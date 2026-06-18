@@ -951,3 +951,26 @@ body {
   gap: 1.5rem;
   animation: modalScaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
+/* Back Button Navigation */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.35rem 0.65rem;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+  transition: var(--transition);
+  margin-left: -0.65rem;
+}
+
+.back-btn:hover {
+  color: var(--primary);
+  background-color: rgba(59, 130, 246, 0.08);
+}

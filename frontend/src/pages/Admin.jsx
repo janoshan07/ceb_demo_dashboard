@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   ShieldAlert, 
@@ -11,10 +12,12 @@ import {
   CheckCircle2,
   FileCheck2,
   ThumbsUp,
-  ThumbsDown
+  ThumbsDown,
+  ArrowLeft
 } from 'lucide-react';
 
 const Admin = () => {
+  const navigate = useNavigate();
   const { authFetch, user } = useAuth();
 
   // Navigation Tab State
@@ -293,6 +296,10 @@ const Admin = () => {
   if (user?.role !== 'ADMIN') {
     return (
       <div className="page-wrapper animate-fade-in">
+        <button onClick={() => navigate('/')} className="back-btn">
+          <ArrowLeft size={16} />
+          Back to Dashboard
+        </button>
         <div style={{ padding: '3rem', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', textAlign: 'center' }}>
           <ShieldAlert size={64} className="text-danger" style={{ margin: '0 auto 1.5rem', color: 'var(--danger)' }} />
           <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Access Restricted</h2>
@@ -304,6 +311,10 @@ const Admin = () => {
 
   return (
     <div className="page-wrapper animate-fade-in">
+      <button onClick={() => navigate('/')} className="back-btn">
+        <ArrowLeft size={16} />
+        Back to Dashboard
+      </button>
       <div className="page-header">
         <div>
           <h1 className="page-title">Admin Management Panel</h1>

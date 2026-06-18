@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   Upload, 
@@ -7,10 +8,12 @@ import {
   AlertTriangle, 
   XCircle,
   FileText,
-  Loader
+  Loader,
+  ArrowLeft
 } from 'lucide-react';
 
 const UploadPage = () => {
+  const navigate = useNavigate();
   const { authFetch } = useAuth();
   const [dragging, setDragging] = useState(false);
   const [file, setFile] = useState(null);
@@ -121,6 +124,10 @@ const UploadPage = () => {
 
   return (
     <div className="page-wrapper animate-fade-in">
+      <button onClick={() => navigate('/')} className="back-btn">
+        <ArrowLeft size={16} />
+        Back to Dashboard
+      </button>
       <div className="page-header">
         <div>
           <h1 className="page-title">Import Billing Workbook</h1>

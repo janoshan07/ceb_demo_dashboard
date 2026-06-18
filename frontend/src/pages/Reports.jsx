@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   TrendingUp, 
@@ -7,10 +8,12 @@ import {
   Award,
   Calendar,
   AlertCircle,
-  Download
+  Download,
+  ArrowLeft
 } from 'lucide-react';
 
 const Reports = () => {
+  const navigate = useNavigate();
   const { authFetch } = useAuth();
   
   const [totals, setTotals] = useState(null);
@@ -136,6 +139,10 @@ const Reports = () => {
 
   return (
     <div className="page-wrapper animate-fade-in">
+      <button onClick={() => navigate('/')} className="back-btn">
+        <ArrowLeft size={16} />
+        Back to Dashboard
+      </button>
       <div className="page-header">
         <div>
           <h1 className="page-title">Management Reports</h1>

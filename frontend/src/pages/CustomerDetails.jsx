@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { 
   Search, 
@@ -13,15 +14,18 @@ import {
   TrendingUp,
   AlertCircle,
   FileSpreadsheet,
-  Activity
+  Activity,
+  ArrowLeft
 } from 'lucide-react';
 
 const CustomerDetails = () => {
+  const navigate = useNavigate();
   const { authFetch, user } = useAuth();
   
   // Search & Pagination State
   const [customers, setCustomers] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [appliedQuery, setAppliedQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -91,19 +95,54 @@ const CustomerDetails = () => {
   };
 
   useEffect(() => {
-    fetchCustomers(currentPage, searchQuery);
-  }, [currentPage]);
+    fetchCustomers(currentPage, appliedQuery);
+  }, [currentPage, appliedQuery]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
+    setAppliedQuery(searchQuery);
     setCurrentPage(0);
-    fetchCustomers(0, searchQuery);
   };
 
   const handleSearchClear = () => {
     setSearchQuery('');
+    setAppliedQuery('');
     setCurrentPage(0);
-    fetchCustomers(0, '');
+  };
+
+  // Helper to generate professional pagination pages layout
+  const getPageNumbers = () => {
+    const pageNumbers = [];
+    if (totalPages <= 7) {
+      for (let i = 0; i < totalPages; i++) {
+        pageNumbers.push(i);
+      }
+    } else {
+      pageNumbers.push(0);
+      let start = Math.max(1, currentPage - 1);
+      let end = Math.min(totalPages - 2, currentPage + 1);
+      
+      if (currentPage <= 2) {
+        end = 3;
+      } else if (currentPage >= totalPages - 3) {
+        start = totalPages - 4;
+      }
+      
+      if (start > 1) {
+        pageNumbers.push('ellipsis-left');
+      }
+      
+      for (let i = start; i <= end; i++) {
+        pageNumbers.push(i);
+      }
+      
+      if (end < totalPages - 2) {
+        pageNumbers.push('ellipsis-right');
+      }
+      
+      pageNumbers.push(totalPages - 1);
+    }
+    return pageNumbers;
   };
 
   const fetchBillingHistory = async (accountNo) => {
@@ -272,6 +311,10 @@ const CustomerDetails = () => {
 
   return (
     <div className="page-wrapper animate-fade-in">
+      <button onClick={() => navigate('/')} className="back-btn">
+        <ArrowLeft size={16} />
+        Back to Dashboard
+      </button>
       <div className="page-header">
         <div>
           <h1 className="page-title">Customer Directory</h1>
@@ -370,16 +413,36 @@ const CustomerDetails = () => {
               <ChevronLeft size={16} />
             </button>
             
-            {Array.from({ length: totalPages }, (_, i) => (
-              <button 
-                key={i} 
-                className={`pagination-btn ${currentPage === i ? 'active' : ''}`}
-                onClick={() => setCurrentPage(i)}
-                disabled={loading}
-              >
-                {i + 1}
-              </button>
-            ))}
+            {getPageNumbers().map((item, idx) => {
+              if (item === 'ellipsis-left' || item === 'ellipsis-right') {
+                return (
+                  <span 
+                    key={`ellipsis-${idx}`} 
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      padding: '0 0.5rem', 
+                      color: 'var(--text-secondary)',
+                      fontSize: '0.9rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    ...
+                  </span>
+                );
+              }
+              return (
+                <button 
+                  key={item} 
+                  className={`pagination-btn ${currentPage === item ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(item)}
+                  disabled={loading}
+                >
+                  {item + 1}
+                </button>
+              );
+            })}
 
             <button 
               className="pagination-btn" 

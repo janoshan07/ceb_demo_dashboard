@@ -1,0 +1,340 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { 
+  Upload, 
+  FileSpreadsheet, 
+  CheckCircle, 
+  AlertTriangle, 
+  XCircle,
+  FileText,
+  Loader
+} from 'lucide-react';
+
+const UploadPage = () => {
+  const { authFetch } = useAuth();
+  const [dragging, setDragging] = useState(false);
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [result, setResult] = useState(null);
+  const [uploadHistory, setUploadHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  const fileInputRef = useRef(null);
+
+  const fetchHistory = async () => {
+    try {
+      setHistoryLoading(true);
+      const res = await authFetch('/api/officer/billing/uploads');
+      if (res.ok) {
+        const data = await res.json();
+        setUploadHistory(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch upload history', err);
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHistory();
+  }, []);
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragging(false);
+    setError(null);
+    setResult(null);
+
+    const droppedFile = e.dataTransfer.files[0];
+    if (validateFile(droppedFile)) {
+      setFile(droppedFile);
+    }
+  };
+
+  const handleFileChange = (e) => {
+    setError(null);
+    setResult(null);
+    const selectedFile = e.target.files[0];
+    if (validateFile(selectedFile)) {
+      setFile(selectedFile);
+    }
+  };
+
+  const validateFile = (fileToValidate) => {
+    if (!fileToValidate) return false;
+    const isExcel = fileToValidate.name.endsWith('.xlsx') || 
+                    fileToValidate.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    if (!isExcel) {
+      setError('Please upload a valid Excel workbook file (.xlsx).');
+      setFile(null);
+      return false;
+    }
+    return true;
+  };
+
+  const triggerFileInput = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleUploadSubmit = async (e) => {
+    e.preventDefault();
+    if (!file) return;
+
+    try {
+      setUploading(true);
+      setError(null);
+      
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await authFetch('/api/officer/upload/excel', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Excel import failed.');
+      }
+
+      setResult(data);
+      setFile(null);
+      fetchHistory(); // Refresh history
+    } catch (err) {
+      setError(err.message || 'Error occurred during file upload.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="page-wrapper animate-fade-in">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Import Billing Workbook</h1>
+          <p className="page-subtitle">Upload monthly billing Excel workbooks to parse customers and compute energy bills.</p>
+        </div>
+      </div>
+
+      <div className="dashboard-grid" style={{ gridTemplateColumns: result ? '1fr 1fr' : '1fr' }}>
+        {/* Upload Form */}
+        <div className="card">
+          <div className="panel-header">
+            <h2 className="panel-title">Upload Excel Sheet</h2>
+          </div>
+
+          <form onSubmit={handleUploadSubmit}>
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              style={{ display: 'none' }}
+              accept=".xlsx"
+            />
+            
+            <div 
+              className={`upload-zone ${dragging ? 'dragging' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={triggerFileInput}
+            >
+              <div className="upload-icon-container">
+                <Upload size={32} />
+              </div>
+              <span className="upload-title">
+                {file ? file.name : 'Drag & drop monthly billing Excel sheet here'}
+              </span>
+              <span className="upload-subtitle">
+                {file ? `${(file.size / 1024).toFixed(1)} KB` : 'or click to browse from files (Only .xlsx spreadsheets are supported)'}
+              </span>
+            </div>
+
+            {error && (
+              <div className="login-error" style={{ marginTop: '1rem' }}>
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', justifyContent: 'flex-end' }}>
+              {file && (
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  onClick={() => setFile(null)}
+                  disabled={uploading}
+                >
+                  Clear File
+                </button>
+              )}
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!file || uploading}
+                style={{ minWidth: '120px' }}
+              >
+                {uploading ? (
+                  <>
+                    <Loader className="animate-spin" size={16} />
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Process Sheet</span>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        {/* Upload Result Summary */}
+        {result && (
+          <div className="card animate-fade-in">
+            <div className="panel-header">
+              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {result.status === 'SUCCESS' && <CheckCircle className="text-success" size={20} />}
+                {result.status === 'COMPLETED_WITH_ERRORS' && <AlertTriangle className="text-warning" size={20} />}
+                {result.status === 'FAILED' && <XCircle className="text-danger" size={20} />}
+                Upload Processing Report
+              </h2>
+              <span className={`badge ${
+                result.status === 'SUCCESS' ? 'success' : 
+                result.status === 'COMPLETED_WITH_ERRORS' ? 'warning' : 'danger'
+              }`}>
+                {result.status.replaceAll('_', ' ')}
+              </span>
+            </div>
+
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+              File: <strong style={{ color: 'white' }}>{result.filename}</strong> has been imported and calculated.
+            </p>
+
+            <div className="upload-summary-grid">
+              <div className="summary-tile">
+                <div className="summary-tile-val">{result.rowsProcessed}</div>
+                <div className="summary-tile-label">Rows Scanned</div>
+              </div>
+              <div className="summary-tile" style={{ borderLeft: '2px solid var(--success)' }}>
+                <div className="summary-tile-val" style={{ color: 'var(--success)' }}>{result.newCustomers}</div>
+                <div className="summary-tile-label">New Customers</div>
+              </div>
+              <div className="summary-tile" style={{ borderLeft: '2px solid var(--primary)' }}>
+                <div className="summary-tile-val" style={{ color: 'var(--primary)' }}>{result.billingInserted}</div>
+                <div className="summary-tile-label">Bills Persisted</div>
+              </div>
+              <div className="summary-tile" style={{ borderLeft: '2px solid var(--danger)' }}>
+                <div className="summary-tile-val" style={{ color: 'var(--danger)' }}>{result.errorsCount}</div>
+                <div className="summary-tile-label">Errors Found</div>
+              </div>
+            </div>
+
+            {/* Validation Errors Detail */}
+            {result.errors && result.errors.length > 0 && (
+              <div style={{ marginTop: '1.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--warning)' }}>
+                  <AlertTriangle size={16} />
+                  Validation Failures / Warning Log
+                </h3>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                  <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                        <th style={{ padding: '0.5rem' }}>Sheet</th>
+                        <th style={{ padding: '0.5rem' }}>Row</th>
+                        <th style={{ padding: '0.5rem' }}>Field</th>
+                        <th style={{ padding: '0.5rem' }}>Error</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.errors.map((err, i) => (
+                        <tr key={i}>
+                          <td style={{ padding: '0.65rem 0.5rem' }}>{err.sheetName}</td>
+                          <td style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}>{err.rowNum}</td>
+                          <td style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)' }}>{err.field}</td>
+                          <td style={{ padding: '0.65rem 0.5rem', color: 'var(--danger)' }}>{err.errorMessage}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* History Log */}
+      <div className="card" style={{ marginTop: '2.5rem' }}>
+        <div className="panel-header">
+          <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <FileText size={18} className="text-primary" />
+            Workbook Import Registry
+          </h2>
+        </div>
+
+        <div className="table-container">
+          {historyLoading ? (
+            <div style={{ padding: '2rem 0', textAlignment: 'center', color: 'var(--text-secondary)' }}>
+              Loading Import History Log...
+            </div>
+          ) : uploadHistory.length === 0 ? (
+            <div style={{ padding: '2rem 0', textAlignment: 'center', color: 'var(--text-muted)' }}>
+              No imports have been registered.
+            </div>
+          ) : (
+            <table className="custom-table">
+              <thead>
+                <tr>
+                  <th>Import Date</th>
+                  <th>Filename</th>
+                  <th>Uploaded By</th>
+                  <th>Status</th>
+                  <th>Rows Processed</th>
+                  <th>New Customers</th>
+                  <th>Bills Logged</th>
+                  <th>Errors Count</th>
+                </tr>
+              </thead>
+              <tbody>
+                {uploadHistory.map((historyItem) => (
+                  <tr key={historyItem.id}>
+                    <td>{new Date(historyItem.uploadTime).toLocaleString('en-LK')}</td>
+                    <td style={{ fontWeight: 600 }}>{historyItem.filename}</td>
+                    <td>{historyItem.uploadedBy}</td>
+                    <td>
+                      <span className={`badge ${
+                        historyItem.status === 'SUCCESS' ? 'success' : 
+                        historyItem.status === 'COMPLETED_WITH_ERRORS' ? 'warning' : 'danger'
+                      }`}>
+                        {historyItem.status.replaceAll('_', ' ')}
+                      </span>
+                    </td>
+                    <td>{historyItem.rowsProcessed}</td>
+                    <td>{historyItem.newCustomers}</td>
+                    <td>{historyItem.billingInserted}</td>
+                    <td style={{ color: historyItem.errorsCount > 0 ? 'var(--danger)' : 'inherit', fontWeight: historyItem.errorsCount > 0 ? 600 : 'normal' }}>
+                      {historyItem.errorsCount}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default UploadPage;

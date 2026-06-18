@@ -1,0 +1,170 @@
+package com.ceb.billing.controllers;
+
+import com.ceb.billing.config.UserDetailsImpl;
+import com.ceb.billing.entities.ApprovalRequest;
+import com.ceb.billing.entities.BillingRecord;
+import com.ceb.billing.entities.UploadHistory;
+import com.ceb.billing.models.ExcelUploadResponse;
+import com.ceb.billing.models.MessageResponse;
+import com.ceb.billing.repositories.ApprovalRequestRepository;
+import com.ceb.billing.repositories.BillingRecordRepository;
+import com.ceb.billing.repositories.UploadHistoryRepository;
+import com.ceb.billing.services.ExcelParsingService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+
+@RestController
+@RequestMapping
+public class BillingController {
+
+    @Autowired
+    private ExcelParsingService excelParsingService;
+
+    @Autowired
+    private BillingRecordRepository billingRecordRepository;
+
+    @Autowired
+    private UploadHistoryRepository uploadHistoryRepository;
+
+    @Autowired
+    private ApprovalRequestRepository approvalRequestRepository;
+
+    @Autowired
+    private com.ceb.billing.services.AuditLogService auditLogService;
+
+    // --- Officer Billing Endpoints ---
+
+    @PostMapping("/api/officer/upload/excel")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> uploadExcelFile(@RequestParam("file") MultipartFile file) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Please upload a valid Excel file."));
+        }
+
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        try {
+            ExcelUploadResponse response = excelParsingService.parseAndSaveExcel(file, username);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(new MessageResponse("Excel parsing failed: " + e.getMessage()));
+        }
+    }
+
+    @GetMapping("/api/officer/billing/uploads")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<List<UploadHistory>> getUploadHistory() {
+        List<UploadHistory> history = uploadHistoryRepository.findAll(Sort.by(Sort.Direction.DESC, "uploadTime"));
+        return ResponseEntity.ok(history);
+    }
+
+    @GetMapping("/api/officer/billing")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<List<BillingRecord>> getAllBillingRecords() {
+        return ResponseEntity.ok(billingRecordRepository.findAll());
+    }
+
+    @GetMapping("/api/officer/billing/{accountNo}")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getBillingByAccountNo(@PathVariable String accountNo) {
+        List<BillingRecord> records = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
+        return ResponseEntity.ok(records);
+    }
+
+    @PutMapping("/api/officer/billing/{billingId}")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> officerUpdateBillingRecord(@PathVariable Long billingId,
+            @RequestBody BillingRecord billingDetails) {
+        Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
+        if (optRecord.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        BillingRecord record = optRecord.get();
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        UserDetailsImpl userDetails = (UserDetailsImpl) auth.getPrincipal();
+
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+            Map<String, Object> oldMap = getBillingFieldMap(record);
+            Map<String, Object> newMap = getBillingFieldMap(billingDetails);
+
+            String oldJson = objectMapper.writeValueAsString(oldMap);
+            String newJson = objectMapper.writeValueAsString(newMap);
+
+            ApprovalRequest request = new ApprovalRequest(
+                    billingId,
+                    record.getCustomer().getAccountNo(),
+                    userDetails.getUsername(),
+                    oldJson,
+                    newJson,
+                    "PENDING");
+            approvalRequestRepository.save(request);
+            auditLogService.log("BILLING_EDIT_REQUEST", "Billing Officer " + userDetails.getUsername()
+                    + " submitted billing edit request for bill ID " + billingId);
+
+            // Explicitly set status PENDING to notify frontend
+            Map<String, Object> response = new HashMap<>();
+            response.put("requestId", request.getRequestId());
+            response.put("status", "PENDING");
+            response.put("message", "Billing edit request queued for approval.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(new MessageResponse("Failed to create approval request: " + e.getMessage()));
+        }
+    }
+
+    // --- Admin Billing Endpoints ---
+
+    @PutMapping("/api/admin/billing/{billingId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> adminUpdateBillingRecord(@PathVariable Long billingId,
+            @RequestBody BillingRecord billingDetails) {
+        Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
+        if (optRecord.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        BillingRecord record = optRecord.get();
+        record.setRefNo(billingDetails.getRefNo());
+        record.setFromDate(billingDetails.getFromDate());
+        record.setToDate(billingDetails.getToDate());
+        record.setImportUnits(billingDetails.getImportUnits());
+        record.setExportUnits(billingDetails.getExportUnits());
+        record.setUnitCost(billingDetails.getUnitCost());
+        record.setBillingMode(billingDetails.getBillingMode());
+        record.calculateFields();
+        billingRecordRepository.save(record);
+
+        auditLogService.log("BILLING_UPDATE", "Admin updated billing record ID: " + billingId);
+        return ResponseEntity.ok(record);
+    }
+
+    private Map<String, Object> getBillingFieldMap(BillingRecord record) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("refNo", record.getRefNo());
+        map.put("fromDate", record.getFromDate() != null ? record.getFromDate().toString() : null);
+        map.put("toDate", record.getToDate() != null ? record.getToDate().toString() : null);
+        map.put("importUnits", record.getImportUnits());
+        map.put("exportUnits", record.getExportUnits());
+        map.put("unitCost", record.getUnitCost());
+        map.put("billingMode", record.getBillingMode());
+        return map;
+    }
+}

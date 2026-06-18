@@ -1,0 +1,118 @@
+# ====================================================================
+# Ceylon Electricity Board (CEB) Billing Management System .gitignore
+# ====================================================================
+
+# --------------------------------------------------------------------
+# System & OS Files
+# --------------------------------------------------------------------
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# --------------------------------------------------------------------
+# Editor / IDE Configuration Directories
+# --------------------------------------------------------------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.settings/
+.classpath
+.project
+.factorypath
+.springBeans
+.recommenders/
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json
+*.sublime-workspace
+*.sublime-project
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# --------------------------------------------------------------------
+# Logs & Diagnostics
+# --------------------------------------------------------------------
+*.log
+*.log.*
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# --------------------------------------------------------------------
+# Backend - Maven & Spring Boot Specifics
+# --------------------------------------------------------------------
+**/target/
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+.mvn/wrapper/maven-wrapper.jar
+.maven/
+
+# --------------------------------------------------------------------
+# Database Config & Temp Files
+# --------------------------------------------------------------------
+*.db
+*.sqlite
+.h2.db
+*.tmp
+*.bak
+
+# --------------------------------------------------------------------
+# Frontend - Node.js, npm & Vite Specifics
+# --------------------------------------------------------------------
+**/node_modules/
+node_modules/
+dist/
+dist-ssr/
+build/
+.svelte-kit/
+.next/
+.nuxt/
+.cache/
+.parcel-cache/
+.eslintcache
+.stylelintcache
+.tape.log
+.yarn-metadata.json
+yarn-tarball.tgz
+pid
+app-port
+
+# --------------------------------------------------------------------
+# Environment Variables & Secrets (Keep confidential data out of Git!)
+# --------------------------------------------------------------------
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+*.env.*
+secrets.properties
+
+# --------------------------------------------------------------------
+# Project Data & Large Binary Files (e.g., test spreadsheets)
+# --------------------------------------------------------------------
+*.xlsx
+*.xls
+*.csv
+~$*.xlsx
+~$*.xls
+!**/templates/*.xlsx

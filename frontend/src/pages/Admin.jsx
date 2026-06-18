@@ -13,7 +13,10 @@ import {
   FileCheck2,
   ThumbsUp,
   ThumbsDown,
-  ArrowLeft
+  ArrowLeft,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 
 const Admin = () => {
@@ -30,6 +33,7 @@ const Admin = () => {
   // New User Form State
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [newRole, setNewRole] = useState('USER');
   const [userError, setUserError] = useState(null);
   const [userSuccess, setUserSuccess] = useState(null);
@@ -565,14 +569,27 @@ const Admin = () => {
 
               <div className="form-group">
                 <label className="form-label">Password</label>
-                <input 
-                  type="password" 
-                  className="login-form-input" 
-                  placeholder="Enter password"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required 
-                />
+                <div className="input-group">
+                  <Lock className="input-icon" size={18} />
+                  <input 
+                    type={showNewPassword ? "text" : "password"} 
+                    className="form-input" 
+                    placeholder="Enter password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    style={{ paddingRight: '2.75rem' }}
+                    required 
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    aria-label={showNewPassword ? "Hide password" : "Show password"}
+                    tabIndex={-1}
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">

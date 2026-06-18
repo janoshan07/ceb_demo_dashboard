@@ -368,6 +368,7 @@ const CustomerDetails = () => {
             <table className="custom-table">
               <thead>
                 <tr>
+                  <th style={{ width: '60px' }}>#</th>
                   <th>Account No</th>
                   <th>Customer Name</th>
                   <th>Solar Type</th>
@@ -378,8 +379,11 @@ const CustomerDetails = () => {
                 </tr>
               </thead>
               <tbody>
-                {customers.map((cust) => (
+                {customers.map((cust, idx) => (
                   <tr key={cust.accountNo}>
+                    <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+                      {currentPage * 8 + idx + 1}
+                    </td>
                     <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
                     <td style={{ fontWeight: 500 }}>{cust.customerName}</td>
                     <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>

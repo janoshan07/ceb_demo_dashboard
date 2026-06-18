@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Zap, User as UserIcon, Lock } from 'lucide-react';
+import { Zap, User as UserIcon, Lock, Eye, EyeOff } from 'lucide-react';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const { login, loading, error, setError } = useAuth();
 
   const handleSubmit = async (e) => {
@@ -54,13 +55,23 @@ const Login = () => {
               <Lock className="input-icon" size={18} />
               <input
                 id="password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 className="form-input"
                 placeholder="Enter password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
+                style={{ paddingRight: '2.75rem' }}
               />
+              <button
+                type="button"
+                className="password-toggle-btn"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
             </div>
           </div>
 

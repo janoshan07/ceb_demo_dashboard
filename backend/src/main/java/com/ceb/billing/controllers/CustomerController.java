@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 
 @RestController
 @RequestMapping
@@ -66,7 +67,7 @@ public class CustomerController {
     @GetMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomerByAccountNo(@PathVariable String accountNo) {
-        Optional<Customer> customer = customerRepository.findById(accountNo);
+        Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (customer.isPresent()) {
             return ResponseEntity.ok(customer.get());
         }
@@ -76,11 +77,11 @@ public class CustomerController {
     @GetMapping("/api/officer/customers/{accountNo}/billing")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomerBillingHistory(@PathVariable String accountNo) {
-        Optional<Customer> customer = customerRepository.findById(accountNo);
+        Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (customer.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
+        List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(Objects.requireNonNull(accountNo));
         return ResponseEntity.ok(history);
     }
 
@@ -88,7 +89,7 @@ public class CustomerController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> officerUpdateCustomer(@PathVariable String accountNo,
             @RequestBody Customer customerDetails) {
-        Optional<Customer> optCustomer = customerRepository.findById(accountNo);
+        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (optCustomer.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -136,7 +137,7 @@ public class CustomerController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> adminUpdateCustomer(@PathVariable String accountNo,
             @RequestBody Customer customerDetails) {
-        Optional<Customer> optCustomer = customerRepository.findById(accountNo);
+        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (optCustomer.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -153,7 +154,7 @@ public class CustomerController {
         customer.setBankAccountNo(customerDetails.getBankAccountNo());
         customer.setSolarType(customerDetails.getSolarType());
 
-        customerRepository.save(customer);
+        customerRepository.save(Objects.requireNonNull(customer));
 
         // Audit Log Entry
         String auditDetail = String.format("Admin updated customer account: %s. Name changed from '%s' to '%s'",
@@ -176,7 +177,7 @@ public class CustomerController {
                     .body(new MessageResponse("Access Denied: You can only view your own details."));
         }
 
-        Optional<Customer> customer = customerRepository.findById(accountNo);
+        Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (customer.isPresent()) {
             return ResponseEntity.ok(customer.get());
         }
@@ -194,7 +195,7 @@ public class CustomerController {
                     .body(new MessageResponse("Access Denied: You can only view your own billing history."));
         }
 
-        Optional<Customer> customer = customerRepository.findById(accountNo);
+        Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (customer.isEmpty()) {
             return ResponseEntity.notFound().build();
         }

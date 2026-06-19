@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/admin")
@@ -59,14 +60,14 @@ public class AdminUserController {
         user.setUsername(user.getUsername().trim());
         user.setPassword(encoder.encode(user.getPassword().trim()));
         user.setRole(assignedRole);
-        userRepository.save(user);
+        userRepository.save(Objects.requireNonNull(user));
 
         auditLogService.log("USER_CREATED", "Created user: " + user.getUsername() + " with role: " + user.getRole());
         return ResponseEntity.ok(user);
     }
 
     @PutMapping("/users/{id}")
-    public ResponseEntity<?> updateUser(@PathVariable Long id, @RequestBody User userDetails) {
+    public ResponseEntity<?> updateUser(@PathVariable long id, @RequestBody User userDetails) {
         Optional<User> optUser = userRepository.findById(id);
         if (optUser.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -89,14 +90,14 @@ public class AdminUserController {
             user.setRole(assignedRole);
         }
 
-        userRepository.save(user);
+        userRepository.save(Objects.requireNonNull(user));
 
         auditLogService.log("USER_UPDATED", "Updated user details for username: " + user.getUsername());
         return ResponseEntity.ok(user);
     }
 
     @DeleteMapping("/users/{id}")
-    public ResponseEntity<?> deleteUser(@PathVariable Long id) {
+    public ResponseEntity<?> deleteUser(@PathVariable long id) {
         Optional<User> optUser = userRepository.findById(id);
         if (optUser.isEmpty()) {
             return ResponseEntity.notFound().build();

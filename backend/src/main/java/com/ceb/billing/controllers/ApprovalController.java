@@ -20,6 +20,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/api/admin/approvals")
@@ -45,7 +46,7 @@ public class ApprovalController {
     }
 
     @PostMapping("/{id}/approve")
-    public ResponseEntity<?> approveRequest(@PathVariable Long id) {
+    public ResponseEntity<?> approveRequest(@PathVariable long id) {
         Optional<ApprovalRequest> optRequest = approvalRequestRepository.findById(id);
         if (optRequest.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -68,26 +69,26 @@ public class ApprovalController {
 
             if (request.getBillingId() == null) {
                 // Customer Profile Edit
-                Optional<Customer> optCustomer = customerRepository.findById(request.getAccountNo());
+                Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
                 if (optCustomer.isEmpty()) {
                     return ResponseEntity.badRequest().body(new MessageResponse("Customer account no longer exists."));
                 }
                 Customer customer = optCustomer.get();
                 applyCustomerEdits(customer, newValues);
-                customerRepository.save(customer);
+                customerRepository.save(Objects.requireNonNull(customer));
 
                 auditLogService.log("CUSTOMER_EDIT_APPROVED",
                         String.format("Admin %s approved customer %s changes from %s", adminUsername,
                                 request.getAccountNo(), request.getChangedBy()));
             } else {
                 // Billing Record Edit
-                Optional<BillingRecord> optBilling = billingRecordRepository.findById(request.getBillingId());
+                Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
                 if (optBilling.isEmpty()) {
                     return ResponseEntity.badRequest().body(new MessageResponse("Billing record no longer exists."));
                 }
                 BillingRecord billing = optBilling.get();
                 applyBillingEdits(billing, newValues);
-                billingRecordRepository.save(billing);
+                billingRecordRepository.save(Objects.requireNonNull(billing));
 
                 auditLogService.log("BILLING_EDIT_APPROVED",
                         String.format("Admin %s approved billing ID %d changes from %s", adminUsername,
@@ -95,7 +96,7 @@ public class ApprovalController {
             }
 
             request.setStatus("APPROVED");
-            approvalRequestRepository.save(request);
+            approvalRequestRepository.save(Objects.requireNonNull(request));
 
             return ResponseEntity.ok(new MessageResponse("Approval request approved and applied successfully."));
         } catch (Exception e) {
@@ -105,7 +106,7 @@ public class ApprovalController {
     }
 
     @PostMapping("/{id}/reject")
-    public ResponseEntity<?> rejectRequest(@PathVariable Long id) {
+    public ResponseEntity<?> rejectRequest(@PathVariable long id) {
         Optional<ApprovalRequest> optRequest = approvalRequestRepository.findById(id);
         if (optRequest.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -119,7 +120,7 @@ public class ApprovalController {
         String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
 
         request.setStatus("REJECTED");
-        approvalRequestRepository.save(request);
+        approvalRequestRepository.save(Objects.requireNonNull(request));
 
         auditLogService.log("EDIT_REJECTED",
                 String.format("Admin %s rejected changes from %s for target %s",

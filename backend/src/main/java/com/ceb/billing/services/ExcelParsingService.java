@@ -217,12 +217,12 @@ public class ExcelParsingService {
                     }
 
                     // Save / Update Customer
-                    Optional<Customer> optCustomer = customerRepository.findById(accountNo);
+                    Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
                     Customer customer;
                     if (optCustomer.isEmpty()) {
                         customer = new Customer(accountNo, customerName, customerAddress, mobileNo, agreementDate,
                                 panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
-                        customerRepository.save(customer);
+                        customerRepository.save(Objects.requireNonNull(customer));
                         newCustomers++;
                     } else {
                         customer = optCustomer.get();
@@ -243,7 +243,7 @@ public class ExcelParsingService {
                             customer.setPanelCapacity(panelCapacity);
                         if (solarType != null && !solarType.isEmpty())
                             customer.setSolarType(solarType);
-                        customerRepository.save(customer);
+                        customerRepository.save(Objects.requireNonNull(customer));
                     }
 
                     // Create Billing Record (Calculations are auto-performed in Entity @PrePersist)
@@ -451,109 +451,6 @@ public class ExcelParsingService {
                 } catch (Exception e) {
                     try {
                         return String.valueOf(cell.getNumericCellValue());
-                    } catch (Exception ex) {
-                        return null;
-                    }
-                }
-            default:
-                return null;
-        }
-    }
-
-    private Double getCellValueAsDouble(Cell cell, DataFormatter dataFormatter, FormulaEvaluator formulaEvaluator) {
-        if (cell == null)
-            return null;
-        switch (cell.getCellType()) {
-            case NUMERIC:
-                return cell.getNumericCellValue();
-            case STRING:
-            case FORMULA:
-                try {
-                    String value = getFormattedCellValue(cell, dataFormatter, formulaEvaluator);
-                    if (value == null)
-                        return null;
-                    return Double.parseDouble(value.replace(",", ""));
-                } catch (Exception e) {
-                    return null;
-                }
-            default:
-                return null;
-        }
-    }
-
-    private LocalDate getCellValueAsDate(Cell cell, DataFormatter dataFormatter, FormulaEvaluator formulaEvaluator) {
-        if (cell == null)
-            return null;
-        switch (cell.getCellType()) {
-            case NUMERIC:
-                if (DateUtil.isCellDateFormatted(cell)) {
-                    return cell.getLocalDateTimeCellValue().toLocalDate();
-                }
-                return null;
-            case STRING:
-            case FORMULA:
-                try {
-                    String val = getFormattedCellValue(cell, dataFormatter, formulaEvaluator);
-                    if (val == null)
-                        return null;
-                    if (val.matches("\\d{4}-\\d{2}-\\d{2}")) {
-                        return LocalDate.parse(val);
-                    } else if (val.matches("\\d{2}/\\d{2}/\\d{4}")) {
-                        String[] parts = val.split("/");
-                        return LocalDate.of(Integer.parseInt(parts[2]), Integer.parseInt(parts[1]),
-                                Integer.parseInt(parts[0]));
-                    } else if (val.matches("\\d{2}-\\d{2}-\\d{4}")) {
-                        String[] parts = val.split("-");
-                        return LocalDate.of(Integer.parseInt(parts[2]), Integer.parseInt(parts[1]),
-                                Integer.parseInt(parts[0]));
-                    } else if (val.matches("\\d{4}/\\d{2}/\\d{2}")) {
-                        String[] parts = val.split("/");
-                        return LocalDate.of(Integer.parseInt(parts[0]), Integer.parseInt(parts[1]),
-                                Integer.parseInt(parts[2]));
-                    }
-                    return null;
-                } catch (Exception e) {
-                    return null;
-                }
-            default:
-                return null;
-        }
-    }
-
-    private boolean isRowEmpty(Row row, DataFormatter dataFormatter, FormulaEvaluator formulaEvaluator) {
-        short firstCellNum = row.getFirstCellNum();
-        short lastCellNum = row.getLastCellNum();
-        if (firstCellNum < 0 || lastCellNum < 0)
-            return true;
-
-        for (int c = firstCellNum; c < lastCellNum; c++) {
-            Cell cell = row.getCell(c);
-            if (getFormattedCellValue(cell, dataFormatter, formulaEvaluator) != null) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private Integer getCellValueAsInteger(Cell cell, DataFormatter dataFormatter, FormulaEvaluator formulaEvaluator) {
-        if (cell == null)
-            return null;
-        switch (cell.getCellType()) {
-            case NUMERIC:
-                return (int) cell.getNumericCellValue();
-            case STRING:
-            case FORMULA:
-                try {
-                    String value = getFormattedCellValue(cell, dataFormatter, formulaEvaluator);
-                    if (value == null)
-                        return null;
-                    return Integer.parseInt(value.replace(",", ""));
-                } catch (Exception e) {
-                    try {
-                        String value = getFormattedCellValue(cell, dataFormatter, formulaEvaluator);
-                        if (value == null)
-                            return null;
-                        return (int) Double.parseDouble(value.replace(",", ""));
                     } catch (Exception ex) {
                         return null;
                     }

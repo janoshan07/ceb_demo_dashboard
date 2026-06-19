@@ -71,6 +71,34 @@ public class BillingController {
         return ResponseEntity.ok(history);
     }
 
+    @DeleteMapping("/api/officer/billing/uploads/{uploadId}")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> deleteUploadHistory(@PathVariable long uploadId) {
+        Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(uploadId);
+        if (optHistory.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        UploadHistory history = optHistory.get();
+        String filename = history.getFilename();
+
+        // Delete all billing records linked to this upload first
+        billingRecordRepository.deleteByUploadHistoryId(uploadId);
+
+        // Delete the upload history record
+        uploadHistoryRepository.deleteById(uploadId);
+
+        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+        auditLogService.log("UPLOAD_ROLLBACK",
+                "User " + actor + " deleted upload history entry ID " + uploadId
+                        + " (\"" + filename + "\") and all associated billing records.");
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Upload \"" + filename + "\" and all " + history.getBillingInserted() + " associated billing records have been deleted.");
+        response.put("filename", filename);
+        return ResponseEntity.ok(response);
+    }
+
     @GetMapping("/api/officer/billing")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<List<BillingRecord>> getAllBillingRecords() {

@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
+import jakarta.transaction.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +32,9 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
 
     @Query("SELECT COALESCE(SUM(b.exportUnits), 0.0) FROM BillingRecord b")
     Double sumTotalExports();
+
+    @Transactional
+    void deleteByUploadHistoryId(Long uploadHistoryId);
 
     // Top 5 highest exporters
     List<BillingRecord> findTop5ByOrderByExportUnitsDesc();

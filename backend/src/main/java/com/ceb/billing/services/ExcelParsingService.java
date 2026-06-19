@@ -417,27 +417,48 @@ public class ExcelParsingService {
             }
         }
         return true;
-    }}return normalizeCellText(cell.getStringCellValue());case NUMERIC:if(DateUtil.isCellDateFormatted(cell)){return cell.getLocalDateTimeCellValue().toLocalDate().toString();}
+    }
 
-    double numVal = cell.getNumericCellValue();if(numVal==(long)numVal)
-    {
-        return String.format("%d", (long) numVal);
-    }else
-    {
-        return String.valueOf(numVal);
-    }case BOOLEAN:return String.valueOf(cell.getBooleanCellValue());case FORMULA:try
-    {
-        return normalizeCellText(cell.getStringCellValue());
-    }catch(
-    Exception e)
-    {
-        try {
-            return String.valueOf(cell.getNumericCellValue());
-        } catch (Exception ex) {
+    private String normalizeCellText(String text) {
+        if (text == null) {
             return null;
         }
-    }default:return null;
-    }}
+        return text.trim();
+    }
+
+    private String getFormattedCellValue(Cell cell, DataFormatter dataFormatter, FormulaEvaluator formulaEvaluator) {
+        if (cell == null) {
+            return null;
+        }
+        switch (cell.getCellType()) {
+            case STRING:
+                return normalizeCellText(cell.getStringCellValue());
+            case NUMERIC:
+                if (DateUtil.isCellDateFormatted(cell)) {
+                    return cell.getLocalDateTimeCellValue().toLocalDate().toString();
+                }
+                double numVal = cell.getNumericCellValue();
+                if (numVal == (long) numVal) {
+                    return String.format("%d", (long) numVal);
+                } else {
+                    return String.valueOf(numVal);
+                }
+            case BOOLEAN:
+                return String.valueOf(cell.getBooleanCellValue());
+            case FORMULA:
+                try {
+                    return normalizeCellText(cell.getStringCellValue());
+                } catch (Exception e) {
+                    try {
+                        return String.valueOf(cell.getNumericCellValue());
+                    } catch (Exception ex) {
+                        return null;
+                    }
+                }
+            default:
+                return null;
+        }
+    }
 
     private Double getCellValueAsDouble(Cell cell, DataFormatter dataFormatter, FormulaEvaluator formulaEvaluator) {
         if (cell == null)

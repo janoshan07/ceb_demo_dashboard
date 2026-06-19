@@ -86,7 +86,7 @@ public class BillingController {
 
     @PutMapping("/api/officer/billing/{billingId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
-    public ResponseEntity<?> officerUpdateBillingRecord(@PathVariable Long billingId,
+    public ResponseEntity<?> officerUpdateBillingRecord(@PathVariable long billingId,
             @RequestBody BillingRecord billingDetails) {
         Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
         if (optRecord.isEmpty()) {
@@ -134,7 +134,7 @@ public class BillingController {
 
     @PutMapping("/api/admin/billing/{billingId}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> adminUpdateBillingRecord(@PathVariable Long billingId,
+    public ResponseEntity<?> adminUpdateBillingRecord(@PathVariable long billingId,
             @RequestBody BillingRecord billingDetails) {
         Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
         if (optRecord.isEmpty()) {

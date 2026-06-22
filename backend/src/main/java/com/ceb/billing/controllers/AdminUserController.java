@@ -2,9 +2,14 @@ package com.ceb.billing.controllers;
 
 import com.ceb.billing.entities.AuditLog;
 import com.ceb.billing.entities.User;
+import com.ceb.billing.entities.UploadHistory;
+import com.ceb.billing.entities.BillingUploadStaging;
 import com.ceb.billing.repositories.AuditLogRepository;
 import com.ceb.billing.repositories.UserRepository;
+import com.ceb.billing.repositories.UploadHistoryRepository;
+import com.ceb.billing.repositories.BillingUploadStagingRepository;
 import com.ceb.billing.services.AuditLogService;
+import com.ceb.billing.services.StagingMigrationService;
 import com.ceb.billing.models.MessageResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +32,15 @@ public class AdminUserController {
 
     @Autowired
     private AuditLogRepository auditLogRepository;
+
+    @Autowired
+    private UploadHistoryRepository uploadHistoryRepository;
+
+    @Autowired
+    private BillingUploadStagingRepository stagingRepository;
+
+    @Autowired
+    private StagingMigrationService stagingMigrationService;
 
     @Autowired
     private PasswordEncoder encoder;
@@ -121,4 +135,37 @@ public class AdminUserController {
         List<AuditLog> logs = auditLogRepository.findAllByOrderByTimestampDesc();
         return ResponseEntity.ok(logs);
     }
+
+    @GetMapping("/staging/pending")
+    public ResponseEntity<List<UploadHistory>> getPendingStagingBatches() {
+        return ResponseEntity.ok(uploadHistoryRepository.findByStatusOrderByUploadTimeDesc("PENDING_APPROVAL"));
+    }
+
+    @GetMapping("/staging/batch/{batchId}")
+    public ResponseEntity<List<BillingUploadStaging>> getStagingBatchDetails(@PathVariable long batchId) {
+        return ResponseEntity.ok(stagingRepository.findByUploadBatchId(batchId));
+    }
+
+    @PostMapping("/staging/batch/{batchId}/approve")
+    public ResponseEntity<?> approveStagingBatch(@PathVariable long batchId) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            stagingMigrationService.migrateApprovedBatch(batchId, currentUsername);
+            return ResponseEntity.ok(new MessageResponse("Staging batch approved and successfully migrated to main tables."));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to migrate staging batch: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/staging/batch/{batchId}/reject")
+    public ResponseEntity<?> rejectStagingBatch(@PathVariable long batchId) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            stagingMigrationService.rejectBatch(batchId, currentUsername);
+            return ResponseEntity.ok(new MessageResponse("Staging batch successfully rejected and staging rows discarded."));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to reject staging batch: " + e.getMessage()));
+        }
+    }
 }
+

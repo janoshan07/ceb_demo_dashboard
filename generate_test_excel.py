@@ -36,7 +36,16 @@ sheets_data = {
     ],
     "Galle South": [
         ["5009871230", "Jetwing Lighthouse Galle", "HNB", "008", "9928173", "REF-202606-08", "2026-06-01", "2026-06-30", 7200, 9900, 52.0, "EXP-COM-B"],
-        ["2004561001", "Lanka Hospitals Corp (Galle)", "HNB", "001", "4592810", "REF-202606-09", "2026-06-01", "2026-06-30", 2200, 1900, 52.0, "EXP-MED-B"]
+        ["2004561001", "Lanka Hospitals Corp (Galle)", "HNB", "001", "4592810", "REF-202606-09", "2026-06-01", "2026-06-30", 2200, 1900, 52.0, "EXP-MED-B"],
+        
+        # Test Case: Invalid bank code (warning only - should still import successfully)
+        ["6008761042", "Galle Marina Resort", "XYZ", "020", "1122334", "REF-202606-10", "2026-06-01", "2026-06-30", 800, 1500, 48.0, "EXP-COM-A"],
+        
+        # Test Case: Negative Imports (Error - should skip)
+        ["6008761043", "Galle Port Authority", "COM", "102", "8899221", "REF-202606-11", "2026-06-01", "2026-06-30", -250, 1000, 45.0, "EXP-GOV-B"],
+        
+        # Test Case: Negative Unit Cost (Error - should skip)
+        ["6008761044", "Galle Fisheries Co", "BOC", "005", "4455667", "REF-202606-12", "2026-06-01", "2026-06-30", 300, 1200, -5.0, "EXP-IND-B"]
     ]
 }
 

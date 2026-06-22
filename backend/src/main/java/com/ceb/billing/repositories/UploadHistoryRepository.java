@@ -9,4 +9,6 @@ import java.util.List;
 @Repository
 public interface UploadHistoryRepository extends JpaRepository<UploadHistory, Long> {
     List<UploadHistory> findTop5ByOrderByUploadTimeDesc();
+    List<UploadHistory> findByStatusOrderByUploadTimeDesc(String status);
 }
+

@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 @Repository
 public interface CustomerRepository extends JpaRepository<Customer, String> {
     
@@ -19,4 +21,7 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
            "(:query IS NULL OR LOWER(c.accountNo) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%')))")
     Page<Customer> searchCustomers(@Param("query") String query, Pageable pageable);
+
+    @Query("SELECT c.solarType, COUNT(c) FROM Customer c GROUP BY c.solarType")
+    List<Object[]> getSolarTypeDistribution();
 }

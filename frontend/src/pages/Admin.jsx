@@ -11,6 +11,7 @@ import {
   AlertCircle,
   CheckCircle2,
   FileCheck2,
+  FileSpreadsheet,
   ThumbsUp,
   ThumbsDown,
   ArrowLeft,
@@ -18,13 +19,15 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react';
+import StagingReview from './StagingReview';
 
 const Admin = () => {
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
 
   // Navigation Tab State
-  const [activeTab, setActiveTab] = useState('approvals'); // approvals, users, or logs
+  const [activeTab, setActiveTab] = useState('staging'); // staging, approvals, users, or logs
+
 
   // Users Management State
   const [usersList, setUsersList] = useState([]);
@@ -346,6 +349,30 @@ const Admin = () => {
             padding: '1rem 1.5rem', 
             background: 'transparent', 
             border: 'none', 
+            borderBottom: activeTab === 'staging' ? '3px solid var(--primary)' : '3px solid transparent',
+            color: activeTab === 'staging' ? 'var(--text-primary)' : 'var(--text-secondary)',
+            fontWeight: 600,
+            cursor: 'pointer',
+            fontSize: '0.95rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem'
+          }}
+          onClick={() => {
+            setActiveTab('staging');
+            setUserError(null);
+            setUserSuccess(null);
+          }}
+        >
+          <FileSpreadsheet size={16} />
+          Excel Staging Review
+        </button>
+
+        <button 
+          style={{ 
+            padding: '1rem 1.5rem', 
+            background: 'transparent', 
+            border: 'none', 
             borderBottom: activeTab === 'approvals' ? '3px solid var(--primary)' : '3px solid transparent',
             color: activeTab === 'approvals' ? 'var(--text-primary)' : 'var(--text-secondary)',
             fontWeight: 600,
@@ -413,6 +440,14 @@ const Admin = () => {
           Security Audit Logs
         </button>
       </div>
+
+      {/* Excel Staging Review Tab */}
+      {activeTab === 'staging' && (
+        <StagingReview 
+          authFetch={authFetch} 
+          onConfirmAction={setConfirmModal} 
+        />
+      )}
 
       {/* Approvals Center Tab */}
       {activeTab === 'approvals' && (

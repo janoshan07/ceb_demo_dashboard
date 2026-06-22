@@ -449,28 +449,34 @@ const UploadPage = () => {
               and calculated.
             </p>
 
-            <div className="upload-summary-grid">
+            <div className="upload-summary-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
               <div className="summary-tile">
-                <div className="summary-tile-val">{result.rowsProcessed}</div>
-                <div className="summary-tile-label">Rows Scanned</div>
+                <div className="summary-tile-val">{result.totalRows !== undefined ? result.totalRows : result.rowsProcessed}</div>
+                <div className="summary-tile-label">Total Rows</div>
               </div>
               <div className="summary-tile" style={{ borderLeft: '2px solid var(--success)' }}>
                 <div className="summary-tile-val" style={{ color: 'var(--success)' }}>
-                  {result.newCustomers}
+                  {result.validRows !== undefined ? result.validRows : result.billingInserted}
                 </div>
-                <div className="summary-tile-label">New Customers</div>
-              </div>
-              <div className="summary-tile" style={{ borderLeft: '2px solid var(--primary)' }}>
-                <div className="summary-tile-val" style={{ color: 'var(--primary)' }}>
-                  {result.billingInserted}
-                </div>
-                <div className="summary-tile-label">Bills Persisted</div>
+                <div className="summary-tile-label">Valid Rows</div>
               </div>
               <div className="summary-tile" style={{ borderLeft: '2px solid var(--danger)' }}>
                 <div className="summary-tile-val" style={{ color: 'var(--danger)' }}>
-                  {result.errorsCount}
+                  {result.invalidRows !== undefined ? result.invalidRows : result.errorsCount}
                 </div>
-                <div className="summary-tile-label">Errors Found</div>
+                <div className="summary-tile-label">Invalid Rows</div>
+              </div>
+              <div className="summary-tile" style={{ borderLeft: '2px solid #a855f7' }}>
+                <div className="summary-tile-val" style={{ color: '#a855f7' }}>
+                  {result.duplicateRows !== undefined ? result.duplicateRows : 0}
+                </div>
+                <div className="summary-tile-label">Duplicate Rows</div>
+              </div>
+              <div className="summary-tile" style={{ borderLeft: '2px solid #eab308' }}>
+                <div className="summary-tile-val" style={{ color: '#eab308' }}>
+                  {result.warningCount !== undefined ? result.warningCount : 0}
+                </div>
+                <div className="summary-tile-label">Warnings</div>
               </div>
             </div>
 
@@ -495,11 +501,11 @@ const UploadPage = () => {
                   }}
                 >
                   <AlertTriangle size={16} />
-                  Validation Failures / Warning Log
+                  Validation Failures &amp; Warnings Log
                 </h3>
                 <div
                   style={{
-                    maxHeight: '180px',
+                    maxHeight: '220px',
                     overflowY: 'auto',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
@@ -518,22 +524,51 @@ const UploadPage = () => {
                         <th style={{ padding: '0.5rem' }}>Sheet</th>
                         <th style={{ padding: '0.5rem' }}>Row</th>
                         <th style={{ padding: '0.5rem' }}>Field</th>
-                        <th style={{ padding: '0.5rem' }}>Error</th>
+                        <th style={{ padding: '0.5rem' }}>Severity</th>
+                        <th style={{ padding: '0.5rem' }}>Details</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {result.errors.map((err, i) => (
-                        <tr key={i}>
-                          <td style={{ padding: '0.65rem 0.5rem' }}>{err.sheetName}</td>
-                          <td style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}>{err.rowNum}</td>
-                          <td style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)' }}>
-                            {err.field}
-                          </td>
-                          <td style={{ padding: '0.65rem 0.5rem', color: 'var(--danger)' }}>
-                            {err.errorMessage}
-                          </td>
-                        </tr>
-                      ))}
+                      {result.errors.map((err, i) => {
+                        const isWarning = err.warning;
+                        const isDuplicate = err.field === 'Duplicate';
+                        let severityBadge = (
+                          <span className="badge danger" style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem' }}>
+                            Error
+                          </span>
+                        );
+                        let detailColor = 'var(--danger)';
+                        
+                        if (isWarning) {
+                          severityBadge = (
+                            <span className="badge warning" style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem' }}>
+                              Warning
+                            </span>
+                          );
+                          detailColor = '#eab308';
+                        } else if (isDuplicate) {
+                          severityBadge = (
+                            <span className="badge" style={{ backgroundColor: 'rgba(168,85,247,0.12)', color: '#a855f7', padding: '0.15rem 0.45rem', fontSize: '0.7rem' }}>
+                              Duplicate
+                            </span>
+                          );
+                          detailColor = '#a855f7';
+                        }
+                        
+                        return (
+                          <tr key={i} style={{ backgroundColor: isWarning ? 'rgba(234,179,8,0.02)' : isDuplicate ? 'rgba(168,85,247,0.02)' : 'rgba(239,68,68,0.02)' }}>
+                            <td style={{ padding: '0.65rem 0.5rem' }}>{err.sheetName}</td>
+                            <td style={{ padding: '0.65rem 0.5rem', fontWeight: 600 }}>{err.rowNum}</td>
+                            <td style={{ padding: '0.65rem 0.5rem', color: 'var(--text-secondary)' }}>
+                              {err.field}
+                            </td>
+                            <td style={{ padding: '0.65rem 0.5rem' }}>{severityBadge}</td>
+                            <td style={{ padding: '0.65rem 0.5rem', color: detailColor }}>
+                              {err.errorMessage}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

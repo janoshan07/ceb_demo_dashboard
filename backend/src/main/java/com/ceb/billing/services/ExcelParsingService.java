@@ -3,11 +3,14 @@ package com.ceb.billing.services;
 import com.ceb.billing.entities.BillingRecord;
 import com.ceb.billing.entities.Customer;
 import com.ceb.billing.entities.UploadHistory;
+import com.ceb.billing.entities.BillingUploadStaging;
 import com.ceb.billing.models.ExcelUploadResponse;
 import com.ceb.billing.models.ExcelValidationError;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
+import com.ceb.billing.repositories.BillingUploadStagingRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -32,6 +35,16 @@ public class ExcelParsingService {
     @Autowired
     private AuditLogService auditLogService;
 
+    @Autowired
+    private ExcelValidationService excelValidationService;
+
+    @Autowired
+    private BillingUploadStagingRepository billingUploadStagingRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+
     @Transactional
     public ExcelUploadResponse parseAndSaveExcel(MultipartFile file, String uploadedBy) throws Exception {
         String filename = file.getOriginalFilename();
@@ -39,6 +52,16 @@ public class ExcelParsingService {
         int rowsProcessed = 0;
         int newCustomers = 0;
         int billingInserted = 0;
+
+        // Validation Summary Counters
+        int totalRows = 0;
+        int validRows = 0;
+        int invalidRows = 0;
+        int duplicateRows = 0;
+        int warningCount = 0;
+
+        // In-memory set to track duplicate account + billing month/year combinations in this upload
+        Set<String> processedRecordsInUpload = new HashSet<>();
 
         // Save a placeholder history so we get an ID
         UploadHistory history = new UploadHistory(filename, uploadedBy, "PROCESSING", 0, 0, 0, 0);
@@ -69,12 +92,10 @@ public class ExcelParsingService {
                     }
                 }
 
-                // Check required headers
+                // Check required headers (mandatory columns list)
                 List<String> missingHeaders = new ArrayList<>();
                 verifyHeader(headerMap, Arrays.asList("accountno", "accountnumber"), "Account No", missingHeaders);
                 verifyHeader(headerMap, Arrays.asList("customername", "name"), "Customer Name", missingHeaders);
-                verifyHeader(headerMap, Arrays.asList("refno", "referenceno", "referencenumber"), "Ref No",
-                        missingHeaders);
                 verifyHeader(headerMap, Arrays.asList("fromdate", "startdate"), "From Date", missingHeaders);
                 verifyHeader(headerMap, Arrays.asList("todate", "enddate"), "To Date", missingHeaders);
                 verifyHeader(headerMap, Arrays.asList("imports", "import", "importunits"), "Imports", missingHeaders);
@@ -125,11 +146,19 @@ public class ExcelParsingService {
                     }
 
                     rowsProcessed++;
+                    totalRows++;
 
-                    // Extract values
+                    // Extract raw cell values as string to detect format errors or missing fields
+                    String rawFromDate = fromDateCol != -1 ? getCellValueAsString(row.getCell(fromDateCol)) : null;
+                    String rawToDate = toDateCol != -1 ? getCellValueAsString(row.getCell(toDateCol)) : null;
+                    String rawImports = importsCol != -1 ? getCellValueAsString(row.getCell(importsCol)) : null;
+                    String rawExports = exportsCol != -1 ? getCellValueAsString(row.getCell(exportsCol)) : null;
+                    String rawUnitCost = unitCostCol != -1 ? getCellValueAsString(row.getCell(unitCostCol)) : null;
+
+                    // Extract parsed values
                     String accountNo = getCellValueAsString(row.getCell(accountNoCol));
                     String customerName = getCellValueAsString(row.getCell(customerNameCol));
-                    String refNo = getCellValueAsString(row.getCell(refNoCol));
+                    String refNo = refNoCol != -1 ? getCellValueAsString(row.getCell(refNoCol)) : "";
                     LocalDate fromDate = getCellValueAsDate(row.getCell(fromDateCol));
                     LocalDate toDate = getCellValueAsDate(row.getCell(toDateCol));
                     Double importUnits = getCellValueAsDouble(row.getCell(importsCol));
@@ -157,100 +186,84 @@ public class ExcelParsingService {
                     String solarType = solarTypeCol != null ? getCellValueAsString(row.getCell(solarTypeCol))
                             : "Net Plus";
 
-                    // Validation Checks
-                    boolean hasRowErrors = false;
+                    // Call the ExcelValidationService to validate row data
+                    ExcelValidationService.RowValidationResult validationResult = excelValidationService.validateRow(
+                            sheetName,
+                            r + 1,
+                            accountNo,
+                            customerName,
+                            rawFromDate,
+                            fromDate,
+                            rawToDate,
+                            toDate,
+                            rawImports,
+                            importUnits,
+                            rawExports,
+                            exportUnits,
+                            rawUnitCost,
+                            unitCost,
+                            bankCode,
+                            processedRecordsInUpload
+                    );
 
-                    if (accountNo == null || accountNo.isEmpty()) {
-                        errors.add(
-                                new ExcelValidationError(sheetName, r + 1, "Account No", "Account number is required"));
-                        hasRowErrors = true;
-                    }
-                    if (customerName == null || customerName.isEmpty()) {
-                        errors.add(new ExcelValidationError(sheetName, r + 1, "Customer Name",
-                                "Customer name is required"));
-                        hasRowErrors = true;
-                    }
-                    if (refNo == null || refNo.isEmpty()) {
-                        errors.add(
-                                new ExcelValidationError(sheetName, r + 1, "Ref No", "Reference number is required"));
-                        hasRowErrors = true;
-                    }
-                    if (fromDate == null) {
-                        errors.add(new ExcelValidationError(sheetName, r + 1, "From Date",
-                                "Valid From Date (YYYY-MM-DD) is required"));
-                        hasRowErrors = true;
-                    }
-                    if (toDate == null) {
-                        errors.add(new ExcelValidationError(sheetName, r + 1, "To Date",
-                                "Valid To Date (YYYY-MM-DD) is required"));
-                        hasRowErrors = true;
-                    }
-                    if (importUnits == null) {
-                        errors.add(
-                                new ExcelValidationError(sheetName, r + 1, "Imports", "Imports units must be numeric"));
-                        hasRowErrors = true;
-                    }
-                    if (exportUnits == null) {
-                        errors.add(
-                                new ExcelValidationError(sheetName, r + 1, "Exports", "Exports units must be numeric"));
-                        hasRowErrors = true;
-                    }
-                    if (unitCost == null) {
-                        errors.add(
-                                new ExcelValidationError(sheetName, r + 1, "Unit Cost", "Unit Cost must be numeric"));
-                        hasRowErrors = true;
-                    }
+                    // Add all messages (errors, duplicates, warnings) to validation log
+                    errors.addAll(validationResult.getValidationMessages());
 
-                    if (hasRowErrors) {
-                        continue;
-                    }
-
-                    // Check for duplicate bill in DB (Account, RefNo, and Period)
-                    Optional<BillingRecord> duplicateRecord = billingRecordRepository
-                            .findByCustomerAccountNoAndRefNoAndFromDateAndToDate(accountNo, refNo, fromDate, toDate);
-
-                    if (duplicateRecord.isPresent()) {
-                        errors.add(new ExcelValidationError(sheetName, r + 1, "Duplicate",
-                                "Duplicate billing record exists in DB for Account: " + accountNo + " Ref: " + refNo
-                                        + " from " + fromDate + " to " + toDate));
-                        continue;
-                    }
-
-                    // Save / Update Customer
-                    Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
-                    Customer customer;
-                    if (optCustomer.isEmpty()) {
-                        customer = new Customer(accountNo, customerName, customerAddress, mobileNo, agreementDate,
-                                panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
-                        customerRepository.save(Objects.requireNonNull(customer));
-                        newCustomers++;
+                    // Determine validation status for staging
+                    String validationStatus = "VALID";
+                    if (validationResult.hasErrors()) {
+                        validationStatus = "INVALID";
+                        invalidRows++;
+                    } else if (validationResult.hasDuplicate()) {
+                        validationStatus = "DUPLICATE";
+                        duplicateRows++;
+                    } else if (validationResult.hasWarnings()) {
+                        validationStatus = "WARNING";
+                        long rowWarningsCount = validationResult.getValidationMessages().stream()
+                                .filter(ExcelValidationError::isWarning)
+                                .count();
+                        warningCount += (int) rowWarningsCount;
                     } else {
-                        customer = optCustomer.get();
-                        customer.setCustomerName(customerName);
-                        if (bankCode != null && !bankCode.isEmpty())
-                            customer.setBankCode(bankCode);
-                        if (branchCode != null && !branchCode.isEmpty())
-                            customer.setBranchCode(branchCode);
-                        if (bankAccountNo != null && !bankAccountNo.isEmpty())
-                            customer.setBankAccountNo(bankAccountNo);
-                        if (customerAddress != null && !customerAddress.isEmpty())
-                            customer.setCustomerAddress(customerAddress);
-                        if (mobileNo != null && !mobileNo.isEmpty())
-                            customer.setMobileNo(mobileNo);
-                        if (agreementDate != null)
-                            customer.setAgreementDate(agreementDate);
-                        if (panelCapacity != null)
-                            customer.setPanelCapacity(panelCapacity);
-                        if (solarType != null && !solarType.isEmpty())
-                            customer.setSolarType(solarType);
-                        customerRepository.save(Objects.requireNonNull(customer));
+                        validRows++;
                     }
 
-                    // Create Billing Record (Calculations are auto-performed in Entity @PrePersist)
-                    BillingRecord record = new BillingRecord(customer, refNo, fromDate, toDate, importUnits,
-                            exportUnits, unitCost, billingMode, historyId);
-                    billingRecordRepository.save(record);
-                    billingInserted++;
+                    // Add to in-memory set to prevent duplicates within this upload sheet
+                    if (fromDate != null && ("VALID".equals(validationStatus) || "WARNING".equals(validationStatus))) {
+                        int year = fromDate.getYear();
+                        int month = fromDate.getMonthValue();
+                        processedRecordsInUpload.add(accountNo + "|" + year + "|" + month);
+                    }
+
+                    // Serialize row data to raw_json
+                    Map<String, Object> rowDataMap = new HashMap<>();
+                    rowDataMap.put("accountNo", accountNo);
+                    rowDataMap.put("customerName", customerName);
+                    // Handle reference number fallback logic
+                    if ((refNo == null || refNo.trim().isEmpty()) && fromDate != null) {
+                        refNo = "REF-" + accountNo + "-" + fromDate.toString().replaceAll("-", "");
+                    }
+                    rowDataMap.put("refNo", refNo);
+                    rowDataMap.put("fromDate", fromDate != null ? fromDate.toString() : rawFromDate);
+                    rowDataMap.put("toDate", toDate != null ? toDate.toString() : rawToDate);
+                    rowDataMap.put("importUnits", importUnits != null ? importUnits : rawImports);
+                    rowDataMap.put("exportUnits", exportUnits != null ? exportUnits : rawExports);
+                    rowDataMap.put("unitCost", unitCost != null ? unitCost : rawUnitCost);
+                    rowDataMap.put("bankCode", bankCode);
+                    rowDataMap.put("branchCode", branchCode);
+                    rowDataMap.put("bankAccountNo", bankAccountNo);
+                    rowDataMap.put("billingMode", billingMode);
+                    rowDataMap.put("customerAddress", customerAddress);
+                    rowDataMap.put("mobileNo", mobileNo);
+                    rowDataMap.put("agreementDate", agreementDate != null ? agreementDate.toString() : null);
+                    rowDataMap.put("panelCapacity", panelCapacity);
+                    rowDataMap.put("solarType", solarType);
+
+                    String rawJson = objectMapper.writeValueAsString(rowDataMap);
+                    String validationErrorsJson = objectMapper.writeValueAsString(validationResult.getValidationMessages());
+
+                    // Create staging record
+                    BillingUploadStaging stagingRecord = new BillingUploadStaging(historyId, rawJson, validationStatus, validationErrorsJson);
+                    billingUploadStagingRepository.save(stagingRecord);
                 }
             }
         } catch (Exception e) {
@@ -263,26 +276,23 @@ public class ExcelParsingService {
         }
 
         // Determine final status
-        String finalStatus = "SUCCESS";
-        if (errors.size() > 0) {
-            finalStatus = (billingInserted > 0) ? "COMPLETED_WITH_ERRORS" : "FAILED";
-        }
+        String finalStatus = "PENDING_APPROVAL";
 
         history.setStatus(finalStatus);
         history.setRowsProcessed(rowsProcessed);
-        history.setNewCustomers(newCustomers);
-        history.setBillingInserted(billingInserted);
+        history.setNewCustomers(0);
+        history.setBillingInserted(0);
         history.setErrorsCount(errors.size());
         uploadHistoryRepository.save(history);
 
         // Audit Log Entry
         String auditDetails = String.format(
-                "File: %s, Processed rows: %d, Added customers: %d, Inserted bills: %d, Errors: %d",
-                filename, rowsProcessed, newCustomers, billingInserted, errors.size());
+                "File: %s, Processed and staged: %d rows, Errors/warnings: %d",
+                filename, rowsProcessed, errors.size());
         auditLogService.log("EXCEL_UPLOAD", auditDetails);
 
-        return new ExcelUploadResponse(filename, finalStatus, rowsProcessed, newCustomers, billingInserted,
-                errors.size(), errors);
+        return new ExcelUploadResponse(filename, finalStatus, rowsProcessed, 0, 0,
+                errors.size(), errors, totalRows, validRows, invalidRows, duplicateRows, warningCount);
     }
 
     private void verifyHeader(Map<String, Integer> headerMap, List<String> matchOptions, String columnName,

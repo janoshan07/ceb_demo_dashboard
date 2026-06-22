@@ -995,3 +995,212 @@ body {
   color: var(--primary);
   background-color: rgba(59, 130, 246, 0.08);
 }
+
+/* ==========================================================================
+   Advanced Analytics Dashboard Enhancements
+   ========================================================================== */
+
+/* Keyframes for premium animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.35);
+  }
+}
+
+@keyframes drawDash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes scaleUp {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Analytics general utility classes */
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scale-up {
+  animation: scaleUp 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Card Glow variants */
+.metric-card.glow-primary:hover {
+  animation: pulseGlow 2s infinite;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+.metric-card.glow-success:hover {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.metric-card.glow-warning:hover {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.metric-card.glow-teal:hover {
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+  border-color: rgba(6, 182, 212, 0.4);
+}
+
+/* Layout Grids */
+.analytics-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.analytics-layout {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+@media (max-width: 1200px) {
+  .analytics-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.analytics-widget-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  box-shadow: var(--shadow);
+  transition: var(--transition);
+  position: relative;
+  overflow: hidden;
+}
+
+.analytics-widget-card:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.5);
+}
+
+/* Custom interactive SVG chart styling */
+.chart-tooltip-portal {
+  position: absolute;
+  background: rgba(17, 24, 39, 0.95);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-primary);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity 0.15s ease-out;
+  backdrop-filter: blur(8px);
+}
+
+.svg-chart-interactive-point {
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), r 0.2s;
+}
+
+.svg-chart-interactive-point:hover {
+  r: 7px !important;
+}
+
+/* Horizontal Progress Bars for Top Lists */
+.top-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+.top-list-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.top-list-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.top-list-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.top-list-val {
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.top-list-bar-track {
+  height: 8px;
+  background-color: var(--bg-card);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.top-list-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  background: linear-gradient(90deg, var(--primary), var(--accent-teal));
+}
+
+.top-list-bar-fill.warning-red {
+  background: linear-gradient(90deg, var(--warning), var(--danger));
+}
+
+.top-list-bar-fill.success-teal {
+  background: linear-gradient(90deg, var(--success), var(--accent-teal));
+}
+
+/* Donut Slice Anim */
+.donut-slice {
+  transition: stroke-width 0.2s, stroke 0.2s;
+  cursor: pointer;
+}
+
+.donut-slice:hover {
+  stroke-width: 22 !important;
+}
+
+/* Branch breakdown row styling */
+.branch-row {
+  transition: var(--transition);
+}
+
+.branch-row:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}

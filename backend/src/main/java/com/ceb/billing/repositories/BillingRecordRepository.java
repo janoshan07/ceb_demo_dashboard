@@ -51,4 +51,36 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
            "GROUP BY YEAR(b.fromDate), MONTH(b.fromDate) " +
            "ORDER BY yr DESC, mo DESC")
     List<Object[]> getMonthlyRevenueReport();
+
+    @Query("SELECT YEAR(b.fromDate) as yr, MONTH(b.fromDate) as mo, " +
+           "COALESCE(SUM(b.totalAmount), 0.0) as rev, " +
+           "COALESCE(SUM(b.importUnits), 0.0) as imp, " +
+           "COALESCE(SUM(b.exportUnits), 0.0) as exp, " +
+           "COALESCE(SUM(b.netUnit), 0.0) as net " +
+           "FROM BillingRecord b " +
+           "GROUP BY YEAR(b.fromDate), MONTH(b.fromDate) " +
+           "ORDER BY yr ASC, mo ASC")
+    List<Object[]> getMonthlyAnalyticsReport();
+
+    @Query(value = "SELECT b.account_no, c.customer_name, COALESCE(SUM(b.export_units), 0.0) as totalExport " +
+                  "FROM billing_records b JOIN customers c ON b.account_no = c.account_no " +
+                  "GROUP BY b.account_no, c.customer_name " +
+                  "ORDER BY totalExport DESC LIMIT 10", nativeQuery = true)
+    List<Object[]> getTop10SolarExporters();
+
+    @Query(value = "SELECT b.account_no, c.customer_name, COALESCE(SUM(b.import_units), 0.0) as totalImport " +
+                  "FROM billing_records b JOIN customers c ON b.account_no = c.account_no " +
+                  "GROUP BY b.account_no, c.customer_name " +
+                  "ORDER BY totalImport DESC LIMIT 10", nativeQuery = true)
+    List<Object[]> getTop10ImportConsumers();
+
+    @Query(value = "SELECT c.branch_code, COUNT(DISTINCT c.account_no) as customerCount, " +
+                  "COALESCE(SUM(b.import_units), 0.0) as totalImports, " +
+                  "COALESCE(SUM(b.export_units), 0.0) as totalExports, " +
+                  "COALESCE(SUM(b.total_amount), 0.0) as totalRevenue " +
+                  "FROM customers c " +
+                  "LEFT JOIN billing_records b ON c.account_no = b.account_no " +
+                  "GROUP BY c.branch_code " +
+                  "ORDER BY totalRevenue DESC", nativeQuery = true)
+    List<Object[]> getBranchWiseAnalytics();
 }

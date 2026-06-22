@@ -5,7 +5,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "billing_records")
+@Table(name = "billing_records", indexes = {
+    @Index(name = "idx_billing_from_date", columnList = "from_date"),
+    @Index(name = "idx_billing_account_no", columnList = "account_no"),
+    @Index(name = "idx_billing_upload_history", columnList = "upload_history_id")
+})
 public class BillingRecord {
 
     @Id

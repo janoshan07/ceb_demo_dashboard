@@ -5,7 +5,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "customers")
+@Table(name = "customers", indexes = {
+    @Index(name = "idx_customer_branch_code", columnList = "branch_code"),
+    @Index(name = "idx_customer_solar_type", columnList = "solar_type")
+})
 public class Customer {
 
     @Id

@@ -11,6 +11,9 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import java.time.LocalDate;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -23,6 +26,12 @@ public class ReportController {
 
     @Autowired
     private BillingRecordRepository billingRecordRepository;
+
+    @Autowired
+    private com.ceb.billing.repositories.CustomerRepository customerRepository;
+
+    @Autowired
+    private com.ceb.billing.services.ReportService reportService;
 
     // --- Officer and Admin Report Endpoints ---
 
@@ -95,5 +104,65 @@ public class ReportController {
             reports.add(map);
         }
         return ResponseEntity.ok(reports);
+    }
+
+    @GetMapping("/api/officer/reports/branches")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getDistinctBranches() {
+        List<String> branches = customerRepository.findDistinctBranchCodes();
+        return ResponseEntity.ok(branches);
+    }
+
+    @GetMapping("/api/officer/reports/generate")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> generateReport(
+            @RequestParam("type") String type,
+            @RequestParam(value = "startDate", required = false) String startDateStr,
+            @RequestParam(value = "endDate", required = false) String endDateStr,
+            @RequestParam(value = "branchCode", required = false) String branchCode) {
+
+        LocalDate startDate = null;
+        LocalDate endDate = null;
+
+        try {
+            if (startDateStr != null && !startDateStr.trim().isEmpty()) {
+                startDate = LocalDate.parse(startDateStr.trim());
+            }
+            if (endDateStr != null && !endDateStr.trim().isEmpty()) {
+                endDate = LocalDate.parse(endDateStr.trim());
+            }
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Invalid date format. Use YYYY-MM-DD."));
+        }
+
+        List<Map<String, Object>> reportData;
+
+        switch (type.toUpperCase()) {
+            case "MONTHLY_REVENUE":
+                reportData = reportService.getMonthlyRevenueReport(startDate, endDate, branchCode);
+                break;
+            case "CUSTOMER_BILLING":
+                reportData = reportService.getCustomerBillingReport(startDate, endDate, branchCode);
+                break;
+            case "HIGHEST_EXPORTERS":
+                reportData = reportService.getHighestExportersReport(startDate, endDate, branchCode);
+                break;
+            case "HIGHEST_IMPORTERS":
+                reportData = reportService.getHighestImportersReport(startDate, endDate, branchCode);
+                break;
+            case "BRANCH_PERFORMANCE":
+                reportData = reportService.getBranchPerformanceReport(startDate, endDate);
+                break;
+            case "SOLAR_TYPE":
+                reportData = reportService.getSolarTypePerformanceReport(startDate, endDate, branchCode);
+                break;
+            case "ALERT_ANOMALY":
+                reportData = reportService.getAlertAnomalyReport(startDate, endDate, branchCode);
+                break;
+            default:
+                return ResponseEntity.badRequest().body(Map.of("message", "Unknown report type: " + type));
+        }
+
+        return ResponseEntity.ok(reportData);
     }
 }

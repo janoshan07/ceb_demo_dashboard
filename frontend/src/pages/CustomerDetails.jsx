@@ -15,8 +15,13 @@ import {
   AlertCircle,
   FileSpreadsheet,
   Activity,
-  ArrowLeft
+  ArrowLeft,
+  Sun,
+  Zap,
+  Calendar,
+  DollarSign
 } from 'lucide-react';
+import SVGLineChart from '../components/charts/SVGLineChart';
 
 const CustomerDetails = () => {
   const navigate = useNavigate();
@@ -36,6 +41,59 @@ const CustomerDetails = () => {
   const [billingHistory, setBillingHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('overview'); // overview, billing, analytics
+
+  // Helpers for Customer 360 calculations
+  const calculatePerformanceScore = (exportUnits, panelCapacity) => {
+    if (!panelCapacity || panelCapacity <= 0 || !exportUnits) {
+      return { score: 0, text: 'N/A', class: 'muted', color: 'var(--text-muted)' };
+    }
+    const score = exportUnits / panelCapacity;
+    if (score >= 120) {
+      return { score, text: 'Excellent', class: 'success', color: 'var(--success)' };
+    } else if (score >= 70) {
+      return { score, text: 'Good', class: 'info', color: 'var(--primary)' };
+    } else {
+      return { score, text: 'Poor', class: 'danger', color: 'var(--danger)' };
+    }
+  };
+
+  const getAverageExports = (history) => {
+    if (!history || history.length === 0) return 0;
+    const totalExp = history.reduce((sum, bill) => sum + (bill.exportUnits || 0), 0);
+    return totalExp / history.length;
+  };
+
+  const getYearlySummary = (history) => {
+    const summary = {};
+    history.forEach(bill => {
+      if (!bill.fromDate) return;
+      const d = new Date(bill.fromDate);
+      if (isNaN(d.getTime())) return;
+      const year = d.getFullYear();
+      if (!summary[year]) {
+        summary[year] = { exports: 0, imports: 0, revenue: 0 };
+      }
+      summary[year].exports += bill.exportUnits || 0;
+      summary[year].imports += bill.importUnits || 0;
+      summary[year].revenue += bill.totalAmount || 0;
+    });
+    return Object.keys(summary).sort((a, b) => b - a).map(year => ({
+      year,
+      ...summary[year]
+    }));
+  };
+
+  const parseDateLabel = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleDateString('en-LK', { month: 'short', year: '2-digit' });
+    } catch (e) {
+      return '—';
+    }
+  };
 
   // Customer Editing state
   const [isEditing, setIsEditing] = useState(false);
@@ -168,6 +226,7 @@ const CustomerDetails = () => {
     setEditError(null);
     setEditMessage(null);
     setEditingBill(null);
+    setActiveTab('overview');
     
     // Prep Edit Fields
     setEditName(customer.customerName);
@@ -460,11 +519,11 @@ const CustomerDetails = () => {
       </div>
 
       {/* Details Slide-out Drawer */}
-      <div className={`slide-drawer ${drawerOpen ? 'open' : ''}`} style={{ width: '680px' }}>
+      <div className={`slide-drawer ${drawerOpen ? 'open' : ''}`} style={{ width: '850px', maxWidth: '95%' }}>
         <div className="drawer-header">
           <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <User size={18} className="text-primary" />
-            Customer Profile Details
+            Customer 360 Profile
           </h2>
           <button 
             style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
@@ -477,299 +536,468 @@ const CustomerDetails = () => {
         {selectedCustomer && (
           <div className="drawer-body">
             
+            {/* Tab Navigation */}
+            <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
+              <button
+                type="button"
+                className={`btn ${activeTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                onClick={() => setActiveTab('overview')}
+              >
+                Overview
+              </button>
+              <button
+                type="button"
+                className={`btn ${activeTab === 'billing' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                onClick={() => setActiveTab('billing')}
+              >
+                Billing History
+              </button>
+              <button
+                type="button"
+                className={`btn ${activeTab === 'analytics' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                onClick={() => setActiveTab('analytics')}
+              >
+                Analytics
+              </button>
+            </div>
+
             {editMessage && (
-              <div style={{ padding: '0.75rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '8px', borderLeft: '3px solid var(--success)', fontSize: '0.85rem' }}>
+              <div style={{ padding: '0.75rem', backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '8px', borderLeft: '3px solid var(--success)', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 {editMessage}
               </div>
             )}
 
-            {/* Profile Block */}
-            <div className="card" style={{ backgroundColor: 'var(--bg-primary)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
-                <div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Account Number</span>
-                  <div style={{ fontSize: '1.4rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.1rem' }}>{selectedCustomer.accountNo}</div>
-                </div>
-                {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && !isEditing && (
-                  <button 
-                    className="btn btn-secondary" 
-                    style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                    onClick={() => {
-                      setIsEditing(true);
-                      setEditMessage(null);
-                      setEditError(null);
-                    }}
-                  >
-                    <Edit size={14} />
-                    Edit Profile
-                  </button>
-                )}
-              </div>
-
-              {isEditing ? (
-                <form onSubmit={handleEditSubmit} className="login-form">
-                  {editError && <div className="login-error">{editError}</div>}
-                  
-                  <div className="form-group">
-                    <label className="form-label">Customer Name</label>
-                    <input 
-                      type="text" 
-                      className="login-form-input" 
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Customer Address</label>
-                    <input 
-                      type="text" 
-                      className="login-form-input" 
-                      value={editAddress}
-                      onChange={(e) => setEditAddress(e.target.value)}
-                    />
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label">Mobile Number</label>
-                      <input 
-                        type="text" 
-                        className="login-form-input" 
-                        value={editMobile}
-                        onChange={(e) => setEditMobile(e.target.value)}
-                      />
+            {/* TAB CONTENT: OVERVIEW */}
+            {activeTab === 'overview' && (
+              <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.25rem', alignItems: 'start' }}>
+                {/* Profile Card */}
+                <div className="card" style={{ backgroundColor: 'var(--bg-primary)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+                    <div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Account Number</span>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.1rem' }}>{selectedCustomer.accountNo}</div>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Solar Type</label>
-                      <select 
-                        className="login-form-input" 
-                        value={editSolarType}
-                        onChange={(e) => setEditSolarType(e.target.value)}
-                        style={{ appearance: 'auto' }}
+                    {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && !isEditing && (
+                      <button 
+                        type="button"
+                        className="btn btn-secondary" 
+                        style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                        onClick={() => {
+                          setIsEditing(true);
+                          setEditMessage(null);
+                          setEditError(null);
+                        }}
                       >
-                        <option value="Net Plus">Net Plus</option>
-                        <option value="Net Plus Plus">Net Plus Plus</option>
-                        <option value="Net Metering">Net Metering</option>
-                        <option value="Net Accounting">Net Accounting</option>
-                      </select>
-                    </div>
+                        <Edit size={12} />
+                        Edit Profile
+                      </button>
+                    )}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label">Panel Capacity (kW)</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        className="login-form-input" 
-                        value={editCapacity}
-                        onChange={(e) => setEditCapacity(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Agreement Date</label>
-                      <input 
-                        type="date" 
-                        className="login-form-input" 
-                        value={editAgreementDate}
-                        onChange={(e) => setEditAgreementDate(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                  {isEditing ? (
+                    <form onSubmit={handleEditSubmit} className="login-form">
+                      {editError && <div className="login-error">{editError}</div>}
+                      
+                      <div className="form-group">
+                        <label className="form-label">Customer Name</label>
+                        <input 
+                          type="text" 
+                          className="login-form-input" 
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          required
+                        />
+                      </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label">Bank Code</label>
-                      <input 
-                        type="text" 
-                        className="login-form-input" 
-                        value={editBankCode}
-                        onChange={(e) => setEditBankCode(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Branch Code</label>
-                      <input 
-                        type="text" 
-                        className="login-form-input" 
-                        value={editBranchCode}
-                        onChange={(e) => setEditBranchCode(e.target.value)}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Bank Account No</label>
-                      <input 
-                        type="text" 
-                        className="login-form-input" 
-                        value={editBankAccountNo}
-                        onChange={(e) => setEditBankAccountNo(e.target.value)}
-                      />
-                    </div>
-                  </div>
+                      <div className="form-group">
+                        <label className="form-label">Customer Address</label>
+                        <input 
+                          type="text" 
+                          className="login-form-input" 
+                          value={editAddress}
+                          onChange={(e) => setEditAddress(e.target.value)}
+                        />
+                      </div>
 
-                  <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
-                      onClick={() => { setIsEditing(false); setEditError(null); }}
-                      disabled={editLoading}
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="btn btn-primary"
-                      disabled={editLoading}
-                    >
-                      {editLoading ? 'Submitting...' : 'Save Profile'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">Mobile Number</label>
+                          <input 
+                            type="text" 
+                            className="login-form-input" 
+                            value={editMobile}
+                            onChange={(e) => setEditMobile(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Solar Type</label>
+                          <select 
+                            className="login-form-input" 
+                            value={editSolarType}
+                            onChange={(e) => setEditSolarType(e.target.value)}
+                            style={{ appearance: 'auto' }}
+                          >
+                            <option value="Net Plus">Net Plus</option>
+                            <option value="Net Plus Plus">Net Plus Plus</option>
+                            <option value="Net Metering">Net Metering</option>
+                            <option value="Net Accounting">Net Accounting</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">Panel Capacity (kW)</label>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            className="login-form-input" 
+                            value={editCapacity}
+                            onChange={(e) => setEditCapacity(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Agreement Date</label>
+                          <input 
+                            type="date" 
+                            className="login-form-input" 
+                            value={editAgreementDate}
+                            onChange={(e) => setEditAgreementDate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">Bank Code</label>
+                          <input 
+                            type="text" 
+                            className="login-form-input" 
+                            value={editBankCode}
+                            onChange={(e) => setEditBankCode(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Branch Code</label>
+                          <input 
+                            type="text" 
+                            className="login-form-input" 
+                            value={editBranchCode}
+                            onChange={(e) => setEditBranchCode(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Bank Account No</label>
+                          <input 
+                            type="text" 
+                            className="login-form-input" 
+                            value={editBankAccountNo}
+                            onChange={(e) => setEditBankAccountNo(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+                        <button 
+                          type="button" 
+                          className="btn btn-secondary" 
+                          onClick={() => { setIsEditing(false); setEditError(null); }}
+                          disabled={editLoading}
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          type="submit" 
+                          className="btn btn-primary"
+                          disabled={editLoading}
+                        >
+                          {editLoading ? 'Submitting...' : 'Save Profile'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Name</span>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>{selectedCustomer.customerName}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Solar System Type</span>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: 'var(--success)' }}>
+                            {selectedCustomer.solarType || 'Net Plus'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Address</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.customerAddress || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Mobile No</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.mobileNo || '—'}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
+                          <div style={{ fontWeight: 600 }}>{selectedCustomer.panelCapacity ? `${selectedCustomer.panelCapacity} kW` : '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Agreement Date</span>
+                          <div style={{ fontWeight: 600 }}>
+                            {selectedCustomer.agreementDate ? new Date(selectedCustomer.agreementDate).toLocaleDateString('en-LK') : '—'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Code</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.bankCode || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Branch Code</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.branchCode || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Account No</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.bankAccountNo || '—'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Score & Yearly Summaries */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Customer Name</span>
-                      <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>{selectedCustomer.customerName}</div>
+                  {/* Performance Score Card */}
+                  <div className="card" style={{ border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: 'var(--bg-secondary)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Solar Performance Score</span>
+                      {(() => {
+                        const avgExp = getAverageExports(billingHistory);
+                        const perf = calculatePerformanceScore(avgExp, selectedCustomer.panelCapacity);
+                        return (
+                          <span className={`badge ${perf.class}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 700 }}>
+                            {perf.text}
+                          </span>
+                        );
+                      })()}
                     </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Solar System Type</span>
-                      <div style={{ fontWeight: 600, marginTop: '0.1rem', color: 'var(--success)' }}>
-                        {selectedCustomer.solarType || 'Net Plus'}
-                      </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', marginTop: '0.25rem' }}>
+                      {(() => {
+                        const avgExp = getAverageExports(billingHistory);
+                        const ratio = selectedCustomer.panelCapacity > 0 ? (avgExp / selectedCustomer.panelCapacity) : 0;
+                        return (
+                          <>
+                            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {ratio.toFixed(1)}
+                            </span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>kWh / kW</span>
+                          </>
+                        );
+                      })()}
                     </div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.25' }}>
+                      Calculated as average monthly export units divided by solar panel capacity. Represents overall solar yield health.
+                    </span>
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Customer Address</span>
-                      <div style={{ fontWeight: 500 }}>{selectedCustomer.customerAddress || '—'}</div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Mobile No</span>
-                      <div style={{ fontWeight: 500 }}>{selectedCustomer.mobileNo || '—'}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
-                      <div style={{ fontWeight: 600 }}>{selectedCustomer.panelCapacity ? `${selectedCustomer.panelCapacity} kW` : '—'}</div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Agreement Date</span>
-                      <div style={{ fontWeight: 600 }}>
-                        {selectedCustomer.agreementDate ? new Date(selectedCustomer.agreementDate).toLocaleDateString('en-LK') : '—'}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Bank Code</span>
-                      <div style={{ fontWeight: 500 }}>{selectedCustomer.bankCode || '—'}</div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Branch Code</span>
-                      <div style={{ fontWeight: 500 }}>{selectedCustomer.branchCode || '—'}</div>
-                    </div>
-                    <div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Bank Account No</span>
-                      <div style={{ fontWeight: 500 }}>{selectedCustomer.bankAccountNo || '—'}</div>
+                  {/* Yearly Summary Card */}
+                  <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                    <h4 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <Calendar size={14} />
+                      Yearly Summary Ledger
+                    </h4>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      {getYearlySummary(billingHistory).map(yearData => (
+                        <div key={yearData.year} style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.25rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)', marginBottom: '0.25rem' }}>
+                            <span>Year {yearData.year}</span>
+                            <span>{formatLKR(yearData.revenue)}</span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            <div>Exports: <strong style={{ color: 'var(--success)' }}>{yearData.exports.toLocaleString()} kWh</strong></div>
+                            <div style={{ textAlign: 'right' }}>Imports: <strong style={{ color: 'var(--warning)' }}>{yearData.imports.toLocaleString()} kWh</strong></div>
+                          </div>
+                        </div>
+                      ))}
+                      {billingHistory.length === 0 && (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No statements available to group.</span>
+                      )}
                     </div>
                   </div>
                 </div>
-              )}
-            </div>
-
-            {/* Billing Ledger Block */}
-            <div>
-              <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-                <History size={16} className="text-accent" style={{ color: 'var(--accent-teal)' }} />
-                Monthly Billing Ledger
-              </h3>
-              
-              <div style={{ maxHeight: '350px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
-                {historyLoading ? (
-                  <div style={{ padding: '2rem', textAlignment: 'center', color: 'var(--text-secondary)' }}>
-                    Loading customer records...
-                  </div>
-                ) : billingHistory.length === 0 ? (
-                  <div style={{ padding: '2rem', textAlignment: 'center', color: 'var(--text-muted)' }}>
-                    No bills logged for this customer.
-                  </div>
-                ) : (
-                  <table className="custom-table" style={{ fontSize: '0.85rem' }}>
-                    <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                      <tr>
-                        <th>Period</th>
-                        <th>Ref No</th>
-                        <th>Bill Cycle</th>
-                        <th>Imports</th>
-                        <th>Exports</th>
-                        <th>Net (kWh)</th>
-                        <th>Total Amount</th>
-                        <th>Bill Set Off</th>
-                        <th>Retention Mo</th>
-                        <th>Payment</th>
-                        <th>Mode</th>
-                        <th style={{ textAlign: 'right' }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {billingHistory.map((bill) => (
-                        <tr key={bill.billingId}>
-                          <td>
-                            {new Date(bill.fromDate).toLocaleDateString('en-LK', { month: 'short', year: '2-digit' })}
-                          </td>
-                          <td style={{ fontWeight: 500 }}>{bill.refNo}</td>
-                          <td style={{ fontWeight: 600 }}>{bill.billCycle || '—'}</td>
-                          <td>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--warning)' }}>
-                              <TrendingDown size={12} />
-                              {bill.importUnits}
-                            </span>
-                          </td>
-                          <td>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--success)' }}>
-                              <TrendingUp size={12} />
-                              {bill.exportUnits}
-                            </span>
-                          </td>
-                          <td style={{ fontWeight: 600, color: bill.netUnit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                            {bill.netUnit > 0 ? `+${bill.netUnit}` : bill.netUnit}
-                          </td>
-                          <td style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                            {formatLKR(bill.totalAmount)}
-                          </td>
-                          <td style={{ color: 'var(--warning)', fontWeight: 500 }}>
-                            {bill.billSetOff != null ? formatLKR(bill.billSetOff) : '—'}
-                          </td>
-                          <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
-                            {bill.retentionMoney != null ? formatLKR(bill.retentionMoney) : '—'}
-                          </td>
-                          <td style={{ color: 'var(--success)', fontWeight: 700 }}>
-                            {bill.payment != null ? formatLKR(bill.payment) : '—'}
-                          </td>
-                          <td><span className="badge success" style={{ fontSize: '0.65rem' }}>{bill.billingMode || 'Fixed'}</span></td>
-                          <td style={{ textAlign: 'right' }}>
-                            <button 
-                              className="btn btn-secondary"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
-                              onClick={() => handleOpenBillEdit(bill)}
-                            >
-                              Edit Bill
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
               </div>
-            </div>
+            )}
+
+            {/* TAB CONTENT: BILLING HISTORY */}
+            {activeTab === 'billing' && (
+              <div className="animate-fade-in">
+                <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', fontSize: '1rem' }}>
+                  <History size={16} className="text-accent" style={{ color: 'var(--accent-teal)' }} />
+                  Monthly Billing Ledger
+                </h3>
+                
+                <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                  {historyLoading ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                      Loading customer records...
+                    </div>
+                  ) : billingHistory.length === 0 ? (
+                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                      No bills logged for this customer.
+                    </div>
+                  ) : (
+                    <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                        <tr>
+                          <th>Period</th>
+                          <th>Ref No</th>
+                          <th>Yield Perf</th>
+                          <th>Imports</th>
+                          <th>Exports</th>
+                          <th>Net (kWh)</th>
+                          <th>Total Amount</th>
+                          <th>Payment</th>
+                          <th>Mode</th>
+                          <th style={{ textAlign: 'right' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {billingHistory.map((bill) => {
+                          const perf = calculatePerformanceScore(bill.exportUnits, selectedCustomer.panelCapacity);
+                          return (
+                            <tr key={bill.billingId}>
+                              <td>
+                                {parseDateLabel(bill.fromDate)}
+                              </td>
+                              <td style={{ fontWeight: 500 }}>{bill.refNo}</td>
+                              <td>
+                                <span className={`badge ${perf.class}`} style={{ textTransform: 'capitalize', fontSize: '0.72rem', fontWeight: 600 }}>
+                                  {perf.text}
+                                </span>
+                              </td>
+                              <td>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--warning)' }}>
+                                  <TrendingDown size={12} />
+                                  {bill.importUnits.toLocaleString()}
+                                </span>
+                              </td>
+                              <td>
+                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--success)' }}>
+                                  <TrendingUp size={12} />
+                                  {bill.exportUnits.toLocaleString()}
+                                </span>
+                              </td>
+                              <td style={{ fontWeight: 600, color: bill.netUnit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                {bill.netUnit > 0 ? `+${bill.netUnit.toLocaleString()}` : bill.netUnit.toLocaleString()}
+                              </td>
+                              <td style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                                {formatLKR(bill.totalAmount)}
+                              </td>
+                              <td style={{ color: 'var(--success)', fontWeight: 700 }}>
+                                {bill.payment != null ? formatLKR(bill.payment) : '—'}
+                              </td>
+                              <td><span className="badge success" style={{ fontSize: '0.65rem' }}>{bill.billingMode || 'Fixed'}</span></td>
+                              <td style={{ textAlign: 'right' }}>
+                                <button 
+                                  type="button"
+                                  className="btn btn-secondary"
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                  onClick={() => handleOpenBillEdit(bill)}
+                                >
+                                  Edit
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* TAB CONTENT: ANALYTICS */}
+            {activeTab === 'analytics' && (() => {
+              const sortedHistory = billingHistory ? [...billingHistory].reverse() : [];
+              return (
+                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  
+                  {/* Revenue Trend Chart (100% width) */}
+                  <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                    <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                      <DollarSign size={16} className="text-primary" />
+                      Revenue Trend (LKR)
+                    </h4>
+                    <SVGLineChart
+                      data={sortedHistory.map(bill => ({
+                        label: parseDateLabel(bill.fromDate),
+                        value: bill.totalAmount || 0
+                      }))}
+                      strokeColor="#3b82f6"
+                      fillGradientId="c360-rev-grad"
+                      fillColorStart="rgba(59, 130, 246, 0.22)"
+                      fillColorEnd="rgba(59, 130, 246, 0)"
+                      tooltipSuffix=" LKR"
+                      formatter={(val) => formatLKR(val).replace('LKR', '')}
+                    />
+                  </div>
+
+                  {/* Import / Export Grid (50% / 50% split) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                    {/* Export units */}
+                    <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                      <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Sun size={16} style={{ color: 'var(--success)' }} />
+                        Monthly Solar Export (kWh)
+                      </h4>
+                      <SVGLineChart
+                        data={sortedHistory.map(bill => ({
+                          label: parseDateLabel(bill.fromDate),
+                          value: bill.exportUnits || 0
+                        }))}
+                        strokeColor="#10b981"
+                        fillGradientId="c360-exp-grad"
+                        fillColorStart="rgba(16, 185, 129, 0.2)"
+                        fillColorEnd="rgba(16, 185, 129, 0)"
+                        tooltipSuffix=" kWh"
+                      />
+                    </div>
+
+                    {/* Import units */}
+                    <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                      <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <TrendingDown size={16} style={{ color: 'var(--warning)' }} />
+                        Monthly Grid Import (kWh)
+                      </h4>
+                      <SVGLineChart
+                        data={sortedHistory.map(bill => ({
+                          label: parseDateLabel(bill.fromDate),
+                          value: bill.importUnits || 0
+                        }))}
+                        strokeColor="#f59e0b"
+                        fillGradientId="c360-imp-grad"
+                        fillColorStart="rgba(245, 158, 11, 0.2)"
+                        fillColorEnd="rgba(245, 158, 11, 0)"
+                        tooltipSuffix=" kWh"
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
           </div>
         )}
       </div>

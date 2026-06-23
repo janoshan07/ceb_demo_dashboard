@@ -19,11 +19,14 @@ import {
   Building,
   Sun,
   Zap,
-  TrendingDown
+  TrendingDown,
+  CheckCircle,
+  Bell
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SVGLineChart from '../components/charts/SVGLineChart';
 import SVGDonutChart from '../components/charts/SVGDonutChart';
+import SVGPredictionChart from '../components/charts/SVGPredictionChart';
 
 const Dashboard = () => {
   const { authFetch, user } = useAuth();
@@ -33,6 +36,83 @@ const Dashboard = () => {
   const [customerInfo, setCustomerInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Smart Alert Engine State
+  const [alerts, setAlerts] = useState([]);
+  const [alertCounters, setAlertCounters] = useState({ critical: 0, warning: 0, info: 0, total: 0 });
+  const [severityFilter, setSeverityFilter] = useState('ALL');
+  const [alertsLoading, setAlertsLoading] = useState(false);
+
+  // Predictions Module State
+  const [predictions, setPredictions] = useState(null);
+  const [predictionsLoading, setPredictionsLoading] = useState(true);
+
+  useEffect(() => {
+    if (user && (user.role === 'ADMIN' || user.role === 'OFFICER')) {
+      const fetchPredictionsData = async () => {
+        try {
+          setPredictionsLoading(true);
+          const res = await authFetch('/api/admin/dashboard/predictions');
+          if (res.ok) {
+            const data = await res.json();
+            setPredictions(data);
+          }
+        } catch (err) {
+          console.error('Failed to load predictions:', err);
+        } finally {
+          setPredictionsLoading(false);
+        }
+      };
+      fetchPredictionsData();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (user && (user.role === 'ADMIN' || user.role === 'OFFICER')) {
+      const fetchFilteredAlerts = async () => {
+        try {
+          setAlertsLoading(true);
+          const cntRes = await authFetch('/api/admin/alerts/counters');
+          if (cntRes.ok) {
+            const cntData = await cntRes.json();
+            setAlertCounters(cntData);
+          }
+          const alertsRes = await authFetch(`/api/admin/alerts?severity=${severityFilter}`);
+          if (alertsRes.ok) {
+            const alertsData = await alertsRes.json();
+            setAlerts(alertsData);
+          }
+        } catch (err) {
+          console.error('Error fetching alerts:', err);
+        } finally {
+          setAlertsLoading(false);
+        }
+      };
+      fetchFilteredAlerts();
+    }
+  }, [severityFilter, user]);
+
+  const handleResolveAlert = async (alertId) => {
+    try {
+      const res = await authFetch(`/api/admin/alerts/${alertId}/resolve`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const cntRes = await authFetch('/api/admin/alerts/counters');
+        if (cntRes.ok) {
+          const cntData = await cntRes.json();
+          setAlertCounters(cntData);
+        }
+        const alertsRes = await authFetch(`/api/admin/alerts?severity=${severityFilter}`);
+        if (alertsRes.ok) {
+          const alertsData = await alertsRes.json();
+          setAlerts(alertsData);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to resolve alert:', err);
+    }
+  };
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -246,6 +326,87 @@ const Dashboard = () => {
           </div>
         </div>
 
+        {/* Smart Alert Engine Panel */}
+        <div className="alerts-card animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+          <div className="alerts-header">
+            <div className="alerts-header-left">
+              <div className="alerts-header-title">
+                <Bell className="text-primary" size={20} />
+                Smart Alert Engine
+              </div>
+              <div className="alerts-counters-chips">
+                <span className="alert-counter-chip critical">
+                  {alertCounters.critical} Critical
+                </span>
+                <span className="alert-counter-chip warning">
+                  {alertCounters.warning} Warnings
+                </span>
+                <span className="alert-counter-chip info">
+                  {alertCounters.info} Info
+                </span>
+              </div>
+            </div>
+            <div className="alerts-filter-bar">
+              {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map((sev) => (
+                <button
+                  key={sev}
+                  className={`alerts-filter-btn ${severityFilter === sev ? 'active' : ''}`}
+                  onClick={() => setSeverityFilter(sev)}
+                >
+                  {sev}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {alertsLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
+              <div style={{ border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid var(--primary)', borderRadius: '50%', width: '24px', height: '24px', animation: 'spin 1s linear infinite' }}></div>
+            </div>
+          ) : alerts.length === 0 ? (
+            <div className="alert-empty-state">
+              <CheckCircle className="alert-empty-icon" size={32} />
+              <div>
+                <h4 style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.15rem' }}>No Active Anomalies</h4>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>All customer grid cycles and statement ledger records validate correctly.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="alerts-list">
+              {alerts.map((alert) => (
+                <div key={alert.alertId} className={`alert-item ${alert.severity.toLowerCase()}`}>
+                  <div className="alert-item-content">
+                    <div className="alert-item-icon-wrapper">
+                      <AlertCircle 
+                        className={
+                          alert.severity === 'CRITICAL' ? 'text-danger' : 
+                          alert.severity === 'WARNING' ? 'text-warning' : 'text-primary'
+                        } 
+                        size={18} 
+                      />
+                    </div>
+                    <div className="alert-item-body">
+                      <div className="alert-item-msg">{alert.message}</div>
+                      <div className="alert-item-meta">
+                        <span className="alert-item-account">Account: {alert.accountNo}</span>
+                        <span className="alert-item-time">
+                          Detected: {new Date(alert.createdAt).toLocaleString('en-LK', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    className="alert-resolve-btn"
+                    onClick={() => handleResolveAlert(alert.alertId)}
+                  >
+                    Resolve
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* First Grid Row: Trend Charts */}
         <div className="analytics-layout">
           {/* Revenue Trend Chart */}
@@ -423,6 +584,92 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* CEB Predictor Engine Section */}
+        {!isCustomer && predictions && (
+          <div style={{ marginTop: '2.5rem' }}>
+            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem' }}>
+              <Zap className="text-primary" size={22} style={{ color: '#a78bfa' }} />
+              CEB Predictor Engine (Linear Regression Model)
+            </h2>
+
+            {/* Predictions Summary Cards Row */}
+            <div className="analytics-grid-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginBottom: '1.5rem' }}>
+              <div className="metric-card glow-indigo animate-fade-in-up" style={{ background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%)', borderColor: 'rgba(139, 92, 246, 0.2)' }}>
+                <div className="metric-info">
+                  <span className="metric-label" style={{ color: 'var(--text-secondary)' }}>Forecasted Next Month ({predictions.nextMonthName}) Revenue</span>
+                  <span className="metric-value" style={{ color: '#a78bfa' }}>{formatLKR(predictions.nextMonthRevenue)}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Net Revenue Statement</span>
+                </div>
+                <div className="metric-icon-box" style={{ color: '#a78bfa', backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
+                  <TrendingUp size={24} />
+                </div>
+              </div>
+
+              <div className="metric-card glow-teal animate-fade-in-up" style={{ background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(6, 182, 212, 0.02) 100%)', borderColor: 'rgba(20, 184, 166, 0.2)' }}>
+                <div className="metric-info">
+                  <span className="metric-label" style={{ color: 'var(--text-secondary)' }}>Forecasted Next Month ({predictions.nextMonthName}) Exports</span>
+                  <span className="metric-value" style={{ color: 'var(--success)' }}>
+                    {Math.round(predictions.nextMonthExports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Solar Generation Export</span>
+                </div>
+                <div className="metric-icon-box" style={{ color: 'var(--success)', backgroundColor: 'var(--success-glow)' }}>
+                  <Sun size={24} />
+                </div>
+              </div>
+
+              <div className="metric-card glow-warning animate-fade-in-up" style={{ background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(239, 68, 68, 0.02) 100%)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
+                <div className="metric-info">
+                  <span className="metric-label" style={{ color: 'var(--text-secondary)' }}>Forecasted Next Month ({predictions.nextMonthName}) Imports</span>
+                  <span className="metric-value" style={{ color: 'var(--warning)' }}>
+                    {Math.round(predictions.nextMonthImports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Consumer Demand Draw</span>
+                </div>
+                <div className="metric-icon-box" style={{ color: 'var(--warning)', backgroundColor: 'var(--warning-glow)' }}>
+                  <ArrowDownCircle size={24} />
+                </div>
+              </div>
+            </div>
+
+            {/* Predictions Comparative Charts Row */}
+            <div className="analytics-layout" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '1.5rem' }}>
+              {/* Revenue Comparison Chart */}
+              <div className="analytics-widget-card">
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  <DollarSign size={18} style={{ color: '#a78bfa' }} />
+                  Revenue: Actual vs Forecast Trend
+                </h3>
+                <SVGPredictionChart
+                  data={predictions.history}
+                  actualKey="actualRevenue"
+                  predictedKey="predictedRevenue"
+                  strokeColor="#3b82f6"
+                  predictedStrokeColor="#a78bfa"
+                  tooltipSuffix=" LKR"
+                  formatter={(val) => formatLKR(val).replace('LKR', '')}
+                />
+              </div>
+
+              {/* Energy Units Comparison Chart */}
+              <div className="analytics-widget-card">
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  <Sun size={18} style={{ color: 'var(--success)' }} />
+                  Solar Exports: Actual vs Forecast Trend
+                </h3>
+                <SVGPredictionChart
+                  data={predictions.history}
+                  actualKey="actualExports"
+                  predictedKey="predictedExports"
+                  strokeColor="#10b981"
+                  predictedStrokeColor="#34d399"
+                  tooltipSuffix=" kWh"
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Quick Operations Control & Ingestions Panel */}
         <div className="analytics-layout" style={{ gridTemplateColumns: '1.8fr 1.2fr', marginTop: '1.5rem' }}>

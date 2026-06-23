@@ -38,6 +38,9 @@ public class StagingMigrationService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private AlertService alertService;
+
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(batchId);
@@ -51,6 +54,7 @@ public class StagingMigrationService {
         int billingInserted = 0;
         int invalidCount = 0;
         int duplicateCount = 0;
+        Set<String> impactedAccounts = new HashSet<>();
 
         for (BillingUploadStaging record : stagingRecords) {
             String status = record.getValidationStatus();
@@ -67,6 +71,7 @@ public class StagingMigrationService {
             Map<String, Object> data = objectMapper.readValue(record.getRawJson(), new TypeReference<Map<String, Object>>() {});
 
             String accountNo = (String) data.get("accountNo");
+            impactedAccounts.add(accountNo);
             String customerName = (String) data.get("customerName");
             String refNo = (String) data.get("refNo");
             LocalDate fromDate = data.get("fromDate") != null ? LocalDate.parse((String) data.get("fromDate")) : null;
@@ -132,6 +137,15 @@ public class StagingMigrationService {
         auditLogService.log("STAGING_APPROVED", String.format(
                 "Batch ID %d approved by %s. Inserted bills: %d, New customers: %d, Skipped (invalid/duplicate): %d",
                 batchId, approvedBy, billingInserted, newCustomers, (invalidCount + duplicateCount)));
+
+        // Generate alerts for impacted accounts
+        if (!impactedAccounts.isEmpty()) {
+            try {
+                alertService.generateAlertsForAccounts(impactedAccounts);
+            } catch (Exception e) {
+                System.err.println("Error generating alerts: " + e.getMessage());
+            }
+        }
     }
 
     @Transactional

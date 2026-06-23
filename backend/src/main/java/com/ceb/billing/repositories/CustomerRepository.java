@@ -24,4 +24,7 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
 
     @Query("SELECT c.solarType, COUNT(c) FROM Customer c GROUP BY c.solarType")
     List<Object[]> getSolarTypeDistribution();
+
+    @Query("SELECT DISTINCT c.branchCode FROM Customer c WHERE c.branchCode IS NOT NULL ORDER BY c.branchCode ASC")
+    List<String> findDistinctBranchCodes();
 }

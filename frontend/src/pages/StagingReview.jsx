@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useToast } from '../context/ToastContext';
 import { 
   FileSpreadsheet, 
   CheckCircle2, 
@@ -7,12 +8,13 @@ import {
   ThumbsUp, 
   ThumbsDown, 
   Loader, 
-  ArrowLeft,
+  ArrowLeft, 
   FileText,
   BadgeAlert
 } from 'lucide-react';
 
 const StagingReview = ({ authFetch, onConfirmAction }) => {
+  const { showToast } = useToast();
   const [pendingBatches, setPendingBatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -120,11 +122,15 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
             throw new Error(body.message || 'Failed to approve batch.');
           }
           
-          setActionSuccess(body.message || 'Batch approved and migrated successfully.');
+          const msg = body.message || 'Batch approved and migrated successfully.';
+          setActionSuccess(msg);
+          showToast(msg, 'success');
           setSelectedBatch(null);
           fetchPendingBatches();
         } catch (err) {
-          setActionError(err.message || 'Approval operation failed.');
+          const errMsg = err.message || 'Approval operation failed.';
+          setActionError(errMsg);
+          showToast(errMsg, 'error');
         } finally {
           setActionProcessing(false);
         }
@@ -156,11 +162,15 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
             throw new Error(body.message || 'Failed to reject batch.');
           }
           
-          setActionSuccess(body.message || 'Batch rejected successfully.');
+          const msg = body.message || 'Batch rejected successfully.';
+          setActionSuccess(msg);
+          showToast(msg, 'success');
           setSelectedBatch(null);
           fetchPendingBatches();
         } catch (err) {
-          setActionError(err.message || 'Rejection operation failed.');
+          const errMsg = err.message || 'Rejection operation failed.';
+          setActionError(errMsg);
+          showToast(errMsg, 'error');
         } finally {
           setActionProcessing(false);
         }
@@ -241,9 +251,46 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
           </div>
 
           {detailsLoading ? (
-            <div style={{ padding: '3rem', textAlignment: 'center', color: 'var(--text-secondary)' }}>
-              Loading staging batch records...
-            </div>
+            <>
+              {/* Summary Cards Skeleton */}
+              <div className="upload-summary-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '2rem' }}>
+                {[...Array(5)].map((_, i) => (
+                  <div key={i} className="summary-tile skeleton" style={{ height: '70px', borderLeft: 'none' }}></div>
+                ))}
+              </div>
+              
+              {/* Table Skeleton */}
+              <div className="table-container">
+                <table className="custom-table" style={{ opacity: 0.8 }}>
+                  <thead>
+                    <tr>
+                      <th>Row</th>
+                      <th>Account No</th>
+                      <th>Customer Name</th>
+                      <th>Billing Period</th>
+                      <th>Net (Imp / Exp)</th>
+                      <th>Unit Cost</th>
+                      <th>Severity</th>
+                      <th>Validation Errors / Warnings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...Array(6)].map((_, i) => (
+                      <tr key={i}>
+                        <td><div className="skeleton" style={{ height: '16px', width: '30px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '140px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '22px', width: '60px', borderRadius: '4px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '200px' }}></div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           ) : detailsError ? (
             <div style={{ padding: '3rem', textAlignment: 'center', color: 'var(--danger)' }}>
               {detailsError}
@@ -382,9 +429,32 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
 
           <div className="table-container">
             {loading ? (
-              <div style={{ padding: '2rem', textAlignment: 'center', color: 'var(--text-secondary)' }}>
-                Loading approval queue...
-              </div>
+              <table className="custom-table" style={{ opacity: 0.8 }}>
+                <thead>
+                  <tr>
+                    <th>Upload Time</th>
+                    <th>Filename</th>
+                    <th>Uploaded By</th>
+                    <th>Status</th>
+                    <th>Rows Scanned</th>
+                    <th>Staged Warnings / Failures</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...Array(4)].map((_, i) => (
+                    <tr key={i}>
+                      <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '220px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                      <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '100px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : error ? (
               <div style={{ padding: '2rem', textAlignment: 'center', color: 'var(--danger)' }}>
                 {error}

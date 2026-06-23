@@ -101,16 +101,39 @@ public class StagingMigrationService {
                 newCustomers++;
             } else {
                 customer = optCustomer.get();
-                customer.setCustomerName(customerName);
-                if (bankCode != null && !bankCode.isEmpty()) customer.setBankCode(bankCode);
-                if (branchCode != null && !branchCode.isEmpty()) customer.setBranchCode(branchCode);
-                if (bankAccountNo != null && !bankAccountNo.isEmpty()) customer.setBankAccountNo(bankAccountNo);
-                if (customerAddress != null && !customerAddress.isEmpty()) customer.setCustomerAddress(customerAddress);
-                if (mobileNo != null && !mobileNo.isEmpty()) customer.setMobileNo(mobileNo);
-                if (agreementDate != null) customer.setAgreementDate(agreementDate);
-                if (panelCapacity != null) customer.setPanelCapacity(panelCapacity);
-                if (solarType != null && !solarType.isEmpty()) customer.setSolarType(solarType);
+                // Only update fields that are currently null/empty — never overwrite existing data
+                if (customerName != null && !customerName.isEmpty()
+                        && (customer.getCustomerName() == null || customer.getCustomerName().isEmpty())) {
+                    customer.setCustomerName(customerName);
+                }
+                if (bankCode != null && !bankCode.isEmpty() && (customer.getBankCode() == null || customer.getBankCode().isEmpty()))
+                    customer.setBankCode(bankCode);
+                if (branchCode != null && !branchCode.isEmpty() && (customer.getBranchCode() == null || customer.getBranchCode().isEmpty()))
+                    customer.setBranchCode(branchCode);
+                if (bankAccountNo != null && !bankAccountNo.isEmpty() && (customer.getBankAccountNo() == null || customer.getBankAccountNo().isEmpty()))
+                    customer.setBankAccountNo(bankAccountNo);
+                if (customerAddress != null && !customerAddress.isEmpty() && (customer.getCustomerAddress() == null || customer.getCustomerAddress().isEmpty()))
+                    customer.setCustomerAddress(customerAddress);
+                if (mobileNo != null && !mobileNo.isEmpty() && (customer.getMobileNo() == null || customer.getMobileNo().isEmpty()))
+                    customer.setMobileNo(mobileNo);
+                if (agreementDate != null && customer.getAgreementDate() == null)
+                    customer.setAgreementDate(agreementDate);
+                if (panelCapacity != null && customer.getPanelCapacity() == null)
+                    customer.setPanelCapacity(panelCapacity);
+                if (solarType != null && !solarType.isEmpty() && (customer.getSolarType() == null || customer.getSolarType().isEmpty()))
+                    customer.setSolarType(solarType);
                 customerRepository.save(customer);
+            }
+
+            // Guard: skip billing record if one already exists for this account + billing period
+            if (fromDate != null) {
+                boolean alreadyExists = billingRecordRepository
+                        .findByCustomerAccountNoAndFromDateYearAndMonth(accountNo, fromDate.getYear(), fromDate.getMonthValue())
+                        .isPresent();
+                if (alreadyExists) {
+                    duplicateCount++;
+                    continue;
+                }
             }
 
             // Create Billing Record

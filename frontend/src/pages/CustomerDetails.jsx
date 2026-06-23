@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { 
   Search, 
   User, 
@@ -26,6 +27,7 @@ import SVGLineChart from '../components/charts/SVGLineChart';
 const CustomerDetails = () => {
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
+  const { showToast } = useToast();
   
   // Search & Pagination State
   const [customers, setCustomers] = useState([]);
@@ -277,16 +279,22 @@ const CustomerDetails = () => {
       }
 
       if (data.status === 'PENDING') {
-        setEditMessage('Success: Edits submitted successfully and are pending administrator approval.');
+        const pendingMsg = 'Edits submitted successfully and are pending administrator approval.';
+        setEditMessage(`Success: ${pendingMsg}`);
+        showToast(pendingMsg, 'warning');
         setIsEditing(false);
       } else {
         setSelectedCustomer(data);
         setIsEditing(false);
-        setEditMessage('Success: Customer details updated successfully.');
+        const successMsg = 'Customer details updated successfully.';
+        setEditMessage(`Success: ${successMsg}`);
+        showToast(successMsg, 'success');
         fetchCustomers(currentPage, searchQuery);
       }
     } catch (err) {
-      setEditError(err.message || 'Failed to update customer details.');
+      const errMsg = err.message || 'Failed to update customer details.';
+      setEditError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setEditLoading(false);
     }
@@ -346,15 +354,21 @@ const CustomerDetails = () => {
       }
 
       if (data.status === 'PENDING') {
-        setBillEditSuccess('Success: Billing updates submitted and are pending Admin approval.');
+        const pendingMsg = 'Billing updates submitted and are pending Admin approval.';
+        setBillEditSuccess(`Success: ${pendingMsg}`);
+        showToast(pendingMsg, 'warning');
         setTimeout(() => setEditingBill(null), 2500);
       } else {
-        setBillEditSuccess('Success: Billing record updated successfully.');
+        const successMsg = 'Billing record updated successfully.';
+        setBillEditSuccess(`Success: ${successMsg}`);
+        showToast(successMsg, 'success');
         fetchBillingHistory(selectedCustomer.accountNo);
         setTimeout(() => setEditingBill(null), 1500);
       }
     } catch (err) {
-      setBillEditError(err.message || 'Failed to edit billing record.');
+      const errMsg = err.message || 'Failed to edit billing record.';
+      setBillEditError(errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setBillEditLoading(false);
     }
@@ -416,9 +430,34 @@ const CustomerDetails = () => {
       <div className="card">
         <div className="table-container">
           {loading ? (
-            <div style={{ padding: '3rem 0', textAlignment: 'center', color: 'var(--text-secondary)' }}>
-              Querying Customer Database...
-            </div>
+            <table className="custom-table" style={{ opacity: 0.8 }}>
+              <thead>
+                <tr>
+                  <th style={{ width: '60px' }}>#</th>
+                  <th>Account No</th>
+                  <th>Customer Name</th>
+                  <th>Solar Type</th>
+                  <th>Panel Cap</th>
+                  <th>Agreement Date</th>
+                  <th>Location</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...Array(8)].map((_, i) => (
+                  <tr key={i}>
+                    <td><div className="skeleton" style={{ height: '16px', width: '20px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '150px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '180px' }}></div></td>
+                    <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '90px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : customers.length === 0 ? (
             <div style={{ padding: '3rem 0', textAlignment: 'center', color: 'var(--text-muted)' }}>
               No customers found. Try a different search query or import a billing file.
@@ -779,35 +818,41 @@ const CustomerDetails = () => {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {/* Performance Score Card */}
                   <div className="card" style={{ border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: 'var(--bg-secondary)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Solar Performance Score</span>
-                      {(() => {
-                        const avgExp = getAverageExports(billingHistory);
-                        const perf = calculatePerformanceScore(avgExp, selectedCustomer.panelCapacity);
-                        return (
-                          <span className={`badge ${perf.class}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 700 }}>
-                            {perf.text}
-                          </span>
-                        );
-                      })()}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', marginTop: '0.25rem' }}>
-                      {(() => {
-                        const avgExp = getAverageExports(billingHistory);
-                        const ratio = selectedCustomer.panelCapacity > 0 ? (avgExp / selectedCustomer.panelCapacity) : 0;
-                        return (
-                          <>
-                            <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                              {ratio.toFixed(1)}
-                            </span>
-                            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>kWh / kW</span>
-                          </>
-                        );
-                      })()}
-                    </div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.25' }}>
-                      Calculated as average monthly export units divided by solar panel capacity. Represents overall solar yield health.
-                    </span>
+                    {historyLoading ? (
+                      <div className="skeleton" style={{ height: '90px', width: '100%' }}></div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Solar Performance Score</span>
+                          {(() => {
+                            const avgExp = getAverageExports(billingHistory);
+                            const perf = calculatePerformanceScore(avgExp, selectedCustomer.panelCapacity);
+                            return (
+                              <span className={`badge ${perf.class}`} style={{ textTransform: 'uppercase', fontSize: '0.75rem', fontWeight: 700 }}>
+                                {perf.text}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.25rem', marginTop: '0.25rem' }}>
+                          {(() => {
+                            const avgExp = getAverageExports(billingHistory);
+                            const ratio = selectedCustomer.panelCapacity > 0 ? (avgExp / selectedCustomer.panelCapacity) : 0;
+                            return (
+                              <>
+                                <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                  {ratio.toFixed(1)}
+                                </span>
+                                <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>kWh / kW</span>
+                              </>
+                            );
+                          })()}
+                        </div>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: '1.25' }}>
+                          Calculated as average monthly export units divided by solar panel capacity. Represents overall solar yield health.
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {/* Yearly Summary Card */}
@@ -818,20 +863,28 @@ const CustomerDetails = () => {
                     </h4>
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      {getYearlySummary(billingHistory).map(yearData => (
-                        <div key={yearData.year} style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.25rem' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)', marginBottom: '0.25rem' }}>
-                            <span>Year {yearData.year}</span>
-                            <span>{formatLKR(yearData.revenue)}</span>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            <div>Exports: <strong style={{ color: 'var(--success)' }}>{yearData.exports.toLocaleString()} kWh</strong></div>
-                            <div style={{ textAlign: 'right' }}>Imports: <strong style={{ color: 'var(--warning)' }}>{yearData.imports.toLocaleString()} kWh</strong></div>
-                          </div>
-                        </div>
-                      ))}
-                      {billingHistory.length === 0 && (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No statements available to group.</span>
+                      {historyLoading ? (
+                        [...Array(2)].map((_, i) => (
+                          <div key={i} className="skeleton" style={{ height: '38px', width: '100%' }}></div>
+                        ))
+                      ) : (
+                        <>
+                          {getYearlySummary(billingHistory).map(yearData => (
+                            <div key={yearData.year} style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '0.25rem' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, fontSize: '0.82rem', color: 'var(--primary)', marginBottom: '0.25rem' }}>
+                                <span>Year {yearData.year}</span>
+                                <span>{formatLKR(yearData.revenue)}</span>
+                              </div>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                <div>Exports: <strong style={{ color: 'var(--success)' }}>{yearData.exports.toLocaleString()} kWh</strong></div>
+                                <div style={{ textAlign: 'right' }}>Imports: <strong style={{ color: 'var(--warning)' }}>{yearData.imports.toLocaleString()} kWh</strong></div>
+                              </div>
+                            </div>
+                          ))}
+                          {billingHistory.length === 0 && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No statements available to group.</span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
@@ -849,9 +902,38 @@ const CustomerDetails = () => {
                 
                 <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                   {historyLoading ? (
-                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                      Loading customer records...
-                    </div>
+                    <table className="custom-table" style={{ opacity: 0.8 }}>
+                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                        <tr>
+                          <th>Period</th>
+                          <th>Ref No</th>
+                          <th>Yield Perf</th>
+                          <th>Imports</th>
+                          <th>Exports</th>
+                          <th>Net (kWh)</th>
+                          <th>Total Amount</th>
+                          <th>Payment</th>
+                          <th>Mode</th>
+                          <th style={{ textAlign: 'right' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...Array(5)].map((_, i) => (
+                          <tr key={i}>
+                            <td><div className="skeleton" style={{ height: '16px', width: '70px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '22px', width: '60px', borderRadius: '4px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '22px', width: '50px', borderRadius: '4px' }}></div></td>
+                            <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '50px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   ) : billingHistory.length === 0 ? (
                     <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                       No bills logged for this customer.
@@ -930,6 +1012,17 @@ const CustomerDetails = () => {
 
             {/* TAB CONTENT: ANALYTICS */}
             {activeTab === 'analytics' && (() => {
+              if (historyLoading) {
+                return (
+                  <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                    <div className="card skeleton" style={{ height: '320px', border: 'none' }}></div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
+                      <div className="card skeleton" style={{ height: '240px', border: 'none' }}></div>
+                      <div className="card skeleton" style={{ height: '240px', border: 'none' }}></div>
+                    </div>
+                  </div>
+                );
+              }
               const sortedHistory = billingHistory ? [...billingHistory].reverse() : [];
               return (
                 <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>

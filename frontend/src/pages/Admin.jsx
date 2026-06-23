@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { 
   ShieldAlert, 
   Users, 
@@ -24,6 +25,7 @@ import StagingReview from './StagingReview';
 const Admin = () => {
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
+  const { showToast } = useToast();
 
   // Navigation Tab State
   const [activeTab, setActiveTab] = useState('staging'); // staging, approvals, users, or logs
@@ -148,13 +150,17 @@ const Admin = () => {
         throw new Error(data.message || 'Failed to create user.');
       }
 
-      setUserSuccess(`Account for ${newUsername} has been registered.`);
+      const successMsg = `Account for ${newUsername} has been registered.`;
+      setUserSuccess(successMsg);
+      showToast(successMsg, 'success');
       setNewUsername('');
       setNewPassword('');
       setNewRole('USER');
       fetchUsers();
     } catch (err) {
-      setUserError(err.message || 'Failed to register account.');
+      const errMsg = err.message || 'Failed to register account.';
+      setUserError(errMsg);
+      showToast(errMsg, 'error');
     }
   };
 
@@ -169,10 +175,14 @@ const Admin = () => {
         throw new Error(data.message || 'Failed to delete user.');
       }
 
-      setUserSuccess('User account removed.');
+      const successMsg = 'User account removed.';
+      setUserSuccess(successMsg);
+      showToast(successMsg, 'success');
       fetchUsers();
     } catch (err) {
-      setUserError(err.message || 'Failed to delete user.');
+      const errMsg = err.message || 'Failed to delete user.';
+      setUserError(errMsg);
+      showToast(errMsg, 'error');
     }
   };
 
@@ -210,10 +220,14 @@ const Admin = () => {
       if (!res.ok) {
         throw new Error(data.message || 'Failed to approve request.');
       }
-      setUserSuccess('Approval successfully applied to database.');
+      const successMsg = 'Approval successfully applied to database.';
+      setUserSuccess(successMsg);
+      showToast(successMsg, 'success');
       fetchApprovals();
     } catch (err) {
-      setUserError(err.message || 'Approval operation failed.');
+      const errMsg = err.message || 'Approval operation failed.';
+      setUserError(errMsg);
+      showToast(errMsg, 'error');
     }
   };
 
@@ -239,10 +253,14 @@ const Admin = () => {
       if (!res.ok) {
         throw new Error(data.message || 'Failed to reject request.');
       }
-      setUserSuccess('Changes successfully rejected and discarded.');
+      const successMsg = 'Changes successfully rejected and discarded.';
+      setUserSuccess(successMsg);
+      showToast(successMsg, 'success');
       fetchApprovals();
     } catch (err) {
-      setUserError(err.message || 'Rejection operation failed.');
+      const errMsg = err.message || 'Rejection operation failed.';
+      setUserError(errMsg);
+      showToast(errMsg, 'error');
     }
   };
 
@@ -458,7 +476,40 @@ const Admin = () => {
 
           <div className="table-container">
             {approvalsLoading ? (
-              <div style={{ padding: '2.5rem', textAlignment: 'center', color: 'var(--text-secondary)' }}>Loading pending approvals...</div>
+              <table className="custom-table" style={{ opacity: 0.8 }}>
+                <thead>
+                  <tr>
+                    <th>Requested Time</th>
+                    <th>Requested By</th>
+                    <th>Modification Type</th>
+                    <th>Target account</th>
+                    <th>Details Comparison</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...Array(3)].map((_, i) => (
+                    <tr key={i}>
+                      <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '22px', width: '100px', borderRadius: '4px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '90px' }}></div></td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                          <div className="skeleton" style={{ height: '14px', width: '100%' }}></div>
+                          <div className="skeleton" style={{ height: '14px', width: '70%' }}></div>
+                        </div>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                          <div className="skeleton" style={{ height: '28px', width: '70px', borderRadius: '4px' }}></div>
+                          <div className="skeleton" style={{ height: '28px', width: '70px', borderRadius: '4px' }}></div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : approvalsError ? (
               <div style={{ padding: '2.5rem', textAlignment: 'center', color: 'var(--danger)' }}>{approvalsError}</div>
             ) : approvalsList.length === 0 ? (
@@ -535,7 +586,26 @@ const Admin = () => {
             
             <div className="table-container">
               {userLoading ? (
-                <div style={{ padding: '2rem', textAlignment: 'center', color: 'var(--text-secondary)' }}>Loading users...</div>
+                <table className="custom-table" style={{ opacity: 0.8 }}>
+                  <thead>
+                    <tr>
+                      <th>Username</th>
+                      <th>System Role</th>
+                      <th>Registered</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...Array(4)].map((_, i) => (
+                      <tr key={i}>
+                        <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '24px', width: '70px', borderRadius: '4px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
+                        <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '70px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               ) : (
                 <table className="custom-table">
                   <thead>
@@ -661,7 +731,21 @@ const Admin = () => {
 
           <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
             {logsLoading ? (
-              <div style={{ padding: '3rem 0', textAlignment: 'center', color: 'var(--text-secondary)' }}>Loading audit logs...</div>
+              <div className="timeline" style={{ padding: '1rem', opacity: 0.8 }}>
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="timeline-item">
+                    <div className="timeline-dot skeleton" style={{ width: '12px', height: '12px', borderRadius: '50%' }}></div>
+                    <div className="timeline-content">
+                      <div className="timeline-meta" style={{ display: 'flex', gap: '1rem', marginBottom: '0.5rem' }}>
+                        <div className="skeleton" style={{ height: '16px', width: '120px' }}></div>
+                        <div className="skeleton" style={{ height: '16px', width: '140px' }}></div>
+                      </div>
+                      <div className="skeleton" style={{ height: '14px', width: '180px', marginBottom: '0.5rem' }}></div>
+                      <div className="skeleton" style={{ height: '14px', width: '100%' }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : auditLogs.length === 0 ? (
               <div style={{ padding: '3rem 0', textAlignment: 'center', color: 'var(--text-muted)' }}>No audit logs found.</div>
             ) : (

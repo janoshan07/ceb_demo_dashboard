@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -34,6 +35,8 @@ const Reports = () => {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const { showToast } = useToast();
 
   // Fetch branch list on mount
   useEffect(() => {
@@ -173,6 +176,7 @@ const Reports = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast('Report successfully exported as CSV.', 'success');
   };
 
   // Export to Excel Function (Tab-separated HTML format compatible with Excel)
@@ -205,6 +209,7 @@ const Reports = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    showToast('Report successfully exported as Excel.', 'success');
   };
 
   // Render Charts based on Report Type
@@ -530,11 +535,29 @@ const Reports = () => {
             </div>
 
             {loading ? (
-              <div style={{ padding: '3rem 0', textAlign: 'center' }}>
-                <div style={{ border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid var(--primary)', borderRadius: '50%', width: '30px', height: '30px', animation: 'spin 1s linear infinite', margin: '0 auto 1rem' }}></div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Compiling ledger data...</p>
-              </div>
-            ) : error ? (
+      <div className="page-wrapper animate-fade-in">
+        {/* Title Header Skeleton */}
+        <div className="page-header" style={{ marginBottom: '2.5rem' }}>
+          <div>
+            <div className="skeleton" style={{ height: '32px', width: '280px', marginBottom: '8px' }}></div>
+            <div className="skeleton" style={{ height: '16px', width: '450px' }}></div>
+          </div>
+        </div>
+
+        {/* 3 cards skeleton */}
+        <div className="metrics-grid" style={{ marginBottom: '2.5rem' }}>
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="metric-card skeleton" style={{ height: '120px' }}></div>
+          ))}
+        </div>
+
+        {/* Main layout skeleton */}
+        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
+          <div className="card skeleton" style={{ height: '320px' }}></div>
+          <div className="card skeleton" style={{ height: '320px' }}></div>
+        </div>
+      </div>
+    ) : error ? (
               <div style={{ padding: '2rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.75rem', border: '1px solid var(--danger)', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
                 <AlertCircle size={20} />
                 <span style={{ fontSize: '0.9rem' }}>{error}</span>

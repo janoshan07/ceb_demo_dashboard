@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { 
   Users, 
   DollarSign, 
@@ -46,6 +47,8 @@ const Dashboard = () => {
   // Predictions Module State
   const [predictions, setPredictions] = useState(null);
   const [predictionsLoading, setPredictionsLoading] = useState(true);
+
+  const { showToast } = useToast();
 
   useEffect(() => {
     if (user && (user.role === 'ADMIN' || user.role === 'OFFICER')) {
@@ -98,6 +101,7 @@ const Dashboard = () => {
         method: 'POST'
       });
       if (res.ok) {
+        showToast('Alert anomaly marked as resolved.', 'success');
         const cntRes = await authFetch('/api/admin/alerts/counters');
         if (cntRes.ok) {
           const cntData = await cntRes.json();
@@ -110,6 +114,7 @@ const Dashboard = () => {
         }
       }
     } catch (err) {
+      showToast('Failed to resolve alert: ' + err.message, 'error');
       console.error('Failed to resolve alert:', err);
     }
   };
@@ -198,10 +203,26 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="page-wrapper" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ border: '4px solid rgba(255,255,255,0.1)', borderTop: '4px solid var(--primary)', borderRadius: '50%', width: '50px', height: '50px', animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' }}></div>
-          <p style={{ color: 'var(--text-secondary)' }}>Loading Dashboard Analytics...</p>
+      <div className="page-wrapper animate-fade-in">
+        {/* Header Skeleton */}
+        <div className="page-header" style={{ marginBottom: '2.5rem' }}>
+          <div>
+            <div className="skeleton" style={{ height: '32px', width: '280px', marginBottom: '8px' }}></div>
+            <div className="skeleton" style={{ height: '16px', width: '450px' }}></div>
+          </div>
+        </div>
+
+        {/* summary metrics cards skeleton */}
+        <div className="analytics-grid-4" style={{ marginBottom: '2.5rem' }}>
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="metric-card skeleton" style={{ height: '135px' }}></div>
+          ))}
+        </div>
+
+        {/* charts grid skeleton */}
+        <div className="analytics-layout" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: '2.5rem' }}>
+          <div className="analytics-widget-card skeleton" style={{ height: '300px' }}></div>
+          <div className="analytics-widget-card skeleton" style={{ height: '300px' }}></div>
         </div>
       </div>
     );

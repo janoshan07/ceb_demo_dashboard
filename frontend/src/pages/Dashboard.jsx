@@ -606,12 +606,12 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* CEB Predictor Engine Section */}
+        {/* EDL Predictor Engine Section */}
         {!isCustomer && predictions && (
           <div style={{ marginTop: '2.5rem' }}>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem' }}>
               <Zap className="text-primary" size={22} style={{ color: '#a78bfa' }} />
-              CEB Predictor Engine (Linear Regression Model)
+              EDL Predictor Engine (Linear Regression Model)
             </h2>
 
             {/* Predictions Summary Cards Row */}

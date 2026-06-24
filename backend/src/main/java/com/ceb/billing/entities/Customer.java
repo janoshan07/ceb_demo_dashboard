@@ -48,6 +48,19 @@ public class Customer {
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+        autoDeriveBranch();
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        autoDeriveBranch();
+    }
+
+    private void autoDeriveBranch() {
+        String detected = com.ceb.billing.utils.BranchDetector.detectBranch(this.accountNo);
+        if (detected != null) {
+            this.branchCode = detected;
+        }
     }
 
     public Customer() {

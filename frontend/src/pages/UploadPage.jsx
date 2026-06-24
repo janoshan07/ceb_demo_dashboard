@@ -283,10 +283,7 @@ const UploadPage = () => {
         setPreviewActiveSheet(firstImportable ? firstImportable.sheetName : allSheets[0]?.sheetName);
       }
 
-      setTimeout(() => {
-        setWizardStep(3);
-        showToast('Workbook successfully scanned and structures validated.', 'info');
-      }, 1500);
+      showToast('Workbook successfully scanned and structures validated.', 'info');
 
     } catch (err) {
       setError(err.message || 'Error occurred during workbook upload.');
@@ -583,7 +580,7 @@ const UploadPage = () => {
               <div className="animate-fade-in">
                 <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
                   <h3 style={{ fontSize: '1.15rem', fontWeight: 600, marginBottom: '0.25rem' }}>Step 1: Select Spreadsheet</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Select the CEB monthly billing workbook (.xlsx) to feed to the scanner engine.</p>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Select the EDL monthly billing workbook (.xlsx) to feed to the scanner engine.</p>
                 </div>
 
                 <form onSubmit={handleUploadSubmit}>

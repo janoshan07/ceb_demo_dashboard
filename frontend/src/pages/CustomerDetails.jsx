@@ -720,12 +720,14 @@ const CustomerDetails = () => {
                           />
                         </div>
                         <div className="form-group">
-                          <label className="form-label">Branch Code</label>
+                          <label className="form-label">Branch Code (Auto-detected)</label>
                           <input 
                             type="text" 
                             className="login-form-input" 
                             value={editBranchCode}
-                            onChange={(e) => setEditBranchCode(e.target.value)}
+                            readOnly
+                            disabled
+                            style={{ backgroundColor: 'var(--bg-secondary)', cursor: 'not-allowed', opacity: 0.8 }}
                           />
                         </div>
                         <div className="form-group">

@@ -14,38 +14,37 @@ headers = [
 
 # Sheet data configurations
 sheets_data = {
-    "Colombo West": [
+    "Batticaloa Division": [
         # Valid billing records
-        ["1002345091", "Sun Industrial Pvt Ltd", "BOC", "032", "7045920", "REF-202606-01", "2026-06-01", "2026-06-30", 1100, 6400, 48.0, "EXP-IND-A"],
-        ["1005520938", "Siddhalepa Hospital", "HNB", "014", "8829402", "REF-202606-02", "2026-06-01", "2026-06-30", 3200, 4100, 52.0, "EXP-MED-B"],
-        ["3001204092", "Keells Supermarket Col 3", "SAMP", "087", "8876529", "REF-202606-03", "2026-06-01", "2026-06-30", 1550, 3100, 48.0, "EXP-COM-A"],
+        ["3202345091", "Sun Industrial Pvt Ltd", "BOC", "Batticaloa", "7045920", "REF-202606-01", "2026-06-01", "2026-06-30", 1100, 6400, 48.0, "EXP-IND-A"],
+        ["6905520938", "Siddhalepa Hospital", "HNB", "Kalmunai", "8829402", "REF-202606-02", "2026-06-01", "2026-06-30", 3200, 4100, 52.0, "EXP-MED-B"],
+        ["2401204092", "Keells Supermarket Col 3", "SAMP", "Ampara", "8876529", "REF-202606-03", "2026-06-01", "2026-06-30", 1550, 3100, 48.0, "EXP-COM-A"],
         
         # Test Case: Missing Account No (Required)
-        ["", "Asha Foods Ltd", "COM", "102", "1192834", "REF-202606-04", "2026-06-01", "2026-06-30", 400, 1500, 45.0, "EXP-COM-A"],
+        ["", "Asha Foods Ltd", "COM", "Valaichenai", "1192834", "REF-202606-04", "2026-06-01", "2026-06-30", 400, 1500, 45.0, "EXP-COM-A"],
         
         # Test Case: Invalid Date format / Missing Date
-        ["2009871032", "Royal College Colombo", "BOC", "001", "9028104", "REF-202606-05", "", "2026-06-30", 600, 1200, 38.0, "EXP-GOV-C"]
+        ["5609871032", "Royal College Colombo", "BOC", "Valaichenai", "9028104", "REF-202606-05", "", "2026-06-30", 600, 1200, 38.0, "EXP-GOV-C"]
     ],
-    "Kandy Central": [
-        ["1008761230", "Dilmah Tea Factory", "COM", "104", "1209384", "REF-202606-06", "2026-06-01", "2026-06-30", 950, 5100, 48.0, "EXP-IND-A"],
-        ["4001928304", "Kandy City Centre", "SAMP", "002", "4492018", "REF-202606-07", "2026-06-01", "2026-06-30", 4500, 6800, 52.0, "EXP-COM-B"],
+    "Ampara Division": [
+        ["2408761230", "Dilmah Tea Factory", "COM", "Ampara", "1209384", "REF-202606-06", "2026-06-01", "2026-06-30", 950, 5100, 48.0, "EXP-IND-A"],
+        ["3401928304", "Kandy City Centre", "SAMP", "Trincomalee", "4492018", "REF-202606-07", "2026-06-01", "2026-06-30", 4500, 6800, 52.0, "EXP-COM-B"],
         
         # Duplicate record check (same customer account, ref, and period as Colombo West's Sun Industrial record)
-        # Note: If Sun Industrial was already processed, uploading this row checks if the database prevents duplicate entries
-        ["1002345091", "Sun Industrial Pvt Ltd", "BOC", "032", "7045920", "REF-202606-01", "2026-06-01", "2026-06-30", 1100, 6400, 48.0, "EXP-IND-A"]
+        ["3202345091", "Sun Industrial Pvt Ltd", "BOC", "Batticaloa", "7045920", "REF-202606-01", "2026-06-01", "2026-06-30", 1100, 6400, 48.0, "EXP-IND-A"]
     ],
-    "Galle South": [
-        ["5009871230", "Jetwing Lighthouse Galle", "HNB", "008", "9928173", "REF-202606-08", "2026-06-01", "2026-06-30", 7200, 9900, 52.0, "EXP-COM-B"],
-        ["2004561001", "Lanka Hospitals Corp (Galle)", "HNB", "001", "4592810", "REF-202606-09", "2026-06-01", "2026-06-30", 2200, 1900, 52.0, "EXP-MED-B"],
+    "Trincomalee Division": [
+        ["3209871230", "Jetwing Lighthouse Galle", "HNB", "Batticaloa", "9928173", "REF-202606-08", "2026-06-01", "2026-06-30", 7200, 9900, 52.0, "EXP-COM-B"],
+        ["3404561001", "Lanka Hospitals Corp (Galle)", "HNB", "Trincomalee", "4592810", "REF-202606-09", "2026-06-01", "2026-06-30", 2200, 1900, 52.0, "EXP-MED-B"],
         
         # Test Case: Invalid bank code (warning only - should still import successfully)
-        ["6008761042", "Galle Marina Resort", "XYZ", "020", "1122334", "REF-202606-10", "2026-06-01", "2026-06-30", 800, 1500, 48.0, "EXP-COM-A"],
+        ["5608761042", "Galle Marina Resort", "XYZ", "Valaichenai", "1122334", "REF-202606-10", "2026-06-01", "2026-06-30", 800, 1500, 48.0, "EXP-COM-A"],
         
         # Test Case: Negative Imports (Error - should skip)
-        ["6008761043", "Galle Port Authority", "COM", "102", "8899221", "REF-202606-11", "2026-06-01", "2026-06-30", -250, 1000, 45.0, "EXP-GOV-B"],
+        ["6908761043", "Galle Port Authority", "COM", "Kalmunai", "8899221", "REF-202606-11", "2026-06-01", "2026-06-30", -250, 1000, 45.0, "EXP-GOV-B"],
         
         # Test Case: Negative Unit Cost (Error - should skip)
-        ["6008761044", "Galle Fisheries Co", "BOC", "005", "4455667", "REF-202606-12", "2026-06-01", "2026-06-30", 300, 1200, -5.0, "EXP-IND-B"]
+        ["2408761044", "Galle Fisheries Co", "BOC", "Ampara", "4455667", "REF-202606-12", "2026-06-01", "2026-06-30", 300, 1200, -5.0, "EXP-IND-B"]
     ]
 }
 

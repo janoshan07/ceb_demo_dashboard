@@ -88,10 +88,10 @@ public class AuthController {
             userRepository.save(viewer);
 
             // Seed a customer account user
-            User cust = new User("1002345091", encoder.encode("customer123"), "USER");
+            User cust = new User("3202345091", encoder.encode("customer123"), "USER");
             userRepository.save(cust);
 
-            auditLogService.log("SYSTEM_SETUP", "Default system users seeded (admin, officer, viewer, 1002345091)");
+            auditLogService.log("SYSTEM_SETUP", "Default system users seeded (admin, officer, viewer, 3202345091)");
             return ResponseEntity.ok(new MessageResponse("Default users initialized: admin/admin123 (ADMIN), officer/officer123 (OFFICER), viewer/viewer123 (USER)"));
         }
         return ResponseEntity.badRequest().body(new MessageResponse("System already initialized. Setup skipped."));

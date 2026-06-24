@@ -43,7 +43,7 @@ public class StagingMigrationService {
 
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
-        Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(batchId);
+        Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
         if (optHistory.isEmpty()) {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
         }
@@ -92,12 +92,12 @@ public class StagingMigrationService {
             String solarType = (String) data.get("solarType");
 
             // Save / Update Customer
-            Optional<Customer> optCustomer = customerRepository.findById(accountNo);
+            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
             Customer customer;
             if (optCustomer.isEmpty()) {
                 customer = new Customer(accountNo, customerName, customerAddress, mobileNo, agreementDate,
                         panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
-                customerRepository.save(customer);
+                customerRepository.save(Objects.requireNonNull(customer));
                 newCustomers++;
             } else {
                 customer = optCustomer.get();
@@ -122,7 +122,7 @@ public class StagingMigrationService {
                     customer.setPanelCapacity(panelCapacity);
                 if (solarType != null && !solarType.isEmpty() && (customer.getSolarType() == null || customer.getSolarType().isEmpty()))
                     customer.setSolarType(solarType);
-                customerRepository.save(customer);
+                customerRepository.save(Objects.requireNonNull(customer));
             }
 
             // Guard: skip billing record if one already exists for this account + billing period
@@ -139,7 +139,7 @@ public class StagingMigrationService {
             // Create Billing Record
             BillingRecord billingRecord = new BillingRecord(customer, refNo, fromDate, toDate, importUnits,
                     exportUnits, unitCost, billingMode, batchId);
-            billingRecordRepository.save(billingRecord);
+            billingRecordRepository.save(Objects.requireNonNull(billingRecord));
             billingInserted++;
         }
 
@@ -152,7 +152,7 @@ public class StagingMigrationService {
         history.setStatus(finalStatus);
         history.setNewCustomers(newCustomers);
         history.setBillingInserted(billingInserted);
-        uploadHistoryRepository.save(history);
+        uploadHistoryRepository.save(Objects.requireNonNull(history));
 
         // Delete staging rows for this batch
         stagingRepository.deleteByUploadBatchId(batchId);
@@ -173,7 +173,7 @@ public class StagingMigrationService {
 
     @Transactional
     public void rejectBatch(Long batchId, String rejectedBy) {
-        Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(batchId);
+        Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
         if (optHistory.isEmpty()) {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
         }

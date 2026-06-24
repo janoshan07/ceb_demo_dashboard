@@ -32,7 +32,7 @@ const Sidebar = () => {
         <div className="sidebar-logo-icon">
           <Zap size={20} fill="currentColor" />
         </div>
-        <div className="sidebar-title">CEB Billing</div>
+        <div className="sidebar-title">EDL Billing</div>
       </div>
       
       <nav style={{ flex: 1 }}>

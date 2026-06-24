@@ -29,7 +29,7 @@ public class PreviewService {
         FIELD_ALIASES.put("customeraddress",Arrays.asList("customeraddress", "address", "customer_address", "cust_address", "addr"));
         FIELD_ALIASES.put("mobileno",       Arrays.asList("mobileno", "mobile", "phone", "contact", "mobile_no", "tel", "phoneno"));
         FIELD_ALIASES.put("refno",          Arrays.asList("refno", "ref_no", "referenceno", "referencenumber", "reference", "billno", "invoiceno", "refnum"));
-        FIELD_ALIASES.put("fromdate",       Arrays.asList("fromdate", "from_date", "startdate", "start_date", "billingfrom", "datefrom", "period_from", "from"));
+        FIELD_ALIASES.put("fromdate",       Arrays.asList("fromdate", "from_date", "startdate", "start_date", "billingfrom", "datefrom", "period_from", "from", "billperiod", "period"));
         FIELD_ALIASES.put("todate",         Arrays.asList("todate", "to_date", "enddate", "end_date", "billingto", "dateto", "period_to", "to"));
         FIELD_ALIASES.put("imports",        Arrays.asList("imports", "import", "importunits", "import_units", "consumption", "kwhin", "units_import", "importkwh", "importunit"));
         FIELD_ALIASES.put("exports",        Arrays.asList("exports", "export", "exportunits", "export_units", "kwhout", "units_export", "solar_export", "exportkwh", "exportunit"));
@@ -47,6 +47,48 @@ public class PreviewService {
     // Minimum columns required to classify a sheet
     private static final List<String> BILLING_REQUIRED = Arrays.asList("accountno", "imports", "exports");
     private static final List<String> CUSTOMER_REQUIRED = Arrays.asList("accountno", "customername");
+
+    // Keywords for detecting the header row index
+    private static final Set<String> HEADER_KEYWORDS = new HashSet<>(Arrays.asList(
+        "accountno", "accountnumber", "customername", "name", "customeraddress", "address",
+        "mobileno", "mobile", "phone", "contact", "refno", "referenceno", "fromdate", "startdate", "todate", "enddate",
+        "imports", "import", "importunits", "exports", "export", "exportunits", "unitcost", "rate", "totalamount",
+        "total", "amount", "billingmode", "expcode", "exportcode", "mode", "bankcode", "branchcode", "bankaccountno",
+        "bankaccount", "agreementdate", "panelcapacity", "capacity", "solartype", "nettype"
+    ));
+
+    /**
+     * Find the header row index by scoring the first 15 rows of the sheet.
+     */
+    public int findHeaderRowIndex(Sheet sheet) {
+        int bestRowIdx = 0;
+        int maxScore = -1;
+        int searchLimit = Math.max(0, Math.min(15, sheet.getLastRowNum()));
+        for (int r = 0; r <= searchLimit; r++) {
+            Row row = sheet.getRow(r);
+            if (row == null) continue;
+            int matches = 0;
+            int nonEmptyCount = 0;
+            for (int c = 0; c < row.getLastCellNum(); c++) {
+                Cell cell = row.getCell(c);
+                if (cell == null || cell.getCellType() == CellType.BLANK) continue;
+                String txt = getCellValueAsString(cell);
+                if (txt != null && !txt.trim().isEmpty()) {
+                    nonEmptyCount++;
+                    String clean = txt.toLowerCase().replaceAll("[^a-z0-9]", "");
+                    if (HEADER_KEYWORDS.contains(clean)) {
+                        matches++;
+                    }
+                }
+            }
+            int score = matches * 10 + nonEmptyCount;
+            if (score > maxScore) {
+                maxScore = score;
+                bestRowIdx = r;
+            }
+        }
+        return bestRowIdx;
+    }
 
     /**
      * Generate a full preview of ALL sheets with ALL rows.
@@ -73,19 +115,68 @@ public class PreviewService {
                 Sheet sheet = workbook.getSheetAt(sheetIdx);
                 String sheetName = sheet.getSheetName();
 
-                // Parse raw headers from row 0
+                // Detect the header row index
+                int headerRowIdx = findHeaderRowIndex(sheet);
+
+                // Build clean list of actual headers (index -> clean header) to allow duplicate headers
+                List<String> colCleanHeaders = new ArrayList<>();
+                Row headerRow = sheet.getRow(headerRowIdx);
+                if (headerRow != null) {
+                    for (int col = 0; col < headerRow.getLastCellNum(); col++) {
+                        Cell cell = headerRow.getCell(col);
+                        String txt = getCellValueAsString(cell);
+                        if (txt != null && !txt.trim().isEmpty()) {
+                            colCleanHeaders.add(txt.toLowerCase().replaceAll("[^a-z0-9]", ""));
+                        } else {
+                            colCleanHeaders.add("");
+                        }
+                    }
+                }
+
+                // Auto-detect logical column mapping using the detected header row
+                Map<String, Integer> colIndices = autoDetectColumns(sheet, headerRowIdx);
+
+                // Parse raw headers from the detected header row, assign friendly names to empty mapped columns, and ensure they are unique
                 List<String> rawHeaders = new ArrayList<>();
-                Row headerRow = sheet.getRow(0);
+                Map<String, Integer> headerCounts = new HashMap<>();
                 if (headerRow != null) {
                     for (int col = 0; col < headerRow.getLastCellNum(); col++) {
                         Cell cell = headerRow.getCell(col);
                         String hdr = getCellValueAsString(cell);
-                        rawHeaders.add(hdr != null ? hdr.trim() : "");
+                        String trimmedHdr = hdr != null ? hdr.trim() : "";
+                        
+                        if (trimmedHdr.isEmpty()) {
+                            // If this empty column maps to a logical field, give it a friendly name
+                            if (colIndices.containsValue(col)) {
+                                for (Map.Entry<String, Integer> entry : colIndices.entrySet()) {
+                                    if (entry.getValue() == col) {
+                                        String field = entry.getKey();
+                                        if ("todate".equals(field)) {
+                                            trimmedHdr = "To Date";
+                                        } else if ("fromdate".equals(field)) {
+                                            trimmedHdr = "From Date";
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!trimmedHdr.isEmpty()) {
+                            int count = headerCounts.getOrDefault(trimmedHdr, 0) + 1;
+                            headerCounts.put(trimmedHdr, count);
+                            if (count > 1) {
+                                // If it's a duplicate of "Account No", label the second one as "Account No: (Bank)"
+                                if (trimmedHdr.toLowerCase().replaceAll("[^a-z0-9]", "").equals("accountno")) {
+                                    trimmedHdr = trimmedHdr + " (Bank)";
+                                } else {
+                                    trimmedHdr = trimmedHdr + " (" + count + ")";
+                                }
+                            }
+                        }
+                        rawHeaders.add(trimmedHdr);
                     }
                 }
-
-                // Auto-detect logical column mapping
-                Map<String, Integer> colIndices = autoDetectColumns(sheet);
 
                 boolean hasBillingCols  = BILLING_REQUIRED.stream().allMatch(colIndices::containsKey);
                 boolean hasCustomerCols = !hasBillingCols && CUSTOMER_REQUIRED.stream().allMatch(colIndices::containsKey);
@@ -101,7 +192,7 @@ public class PreviewService {
                 int sheetDuplicates = 0;
 
                 int lastRowNum = sheet.getLastRowNum();
-                for (int r = 1; r <= lastRowNum; r++) {
+                for (int r = headerRowIdx + 1; r <= lastRowNum; r++) {
                     Row row = sheet.getRow(r);
                     if (row == null || isRowEmpty(row)) continue;
 
@@ -115,12 +206,11 @@ public class PreviewService {
                     Map<String, String> rawValues = new LinkedHashMap<>();
                     if (headerRow != null) {
                         for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                            Cell hdrCell  = headerRow.getCell(col);
-                            String hdr    = getCellValueAsString(hdrCell);
+                            String hdr    = rawHeaders.get(col);
                             Cell dataCell = row.getCell(col);
                             String val    = getCellValueAsString(dataCell);
                             if (hdr != null && !hdr.trim().isEmpty()) {
-                                rawValues.put(hdr.trim(), val != null ? val : "");
+                                rawValues.put(hdr, val != null ? val : "");
                             }
                         }
                     }
@@ -129,6 +219,9 @@ public class PreviewService {
                     if (hasBillingCols) {
                         // ── Billing row: structured parse + validation ──
                         String accountNo    = getVal(row, colIndices.get("accountno"));
+                        if (accountNo == null || accountNo.trim().isEmpty()) {
+                            continue; // Skip summation / footer rows
+                        }
                         String customerName = getVal(row, colIndices.get("customername"));
                         String rawFromDate  = getDateVal(row, colIndices.get("fromdate"));
                         String rawToDate    = getDateVal(row, colIndices.get("todate"));
@@ -186,6 +279,9 @@ public class PreviewService {
                     } else if (hasCustomerCols) {
                         // ── Customer profile row ──
                         String accountNo    = getVal(row, colIndices.get("accountno"));
+                        if (accountNo == null || accountNo.trim().isEmpty()) {
+                            continue; // Skip summation / footer rows
+                        }
                         String customerName = getVal(row, colIndices.get("customername"));
                         String status = (accountNo == null || accountNo.isEmpty()) ? "INVALID" : "VALID";
                         rowData.put("accountNo",    accountNo    != null ? accountNo    : "");
@@ -226,42 +322,86 @@ public class PreviewService {
     }
 
     /**
-     * Intelligently detect column indices from actual row-0 headers, regardless of order or naming.
+     * Intelligently detect column indices from actual headers, regardless of order or naming.
      * Public so the controller can reuse it.
      */
     public Map<String, Integer> autoDetectColumns(Sheet sheet) {
+        int headerRowIdx = findHeaderRowIndex(sheet);
+        return autoDetectColumns(sheet, headerRowIdx);
+    }
+
+    public Map<String, Integer> autoDetectColumns(Sheet sheet, int headerRowIdx) {
         Map<String, Integer> colIndices = new HashMap<>();
-        Row headerRow = sheet.getRow(0);
+        Row headerRow = sheet.getRow(headerRowIdx);
         if (headerRow == null) return colIndices;
 
-        // Build clean map of actual headers
-        Map<String, Integer> actualCleanMap = new LinkedHashMap<>();
+        // Build clean list of actual headers (index -> clean header) to allow duplicate headers
+        List<String> colCleanHeaders = new ArrayList<>();
         for (int col = 0; col < headerRow.getLastCellNum(); col++) {
             Cell cell = headerRow.getCell(col);
             String txt = getCellValueAsString(cell);
             if (txt != null && !txt.trim().isEmpty()) {
-                String clean = txt.toLowerCase().replaceAll("[^a-z0-9]", "");
-                actualCleanMap.put(clean, col);
+                colCleanHeaders.add(txt.toLowerCase().replaceAll("[^a-z0-9]", ""));
+            } else {
+                colCleanHeaders.add("");
+            }
+        }
+
+        // Handle duplicate accountno columns mapping (e.g. two columns with "Account No:")
+        List<Integer> accountNoIndices = new ArrayList<>();
+        List<String> accAliases = FIELD_ALIASES.get("accountno");
+        for (int col = 0; col < colCleanHeaders.size(); col++) {
+            String clean = colCleanHeaders.get(col);
+            for (String alias : accAliases) {
+                String cleanAlias = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (clean.equals(cleanAlias)) {
+                    accountNoIndices.add(col);
+                    break;
+                }
+            }
+        }
+
+        if (!accountNoIndices.isEmpty()) {
+            colIndices.put("accountno", accountNoIndices.get(0));
+            if (accountNoIndices.size() >= 2) {
+                colIndices.put("bankaccountno", accountNoIndices.get(1));
             }
         }
 
         // Match each logical field to the actual column via alias list
         for (Map.Entry<String, List<String>> entry : FIELD_ALIASES.entrySet()) {
             String fieldName = entry.getKey();
+            // Skip accountno, and only skip bankaccountno if it was already mapped by duplicate account number detection
+            if ("accountno".equals(fieldName) || ("bankaccountno".equals(fieldName) && colIndices.containsKey("bankaccountno"))) {
+                continue;
+            }
+
             for (String alias : entry.getValue()) {
                 String cleanAlias = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
-                if (actualCleanMap.containsKey(cleanAlias)) {
-                    colIndices.put(fieldName, actualCleanMap.get(cleanAlias));
+                int idx = colCleanHeaders.indexOf(cleanAlias);
+                if (idx != -1) {
+                    colIndices.put(fieldName, idx);
                     break;
                 }
             }
             // Fallback: substring match
             if (!colIndices.containsKey(fieldName)) {
-                for (Map.Entry<String, Integer> actual : actualCleanMap.entrySet()) {
-                    if (isSubstringMatch(fieldName, actual.getKey())) {
-                        colIndices.put(fieldName, actual.getValue());
+                for (int col = 0; col < colCleanHeaders.size(); col++) {
+                    String clean = colCleanHeaders.get(col);
+                    if (isSubstringMatch(fieldName, clean)) {
+                        colIndices.put(fieldName, col);
                         break;
                     }
+                }
+            }
+        }
+        // Fallback for todate if fromdate is mapped but todate is not
+        if (colIndices.containsKey("fromdate") && !colIndices.containsKey("todate")) {
+            int fromIdx = colIndices.get("fromdate");
+            if (fromIdx + 1 < colCleanHeaders.size()) {
+                String nextClean = colCleanHeaders.get(fromIdx + 1);
+                if (nextClean.isEmpty()) {
+                    colIndices.put("todate", fromIdx + 1);
                 }
             }
         }

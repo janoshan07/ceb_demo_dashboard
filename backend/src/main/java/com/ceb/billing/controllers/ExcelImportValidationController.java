@@ -294,7 +294,8 @@ public class ExcelImportValidationController {
                             profile.put("panelCapacity",   parseDoubleVal(row, colIndices.get("panelcapacity")));
                             profile.put("solarType",       getVal(row, colIndices.get("solartype")));
                             profile.put("bankCode",        getVal(row, colIndices.get("bankcode")));
-                            profile.put("branchCode",      getVal(row, colIndices.get("branchcode")));
+                            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
+                            profile.put("branchCode",      detBranch != null ? detBranch : getVal(row, colIndices.get("branchcode")));
                             profile.put("bankAccountNo",   getVal(row, colIndices.get("bankaccountno")));
 
                             customerProfiles.put(accountNo.trim(), profile);
@@ -324,7 +325,8 @@ public class ExcelImportValidationController {
                             bill.put("panelCapacity",  parseDoubleVal(row, colIndices.get("panelcapacity")));
                             bill.put("solarType",      getVal(row, colIndices.get("solartype")));
                             bill.put("bankCode",       getVal(row, colIndices.get("bankcode")));
-                            bill.put("branchCode",     getVal(row, colIndices.get("branchcode")));
+                            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
+                            bill.put("branchCode",     detBranch != null ? detBranch : getVal(row, colIndices.get("branchcode")));
                             bill.put("bankAccountNo",  getVal(row, colIndices.get("bankaccountno")));
 
                             billingRecordsList.add(bill);

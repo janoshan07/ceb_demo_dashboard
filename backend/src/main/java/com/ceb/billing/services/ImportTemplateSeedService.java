@@ -36,7 +36,7 @@ public class ImportTemplateSeedService {
         }
 
         // 1. Create Default Template
-        ExcelTemplate template = new ExcelTemplate("CEB Standard Billing Template",
+        ExcelTemplate template = new ExcelTemplate("EDL Standard Billing Template",
                 "Default template containing Customer_Master profile details and Billing_Records monthly consumption values.");
         template = excelTemplateRepository.save(template);
 
@@ -81,6 +81,6 @@ public class ImportTemplateSeedService {
             headerMappingRepository.save(hm);
         }
         
-        System.out.println("CEB Billing Dashboard: Successfully seeded default 'CEB Standard Billing Template' configurations.");
+        System.out.println("EDL Billing Dashboard: Successfully seeded default 'EDL Standard Billing Template' configurations.");
     }
 }

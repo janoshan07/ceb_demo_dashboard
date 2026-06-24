@@ -172,7 +172,7 @@ const Reports = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ceb_report_${reportType.toLowerCase()}.csv`);
+    link.setAttribute("download", `edl_report_${reportType.toLowerCase()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -205,7 +205,7 @@ const Reports = () => {
     const blob = new Blob([excelContent], { type: "application/vnd.ms-excel" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = `ceb_report_${reportType.toLowerCase()}.xls`;
+    link.download = `edl_report_${reportType.toLowerCase()}.xls`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

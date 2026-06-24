@@ -109,8 +109,7 @@ public class ReportController {
     @GetMapping("/api/officer/reports/branches")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getDistinctBranches() {
-        List<String> branches = customerRepository.findDistinctBranchCodes();
-        return ResponseEntity.ok(branches);
+        return ResponseEntity.ok(List.of("Ampara", "Kalmunai", "Valaichenai", "Batticaloa", "Trincomalee"));
     }
 
     @GetMapping("/api/officer/reports/generate")

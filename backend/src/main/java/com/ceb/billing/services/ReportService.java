@@ -18,6 +18,7 @@ public class ReportService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getMonthlyRevenueReport(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT YEAR(b.fromDate) as yr, MONTH(b.fromDate) as mo, " +
@@ -87,6 +88,7 @@ public class ReportService {
         return list;
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getHighestExportersReport(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT b.customer.accountNo, b.customer.customerName, b.customer.branchCode, " +
@@ -120,6 +122,7 @@ public class ReportService {
         return list;
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getHighestImportersReport(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT b.customer.accountNo, b.customer.customerName, b.customer.branchCode, " +
@@ -153,6 +156,7 @@ public class ReportService {
         return list;
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getBranchPerformanceReport(LocalDate start, LocalDate end) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT c.branchCode, COUNT(DISTINCT c.accountNo), " +
@@ -186,6 +190,7 @@ public class ReportService {
         return list;
     }
 
+    @SuppressWarnings("unchecked")
     public List<Map<String, Object>> getSolarTypePerformanceReport(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT c.solarType, COUNT(DISTINCT c.accountNo), " +

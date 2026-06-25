@@ -22,7 +22,9 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Objects;
 
+// Admin user management controller
 @RestController
+
 @RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN')")
 public class AdminUserController {

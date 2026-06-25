@@ -1,13 +1,9 @@
 package com.ceb.billing.services;
 
-import com.ceb.billing.entities.BillingRecord;
-import com.ceb.billing.entities.Customer;
 import com.ceb.billing.entities.UploadHistory;
 import com.ceb.billing.entities.BillingUploadStaging;
 import com.ceb.billing.models.ExcelUploadResponse;
 import com.ceb.billing.models.ExcelValidationError;
-import com.ceb.billing.repositories.BillingRecordRepository;
-import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
 import com.ceb.billing.repositories.BillingUploadStagingRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -22,13 +18,6 @@ import java.util.*;
 
 @Service
 public class ExcelParsingService {
-
-    @Autowired
-    private CustomerRepository customerRepository;
-
-    @Autowired
-    private BillingRecordRepository billingRecordRepository;
-
     @Autowired
     private UploadHistoryRepository uploadHistoryRepository;
 
@@ -92,8 +81,6 @@ public class ExcelParsingService {
         String filename = file.getOriginalFilename();
         List<ExcelValidationError> errors = new ArrayList<>();
         int rowsProcessed = 0;
-        int newCustomers = 0;
-        int billingInserted = 0;
 
         // Validation Summary Counters
         int totalRows = 0;
@@ -376,19 +363,6 @@ public class ExcelParsingService {
                 errors.size(), errors, totalRows, validRows, invalidRows, duplicateRows, warningCount);
     }
 
-    private void verifyHeader(List<String> colCleanHeaders, List<String> matchOptions, String columnName,
-            List<String> missingHeaders) {
-        boolean found = false;
-        for (String option : matchOptions) {
-            if (colCleanHeaders.contains(option)) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            missingHeaders.add(columnName);
-        }
-    }
 
     private int getHeaderColIndex(List<String> colCleanHeaders, List<String> matchOptions) {
         for (String option : matchOptions) {

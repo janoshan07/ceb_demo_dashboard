@@ -5,6 +5,7 @@ import com.ceb.billing.repositories.AlertRepository;
 import com.ceb.billing.services.AlertService;
 import com.ceb.billing.services.AuditLogService;
 import com.ceb.billing.config.UserDetailsImpl;
+import org.springframework.lang.NonNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -49,7 +50,7 @@ public class AlertController {
 
     @PostMapping("/{alertId}/resolve")
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
-    public ResponseEntity<?> resolveAlert(@PathVariable Long alertId) {
+    public ResponseEntity<?> resolveAlert(@PathVariable @NonNull Long alertId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) auth.getPrincipal();
 

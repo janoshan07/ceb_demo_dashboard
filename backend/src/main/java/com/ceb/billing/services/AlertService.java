@@ -8,6 +8,7 @@ import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.lang.NonNull;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -31,6 +32,7 @@ public class AlertService {
      * Clears previous active (UNREAD) alerts for the customer accounts and generates new ones.
      */
     @Transactional
+    @SuppressWarnings("null")
     public void generateAlertsForAccounts(Set<String> accountNos) {
         if (accountNos == null || accountNos.isEmpty()) {
             return;
@@ -167,7 +169,7 @@ public class AlertService {
      * Resolves an alert by ID.
      */
     @Transactional
-    public void resolveAlert(Long alertId) {
+    public void resolveAlert(@NonNull Long alertId) {
         Optional<Alert> optAlert = alertRepository.findById(alertId);
         if (optAlert.isPresent()) {
             Alert alert = optAlert.get();

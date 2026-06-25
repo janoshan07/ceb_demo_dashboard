@@ -6,13 +6,7 @@ import com.ceb.billing.entities.User;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.UserRepository;
-import com.ceb.billing.repositories.ImportBatchRepository;
 import com.ceb.billing.services.AuditLogService;
-import org.apache.poi.ss.usermodel.*;
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,9 +25,6 @@ public class DatabaseInitializer implements CommandLineRunner {
 
     @Autowired
     private BillingRecordRepository billingRecordRepository;
-
-    @Autowired
-    private ImportBatchRepository importBatchRepository;
 
     @Autowired
     private PasswordEncoder encoder;

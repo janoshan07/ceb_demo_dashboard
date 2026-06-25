@@ -145,24 +145,35 @@ const Dashboard = () => {
 
         // Fetch stats
         const statsRes = await authFetch(summaryUrl);
-        const statsData = await statsRes.json();
+        const statsData = statsRes.ok ? await statsRes.json().catch(() => ({})) : null;
+        if (!statsRes.ok || !statsData) {
+          throw new Error(statsData?.message || `Failed to load dashboard summary (S                                 , ,. ,<div className="
+            
+            
+            "></div>tatus ${statsRes.status})`);
+        }
         setStats(statsData);
 
         // Fetch advanced analytics if admin or officer
         if (user?.role === 'ADMIN' || user?.role === 'OFFICER') {
           const analyticsRes = await authFetch('/api/admin/dashboard/analytics');
           if (analyticsRes.ok) {
-            const analyticsData = await analyticsRes.json();
+            const analyticsData = await analyticsRes.json().catch(() => ({}));
             setAnalytics(analyticsData);
           }
         }
 
         // Fetch monthly trend for chart (backward compatible / user chart)
         const trendRes = await authFetch(trendUrl);
-        const trendData = await trendRes.json();
+        const trendData = trendRes.ok ? await trendRes.json().catch(() => ([])) : [];
+        if (!trendRes.ok) {
+          throw new Error(trendData?.message || `Failed to load monthly reports (Status ${trendRes.status})`);
+        }
+        
+        const trendArray = Array.isArray(trendData) ? trendData : [];
         
         // Sort chronologically (oldest to newest)
-        const sortedTrend = [...trendData].sort((a, b) => {
+        const sortedTrend = [...trendArray].sort((a, b) => {
           if (a.year !== b.year) return a.year - b.year;
           return a.month - b.month;
         });

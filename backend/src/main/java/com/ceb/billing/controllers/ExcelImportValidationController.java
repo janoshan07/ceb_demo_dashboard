@@ -4,7 +4,7 @@ import com.ceb.billing.entities.*;
 import com.ceb.billing.repositories.*;
 import com.ceb.billing.services.*;
 import com.ceb.billing.models.ExcelValidationError;
-import com.fasterxml.jackson.core.type.TypeReference;
+import org.springframework.lang.NonNull;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,12 +46,6 @@ public class ExcelImportValidationController {
 
     @Autowired
     private WorkbookScannerService scannerService;
-
-    @Autowired
-    private SheetValidationService sheetValidationService;
-
-    @Autowired
-    private HeaderValidationService headerValidationService;
 
     @Autowired
     private PreviewService previewService;
@@ -217,7 +211,7 @@ public class ExcelImportValidationController {
 
     @PostMapping("/admin/import/batches/{id}/approve")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> approveImportBatch(@PathVariable Long id,
+    public ResponseEntity<?> approveImportBatch(@PathVariable @NonNull Long id,
             @org.springframework.web.bind.annotation.RequestBody(required = false) Map<String, Object> requestBody) {
         Optional<ImportBatch> optBatch = importBatchRepository.findById(id);
         if (optBatch.isEmpty()) return ResponseEntity.notFound().build();
@@ -439,7 +433,7 @@ public class ExcelImportValidationController {
 
     @PostMapping("/admin/import/batches/{id}/reject")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> rejectImportBatch(@PathVariable Long id) {
+    public ResponseEntity<?> rejectImportBatch(@PathVariable @NonNull Long id) {
         Optional<ImportBatch> optBatch = importBatchRepository.findById(id);
         if (optBatch.isEmpty()) return ResponseEntity.notFound().build();
 
@@ -496,7 +490,7 @@ public class ExcelImportValidationController {
 
     @PostMapping("/admin/import/sheet-configs/{id}/toggle-ignore")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> toggleIgnoreSheet(@PathVariable Long id) {
+    public ResponseEntity<?> toggleIgnoreSheet(@PathVariable @NonNull Long id) {
         Optional<SheetConfiguration> opt = sheetConfigurationRepository.findById(id);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
 
@@ -513,7 +507,7 @@ public class ExcelImportValidationController {
 
     @DeleteMapping("/admin/import/sheet-configs/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> softDeleteSheetConfig(@PathVariable Long id) {
+    public ResponseEntity<?> softDeleteSheetConfig(@PathVariable @NonNull Long id) {
         Optional<SheetConfiguration> opt = sheetConfigurationRepository.findById(id);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
 
@@ -530,7 +524,7 @@ public class ExcelImportValidationController {
 
     @PostMapping("/admin/import/sheet-configs/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> restoreSheetConfig(@PathVariable Long id) {
+    public ResponseEntity<?> restoreSheetConfig(@PathVariable @NonNull Long id) {
         Optional<SheetConfiguration> opt = sheetConfigurationRepository.findById(id);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
 
@@ -547,7 +541,7 @@ public class ExcelImportValidationController {
 
     @DeleteMapping("/admin/import/header-mappings/{id}")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> softDeleteHeaderMapping(@PathVariable Long id) {
+    public ResponseEntity<?> softDeleteHeaderMapping(@PathVariable @NonNull Long id) {
         Optional<HeaderMapping> opt = headerMappingRepository.findById(id);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
 
@@ -564,7 +558,7 @@ public class ExcelImportValidationController {
 
     @PostMapping("/admin/import/header-mappings/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> restoreHeaderMapping(@PathVariable Long id) {
+    public ResponseEntity<?> restoreHeaderMapping(@PathVariable @NonNull Long id) {
         Optional<HeaderMapping> opt = headerMappingRepository.findById(id);
         if (opt.isEmpty()) return ResponseEntity.notFound().build();
 

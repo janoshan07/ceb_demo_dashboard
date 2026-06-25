@@ -94,7 +94,7 @@ public class ExcelValidationService {
         }
 
         // If we found any critical format or missing value errors, stop and do not run duplicate or warning checks
-        if (result.hasErrors()) {
+        if (result.hasErrors() || fromDate == null) {
             return result;
         }
 

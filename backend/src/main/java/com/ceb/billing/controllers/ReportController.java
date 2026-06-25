@@ -28,9 +28,6 @@ public class ReportController {
     private BillingRecordRepository billingRecordRepository;
 
     @Autowired
-    private com.ceb.billing.repositories.CustomerRepository customerRepository;
-
-    @Autowired
     private com.ceb.billing.services.ReportService reportService;
 
     // --- Officer and Admin Report Endpoints ---

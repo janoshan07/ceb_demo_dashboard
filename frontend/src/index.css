@@ -1,4 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import "tailwindcss";
 
 :root {
   --bg-primary: #080c16;
@@ -850,7 +851,7 @@ body {
   width: 100%;
   background: rgba(8, 12, 23, 0.72);
   border: 1.5px solid rgba(59, 130, 246, 0.45);
-  box-shadow: 
+  box-shadow:
     0 0 45px rgba(59, 130, 246, 0.18),
     inset 0 0 20px rgba(59, 130, 246, 0.08);
   border-radius: 24px;
@@ -863,7 +864,7 @@ body {
 }
 
 .login-form-card:hover {
-  box-shadow: 
+  box-shadow:
     0 0 50px rgba(59, 130, 246, 0.25),
     inset 0 0 25px rgba(59, 130, 246, 0.12);
 }
@@ -939,7 +940,7 @@ body {
   box-shadow: 0 0 16px rgba(59, 130, 246, 0.4);
 }
 
-.login-field-input-custom:focus + .field-input-icon-custom {
+.login-field-input-custom:focus+.field-input-icon-custom {
   color: #3b82f6;
 }
 
@@ -1099,23 +1100,49 @@ body {
 
 /* Micro Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(24px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slideInRight {
-  from { opacity: 0; transform: translateX(35px); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(35px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes slide-in {
-  from { transform: translateY(-10px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .animate-fade-in {
@@ -1142,9 +1169,11 @@ body {
     gap: 3rem;
     padding: 0 1rem;
   }
+
   .brand-slogan-main {
     font-size: 2.5rem;
   }
+
   .brand-features-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
@@ -1155,15 +1184,18 @@ body {
   .login-container {
     background-position: center;
   }
+
   .login-content-wrapper {
     flex-direction: column;
     justify-content: center;
     align-items: center;
     gap: 2rem;
   }
+
   .login-brand-panel {
     display: none;
   }
+
   .card-mobile-logo {
     display: flex;
     align-items: center;
@@ -1171,6 +1203,7 @@ body {
     margin-bottom: 1.25rem;
     justify-content: center;
   }
+
   .card-mobile-logo-text {
     font-size: 1.75rem;
     font-weight: 900;
@@ -1178,10 +1211,12 @@ body {
     letter-spacing: 0.5px;
     line-height: 1;
   }
+
   .login-form-panel {
     width: 100%;
     max-width: 420px;
   }
+
   .login-form-card {
     padding: 2.25rem 1.75rem;
   }
@@ -1447,6 +1482,7 @@ body {
     opacity: 0;
     transform: translateY(12px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -1454,9 +1490,12 @@ body {
 }
 
 @keyframes pulseGlow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 15px rgba(59, 130, 246, 0.15);
   }
+
   50% {
     box-shadow: 0 0 25px rgba(59, 130, 246, 0.35);
   }
@@ -1473,6 +1512,7 @@ body {
     transform: scale(0.95);
     opacity: 0;
   }
+
   to {
     transform: scale(1);
     opacity: 1;
@@ -1879,10 +1919,12 @@ body {
     opacity: 0.6;
     background-color: rgba(255, 255, 255, 0.04);
   }
+
   50% {
     opacity: 1;
     background-color: rgba(255, 255, 255, 0.1);
   }
+
   100% {
     opacity: 0.6;
     background-color: rgba(255, 255, 255, 0.04);
@@ -2007,6 +2049,7 @@ body {
     transform: translateX(120%);
     opacity: 0;
   }
+
   to {
     transform: translateX(0);
     opacity: 1;

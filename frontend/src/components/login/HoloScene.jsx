@@ -479,7 +479,7 @@ const HoloScene = ({ mousePos = { x: 0, y: 0 }, cardTransform = '' }) => (
     </Canvas>
 
     {/* ── Dashboard mockup (HTML, parallax) ── */}
-    <DashboardMockup cardTransform={cardTransform} />
+    {/* <DashboardMockup cardTransform={cardTransform} /> */}
   </div>
 );
 

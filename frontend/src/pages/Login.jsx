@@ -129,22 +129,12 @@ const IntroLoader = ({ onDone }) => {
 const PremiumInput = ({ icon: Icon, type, placeholder, value, onChange, disabled, rightEl, id }) => {
   const [focused, setFocused] = useState(false);
   return (
-    <div className="relative group">
-      {/* Glow border layer */}
-      <div
-        className="absolute -inset-[1px] rounded-xl transition-all duration-300 pointer-events-none"
-        style={{
-          background: focused
-            ? 'linear-gradient(135deg, rgba(34,211,238,0.5), rgba(59,130,246,0.4), rgba(139,92,246,0.3))'
-            : 'linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03))',
-          opacity: focused ? 1 : 0.6,
-        }}
-      />
+    <div className="relative flex items-center w-full">
       {/* Icon */}
-      <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none z-10">
+      <div className="absolute left-3.5 flex items-center pointer-events-none z-10">
         <Icon
-          className="w-4 h-4 transition-colors duration-300"
-          style={{ color: focused ? '#22d3ee' : '#475569' }}
+          className="w-4 h-4 transition-colors duration-200"
+          style={{ color: focused ? '#22d3ee' : '#64748b' }}
         />
       </div>
       <input
@@ -156,18 +146,18 @@ const PremiumInput = ({ icon: Icon, type, placeholder, value, onChange, disabled
         disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="relative w-full rounded-xl text-[13px] text-white placeholder-slate-500 outline-none transition-all duration-300 disabled:opacity-50"
+        className="w-full rounded-xl text-[13.5px] text-white placeholder-slate-500 outline-none transition-all duration-200 disabled:opacity-50"
         style={{
-          background: focused ? 'rgba(15,23,42,0.9)' : 'rgba(15,23,42,0.6)',
-          border: 'none',
+          height: '46px',
+          background: focused ? 'rgba(15, 23, 42, 0.75)' : 'rgba(15, 23, 42, 0.45)',
+          border: focused ? '1px solid rgba(34, 211, 238, 0.65)' : '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: focused ? '0 0 0 3px rgba(34, 211, 238, 0.12)' : 'none',
           paddingLeft: '2.75rem',
           paddingRight: rightEl ? '2.75rem' : '1rem',
-          paddingTop: '0.75rem',
-          paddingBottom: '0.75rem',
         }}
       />
       {rightEl && (
-        <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center z-10">
+        <div className="absolute right-3.5 flex items-center z-10">
           {rightEl}
         </div>
       )}
@@ -358,8 +348,8 @@ const Login = () => {
 
             {/* ACCESS LEVEL */}
             <div ref={roleRef} className="relative">
-              <label className="block text-[9px] font-mono font-semibold tracking-[0.2em] uppercase mb-1.5"
-                style={{ color: 'rgba(148,163,184,0.6)' }}>
+              <label className="block text-[9.5px] font-mono font-semibold tracking-[0.12em] uppercase mb-1.5"
+                style={{ color: 'rgba(148,163,184,0.65)' }}>
                 Access Level
               </label>
               <button
@@ -367,16 +357,17 @@ const Login = () => {
                 id="role-selector"
                 onClick={() => { setRoleOpen(v => !v); clearErr(); }}
                 disabled={loading}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-[13px] transition-all duration-200 outline-none cursor-pointer"
+                className="w-full flex items-center justify-between px-3.5 rounded-xl text-[13.5px] transition-all duration-200 outline-none cursor-pointer"
                 style={{
-                  background: roleOpen ? 'rgba(15,23,42,0.9)' : 'rgba(15,23,42,0.6)',
-                  border: `1px solid ${roleOpen ? 'rgba(34,211,238,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                  height: '46px',
+                  background: roleOpen ? 'rgba(15, 23, 42, 0.75)' : 'rgba(15, 23, 42, 0.45)',
+                  border: roleOpen ? '1px solid rgba(34, 211, 238, 0.65)' : '1px solid rgba(255, 255, 255, 0.08)',
                   color: '#e2e8f0',
-                  boxShadow: roleOpen ? '0 0 0 3px rgba(34,211,238,0.08)' : 'none',
+                  boxShadow: roleOpen ? '0 0 0 3px rgba(34, 211, 238, 0.12)' : 'none',
                 }}
               >
                 <span className="flex items-center gap-2.5">
-                  <span className="text-[15px] leading-none" style={{ color: '#22d3ee' }}>{selectedRole?.icon}</span>
+                  <span className="text-[14px] leading-none" style={{ color: '#22d3ee' }}>{selectedRole?.icon}</span>
                   <span>{selectedRole?.label}</span>
                 </span>
                 <motion.div animate={{ rotate: roleOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
@@ -425,8 +416,8 @@ const Login = () => {
 
             {/* USERNAME */}
             <div>
-              <label htmlFor="login-username" className="block text-[9px] font-mono font-semibold tracking-[0.2em] uppercase mb-1.5"
-                style={{ color: 'rgba(148,163,184,0.6)' }}>
+              <label htmlFor="login-username" className="block text-[9.5px] font-mono font-semibold tracking-[0.12em] uppercase mb-1.5"
+                style={{ color: 'rgba(148,163,184,0.65)' }}>
                 Username
               </label>
               <PremiumInput
@@ -442,8 +433,8 @@ const Login = () => {
 
             {/* PASSWORD */}
             <div>
-              <label htmlFor="login-password" className="block text-[9px] font-mono font-semibold tracking-[0.2em] uppercase mb-1.5"
-                style={{ color: 'rgba(148,163,184,0.6)' }}>
+              <label htmlFor="login-password" className="block text-[9.5px] font-mono font-semibold tracking-[0.12em] uppercase mb-1.5"
+                style={{ color: 'rgba(148,163,184,0.65)' }}>
                 Password
               </label>
               <PremiumInput
@@ -566,7 +557,7 @@ const Login = () => {
 
           {/* ── FOOTER STATS ── */}
           <div className="border-t pt-4 relative z-10" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            <div className="flex justify-between mb-2.5">
+            <div className="grid grid-cols-3 gap-2 mb-3">
               <AnimatedStat value="1.28M+" label="Connections" color="#e2e8f0" delay={2.3} />
               <AnimatedStat value="LKR 42.6M+" label="Monthly Vol" color="#34d399" delay={2.4} />
               <AnimatedStat value="99.85%" label="Accuracy" color="#38bdf8" delay={2.5} />
@@ -603,14 +594,20 @@ const Login = () => {
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
-        #login-username, #login-password {
-          background: transparent;
-          border: none !important;
-          box-shadow: none !important;
-        }
         #sign-in-btn:not(:disabled) {
           background-size: 200% auto;
           transition: background-position 0.5s ease, box-shadow 0.3s ease, transform 0.15s ease;
+        }
+
+        /* Webkit Autofill Overrides */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active {
+          -webkit-box-shadow: 0 0 0 30px #0b1223 inset !important;
+          -webkit-text-fill-color: #ffffff !important;
+          caret-color: #ffffff !important;
+          transition: background-color 5000s ease-in-out 0s;
         }
       `}</style>
     </>

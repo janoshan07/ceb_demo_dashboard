@@ -45,7 +45,7 @@ public class PreviewService {
     }
 
     // Minimum columns required to classify a sheet
-    private static final List<String> BILLING_REQUIRED = Arrays.asList("accountno", "imports", "exports");
+    private static final List<String> BILLING_REQUIRED = Arrays.asList("accountno", "fromdate", "imports", "exports");
     private static final List<String> CUSTOMER_REQUIRED = Arrays.asList("accountno", "customername");
 
     // Keywords for detecting the header row index

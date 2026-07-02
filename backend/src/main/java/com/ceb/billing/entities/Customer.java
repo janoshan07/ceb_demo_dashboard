@@ -42,6 +42,9 @@ public class Customer {
     @Column(name = "solar_type", length = 50)
     private String solarType; // Net Plus, Net Plus Plus, Net Metering, Net Accounting
 
+    @Column(name = "created_by_upload_id")
+    private Long createdByUploadId;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -174,5 +177,13 @@ public class Customer {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Long getCreatedByUploadId() {
+        return createdByUploadId;
+    }
+
+    public void setCreatedByUploadId(Long createdByUploadId) {
+        this.createdByUploadId = createdByUploadId;
     }
 }

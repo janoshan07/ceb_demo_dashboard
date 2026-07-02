@@ -83,4 +83,6 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
                   "GROUP BY c.branch_code " +
                   "ORDER BY totalRevenue DESC", nativeQuery = true)
     List<Object[]> getBranchWiseAnalytics();
+
+    long countByCustomerAccountNo(String accountNo);
 }

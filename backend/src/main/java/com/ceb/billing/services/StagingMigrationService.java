@@ -54,10 +54,12 @@ public class StagingMigrationService {
         int billingInserted = 0;
         int invalidCount = 0;
         int duplicateCount = 0;
+        int skippedCount = 0;
         Set<String> impactedAccounts = new HashSet<>();
 
         for (BillingUploadStaging record : stagingRecords) {
             String status = record.getValidationStatus();
+
             if ("INVALID".equals(status)) {
                 invalidCount++;
                 continue;
@@ -67,68 +69,95 @@ public class StagingMigrationService {
                 continue;
             }
 
-            // Valid or Warning - migrate to main tables
-            Map<String, Object> data = objectMapper.readValue(record.getRawJson(), new TypeReference<Map<String, Object>>() {});
+            // Parse shared fields
+            Map<String, Object> data = objectMapper.readValue(record.getRawJson(),
+                    new TypeReference<Map<String, Object>>() {});
 
-            String accountNo = (String) data.get("accountNo");
-            impactedAccounts.add(accountNo);
+            String accountNo   = (String) data.get("accountNo");
             String customerName = (String) data.get("customerName");
-            String refNo = (String) data.get("refNo");
-            LocalDate fromDate = data.get("fromDate") != null ? LocalDate.parse((String) data.get("fromDate")) : null;
-            LocalDate toDate = data.get("toDate") != null ? LocalDate.parse((String) data.get("toDate")) : null;
-            
-            Double importUnits = data.get("importUnits") != null ? Double.valueOf(data.get("importUnits").toString()) : 0.0;
-            Double exportUnits = data.get("exportUnits") != null ? Double.valueOf(data.get("exportUnits").toString()) : 0.0;
-            Double unitCost = data.get("unitCost") != null ? Double.valueOf(data.get("unitCost").toString()) : 0.0;
-
-            String bankCode = (String) data.get("bankCode");
-            String branchCode = (String) data.get("branchCode");
+            String bankCode    = (String) data.get("bankCode");
+            String branchCode  = (String) data.get("branchCode");
             String bankAccountNo = (String) data.get("bankAccountNo");
-            String billingMode = (String) data.get("billingMode");
             String customerAddress = (String) data.get("customerAddress");
-            String mobileNo = (String) data.get("mobileNo");
-            LocalDate agreementDate = data.get("agreementDate") != null ? LocalDate.parse((String) data.get("agreementDate")) : null;
-            Double panelCapacity = data.get("panelCapacity") != null ? Double.valueOf(data.get("panelCapacity").toString()) : null;
-            String solarType = (String) data.get("solarType");
+            String mobileNo    = (String) data.get("mobileNo");
+            LocalDate agreementDate = data.get("agreementDate") != null
+                    ? safeParseDate((String) data.get("agreementDate")) : null;
+            Double panelCapacity = data.get("panelCapacity") != null
+                    ? Double.valueOf(data.get("panelCapacity").toString()) : null;
+            String solarType   = (String) data.get("solarType");
 
-            // Save / Update Customer
-            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            if (accountNo == null || accountNo.trim().isEmpty()) {
+                skippedCount++;
+                continue; // Defensive: skip rows with no account number
+            }
+            impactedAccounts.add(accountNo);
+
+            // ── Upsert Customer ───────────────────────────────────────────
+            Optional<Customer> optCustomer = customerRepository.findById(accountNo);
             Customer customer;
             if (optCustomer.isEmpty()) {
-                customer = new Customer(accountNo, customerName, customerAddress, mobileNo, agreementDate,
-                        panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
+                customer = new Customer(accountNo, customerName, customerAddress, mobileNo,
+                        agreementDate, panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
+                customer.setCreatedByUploadId(batchId); // Tag creation upload reference
                 customerRepository.save(Objects.requireNonNull(customer));
                 newCustomers++;
             } else {
                 customer = optCustomer.get();
-                // Only update fields that are currently null/empty — never overwrite existing data
-                if (customerName != null && !customerName.isEmpty()
-                        && (customer.getCustomerName() == null || customer.getCustomerName().isEmpty())) {
+                // Only fill in fields that are currently null/empty — never overwrite existing data
+                if (isNotBlank(customerName) && isBlank(customer.getCustomerName()))
                     customer.setCustomerName(customerName);
-                }
-                if (bankCode != null && !bankCode.isEmpty() && (customer.getBankCode() == null || customer.getBankCode().isEmpty()))
+                if (isNotBlank(bankCode) && isBlank(customer.getBankCode()))
                     customer.setBankCode(bankCode);
-                if (branchCode != null && !branchCode.isEmpty() && (customer.getBranchCode() == null || customer.getBranchCode().isEmpty()))
+                if (isNotBlank(branchCode) && isBlank(customer.getBranchCode()))
                     customer.setBranchCode(branchCode);
-                if (bankAccountNo != null && !bankAccountNo.isEmpty() && (customer.getBankAccountNo() == null || customer.getBankAccountNo().isEmpty()))
+                if (isNotBlank(bankAccountNo) && isBlank(customer.getBankAccountNo()))
                     customer.setBankAccountNo(bankAccountNo);
-                if (customerAddress != null && !customerAddress.isEmpty() && (customer.getCustomerAddress() == null || customer.getCustomerAddress().isEmpty()))
+                if (isNotBlank(customerAddress) && isBlank(customer.getCustomerAddress()))
                     customer.setCustomerAddress(customerAddress);
-                if (mobileNo != null && !mobileNo.isEmpty() && (customer.getMobileNo() == null || customer.getMobileNo().isEmpty()))
+                if (isNotBlank(mobileNo) && isBlank(customer.getMobileNo()))
                     customer.setMobileNo(mobileNo);
                 if (agreementDate != null && customer.getAgreementDate() == null)
                     customer.setAgreementDate(agreementDate);
                 if (panelCapacity != null && customer.getPanelCapacity() == null)
                     customer.setPanelCapacity(panelCapacity);
-                if (solarType != null && !solarType.isEmpty() && (customer.getSolarType() == null || customer.getSolarType().isEmpty()))
+                if (isNotBlank(solarType) && isBlank(customer.getSolarType()))
                     customer.setSolarType(solarType);
                 customerRepository.save(Objects.requireNonNull(customer));
             }
 
-            // Guard: skip billing record if one already exists for this account + billing period
-            if (fromDate != null) {
+            // ── CUSTOMER_PROFILE rows: no billing record to create ────────
+            if ("CUSTOMER_PROFILE".equals(record.getRowType())) {
+                continue;
+            }
+
+            // ── BILLING rows: parse billing-specific fields ───────────────
+            String refNo   = (String) data.get("refNo");
+            LocalDate fromDate = data.get("fromDate") != null
+                    ? safeParseDate((String) data.get("fromDate")) : null;
+            LocalDate toDate = data.get("toDate") != null
+                    ? safeParseDate((String) data.get("toDate")) : null;
+            Double importUnits = data.get("importUnits") != null
+                    ? Double.valueOf(data.get("importUnits").toString()) : 0.0;
+            Double exportUnits = data.get("exportUnits") != null
+                    ? Double.valueOf(data.get("exportUnits").toString()) : 0.0;
+            Double unitCost = data.get("unitCost") != null
+                    ? Double.valueOf(data.get("unitCost").toString()) : 0.0;
+            String billingMode = (String) data.get("billingMode");
+
+            // Guard: skip if dates are missing (DB constraint: fromDate NOT NULL)
+            if (fromDate == null || toDate == null) {
+                System.err.println("[StagingMigration] Skipping billing row for account " + accountNo
+                        + " — fromDate or toDate is null. Row will not produce a billing record.");
+                skippedCount++;
+                continue;
+            }
+
+            // Guard: skip if a billing record already exists for this account + period (unless forceImport is true)
+            Boolean forceImport = data.get("forceImport") instanceof Boolean ? (Boolean) data.get("forceImport") : false;
+            if (!forceImport) {
                 boolean alreadyExists = billingRecordRepository
-                        .findByCustomerAccountNoAndFromDateYearAndMonth(accountNo, fromDate.getYear(), fromDate.getMonthValue())
+                        .findByCustomerAccountNoAndFromDateYearAndMonth(accountNo,
+                                fromDate.getYear(), fromDate.getMonthValue())
                         .isPresent();
                 if (alreadyExists) {
                     duplicateCount++;
@@ -136,17 +165,21 @@ public class StagingMigrationService {
                 }
             }
 
-            // Create Billing Record
-            BillingRecord billingRecord = new BillingRecord(customer, refNo, fromDate, toDate, importUnits,
-                    exportUnits, unitCost, billingMode, batchId);
+            // Create billing record
+            BillingRecord billingRecord = new BillingRecord(customer, refNo, fromDate, toDate,
+                    importUnits, exportUnits, unitCost, billingMode, batchId);
             billingRecordRepository.save(Objects.requireNonNull(billingRecord));
             billingInserted++;
         }
 
-        // Determine final status
-        String finalStatus = "SUCCESS";
-        if (invalidCount > 0 || duplicateCount > 0) {
-            finalStatus = (billingInserted > 0) ? "COMPLETED_WITH_ERRORS" : "FAILED";
+        // ── Determine final status ────────────────────────────────────────
+        String finalStatus;
+        if (billingInserted == 0 && newCustomers == 0) {
+            finalStatus = (invalidCount > 0 || duplicateCount > 0) ? "FAILED" : "SUCCESS";
+        } else if (invalidCount > 0 || duplicateCount > 0 || skippedCount > 0) {
+            finalStatus = "COMPLETED_WITH_ERRORS";
+        } else {
+            finalStatus = "SUCCESS";
         }
 
         history.setStatus(finalStatus);
@@ -158,8 +191,10 @@ public class StagingMigrationService {
         stagingRepository.deleteByUploadBatchId(batchId);
 
         auditLogService.log("STAGING_APPROVED", String.format(
-                "Batch ID %d approved by %s. Inserted bills: %d, New customers: %d, Skipped (invalid/duplicate): %d",
-                batchId, approvedBy, billingInserted, newCustomers, (invalidCount + duplicateCount)));
+                "Batch ID %d approved by %s. Inserted bills: %d, New/updated customers: %d, "
+                + "Skipped (invalid=%d, duplicate=%d, null-date=%d). Final status: %s",
+                batchId, approvedBy, billingInserted, newCustomers,
+                invalidCount, duplicateCount, skippedCount, finalStatus));
 
         // Generate alerts for impacted accounts
         if (!impactedAccounts.isEmpty()) {
@@ -170,6 +205,27 @@ public class StagingMigrationService {
             }
         }
     }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private LocalDate safeParseDate(String dateStr) {
+        if (dateStr == null || dateStr.trim().isEmpty()) return null;
+        try {
+            return LocalDate.parse(dateStr.trim());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
+    }
+
+    private boolean isNotBlank(String s) {
+        return s != null && !s.trim().isEmpty();
+    }
+
+
 
     @Transactional
     public void rejectBatch(Long batchId, String rejectedBy) {

@@ -27,4 +27,6 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
 
     @Query("SELECT DISTINCT c.branchCode FROM Customer c WHERE c.branchCode IS NOT NULL ORDER BY c.branchCode ASC")
     List<String> findDistinctBranchCodes();
+
+    List<Customer> findByCreatedByUploadId(Long createdByUploadId);
 }

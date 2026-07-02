@@ -1,142 +1,61 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  ShieldCheck, Zap, Shield, Lock, User, Eye, EyeOff,
-  Activity, Sun, Users, LineChart, CheckCircle, Database,
-  ChevronDown, Wifi, TrendingUp, BarChart3, Sparkles
-} from 'lucide-react';
-import HoloScene from '../components/login/HoloScene';
 
-/* ─────────────────────────────────────────────
-   CONSTANTS — unchanged from original
-───────────────────────────────────────────── */
-const ROLES = [
-  { value: 'ADMIN',    label: 'Administrator',    icon: '⬡' },
-  { value: 'OFFICER',  label: 'Billing Officer',  icon: '◈' },
-  { value: 'CUSTOMER', label: 'Customer Viewer',  icon: '◎' },
-];
-
-/* ─────────────────────────────────────────────
-   ANIMATED COUNTER
-───────────────────────────────────────────── */
-const AnimatedStat = ({ value, label, color, delay = 0 }) => (
-  <motion.div
-    initial={{ opacity: 0, y: 12 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ delay, duration: 0.6, ease: 'easeOut' }}
-    className="flex flex-col items-center gap-0.5"
-  >
-    <span style={{ color }} className="text-[13px] font-bold tabular-nums tracking-tight">
-      {value}
-    </span>
-    <span className="text-[8px] text-slate-500 uppercase tracking-widest font-semibold">{label}</span>
-  </motion.div>
+/* ─── tiny SVG icons (no heavy lib) ─────────────────────────── */
+const IconUser = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+    <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+  </svg>
+);
+const IconLock = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+    <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+);
+const IconKey = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+    <circle cx="7.5" cy="15.5" r="4.5" /><path d="m21 2-9.6 9.6M15.5 7.5l3 3" />
+  </svg>
+);
+const IconEye = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z" /><circle cx="12" cy="12" r="3" />
+  </svg>
+);
+const IconEyeOff = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+    <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
+);
+const IconZap = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+  </svg>
+);
+const IconShield = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+const IconArrow = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+    <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+  </svg>
 );
 
-/* ─────────────────────────────────────────────
-   FLOATING ORBS (background ambience)
-───────────────────────────────────────────── */
-const FloatingOrb = ({ style, duration, delay }) => (
-  <motion.div
-    className="absolute rounded-full pointer-events-none"
-    style={style}
-    animate={{ y: [0, -30, 0], x: [0, 15, 0], opacity: [0.4, 0.7, 0.4] }}
-    transition={{ duration, delay, repeat: Infinity, ease: 'easeInOut' }}
-  />
-);
-
-/* ─────────────────────────────────────────────
-   GRID OVERLAY
-───────────────────────────────────────────── */
-const GridOverlay = () => (
-  <div
-    className="absolute inset-0 pointer-events-none"
-    style={{
-      backgroundImage: `
-        linear-gradient(rgba(56,189,248,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(56,189,248,0.03) 1px, transparent 1px)
-      `,
-      backgroundSize: '44px 44px',
-    }}
-  />
-);
-
-/* ─────────────────────────────────────────────
-   INTRO LOADER
-───────────────────────────────────────────── */
-const IntroLoader = ({ onDone }) => {
-  useEffect(() => {
-    const t = setTimeout(onDone, 1600);
-    return () => clearTimeout(t);
-  }, [onDone]);
-
-  return (
-    <motion.div
-      className="fixed inset-0 z-[999] flex flex-col items-center justify-center bg-[#060c1a]"
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.6, ease: 'easeInOut' }}
-    >
-      {/* Scanning ring */}
-      <div className="relative w-20 h-20 mb-6">
-        <motion.div
-          className="absolute inset-0 rounded-full border-2 border-cyan-400/30"
-          animate={{ scale: [1, 1.6, 1], opacity: [0.8, 0, 0.8] }}
-          transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
-        />
-        <motion.div
-          className="absolute inset-2 rounded-full border border-blue-500/50"
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}
-          style={{
-            borderTopColor: '#22d3ee',
-            borderRightColor: 'transparent',
-            borderBottomColor: 'transparent',
-            borderLeftColor: 'transparent',
-          }}
-        />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Zap className="w-6 h-6 text-cyan-400" />
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div className="w-48 h-[1px] bg-slate-800 rounded-full overflow-hidden mb-3">
-        <motion.div
-          className="h-full rounded-full"
-          style={{ background: 'linear-gradient(90deg, #3b82f6, #22d3ee)' }}
-          initial={{ width: '0%' }}
-          animate={{ width: '100%' }}
-          transition={{ duration: 1.3, ease: 'easeInOut' }}
-        />
-      </div>
-
-      <motion.p
-        className="text-[10px] font-mono text-slate-500 uppercase tracking-[0.3em]"
-        animate={{ opacity: [0.4, 1, 0.4] }}
-        transition={{ duration: 1.2, repeat: Infinity }}
-      >
-        Initializing Intelligence Core...
-      </motion.p>
-    </motion.div>
-  );
-};
-
-/* ─────────────────────────────────────────────
-   PREMIUM INPUT
-───────────────────────────────────────────── */
-const PremiumInput = ({ icon: Icon, type, placeholder, value, onChange, disabled, rightEl, id }) => {
+/* ─── Input Field ────────────────────────────────────────────── */
+const Field = ({ id, icon: Icon, type, placeholder, value, onChange, disabled, right }) => {
   const [focused, setFocused] = useState(false);
   return (
-    <div className="relative flex items-center w-full">
-      {/* Icon */}
-      <div className="absolute left-3.5 flex items-center pointer-events-none z-10">
-        <Icon
-          className="w-4 h-4 transition-colors duration-200"
-          style={{ color: focused ? '#22d3ee' : '#64748b' }}
-        />
-      </div>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+      <span style={{
+        position: 'absolute', left: '14px', display: 'flex', alignItems: 'center',
+        color: focused ? '#60a5fa' : '#475569', transition: 'color 0.2s', pointerEvents: 'none', zIndex: 1,
+      }}>
+        <Icon />
+      </span>
       <input
         id={id}
         type={type}
@@ -146,471 +65,271 @@ const PremiumInput = ({ icon: Icon, type, placeholder, value, onChange, disabled
         disabled={disabled}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="w-full rounded-xl text-[13.5px] text-white placeholder-slate-500 outline-none transition-all duration-200 disabled:opacity-50"
+        autoComplete="off"
         style={{
-          height: '46px',
-          background: focused ? 'rgba(15, 23, 42, 0.75)' : 'rgba(15, 23, 42, 0.45)',
-          border: focused ? '1px solid rgba(34, 211, 238, 0.65)' : '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: focused ? '0 0 0 3px rgba(34, 211, 238, 0.12)' : 'none',
-          paddingLeft: '2.75rem',
-          paddingRight: rightEl ? '2.75rem' : '1rem',
+          width: '100%', height: '48px', background: focused ? 'rgba(15,23,42,0.9)' : 'rgba(15,23,42,0.6)',
+          border: `1px solid ${focused ? 'rgba(96,165,250,0.7)' : 'rgba(255,255,255,0.09)'}`,
+          borderRadius: '10px', color: '#f1f5f9', fontSize: '13.5px', outline: 'none',
+          paddingLeft: '42px', paddingRight: right ? '42px' : '14px',
+          boxSizing: 'border-box', transition: 'all 0.2s',
+          boxShadow: focused ? '0 0 0 3px rgba(96,165,250,0.15)' : 'none',
         }}
       />
-      {rightEl && (
-        <div className="absolute right-3.5 flex items-center z-10">
-          {rightEl}
-        </div>
+      {right && (
+        <span style={{ position: 'absolute', right: '13px', display: 'flex', alignItems: 'center', zIndex: 1 }}>
+          {right}
+        </span>
       )}
     </div>
   );
 };
 
-/* ─────────────────────────────────────────────
-   MAIN LOGIN COMPONENT
-───────────────────────────────────────────── */
+/* ─── Main Login Page ────────────────────────────────────────── */
 const Login = () => {
-  // ── STATE (unchanged) ──────────────────────
-  const [username, setUsername]         = useState('');
-  const [password, setPassword]         = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [role, setRole]                 = useState('ADMIN');
-  const [rememberMe, setRememberMe]     = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [token, setToken]       = useState('');
+  const [showPw, setShowPw]     = useState(false);
   const { login, loading, error, setError } = useAuth();
-  const [mousePos, setMousePos]         = useState({ x: 0, y: 0 });
 
-  // ── NEW UI STATE ───────────────────────────
-  const [loaded, setLoaded]             = useState(false);
-  const [roleOpen, setRoleOpen]         = useState(false);
-  const roleRef                         = useRef(null);
+  const clearErr = () => { if (error) setError(null); };
 
-  // ── MOUSE PARALLAX (unchanged) ─────────────
-  useEffect(() => {
-    const handleMouseMove = (e) => {
-      const x = (e.clientX / window.innerWidth) - 0.5;
-      const y = (e.clientY / window.innerHeight) - 0.5;
-      setMousePos({ x, y });
-    };
-    window.addEventListener('mousemove', handleMouseMove);
-    return () => window.removeEventListener('mousemove', handleMouseMove);
-  }, []);
-
-  // ── ROLE DROPDOWN CLOSE ON OUTSIDE CLICK ──
-  useEffect(() => {
-    const handler = (e) => {
-      if (roleRef.current && !roleRef.current.contains(e.target)) setRoleOpen(false);
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, []);
-
-  // ── SUBMIT (unchanged) ────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!username.trim() || !password.trim() || !role) {
-      setError('Please enter username, password, and select your control center role.');
+    if (!username.trim() || !password.trim()) {
+      setError('Please enter your Employee ID and password.');
       return;
     }
     await login(username.trim(), password.trim());
   };
 
-  const clearErr = () => { if (error) setError(null); };
+  const ring = (size, opacity, border) => ({
+    position: 'absolute', width: size, height: size, borderRadius: '50%',
+    border: `1px solid ${border}`, opacity, left: '50%', top: '42%',
+    transform: 'translate(-50%, -50%)', pointerEvents: 'none',
+  });
 
-  // ── CARD PARALLAX TRANSFORM (unchanged) ───
-  const cardTransform = `perspective(1200px) rotateY(${-15 + mousePos.x * 14}deg) rotateX(${6 - mousePos.y * 14}deg) translateZ(10px) translateX(${mousePos.x * 12}px) translateY(${mousePos.y * 12}px)`;
-
-  const selectedRole = ROLES.find(r => r.value === role);
-
-  /* ── RENDER ─────────────────────────────── */
   return (
-    <>
-      {/* ─── Intro Loader ─────────────────── */}
-      <AnimatePresence>
-        {!loaded && <IntroLoader onDone={() => setLoaded(true)} />}
-      </AnimatePresence>
+    <div style={{
+      minHeight: '100vh', width: '100%', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center',
+      background: '#060d1b', fontFamily: "'Inter', 'Segoe UI', sans-serif",
+      position: 'relative', overflow: 'hidden',
+    }}>
+      {/* Background grid */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: `linear-gradient(rgba(96,165,250,0.03) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,0.03) 1px,transparent 1px)`,
+        backgroundSize: '48px 48px',
+      }} />
+      {/* Ambient blobs */}
+      <div style={{ position: 'absolute', top: '-120px', left: '-80px', width: '480px', height: '480px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(37,99,235,0.18) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: '-100px', right: '-60px', width: '400px', height: '400px', borderRadius: '50%', background: 'radial-gradient(circle, rgba(14,165,233,0.14) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-      {/* ─── Main Page ────────────────────── */}
-      <div className="fixed inset-0 flex items-center justify-center overflow-hidden w-screen h-screen select-none"
-        style={{ fontFamily: "'Inter', 'Outfit', sans-serif", background: '#060c1a' }}>
+      {/* Page title */}
+      <div style={{ position: 'relative', zIndex: 10, textAlign: 'center', marginBottom: '28px' }}>
+        <h1 style={{ fontSize: '22px', fontWeight: '800', color: '#f1f5f9', letterSpacing: '0.12em', textTransform: 'uppercase', margin: 0 }}>
+          EDL Secure Access
+        </h1>
+        <p style={{ fontSize: '11px', color: 'rgba(148,163,184,0.55)', marginTop: '6px', letterSpacing: '0.04em' }}>
+          Utility Management Dashboard &nbsp;|&nbsp; Electricity Distribution Lanka (Private) Limited
+        </p>
+      </div>
 
-        {/* ─── Full-screen 3D Scene Background ─── */}
-        <div className="absolute inset-0 z-0">
-          <HoloScene mousePos={mousePos} cardTransform={cardTransform} />
+      {/* Main card */}
+      <div style={{
+        position: 'relative', zIndex: 10, width: '100%', maxWidth: '820px',
+        display: 'flex', borderRadius: '20px', overflow: 'hidden',
+        background: 'rgba(9,18,38,0.82)',
+        backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+        border: '1px solid rgba(255,255,255,0.08)',
+        boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(96,165,250,0.04)',
+        margin: '0 24px',
+      }}>
+        {/* ── Left panel ── */}
+        <div style={{
+          flex: '0 0 280px', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: '24px',
+          padding: '56px 32px',
+          background: 'linear-gradient(160deg, rgba(17,35,72,0.9) 0%, rgba(7,14,34,0.95) 100%)',
+          borderRight: '1px solid rgba(255,255,255,0.06)',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          {/* Left glow */}
+          <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 50% 40%, rgba(37,99,235,0.18) 0%, transparent 65%)', pointerEvents: 'none' }} />
+          {/* Rings */}
+          <div style={ring('230px', 0.18, 'rgba(96,165,250,0.5)')} />
+          <div style={ring('170px', 0.25, 'rgba(96,165,250,0.4)')} />
+          <div style={ring('110px', 0.30, 'rgba(96,165,250,0.35)')} />
+
+          {/* Logo */}
+          <div style={{
+            width: '88px', height: '88px', borderRadius: '50%',
+            background: 'linear-gradient(145deg, #1e3a8a, #0c2461)',
+            border: '2px solid rgba(96,165,250,0.4)',
+            boxShadow: '0 0 40px rgba(37,99,235,0.4), 0 0 80px rgba(37,99,235,0.15), inset 0 1px 0 rgba(255,255,255,0.12)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#93c5fd' }}>
+              <IconZap />
+              <span style={{ fontSize: '21px', fontWeight: '800', letterSpacing: '0.04em', color: '#e0f2fe', lineHeight: 1 }}>EDL</span>
+            </div>
+          </div>
+
+          {/* Left text */}
+          <div style={{ position: 'relative', zIndex: 1, textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', fontWeight: '700', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#60a5fa', marginBottom: '6px' }}>
+              Operational Dashboard
+            </div>
+            <div style={{ fontSize: '10px', color: 'rgba(148,163,184,0.65)', letterSpacing: '0.06em', lineHeight: 1.7 }}>
+              Electricity Distribution Lanka<br />Smart Solar Billing System
+            </div>
+          </div>
+
+          {/* Indicator dots */}
+          <div style={{ display: 'flex', gap: '6px', position: 'relative', zIndex: 1 }}>
+            {[true, false, false, false].map((a, i) => (
+              <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', background: a ? '#3b82f6' : 'rgba(255,255,255,0.15)' }} />
+            ))}
+          </div>
         </div>
 
-        {/* ─── Centered Login Panel ─── */}
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.8, delay: 1.7, ease: [0.16, 1, 0.3, 1] }}
-          className="pointer-events-auto relative z-10 flex flex-col justify-between max-w-[440px] w-full mx-auto my-auto p-6 sm:p-8 rounded-2xl overflow-hidden"
-          style={{
-            background: 'rgba(11, 18, 35, 0.75)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-            boxShadow: '0 32px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(34,211,238,0.05), inset 0 1px 0 rgba(255,255,255,0.08)',
-          }}
-        >
-          {/* Card inner glow */}
-          <div className="absolute -inset-[1px] rounded-2xl pointer-events-none"
-            style={{
-              background: 'linear-gradient(135deg, rgba(34,211,238,0.1) 0%, transparent 50%, rgba(139,92,246,0.08) 100%)',
-              borderRadius: 'inherit',
-            }}
-          />
-
-          {/* Grid overlay */}
-          <GridOverlay />
-
-          {/* — Ambient panel orbs — */}
-          <FloatingOrb style={{ width: 220, height: 220, top: -60, left: -60, background: 'radial-gradient(circle, rgba(59,130,246,0.1), transparent 70%)' }} duration={8} delay={0} />
-          <FloatingOrb style={{ width: 180, height: 180, bottom: -40, right: -40, background: 'radial-gradient(circle, rgba(139,92,246,0.08), transparent 70%)' }} duration={10} delay={2} />
-
-          {/* ── HEADER ── */}
-          <div className="flex items-center gap-3 mb-6 relative z-10">
-            {/* Logo mark */}
-            <div className="relative">
-              <motion.div
-                className="absolute -inset-1 rounded-xl"
-                animate={{ opacity: [0.4, 0.8, 0.4] }}
-                transition={{ duration: 2.5, repeat: Infinity }}
-                style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.4), transparent 70%)' }}
-              />
-              <div className="relative w-9 h-9 flex items-center justify-center rounded-xl border"
-                style={{
-                  background: 'linear-gradient(135deg, #1e3a5f, #0f2544)',
-                  borderColor: 'rgba(34,211,238,0.3)',
-                  boxShadow: '0 0 16px rgba(34,211,238,0.2), inset 0 1px 0 rgba(255,255,255,0.1)',
-                }}>
-                <Zap className="w-4.5 h-4.5 text-cyan-400" />
-              </div>
-            </div>
-
-            <div>
-              <div className="text-[14px] font-bold tracking-tight text-white leading-tight">
-                EDL Smart Solar Billing
-              </div>
-              <div className="text-[9px] font-semibold tracking-[0.18em] uppercase mt-0.5"
-                style={{ color: 'rgba(148,163,184,0.6)' }}>
-                Electricity Distribution Lanka
-              </div>
-            </div>
-
-            {/* System online badge */}
-            <div className="ml-auto flex items-center gap-1.5 px-2 py-1 rounded-full border"
-              style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'rgba(16,185,129,0.25)' }}>
-              <motion.span
-                className="w-1.5 h-1.5 rounded-full bg-emerald-400"
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity }}
-              />
-              <span className="text-[8px] font-mono text-emerald-400 uppercase tracking-wider">Online</span>
-            </div>
+        {/* ── Right form panel ── */}
+        <div style={{ flex: 1, padding: '48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          {/* Status badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            padding: '4px 10px', borderRadius: '999px', alignSelf: 'flex-start',
+            background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
+            fontSize: '9.5px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase',
+            color: '#34d399', marginBottom: '20px',
+          }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399', animation: 'edl-blink 1.5s ease-in-out infinite' }} />
+            System Online
           </div>
 
-          {/* ── WELCOME HEADING ── */}
-          <div className="mb-5 relative z-10">
-            <p className="text-[9px] font-mono font-semibold tracking-[0.25em] uppercase mb-1.5"
-              style={{ color: '#22d3ee' }}>
-              Secure Enterprise Access
-            </p>
-            <h1 className="text-[24px] font-bold tracking-tight leading-none text-white mb-1.5">
-              Welcome Back
-            </h1>
-            <p className="text-[11px] leading-relaxed" style={{ color: 'rgba(148,163,184,0.7)' }}>
-              Transforming Solar Billing Through Intelligence
-            </p>
-          </div>
+          <p style={{ fontSize: '10px', fontWeight: '700', letterSpacing: '0.22em', textTransform: 'uppercase', color: '#3b82f6', margin: '0 0 8px' }}>
+            Secure Enterprise Access
+          </p>
+          <h2 style={{ fontSize: '26px', fontWeight: '800', color: '#f1f5f9', letterSpacing: '-0.02em', lineHeight: 1.15, margin: '0 0 4px' }}>
+            Welcome Back
+          </h2>
+          <p style={{ fontSize: '12px', color: 'rgba(148,163,184,0.65)', margin: '0 0 28px', lineHeight: 1.5 }}>
+            Sign in to access the EDL operational dashboard
+          </p>
 
-          {/* ── FORM ── */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3.5 relative z-10 mb-6">
-            {/* Error Banner */}
-            <AnimatePresence>
-              {error && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="flex items-start gap-2.5 p-3 rounded-xl text-[11px]"
-                    style={{
-                      background: 'rgba(239,68,68,0.08)',
-                      border: '1px solid rgba(239,68,68,0.25)',
-                      color: '#fca5a5',
-                    }}>
-                    <Shield className="w-3.5 h-3.5 shrink-0 mt-0.5 text-red-400" />
-                    <span>{error}</span>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* Error */}
+          {error && (
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 14px',
+              borderRadius: '10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)',
+              color: '#fca5a5', fontSize: '12px', marginBottom: '16px', lineHeight: 1.5,
+            }}>
+              <IconShield /><span>{error}</span>
+            </div>
+          )}
 
-            {/* ACCESS LEVEL */}
-            <div ref={roleRef} className="relative">
-              <label className="block text-[9.5px] font-mono font-semibold tracking-[0.12em] uppercase mb-1.5"
-                style={{ color: 'rgba(148,163,184,0.65)' }}>
-                Access Level
+          <form onSubmit={handleSubmit} autoComplete="off">
+            {/* Employee ID */}
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-username">
+                Employee ID / Username
               </label>
-              <button
-                type="button"
-                id="role-selector"
-                onClick={() => { setRoleOpen(v => !v); clearErr(); }}
-                disabled={loading}
-                className="w-full flex items-center justify-between px-3.5 rounded-xl text-[13.5px] transition-all duration-200 outline-none cursor-pointer"
-                style={{
-                  height: '46px',
-                  background: roleOpen ? 'rgba(15, 23, 42, 0.75)' : 'rgba(15, 23, 42, 0.45)',
-                  border: roleOpen ? '1px solid rgba(34, 211, 238, 0.65)' : '1px solid rgba(255, 255, 255, 0.08)',
-                  color: '#e2e8f0',
-                  boxShadow: roleOpen ? '0 0 0 3px rgba(34, 211, 238, 0.12)' : 'none',
-                }}
-              >
-                <span className="flex items-center gap-2.5">
-                  <span className="text-[14px] leading-none" style={{ color: '#22d3ee' }}>{selectedRole?.icon}</span>
-                  <span>{selectedRole?.label}</span>
-                </span>
-                <motion.div animate={{ rotate: roleOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                  <ChevronDown className="w-4 h-4" style={{ color: 'rgba(148,163,184,0.5)' }} />
-                </motion.div>
-              </button>
-
-              <AnimatePresence>
-                {roleOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8, scale: 0.97 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -8, scale: 0.97 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className="absolute left-0 right-0 top-full mt-1.5 z-50 rounded-xl overflow-hidden"
-                    style={{
-                      background: 'rgba(8,14,28,0.97)',
-                      backdropFilter: 'blur(20px)',
-                      border: '1px solid rgba(34,211,238,0.2)',
-                      boxShadow: '0 20px 60px rgba(0,0,0,0.7)',
-                    }}
-                  >
-                    {ROLES.map((r, i) => (
-                      <button
-                        key={r.value}
-                        type="button"
-                        onClick={() => { setRole(r.value); setRoleOpen(false); clearErr(); }}
-                        className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-[13px] text-left transition-colors duration-150"
-                        style={{
-                          color: r.value === role ? '#22d3ee' : '#94a3b8',
-                          background: r.value === role ? 'rgba(34,211,238,0.08)' : 'transparent',
-                          borderBottom: i < ROLES.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(34,211,238,0.06)'}
-                        onMouseLeave={e => e.currentTarget.style.background = r.value === role ? 'rgba(34,211,238,0.08)' : 'transparent'}
-                      >
-                        <span className="text-[15px]">{r.icon}</span>
-                        <span>{r.label}</span>
-                        {r.value === role && <CheckCircle className="w-3.5 h-3.5 ml-auto text-cyan-400" />}
-                      </button>
-                    ))}
-                  </motion.div>
-                )}
-              </AnimatePresence>
+              <Field id="edl-username" icon={IconUser} type="text" placeholder="Enter your Employee ID"
+                value={username} onChange={e => { setUsername(e.target.value); clearErr(); }} disabled={loading} />
             </div>
 
-            {/* USERNAME */}
-            <div>
-              <label htmlFor="login-username" className="block text-[9.5px] font-mono font-semibold tracking-[0.12em] uppercase mb-1.5"
-                style={{ color: 'rgba(148,163,184,0.65)' }}>
-                Username
-              </label>
-              <PremiumInput
-                id="login-username"
-                icon={User}
-                type="text"
-                placeholder="Enter your username"
-                value={username}
-                onChange={e => { setUsername(e.target.value); clearErr(); }}
-                disabled={loading}
-              />
-            </div>
-
-            {/* PASSWORD */}
-            <div>
-              <label htmlFor="login-password" className="block text-[9.5px] font-mono font-semibold tracking-[0.12em] uppercase mb-1.5"
-                style={{ color: 'rgba(148,163,184,0.65)' }}>
+            {/* Password */}
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-password">
                 Password
               </label>
-              <PremiumInput
-                id="login-password"
-                icon={Lock}
-                type={showPassword ? 'text' : 'password'}
-                placeholder="Enter your password"
-                value={password}
-                onChange={e => { setPassword(e.target.value); clearErr(); }}
-                disabled={loading}
-                rightEl={
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="text-slate-500 hover:text-slate-300 transition-colors cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <Field id="edl-password" icon={IconLock} type={showPw ? 'text' : 'password'} placeholder="Enter your password"
+                value={password} onChange={e => { setPassword(e.target.value); clearErr(); }} disabled={loading}
+                right={
+                  <button type="button" onClick={() => setShowPw(v => !v)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 0, display: 'flex' }}>
+                    {showPw ? <IconEyeOff /> : <IconEye />}
                   </button>
                 }
               />
             </div>
 
-            {/* REMEMBER ME + FORGOT */}
-            <div className="flex items-center justify-between mt-0.5">
-              <label className="flex items-center gap-2 cursor-pointer group">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    id="remember-me"
-                    checked={rememberMe}
-                    onChange={e => setRememberMe(e.target.checked)}
-                    className="sr-only"
-                  />
-                  <div
-                    className="w-4 h-4 rounded border flex items-center justify-center transition-all duration-200"
-                    onClick={() => setRememberMe(v => !v)}
-                    style={{
-                      background: rememberMe ? 'rgba(34,211,238,0.15)' : 'rgba(15,23,42,0.6)',
-                      borderColor: rememberMe ? 'rgba(34,211,238,0.6)' : 'rgba(255,255,255,0.12)',
-                    }}
-                  >
-                    {rememberMe && (
-                      <motion.div
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        transition={{ duration: 0.15 }}
-                      >
-                        <CheckCircle className="w-3 h-3 text-cyan-400" />
-                      </motion.div>
-                    )}
-                  </div>
-                </div>
-                <span className="text-[11px] text-slate-400 group-hover:text-slate-300 transition-colors">
-                  Remember me
-                </span>
+            {/* Security Token */}
+            <div style={{ marginBottom: '14px' }}>
+              <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-token">
+                Security Token <span style={{ opacity: 0.4, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
               </label>
-              <a
-                href="#"
-                className="text-[11px] font-medium transition-colors hover:underline"
-                style={{ color: '#38bdf8' }}
-                onMouseEnter={e => e.currentTarget.style.color = '#7dd3fc'}
-                onMouseLeave={e => e.currentTarget.style.color = '#38bdf8'}
-              >
-                Forgot password?
-              </a>
+              <Field id="edl-token" icon={IconKey} type="text" placeholder="Enter security token"
+                value={token} onChange={e => setToken(e.target.value)} disabled={loading} />
             </div>
 
-            {/* SIGN IN BUTTON */}
-            <motion.button
-              whileHover={{ scale: 1.01, y: -1 }}
-              whileTap={{ scale: 0.99 }}
-              type="submit"
-              id="sign-in-btn"
-              disabled={loading}
-              className="relative w-full py-3 mt-1 rounded-xl font-bold tracking-wide text-[13px] uppercase overflow-hidden cursor-pointer transition-all duration-300 disabled:opacity-60 disabled:cursor-not-allowed"
-              style={{
-                background: 'linear-gradient(135deg, #1d4ed8 0%, #0891b2 50%, #1d4ed8 100%)',
-                backgroundSize: '200% auto',
-                color: '#ffffff',
-                boxShadow: '0 0 24px rgba(34,211,238,0.2), 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)',
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.backgroundPosition = 'right center';
-                e.currentTarget.style.boxShadow = '0 0 40px rgba(34,211,238,0.35), 0 12px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.15)';
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.backgroundPosition = 'left center';
-                e.currentTarget.style.boxShadow = '0 0 24px rgba(34,211,238,0.2), 0 8px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)';
-              }}
-            >
-              <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-xl">
-                <motion.div
-                  className="absolute top-0 bottom-0 w-1/3"
-                  style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)', skewX: '-20deg' }}
-                  animate={{ x: ['-200%', '400%'] }}
-                  transition={{ duration: 2.5, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.5 }}
-                />
-              </div>
+            {/* Links */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', marginTop: '4px' }}>
+              <a href="#" style={{ fontSize: '11.5px', color: '#60a5fa', textDecoration: 'none', fontWeight: '500' }}>Forgot Password?</a>
+              <a href="#" style={{ fontSize: '11.5px', color: '#60a5fa', textDecoration: 'none', fontWeight: '500' }}>Request Access</a>
+            </div>
 
-              <div className="relative flex items-center justify-center gap-2.5">
-                {loading ? (
-                  <>
-                    <motion.span
-                      className="w-4 h-4 rounded-full border-2"
-                      style={{ borderColor: 'rgba(255,255,255,0.2)', borderTopColor: '#fff' }}
-                      animate={{ rotate: 360 }}
-                      transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
-                    />
-                    <span>Authenticating...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Sign In</span>
-                    <ShieldCheck className="w-4 h-4" />
-                  </>
-                )}
-              </div>
-            </motion.button>
+            {/* Submit */}
+            <button
+              id="edl-login-btn"
+              type="submit"
+              disabled={loading}
+              style={{
+                width: '100%', height: '50px', border: 'none', borderRadius: '11px',
+                cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+                background: 'linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%)',
+                color: '#fff', fontSize: '13px', fontWeight: '700', letterSpacing: '0.08em',
+                textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                boxShadow: '0 0 24px rgba(37,99,235,0.35), 0 8px 24px rgba(0,0,0,0.4)',
+                transition: 'all 0.25s ease',
+              }}
+              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = '0 0 40px rgba(37,99,235,0.55), 0 12px 32px rgba(0,0,0,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 0 24px rgba(37,99,235,0.35), 0 8px 24px rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'none'; }}
+            >
+              {loading ? (
+                <><div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', borderRadius: '50%', animation: 'edl-spin 0.75s linear infinite' }} /><span>Authenticating…</span></>
+              ) : (
+                <><span>Secure Login</span><IconArrow /></>
+              )}
+            </button>
           </form>
 
-          {/* ── FOOTER STATS ── */}
-          <div className="border-t pt-4 relative z-10" style={{ borderColor: 'rgba(255,255,255,0.06)' }}>
-            <div className="grid grid-cols-3 gap-2 mb-3">
-              <AnimatedStat value="1.28M+" label="Connections" color="#e2e8f0" delay={2.3} />
-              <AnimatedStat value="LKR 42.6M+" label="Monthly Vol" color="#34d399" delay={2.4} />
-              <AnimatedStat value="99.85%" label="Accuracy" color="#38bdf8" delay={2.5} />
-            </div>
-            <p className="text-[8.5px] font-mono text-center" style={{ color: 'rgba(100,116,139,0.7)' }}>
-              End-to-end encrypted. Compliant with SLC Distribution standards.
-            </p>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '24px 0' }} />
+          <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
+            {['Privacy Policy', 'Terms of Use', 'Support'].map(t => (
+              <a key={t} href="#" style={{ fontSize: '10.5px', color: 'rgba(148,163,184,0.4)', textDecoration: 'none' }}>{t}</a>
+            ))}
           </div>
-        </motion.div>
-
-        {/* ══════════════════════════════════
-            GLOBAL FOOTER BAR
-        ══════════════════════════════════ */}
-        <footer
-          className="absolute bottom-0 inset-x-0 z-30 flex items-center justify-between px-8 text-[8px] font-mono tracking-wide"
-          style={{
-            height: '36px',
-            background: 'rgba(5,8,18,0.7)',
-            backdropFilter: 'blur(10px)',
-            borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-            color: 'rgba(100,116,139,0.7)',
-          }}
-        >
-          <div>© 2026 ELECTRICITY DISTRIBUTION LANKA (PVT) LTD. ALL RIGHTS RESERVED.</div>
-          <div className="flex gap-4">
-            <span>PORTAL VER: 4.10.2</span>
-            <span style={{ color: 'rgba(239,68,68,0.5)' }}>CLASSIFICATION: CONFIDENTIAL</span>
-          </div>
-        </footer>
-
+        </div>
       </div>
 
-      {/* ── Global login-page CSS ── */}
+      {/* Page footer */}
+      <footer style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', padding: '0 32px', height: '34px',
+        background: 'rgba(4,8,20,0.7)', backdropFilter: 'blur(8px)',
+        borderTop: '1px solid rgba(255,255,255,0.04)',
+        fontSize: '8.5px', fontFamily: 'monospace', color: 'rgba(100,116,139,0.6)',
+        letterSpacing: '0.05em', textTransform: 'uppercase',
+      }}>
+        <span>© 2026 Electricity Distribution Lanka (Pvt) Ltd. All rights reserved.</span>
+        <span style={{ color: 'rgba(239,68,68,0.45)' }}>Classification: Confidential &nbsp;|&nbsp; Portal v4.10.2</span>
+      </footer>
+
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
-        #sign-in-btn:not(:disabled) {
-          background-size: 200% auto;
-          transition: background-position 0.5s ease, box-shadow 0.3s ease, transform 0.15s ease;
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; }
+        ::placeholder { color: #334155 !important; opacity: 1; }
+        input:-webkit-autofill, input:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0 40px #0a1120 inset !important;
+          -webkit-text-fill-color: #f1f5f9 !important;
+          caret-color: #f1f5f9;
         }
-
-        /* Webkit Autofill Overrides */
-        input:-webkit-autofill,
-        input:-webkit-autofill:hover,
-        input:-webkit-autofill:focus,
-        input:-webkit-autofill:active {
-          -webkit-box-shadow: 0 0 0 30px #0b1223 inset !important;
-          -webkit-text-fill-color: #ffffff !important;
-          caret-color: #ffffff !important;
-          transition: background-color 5000s ease-in-out 0s;
-        }
+        @keyframes edl-spin { to { transform: rotate(360deg); } }
+        @keyframes edl-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
       `}</style>
-    </>
+    </div>
   );
 };
 

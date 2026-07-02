@@ -9,6 +9,8 @@ import com.ceb.billing.models.MessageResponse;
 import com.ceb.billing.repositories.ApprovalRequestRepository;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
+import com.ceb.billing.repositories.CustomerRepository;
+import com.ceb.billing.entities.Customer;
 import com.ceb.billing.services.ExcelParsingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +42,9 @@ public class BillingController {
 
     @Autowired
     private ApprovalRequestRepository approvalRequestRepository;
+
+    @Autowired
+    private CustomerRepository customerRepository;
 
     @Autowired
     private com.ceb.billing.services.AuditLogService auditLogService;
@@ -82,8 +87,26 @@ public class BillingController {
         UploadHistory history = optHistory.get();
         String filename = history.getFilename();
 
+        // Find all customers created by this upload
+        List<Customer> createdCustomers = customerRepository.findByCreatedByUploadId(uploadId);
+        int customersDeleted = 0;
+        int customersDetached = 0;
+
         // Delete all billing records linked to this upload first
         billingRecordRepository.deleteByUploadHistoryId(uploadId);
+
+        // Delete newly created customers if they have no other billing records
+        for (Customer customer : createdCustomers) {
+            long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(customer.getAccountNo());
+            if (activeRecordsCount == 0) {
+                customerRepository.delete(customer);
+                customersDeleted++;
+            } else {
+                customer.setCreatedByUploadId(null);
+                customerRepository.save(customer);
+                customersDetached++;
+            }
+        }
 
         // Delete the upload history record
         uploadHistoryRepository.deleteById(uploadId);
@@ -91,11 +114,15 @@ public class BillingController {
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         auditLogService.log("UPLOAD_ROLLBACK",
                 "User " + actor + " deleted upload history entry ID " + uploadId
-                        + " (\"" + filename + "\") and all associated billing records.");
+                        + " (\"" + filename + "\"), associated billing records, and rolled back "
+                        + customersDeleted + " newly added customer records (retained/detached " + customersDetached + ").");
 
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Upload \"" + filename + "\" and all " + history.getBillingInserted() + " associated billing records have been deleted.");
+        response.put("message", "Upload \"" + filename + "\" and associated records deleted. Rolled back " 
+                     + customersDeleted + " newly added customers (retained " + customersDetached + " referenced customers).");
         response.put("filename", filename);
+        response.put("customersDeleted", customersDeleted);
+        response.put("customersDetached", customersDetached);
         return ResponseEntity.ok(response);
     }
 

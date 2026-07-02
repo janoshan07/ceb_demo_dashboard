@@ -138,6 +138,14 @@ const UploadPage = () => {
   const [sheetPages, setSheetPages] = useState({});             // { sheetName: pageNum }
   const ROWS_PER_PAGE = 50;
 
+  // Redesigned Step 4 preview tabs and action management
+  const [previewTab, setPreviewTab] = useState('all'); // 'all', 'errors', 'duplicates'
+  const [localCorrections, setLocalCorrections] = useState({}); // { 'sheetName|rowNum': { field: val } }
+  const [duplicateActions, setDuplicateActions] = useState({}); // { 'sheetName|rowNum': 'IMPORT' | 'IGNORE' }
+  const [editingRowKey, setEditingRowKey] = useState(null); // 'sheetName|rowNum'
+  const [editRowState, setEditRowState] = useState({}); // values of the row currently edited
+  const [editErrors, setEditErrors] = useState({}); // client side validation errors
+
   // Template Configurations State
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -302,12 +310,53 @@ const UploadPage = () => {
       showToast('Please select at least one sheet to import.', 'warning');
       return;
     }
+
+    // Collect corrections, ignored rows, and import anyway rows
+    const correctionsMap = {};
+    const ignoredRowsArray = [];
+    const importAnywayArray = [];
+
+    previewSheets.forEach(sheet => {
+      if (!sheet.rows) return;
+      sheet.rows.forEach(row => {
+        const key = `${sheet.sheetName}|${row.rowNum}`;
+
+        // Local edit corrections
+        if (localCorrections[key]) {
+          correctionsMap[key] = localCorrections[key];
+        }
+
+        // Duplicate actions
+        if (row.validationStatus === 'DUPLICATE') {
+          const action = duplicateActions[key] || 'IGNORE'; // default to ignore duplicates
+          if (action === 'IGNORE') {
+            ignoredRowsArray.push(key);
+          } else if (action === 'IMPORT') {
+            importAnywayArray.push(key);
+          }
+        }
+
+        // Ignored error records
+        if (row.validationStatus === 'INVALID') {
+          const action = duplicateActions[key];
+          if (action === 'IGNORE') {
+            ignoredRowsArray.push(key);
+          }
+        }
+      });
+    });
+
     try {
       setUploading(true);
       const response = await authFetch(`/api/admin/import/batches/${batchData.batchId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selectedSheets }),
+        body: JSON.stringify({
+          selectedSheets,
+          corrections: correctionsMap,
+          importAnywayRows: importAnywayArray,
+          ignoredRows: ignoredRowsArray
+        }),
       });
       const data = await response.json();
 
@@ -315,8 +364,8 @@ const UploadPage = () => {
         throw new Error(data.message || 'Approval process failed.');
       }
 
-      showToast(`Import approved! Migrated ${data.rowsMigrated} records to database.`, 'success');
-      setBatchData(prev => ({ ...prev, status: 'APPROVED', rowsMigrated: data.rowsMigrated }));
+      showToast(`Import approved! Migrated ${data.rowsStaged || 0} records (${data.billingRows || 0} bills, ${data.customerProfileRows || 0} profiles) to live database.`, 'success');
+      setBatchData(prev => ({ ...prev, status: 'APPROVED', rowsMigrated: data.rowsStaged || 0 }));
       setWizardStep(5);
       fetchHistory();
       setFile(null);
@@ -358,6 +407,141 @@ const UploadPage = () => {
     setImportSelectedSheets(new Set());
     setSheetPages({});
     setPreviewActiveSheet(null);
+    setPreviewTab('all');
+    setLocalCorrections({});
+    setDuplicateActions({});
+    setEditingRowKey(null);
+    setEditRowState({});
+    setEditErrors({});
+  };
+
+  // --- Inline Editing & Interactive Validation Actions ---
+
+  const startEditRow = (row, sheetName) => {
+    const key = `${sheetName}|${row.rowNum}`;
+    setEditingRowKey(key);
+    setEditRowState({
+      accountNo: row.accountNo || '',
+      customerName: row.customerName || '',
+      fromDate: row.fromDate || '',
+      toDate: row.toDate || '',
+      imports: row.imports ?? '',
+      exports: row.exports ?? '',
+      unitCost: row.unitCost ?? '',
+      billingMode: row.billingMode || 'Variable',
+      customerAddress: row.customerAddress || '',
+      mobileNo: row.mobileNo || '',
+      agreementDate: row.agreementDate || '',
+      panelCapacity: row.panelCapacity ?? '',
+      solarType: row.solarType || '',
+      bankCode: row.bankCode || '',
+      branchCode: row.branchCode || '',
+      bankAccountNo: row.bankAccountNo || ''
+    });
+    setEditErrors({});
+  };
+
+  const handleEditChange = (field, val) => {
+    setEditRowState(prev => ({ ...prev, [field]: val }));
+    if (editErrors[field]) {
+      setEditErrors(prev => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  };
+
+  const cancelEditRow = () => {
+    setEditingRowKey(null);
+    setEditRowState({});
+    setEditErrors({});
+  };
+
+  const saveEditedRow = (rowNum, sheetName) => {
+    const key = `${sheetName}|${rowNum}`;
+    
+    // Client-side validation
+    const errors = {};
+    if (!editRowState.accountNo || !editRowState.accountNo.trim()) {
+      errors.accountNo = 'Account number is required';
+    }
+    
+    // Verify sheet type
+    const sheet = previewSheets.find(s => s.sheetName === sheetName);
+    const isBilling = sheet?.detectedType === 'BILLING';
+    
+    if (isBilling) {
+      if (!editRowState.customerName || !editRowState.customerName.trim()) {
+        errors.customerName = 'Customer name is required';
+      }
+      if (!editRowState.fromDate || !editRowState.fromDate.trim()) {
+        errors.fromDate = 'From Date is required';
+      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(editRowState.fromDate)) {
+        errors.fromDate = 'Expected format: YYYY-MM-DD';
+      }
+      if (!editRowState.toDate || !editRowState.toDate.trim()) {
+        errors.toDate = 'To Date is required';
+      } else if (!/^\d{4}-\d{2}-\d{2}$/.test(editRowState.toDate)) {
+        errors.toDate = 'Expected format: YYYY-MM-DD';
+      }
+      if (editRowState.imports === '' || isNaN(editRowState.imports) || Number(editRowState.imports) < 0) {
+        errors.imports = 'Imports must be a positive number';
+      }
+      if (editRowState.exports === '' || isNaN(editRowState.exports) || Number(editRowState.exports) < 0) {
+        errors.exports = 'Exports must be a positive number';
+      }
+      if (editRowState.unitCost === '' || isNaN(editRowState.unitCost) || Number(editRowState.unitCost) < 0) {
+        errors.unitCost = 'Unit Cost must be a positive number';
+      }
+    } else {
+      // Customer profile
+      if (!editRowState.customerName || !editRowState.customerName.trim()) {
+        errors.customerName = 'Customer name is required';
+      }
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEditErrors(errors);
+      showToast('Please correct validation errors first.', 'error');
+      return;
+    }
+
+    // Save correction locally
+    setLocalCorrections(prev => ({
+      ...prev,
+      [key]: {
+        ...editRowState,
+        importUnits: editRowState.imports !== '' ? Number(editRowState.imports) : null,
+        exportUnits: editRowState.exports !== '' ? Number(editRowState.exports) : null,
+        unitCost: editRowState.unitCost !== '' ? Number(editRowState.unitCost) : null,
+        panelCapacity: editRowState.panelCapacity !== '' ? Number(editRowState.panelCapacity) : null
+      }
+    }));
+
+    // Update row details in previewSheets state so UI updates the row to VALID
+    setPreviewSheets(prev => prev.map(s => {
+      if (s.sheetName !== sheetName) return s;
+      return {
+        ...s,
+        rows: s.rows.map(r => {
+          if (r.rowNum !== rowNum) return r;
+          return {
+            ...r,
+            ...editRowState,
+            imports: editRowState.imports,
+            exports: editRowState.exports,
+            unitCost: editRowState.unitCost,
+            panelCapacity: editRowState.panelCapacity,
+            validationStatus: 'VALID', // Force valid status
+            errors: [] // Clear all errors list
+          };
+        })
+      };
+    }));
+
+    setEditingRowKey(null);
+    showToast('Row validation succeeded and marked as valid!', 'success');
   };
 
   // --- Configurations actions (Admins Only) ---
@@ -826,273 +1010,721 @@ const UploadPage = () => {
               const typeBg    = (t) => t === 'BILLING' ? 'rgba(16,185,129,0.12)' : t === 'CUSTOMER_PROFILE' ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.05)';
               const typeLabel = (t) => t === 'BILLING' ? '⚡ Billing' : t === 'CUSTOMER_PROFILE' ? '👤 Profile' : 'ℹ️ Other';
 
+              // Dynamic count and grouping calculations
+              const getErrorsBySheet = () => {
+                const results = [];
+                previewSheets.forEach(sheet => {
+                  if (!sheet.rows) return;
+                  const errRows = sheet.rows.filter(r => {
+                    const key = `${sheet.sheetName}|${r.rowNum}`;
+                    return r.validationStatus === 'INVALID' && duplicateActions[key] !== 'IGNORE';
+                  });
+                  if (errRows.length > 0) {
+                    results.push({
+                      sheetName: sheet.sheetName,
+                      detectedType: sheet.detectedType,
+                      rows: errRows
+                    });
+                  }
+                });
+                return results;
+              };
+
+              const getDuplicatesBySheet = () => {
+                const results = [];
+                previewSheets.forEach(sheet => {
+                  if (!sheet.rows) return;
+                  const dupRows = sheet.rows.filter(r => r.validationStatus === 'DUPLICATE');
+                  if (dupRows.length > 0) {
+                    results.push({
+                      sheetName: sheet.sheetName,
+                      detectedType: sheet.detectedType,
+                      rows: dupRows
+                    });
+                  }
+                });
+                return results;
+              };
+
+              const errorsBySheet = getErrorsBySheet();
+              const duplicatesBySheet = getDuplicatesBySheet();
+
+              const getSheetStats = (sheet) => {
+                let errors = 0;
+                let duplicates = 0;
+                if (sheet.rows) {
+                  sheet.rows.forEach(r => {
+                    const key = `${sheet.sheetName}|${r.rowNum}`;
+                    if (r.validationStatus === 'INVALID') {
+                      if (duplicateActions[key] !== 'IGNORE') errors++;
+                    } else if (r.validationStatus === 'DUPLICATE') {
+                      const action = duplicateActions[key] || 'IGNORE';
+                      if (action === 'IGNORE') duplicates++;
+                    }
+                  });
+                }
+                return { errors, duplicates };
+              };
+
+              const totalErrors = previewSheets.reduce((sum, s) => sum + getSheetStats(s).errors, 0);
+              const totalDuplicates = previewSheets.reduce((sum, s) => sum + getSheetStats(s).duplicates, 0);
+
               return (
                 <div className="animate-fade-in">
                   {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
                     <div>
-                      <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>Step 4: Full Data Preview &amp; Import Selection</h3>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Review all sheets, select which to import, delete unwanted sheets.</p>
+                      <h3 style={{ fontSize: '1.15rem', fontWeight: 600 }}>Step 4: Full Data Preview &amp; Validation Panel</h3>
+                      <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Review all worksheets, resolve duplicate conflicts, correct row validation errors inline.</p>
                     </div>
                     <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center' }}>
                       <span className="badge info">Sheets: {previewSheets.length}</span>
                       <span className="badge success">Selected: {selectedCount}</span>
                       <span className="badge info">Rows to Import: {totalSelectedRows.toLocaleString()}</span>
-                      {(batchData?.preview?.errorCount || 0) > 0 && (
-                        <span className="badge danger">Errors: {batchData.preview.errorCount}</span>
+                      {totalErrors > 0 && (
+                        <span className="badge danger">Unresolved Errors: {totalErrors}</span>
+                      )}
+                      {totalDuplicates > 0 && (
+                        <span className="badge warning">Skipped Duplicates: {totalDuplicates}</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Sheet Selector — ALL sheets, horizontal scroll */}
-                  <div style={{ marginBottom: '1.25rem' }}>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                      <Layers size={12} /> Select sheets to include in import &nbsp;·&nbsp; Click sheet name to preview
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
-                      {previewSheets.map((s) => {
-                        const isActive   = previewActiveSheet === s.sheetName;
-                        const isSelected = importSelectedSheets.has(s.sheetName);
-                        return (
-                          <div
-                            key={s.sheetName}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: '0.35rem',
-                              padding: '0.45rem 0.75rem',
-                              border: `1.5px solid ${isActive ? 'var(--primary)' : isSelected ? 'rgba(99,102,241,0.4)' : 'var(--border-color)'}`,
-                              borderRadius: '8px',
-                              backgroundColor: isActive ? 'rgba(99,102,241,0.1)' : 'var(--bg-secondary)',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                              flexShrink: 0,
-                            }}
-                          >
-                            {/* Select checkbox */}
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleToggleSheet(s.sheetName)}
-                              onClick={e => e.stopPropagation()}
-                              style={{ cursor: 'pointer', accentColor: 'var(--primary)', width: '14px', height: '14px' }}
-                              title={isSelected ? 'Deselect from import' : 'Select for import'}
-                            />
-                            {/* Sheet name (click to preview) */}
-                            <button
-                              type="button"
-                              onClick={() => { setPreviewActiveSheet(s.sheetName); setSheetPages(prev => ({ ...prev, [s.sheetName]: 1 })); }}
-                              style={{ background: 'none', border: 'none', color: isActive ? 'white' : 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: isActive ? 600 : 400, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap' }}
-                            >
-                              {s.sheetName}
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({(s.rowCount || 0).toLocaleString()})</span>
-                            </button>
-                            {/* Type badge */}
-                            <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', borderRadius: '4px', backgroundColor: typeBg(s.detectedType), color: typeColor(s.detectedType), fontWeight: 600, whiteSpace: 'nowrap' }}>
-                              {typeLabel(s.detectedType)}
+                  {/* Panel Category Tab Switchers */}
+                  <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('all')}
+                      className={`btn ${previewTab === 'all' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
+                    >
+                      <Layers size={14} />
+                      <span>All Sheets Data ({previewSheets.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('errors')}
+                      className={`btn ${previewTab === 'errors' ? 'btn-logout' : 'btn-secondary'}`}
+                      style={{ 
+                        padding: '0.5rem 1.25rem', 
+                        fontSize: '0.85rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem',
+                        backgroundColor: previewTab === 'errors' ? 'var(--danger)' : totalErrors > 0 ? 'rgba(239,68,68,0.1)' : 'transparent',
+                        borderColor: totalErrors > 0 ? 'var(--danger)' : 'var(--border-color)',
+                        color: totalErrors > 0 ? 'var(--danger)' : 'var(--text-secondary)'
+                      }}
+                    >
+                      <AlertCircle size={14} />
+                      <span>Errors ({totalErrors})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('duplicates')}
+                      className={`btn ${previewTab === 'duplicates' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ 
+                        padding: '0.5rem 1.25rem', 
+                        fontSize: '0.85rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem',
+                        backgroundColor: previewTab === 'duplicates' ? '#f59e0b' : totalDuplicates > 0 ? 'rgba(245,158,11,0.1)' : 'transparent',
+                        borderColor: totalDuplicates > 0 ? '#f59e0b' : 'var(--border-color)',
+                        color: totalDuplicates > 0 ? '#f59e0b' : 'var(--text-secondary)'
+                      }}
+                    >
+                      <Layers size={14} />
+                      <span>Duplicates ({totalDuplicates})</span>
+                    </button>
+                  </div>
+
+                  {/* TAB 1: ALL SHEETS DATA */}
+                  {previewTab === 'all' && (
+                    <div>
+                      {/* Sheet Tabs Selector */}
+                      <div style={{ marginBottom: '1.25rem' }}>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                          <Layers size={12} /> Select sheets to include in import &nbsp;·&nbsp; Click sheet name to preview
+                        </div>
+                        <div style={{ display: 'flex', gap: '0.5rem', overflowX: 'auto', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
+                          {previewSheets.map((s) => {
+                            const isActive   = previewActiveSheet === s.sheetName;
+                            const isSelected = importSelectedSheets.has(s.sheetName);
+                            const stats = getSheetStats(s);
+                            return (
+                              <div
+                                key={s.sheetName}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: '0.35rem',
+                                  padding: '0.45rem 0.75rem',
+                                  border: `1.5px solid ${isActive ? 'var(--primary)' : isSelected ? 'rgba(99,102,241,0.4)' : 'var(--border-color)'}`,
+                                  borderRadius: '8px',
+                                  backgroundColor: isActive ? 'rgba(99,102,241,0.1)' : 'var(--bg-secondary)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => handleToggleSheet(s.sheetName)}
+                                  onClick={e => e.stopPropagation()}
+                                  style={{ cursor: 'pointer', accentColor: 'var(--primary)', width: '14px', height: '14px' }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => { setPreviewActiveSheet(s.sheetName); setSheetPages(prev => ({ ...prev, [s.sheetName]: 1 })); }}
+                                  style={{ background: 'none', border: 'none', color: isActive ? 'white' : 'var(--text-secondary)', fontSize: '0.82rem', fontWeight: isActive ? 600 : 400, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '0.3rem', whiteSpace: 'nowrap' }}
+                                >
+                                  {s.sheetName}
+                                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({(s.rowCount || 0).toLocaleString()})</span>
+                                </button>
+                                <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', borderRadius: '4px', backgroundColor: typeBg(s.detectedType), color: typeColor(s.detectedType), fontWeight: 600, whiteSpace: 'nowrap' }}>
+                                  {typeLabel(s.detectedType)}
+                                </span>
+                                {stats.errors > 0 && <span style={{ fontSize: '0.65rem', padding: '0.1rem 0.3rem', borderRadius: '4px', backgroundColor: 'rgba(239,68,68,0.2)', color: 'var(--danger)', fontWeight: 600 }}>{stats.errors} err</span>}
+                                <button
+                                  type="button"
+                                  onClick={e => { e.stopPropagation(); handleDeleteSheet(s.sheetName); }}
+                                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.1rem', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }}
+                                >
+                                  <XCircle size={14} />
+                                </button>
+                              </div>
+                            );
+                          })}
+                          {previewSheets.length === 0 && (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>All sheets have been removed.</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Active Sheet Info Bar */}
+                      {activeSheet && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 1rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{activeSheet.sheetName}</span>
+                            <span style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem', borderRadius: '4px', backgroundColor: typeBg(activeSheet.detectedType), color: typeColor(activeSheet.detectedType), fontWeight: 600 }}>
+                              {typeLabel(activeSheet.detectedType)}
                             </span>
-                            {/* Delete sheet button */}
-                            <button
-                              type="button"
-                              onClick={e => { e.stopPropagation(); handleDeleteSheet(s.sheetName); }}
-                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0 0.1rem', display: 'flex', alignItems: 'center', transition: 'color 0.2s' }}
-                              title="Remove sheet from analysis"
-                              onMouseEnter={e => e.currentTarget.style.color = 'var(--danger)'}
-                              onMouseLeave={e => e.currentTarget.style.color = 'var(--text-muted)'}
-                            >
-                              <XCircle size={14} />
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                              {(activeSheet.rowCount || 0).toLocaleString()} rows
+                              {getSheetStats(activeSheet).errors > 0 && <span style={{ color: 'var(--danger)', marginLeft: '0.5rem' }}>· {getSheetStats(activeSheet).errors} errors</span>}
+                              {getSheetStats(activeSheet).duplicates > 0 && <span style={{ color: '#eab308', marginLeft: '0.5rem' }}>· {getSheetStats(activeSheet).duplicates} duplicates (skipped by default)</span>}
+                            </span>
+                          </div>
+                          {/* Pagination controls */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                              Rows {((currentPage-1)*ROWS_PER_PAGE+1).toLocaleString()}–{Math.min(currentPage*ROWS_PER_PAGE, allRows.length).toLocaleString()} of {allRows.length.toLocaleString()}
+                            </span>
+                            <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
+                              <ChevronLeft size={14} />
+                            </button>
+                            <span style={{ fontSize: '0.8rem', minWidth: '80px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                              Page {currentPage} / {totalPages}
+                            </span>
+                            <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}>
+                              <ChevronRight size={14} />
                             </button>
                           </div>
-                        );
-                      })}
-                      {previewSheets.length === 0 && (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem', padding: '0.5rem' }}>All sheets have been removed.</span>
+                        </div>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Active Sheet Info Bar */}
-                  {activeSheet && (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.6rem 1rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{activeSheet.sheetName}</span>
-                        <span style={{ fontSize: '0.72rem', padding: '0.15rem 0.45rem', borderRadius: '4px', backgroundColor: typeBg(activeSheet.detectedType), color: typeColor(activeSheet.detectedType), fontWeight: 600 }}>
-                          {typeLabel(activeSheet.detectedType)}
-                        </span>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                          {(activeSheet.rowCount || 0).toLocaleString()} rows
-                          {activeSheet.errorCount > 0 && <span style={{ color: 'var(--danger)', marginLeft: '0.5rem' }}>· {activeSheet.errorCount} errors</span>}
-                          {activeSheet.duplicateCount > 0 && <span style={{ color: '#eab308', marginLeft: '0.5rem' }}>· {activeSheet.duplicateCount} duplicates (will be skipped)</span>}
-                        </span>
+                      {/* Data Table */}
+                      <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '1.5rem' }}>
+                        {!activeSheet ? (
+                          <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No sheet selected. Choose a sheet tab above to preview its data.</div>
+                        ) : activeSheet.detectedType === 'BILLING' ? (
+                          <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '900px' }}>
+                            <thead>
+                              <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                                <th style={{ width: '50px' }}>Row</th>
+                                <th>Account No</th>
+                                <th>Customer Name</th>
+                                <th>From Date</th>
+                                <th>To Date</th>
+                                <th>Imports</th>
+                                <th>Exports</th>
+                                <th>Unit Cost</th>
+                                <th>Status</th>
+                                <th style={{ width: '25%' }}>Validation Notes</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedRows.map((row, i) => {
+                                const key = `${activeSheet.sheetName}|${row.rowNum}`;
+                                const isIgnored = duplicateActions[key] === 'IGNORE';
+                                const isAnyway = duplicateActions[key] === 'IMPORT';
+
+                                let displayStatus = row.validationStatus;
+                                if (row.validationStatus === 'DUPLICATE') {
+                                  displayStatus = isAnyway ? 'FORCE IMPORT' : 'DUPLICATE (SKIPPED)';
+                                } else if (row.validationStatus === 'INVALID' && isIgnored) {
+                                  displayStatus = 'EXCLUDED';
+                                }
+
+                                return (
+                                  <tr key={i} style={{ 
+                                    opacity: isIgnored ? 0.4 : 1,
+                                    backgroundColor: displayStatus === 'INVALID' ? 'rgba(239,68,68,0.04)' 
+                                      : row.validationStatus === 'DUPLICATE' ? 'rgba(234,179,8,0.04)' : 'transparent' 
+                                  }}>
+                                    <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
+                                    <td>{row.customerName || '—'}</td>
+                                    <td style={{ color: 'var(--text-secondary)' }}>{row.fromDate || '—'}</td>
+                                    <td style={{ color: 'var(--text-secondary)' }}>{row.toDate || '—'}</td>
+                                    <td style={{ color: '#f59e0b' }}>{row.imports ?? '—'}</td>
+                                    <td style={{ color: 'var(--success)' }}>{row.exports ?? '—'}</td>
+                                    <td>{row.unitCost ?? '—'}</td>
+                                    <td>
+                                      <span className={`badge ${
+                                        displayStatus === 'INVALID' ? 'danger' 
+                                          : displayStatus === 'EXCLUDED' ? 'secondary'
+                                          : displayStatus === 'FORCE IMPORT' ? 'success'
+                                          : row.validationStatus === 'DUPLICATE' ? 'warning' : 'success'
+                                      }`} style={{ fontSize: '0.7rem' }}>
+                                        {displayStatus}
+                                      </span>
+                                    </td>
+                                    <td style={{ fontSize: '0.75rem' }}>
+                                      {row.errors && row.errors.length > 0 && displayStatus !== 'EXCLUDED' ? (
+                                        <div style={{ color: 'var(--danger)' }}>
+                                          {row.errors.map((err, ei) => <div key={ei}>· {err}</div>)}
+                                        </div>
+                                      ) : displayStatus === 'EXCLUDED' ? (
+                                        <span style={{ color: 'var(--text-muted)' }}>Row excluded from import</span>
+                                      ) : (
+                                        <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                          <Check size={10} /> OK
+                                        </span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {paginatedRows.length === 0 && (
+                                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        ) : (
+                          /* CUSTOMER PROFILE or UNKNOWN sheet */
+                          <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '600px' }}>
+                            <thead>
+                              <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                                <th style={{ width: '50px' }}>Row</th>
+                                <th>Account No</th>
+                                <th>Customer Name</th>
+                                {activeSheet.headers?.filter(h => h && !['accountno','customername','account no','customer name'].includes(h.toLowerCase().replace(/\s/g,''))).slice(0,6).map((h, hi) => (
+                                  <th key={hi}>{h}</th>
+                                ))}
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {paginatedRows.map((row, i) => {
+                                const key = `${activeSheet.sheetName}|${row.rowNum}`;
+                                const isIgnored = duplicateActions[key] === 'IGNORE';
+                                return (
+                                  <tr key={i} style={{ opacity: isIgnored ? 0.4 : 1 }}>
+                                    <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
+                                    <td>{row.customerName || '—'}</td>
+                                    {activeSheet.headers?.filter(h => h && !['accountno','customername','account no','customer name'].includes(h.toLowerCase().replace(/\s/g,''))).slice(0,6).map((h, hi) => (
+                                      <td key={hi} style={{ color: 'var(--text-secondary)' }}>{row.rawValues?.[h] ?? '—'}</td>
+                                    ))}
+                                    <td>
+                                      <span className={`badge ${isIgnored ? 'secondary' : row.validationStatus === 'INVALID' ? 'danger' : 'success'}`} style={{ fontSize: '0.7rem' }}>
+                                        {isIgnored ? 'EXCLUDED' : row.validationStatus}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                              {paginatedRows.length === 0 && (
+                                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
+                              )}
+                            </tbody>
+                          </table>
+                        )}
                       </div>
-                      {/* Pagination controls */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          Rows {((currentPage-1)*ROWS_PER_PAGE+1).toLocaleString()}–{Math.min(currentPage*ROWS_PER_PAGE, allRows.length).toLocaleString()} of {allRows.length.toLocaleString()}
-                        </span>
-                        <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
-                          <ChevronLeft size={14} />
-                        </button>
-                        <span style={{ fontSize: '0.8rem', minWidth: '80px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                          Page {currentPage} / {totalPages}
-                        </span>
-                        <button type="button" className="btn btn-secondary" style={{ padding: '0.3rem 0.6rem', fontSize: '0.78rem' }} onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}>
-                          <ChevronRight size={14} />
-                        </button>
-                      </div>
+
+                      {/* Bottom pagination */}
+                      {activeSheet && totalPages > 1 && (
+                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+                          <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => goToPage(1)} disabled={currentPage <= 1}>
+                            « First
+                          </button>
+                          <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
+                            <ChevronLeft size={14} /> Prev
+                          </button>
+                          <span style={{ fontSize: '0.8rem', minWidth: '80px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                            Page {currentPage} / {totalPages}
+                          </span>
+                          <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}>
+                            Next <ChevronRight size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
-                  {/* Data Table */}
-                  <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', marginBottom: '1.5rem' }}>
-                    {!activeSheet ? (
-                      <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No sheet selected. Choose a sheet tab above to preview its data.</div>
-                    ) : activeSheet.detectedType === 'BILLING' ? (
-                      <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '900px' }}>
-                        <thead>
-                          <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                            <th style={{ width: '50px' }}>Row</th>
-                            <th>Account No</th>
-                            <th>Customer Name</th>
-                            <th>From Date</th>
-                            <th>To Date</th>
-                            <th>Imports</th>
-                            <th>Exports</th>
-                            <th>Unit Cost</th>
-                            <th>Status</th>
-                            <th style={{ width: '25%' }}>Validation Notes</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paginatedRows.map((row, i) => (
-                            <tr key={i} style={{ backgroundColor: row.validationStatus === 'INVALID' ? 'rgba(239,68,68,0.04)' : row.validationStatus === 'DUPLICATE' ? 'rgba(234,179,8,0.04)' : 'transparent' }}>
-                              <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                              <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
-                              <td>{row.customerName || '—'}</td>
-                              <td style={{ color: 'var(--text-secondary)' }}>{row.fromDate || '—'}</td>
-                              <td style={{ color: 'var(--text-secondary)' }}>{row.toDate || '—'}</td>
-                              <td style={{ color: '#f59e0b' }}>{row.imports ?? '—'}</td>
-                              <td style={{ color: 'var(--success)' }}>{row.exports ?? '—'}</td>
-                              <td>{row.unitCost ?? '—'}</td>
-                              <td>
-                                <span className={`badge ${row.validationStatus === 'INVALID' ? 'danger' : row.validationStatus === 'WARNING' ? 'warning' : row.validationStatus === 'DUPLICATE' ? 'warning' : 'success'}`} style={{ fontSize: '0.7rem' }}>
-                                  {row.validationStatus}
-                                </span>
-                              </td>
-                              <td style={{ fontSize: '0.75rem' }}>
-                                {row.errors && row.errors.length > 0 ? (
-                                  <div style={{ color: 'var(--danger)' }}>
-                                    {row.errors.map((err, ei) => <div key={ei}>· {err}</div>)}
-                                  </div>
-                                ) : (
-                                  <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                    <Check size={10} /> OK
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                          {paginatedRows.length === 0 && (
-                            <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    ) : activeSheet.detectedType === 'CUSTOMER_PROFILE' ? (
-                      <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '600px' }}>
-                        <thead>
-                          <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                            <th style={{ width: '50px' }}>Row</th>
-                            <th>Account No</th>
-                            <th>Customer Name</th>
-                            {activeSheet.headers?.filter(h => h && !['accountno','customername','account no','customer name'].includes(h.toLowerCase().replace(/\s/g,''))).slice(0,6).map((h, hi) => (
-                              <th key={hi}>{h}</th>
-                            ))}
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paginatedRows.map((row, i) => (
-                            <tr key={i}>
-                              <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                              <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
-                              <td>{row.customerName || '—'}</td>
-                              {activeSheet.headers?.filter(h => h && !['accountno','customername','account no','customer name'].includes(h.toLowerCase().replace(/\s/g,''))).slice(0,6).map((h, hi) => (
-                                <td key={hi} style={{ color: 'var(--text-secondary)' }}>{row.rawValues?.[h] ?? '—'}</td>
-                              ))}
-                              <td>
-                                <span className={`badge ${row.validationStatus === 'INVALID' ? 'danger' : 'success'}`} style={{ fontSize: '0.7rem' }}>
-                                  {row.validationStatus}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                          {paginatedRows.length === 0 && (
-                            <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    ) : (
-                      /* UNKNOWN sheet — show raw columns */
-                      <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '700px' }}>
-                        <thead>
-                          <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                            <th style={{ width: '50px' }}>Row</th>
-                            {activeSheet.headers?.filter(h => h && h.trim()).map((h, hi) => (
-                              <th key={hi}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {paginatedRows.map((row, i) => (
-                            <tr key={i}>
-                              <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                              {activeSheet.headers?.filter(h => h && h.trim()).map((h, hi) => (
-                                <td key={hi} style={{ color: 'var(--text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {row.rawValues?.[h] ?? ''}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                          {paginatedRows.length === 0 && (
-                            <tr><td colSpan={activeSheet.headers?.length + 1} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    )}
-                  </div>
+                  {/* TAB 2: DATA VALIDATION ERRORS PANEL */}
+                  {previewTab === 'errors' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {errorsBySheet.length === 0 ? (
+                        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--success)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', backgroundColor: 'rgba(16,185,129,0.02)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                          <CheckCircle size={32} />
+                          <h4 style={{ fontWeight: 600, margin: 0 }}>All Errors Resolved!</h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>Zero unresolved formatting or structure errors remaining. All rows are ready to stage.</p>
+                        </div>
+                      ) : (
+                        errorsBySheet.map(({ sheetName, detectedType, rows }) => (
+                          <div key={sheetName} className="card" style={{ padding: '1.25rem', border: '1px solid rgba(239,68,68,0.2)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
+                              <span style={{ fontWeight: 600, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <AlertTriangle size={15} color="var(--danger)" />
+                                Sheet: {sheetName} <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 400 }}>({rows.length} error row{rows.length !== 1 ? 's' : ''})</span>
+                              </span>
+                              <span className="badge danger" style={{ fontSize: '0.65rem' }}>{typeLabel(detectedType)}</span>
+                            </div>
 
-                  {/* Bottom pagination (repeated for convenience) */}
-                  {activeSheet && totalPages > 1 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                      <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => goToPage(1)} disabled={currentPage <= 1}>
-                        « First
-                      </button>
-                      <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={() => goToPage(currentPage - 1)} disabled={currentPage <= 1}>
-                        <ChevronLeft size={14} /> Prev
-                      </button>
-                      {/* Page number pills */}
-                      {Array.from({ length: Math.min(7, totalPages) }, (_, k) => {
-                        let pg; const half = 3;
-                        if (totalPages <= 7) pg = k + 1;
-                        else if (currentPage <= half + 1) pg = k + 1;
-                        else if (currentPage >= totalPages - half) pg = totalPages - 6 + k;
-                        else pg = currentPage - half + k;
-                        return (
-                          <button key={pg} type="button" onClick={() => goToPage(pg)}
-                            style={{ width: '34px', height: '34px', borderRadius: '6px', border: `1px solid ${pg === currentPage ? 'var(--primary)' : 'var(--border-color)'}`, backgroundColor: pg === currentPage ? 'var(--primary)' : 'var(--bg-secondary)', color: pg === currentPage ? 'white' : 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: pg === currentPage ? 700 : 400 }}>
-                            {pg}
-                          </button>
-                        );
-                      })}
-                      <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 0.85rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={() => goToPage(currentPage + 1)} disabled={currentPage >= totalPages}>
-                        Next <ChevronRight size={14} />
-                      </button>
-                      <button type="button" className="btn btn-secondary" style={{ padding: '0.4rem 1rem', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }} onClick={() => goToPage(totalPages)} disabled={currentPage >= totalPages}>
-                        Last »
-                      </button>
+                            <div style={{ overflowX: 'auto' }}>
+                              <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '950px' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: '50px' }}>Row</th>
+                                    <th>Account No</th>
+                                    <th>Customer Name</th>
+                                    {detectedType === 'BILLING' ? (
+                                      <>
+                                        <th>From Date</th>
+                                        <th>To Date</th>
+                                        <th>Imports</th>
+                                        <th>Exports</th>
+                                        <th>Unit Cost</th>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <th>Address</th>
+                                        <th>Mobile No</th>
+                                        <th>Solar Type</th>
+                                        <th>Bank Code</th>
+                                      </>
+                                    )}
+                                    <th style={{ width: '22%' }}>Validation Errors</th>
+                                    <th style={{ width: '130px', textAlign: 'center' }}>Actions</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rows.map((row) => {
+                                    const rowKey = `${sheetName}|${row.rowNum}`;
+                                    const isEditing = editingRowKey === rowKey;
+
+                                    if (isEditing) {
+                                      return (
+                                        <tr key={row.rowNum} style={{ backgroundColor: 'rgba(59,130,246,0.06)' }}>
+                                          <td style={{ fontWeight: 600 }}>{row.rowNum}</td>
+                                          <td>
+                                            <input
+                                              type="text"
+                                              className="form-control"
+                                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '90px', borderColor: editErrors.accountNo ? 'var(--danger)' : 'var(--border-color)' }}
+                                              value={editRowState.accountNo}
+                                              onChange={e => handleEditChange('accountNo', e.target.value)}
+                                              title={editErrors.accountNo}
+                                            />
+                                          </td>
+                                          <td>
+                                            <input
+                                              type="text"
+                                              className="form-control"
+                                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '120px', borderColor: editErrors.customerName ? 'var(--danger)' : 'var(--border-color)' }}
+                                              value={editRowState.customerName}
+                                              onChange={e => handleEditChange('customerName', e.target.value)}
+                                              title={editErrors.customerName}
+                                            />
+                                          </td>
+                                          {detectedType === 'BILLING' ? (
+                                            <>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  placeholder="YYYY-MM-DD"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '90px', borderColor: editErrors.fromDate ? 'var(--danger)' : 'var(--border-color)' }}
+                                                  value={editRowState.fromDate}
+                                                  onChange={e => handleEditChange('fromDate', e.target.value)}
+                                                  title={editErrors.fromDate}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  placeholder="YYYY-MM-DD"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '90px', borderColor: editErrors.toDate ? 'var(--danger)' : 'var(--border-color)' }}
+                                                  value={editRowState.toDate}
+                                                  onChange={e => handleEditChange('toDate', e.target.value)}
+                                                  title={editErrors.toDate}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '60px', borderColor: editErrors.imports ? 'var(--danger)' : 'var(--border-color)' }}
+                                                  value={editRowState.imports}
+                                                  onChange={e => handleEditChange('imports', e.target.value)}
+                                                  title={editErrors.imports}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '60px', borderColor: editErrors.exports ? 'var(--danger)' : 'var(--border-color)' }}
+                                                  value={editRowState.exports}
+                                                  onChange={e => handleEditChange('exports', e.target.value)}
+                                                  title={editErrors.exports}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '50px', borderColor: editErrors.unitCost ? 'var(--danger)' : 'var(--border-color)' }}
+                                                  value={editRowState.unitCost}
+                                                  onChange={e => handleEditChange('unitCost', e.target.value)}
+                                                  title={editErrors.unitCost}
+                                                />
+                                              </td>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '100px' }}
+                                                  value={editRowState.customerAddress}
+                                                  onChange={e => handleEditChange('customerAddress', e.target.value)}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '80px' }}
+                                                  value={editRowState.mobileNo}
+                                                  onChange={e => handleEditChange('mobileNo', e.target.value)}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '80px' }}
+                                                  value={editRowState.solarType}
+                                                  onChange={e => handleEditChange('solarType', e.target.value)}
+                                                />
+                                              </td>
+                                              <td>
+                                                <input
+                                                  type="text"
+                                                  className="form-control"
+                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '50px' }}
+                                                  value={editRowState.bankCode}
+                                                  onChange={e => handleEditChange('bankCode', e.target.value)}
+                                                />
+                                              </td>
+                                            </>
+                                          )}
+                                          <td style={{ color: 'var(--danger)', fontSize: '0.72rem' }}>
+                                            {Object.keys(editErrors).length > 0 ? (
+                                              <div>
+                                                {Object.entries(editErrors).map(([f, msg]) => (
+                                                  <div key={f}><strong>{f}:</strong> {msg}</div>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <span>Editing raw cell fields...</span>
+                                            )}
+                                          </td>
+                                          <td style={{ textAlign: 'center' }}>
+                                            <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
+                                              <button type="button" className="btn btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', backgroundColor: 'var(--success)' }} onClick={() => saveEditedRow(row.rowNum, sheetName)}>
+                                                Save
+                                              </button>
+                                              <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem' }} onClick={cancelEditRow}>
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+
+                                    return (
+                                      <tr key={row.rowNum} style={{ backgroundColor: 'rgba(239,68,68,0.02)' }}>
+                                        <td style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{row.rowNum}</td>
+                                        <td style={{ fontWeight: 600, color: 'var(--danger)' }}>{row.accountNo || '—'}</td>
+                                        <td>{row.customerName || '—'}</td>
+                                        {detectedType === 'BILLING' ? (
+                                          <>
+                                            <td>{row.fromDate || '—'}</td>
+                                            <td>{row.toDate || '—'}</td>
+                                            <td style={{ color: '#f59e0b' }}>{row.imports ?? '—'}</td>
+                                            <td style={{ color: 'var(--success)' }}>{row.exports ?? '—'}</td>
+                                            <td>{row.unitCost ?? '—'}</td>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <td>{row.customerAddress || '—'}</td>
+                                            <td>{row.mobileNo || '—'}</td>
+                                            <td>{row.solarType || '—'}</td>
+                                            <td>{row.bankCode || '—'}</td>
+                                          </>
+                                        )}
+                                        <td style={{ color: 'var(--danger)', fontSize: '0.75rem' }}>
+                                          {row.errors?.map((err, ei) => <div key={ei}>· {err}</div>)}
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                          <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
+                                            <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem' }} onClick={() => startEditRow(row, sheetName)}>
+                                              Edit Row
+                                            </button>
+                                            <button type="button" className="btn btn-logout" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', width: 'auto', border: '1px solid var(--border-color)' }} onClick={() => setDuplicateActions(prev => ({ ...prev, [rowKey]: 'IGNORE' }))}>
+                                              Exclude
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* TAB 3: DUPLICATE RECORDS PANEL */}
+                  {previewTab === 'duplicates' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {duplicatesBySheet.length === 0 ? (
+                        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--success)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', backgroundColor: 'rgba(16,185,129,0.02)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                          <CheckCircle size={32} />
+                          <h4 style={{ fontWeight: 600, margin: 0 }}>Zero Duplicates Found!</h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>No conflicting duplicate billing periods detected. Clean data merge is ready.</p>
+                        </div>
+                      ) : (
+                        duplicatesBySheet.map(({ sheetName, detectedType, rows }) => (
+                          <div key={sheetName} className="card" style={{ padding: '1.25rem', border: '1px solid rgba(245,158,11,0.2)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>
+                              <span style={{ fontWeight: 600, fontSize: '0.92rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                <AlertTriangle size={15} color="#f59e0b" />
+                                Sheet: {sheetName} <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 400 }}>({rows.length} duplicate row{rows.length !== 1 ? 's' : ''})</span>
+                              </span>
+                              <span className="badge warning" style={{ fontSize: '0.65rem', backgroundColor: 'rgba(245,158,11,0.12)', color: '#f59e0b' }}>{typeLabel(detectedType)}</span>
+                            </div>
+
+                            <div style={{ overflowX: 'auto' }}>
+                              <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '950px' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ width: '50px' }}>Row</th>
+                                    <th>Account No</th>
+                                    <th>Customer Name</th>
+                                    <th>Billing Period</th>
+                                    <th>Imports</th>
+                                    <th>Exports</th>
+                                    <th>Duplicate Check Message</th>
+                                    <th style={{ width: '130px', textAlign: 'center' }}>Import Decision</th>
+                                    <th style={{ width: '220px', textAlign: 'center' }}>Conflict Resolution</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rows.map((row) => {
+                                    const rowKey = `${sheetName}|${row.rowNum}`;
+                                    const action = duplicateActions[rowKey] || 'IGNORE';
+
+                                    return (
+                                      <tr key={row.rowNum} style={{ backgroundColor: action === 'IMPORT' ? 'rgba(16,185,129,0.02)' : 'rgba(245,158,11,0.02)', opacity: action === 'IGNORE' ? 0.75 : 1 }}>
+                                        <td style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{row.rowNum}</td>
+                                        <td style={{ fontWeight: 600 }}>{row.accountNo || '—'}</td>
+                                        <td>{row.customerName || '—'}</td>
+                                        <td style={{ color: 'var(--text-secondary)' }}>{row.fromDate && row.toDate ? `${row.fromDate} to ${row.toDate}` : '—'}</td>
+                                        <td style={{ color: '#f59e0b' }}>{row.imports ?? '—'}</td>
+                                        <td style={{ color: 'var(--success)' }}>{row.exports ?? '—'}</td>
+                                        <td style={{ color: '#eab308', fontSize: '0.75rem' }}>
+                                          {row.errors?.map((err, ei) => <div key={ei}>· {err}</div>)}
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                          <span className={`badge ${action === 'IMPORT' ? 'success' : 'danger'}`} style={{ fontSize: '0.7rem' }}>
+                                            {action === 'IMPORT' ? 'FORCE IMPORT' : 'IGNORE / EXCLUDE'}
+                                          </span>
+                                        </td>
+                                        <td style={{ textAlign: 'center' }}>
+                                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                                            <button 
+                                              type="button" 
+                                              className="btn btn-secondary" 
+                                              style={{ 
+                                                padding: '0.25rem 0.5rem', 
+                                                fontSize: '0.72rem',
+                                                backgroundColor: action === 'IMPORT' ? 'var(--success)' : 'transparent',
+                                                color: action === 'IMPORT' ? 'white' : 'var(--text-secondary)'
+                                              }} 
+                                              onClick={() => setDuplicateActions(prev => ({ ...prev, [rowKey]: 'IMPORT' }))}
+                                            >
+                                              Import anyway
+                                            </button>
+                                            <button 
+                                              type="button" 
+                                              className="btn btn-logout" 
+                                              style={{ 
+                                                padding: '0.25rem 0.5rem', 
+                                                fontSize: '0.72rem', 
+                                                width: 'auto',
+                                                backgroundColor: action === 'IGNORE' ? 'var(--danger)' : 'transparent',
+                                                color: action === 'IGNORE' ? 'white' : 'var(--text-secondary)',
+                                                border: '1px solid var(--border-color)'
+                                              }} 
+                                              onClick={() => setDuplicateActions(prev => ({ ...prev, [rowKey]: 'IGNORE' }))}
+                                            >
+                                              Ignore / Exclude
+                                            </button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 4 Warnings bar */}
+                  {totalErrors > 0 && (
+                    <div style={{ padding: '0.85rem 1.25rem', border: '1px solid var(--danger)', backgroundColor: 'rgba(239,68,68,0.05)', borderRadius: '8px', color: 'var(--danger)', fontSize: '0.82rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <AlertTriangle size={15} />
+                      <span><strong>Notice:</strong> You have {totalErrors} unresolved row errors. Uncorrected errors will be excluded during database migration step.</span>
                     </div>
                   )}
 
                   {/* Action Bar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginTop: '1.5rem' }}>
                     <button className="btn btn-secondary" onClick={() => setWizardStep(3)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <ChevronLeft size={14} /> Back to Validation
                     </button>

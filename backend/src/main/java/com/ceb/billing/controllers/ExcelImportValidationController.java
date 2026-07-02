@@ -221,29 +221,50 @@ public class ExcelImportValidationController {
             return ResponseEntity.badRequest().body(Map.of("message", "This batch has already been approved."));
         }
 
-        // Extract selectedSheets list from request body (null = process all billing sheets)
+        // Extract parameters from request body
         @SuppressWarnings("unchecked")
         List<String> selectedSheets = (requestBody != null && requestBody.get("selectedSheets") != null)
                 ? (List<String>) requestBody.get("selectedSheets")
                 : null;
-        // Convert to lowercase-trimmed set for case-insensitive matching
         Set<String> selectedSheetSet = selectedSheets != null
                 ? new HashSet<>(selectedSheets.stream().map(String::trim).collect(java.util.stream.Collectors.toList()))
                 : null;
+
+        @SuppressWarnings("unchecked")
+        Map<String, Map<String, Object>> corrections = (requestBody != null && requestBody.get("corrections") != null)
+                ? (Map<String, Map<String, Object>>) requestBody.get("corrections")
+                : null;
+
+        @SuppressWarnings("unchecked")
+        List<String> importAnywayList = (requestBody != null && requestBody.get("importAnywayRows") != null)
+                ? (List<String>) requestBody.get("importAnywayRows")
+                : null;
+        Set<String> importAnywayRows = importAnywayList != null ? new HashSet<>(importAnywayList) : null;
+
+        @SuppressWarnings("unchecked")
+        List<String> ignoredList = (requestBody != null && requestBody.get("ignoredRows") != null)
+                ? (List<String>) requestBody.get("ignoredRows")
+                : null;
+        Set<String> ignoredRows = ignoredList != null ? new HashSet<>(ignoredList) : null;
 
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
 
         try {
             byte[] fileBytes = batch.getFileData();
 
-            // Create staging upload history record
-            UploadHistory uploadHistory = new UploadHistory(batch.getFilename(), batch.getUploadedBy(), "STAGED_IMPORT", 0, 0, 0, 0);
+            // Create a staging UploadHistory record to track this migration
+            UploadHistory uploadHistory = new UploadHistory(
+                    batch.getFilename(), batch.getUploadedBy(), "STAGED_IMPORT", 0, 0, 0, 0);
             uploadHistory = uploadHistoryRepository.save(uploadHistory);
             Long stagingBatchId = uploadHistory.getId();
 
-            // In-memory structures
+            // In-memory customer profiles gathered from CUSTOMER_PROFILE sheets
             Map<String, Map<String, Object>> customerProfiles = new LinkedHashMap<>();
+
+            // Billing rows to stage
             List<Map<String, Object>> billingRecordsList = new ArrayList<>();
+
+            // Duplicate guard: account+year+month already staged in this upload
             Set<String> processedRecordsInUpload = new HashSet<>();
 
             try (InputStream is = new ByteArrayInputStream(fileBytes);
@@ -254,7 +275,7 @@ public class ExcelImportValidationController {
                     Sheet sheet = workbook.getSheetAt(sIdx);
                     String currentSheetName = sheet.getSheetName();
 
-                    // Skip sheets not in the selectedSheets list (if provided)
+                    // Skip sheets not in the selected set (if one was provided)
                     if (selectedSheetSet != null && !selectedSheetSet.contains(currentSheetName.trim())) {
                         continue;
                     }
@@ -262,66 +283,98 @@ public class ExcelImportValidationController {
                     // Intelligent column detection
                     Map<String, Integer> colIndices = previewService.autoDetectColumns(sheet);
 
+                    // A billing sheet must have all four required columns
                     boolean hasBilling = Arrays.asList("accountno", "fromdate", "imports", "exports")
                             .stream().allMatch(colIndices::containsKey);
-                    boolean hasCustomer = !hasBilling &&
-                            Arrays.asList("accountno", "customername").stream().allMatch(colIndices::containsKey);
+                    // A customer-profile sheet has account + customer name but NOT billing cols
+                    boolean hasCustomer = !hasBilling
+                            && Arrays.asList("accountno", "customername").stream().allMatch(colIndices::containsKey);
 
                     if (!hasBilling && !hasCustomer) continue; // skip unrecognised sheets
 
                     int lastRowNum = sheet.getLastRowNum();
 
                     if (hasCustomer) {
-                        // Parse customer profile rows
+                        // ── CUSTOMER_PROFILE sheet: collect profiles ──
                         for (int r = 1; r <= lastRowNum; r++) {
                             Row row = sheet.getRow(r);
                             if (row == null || isRowEmpty(row)) continue;
 
-                            String accountNo = getVal(row, colIndices.get("accountno"));
-                            if (accountNo == null || accountNo.trim().isEmpty()) continue;
+                            String key = currentSheetName + "|" + (r + 1);
+                            if (ignoredRows != null && ignoredRows.contains(key)) {
+                                continue;
+                            }
+
+                            String accountNo = normalize(getVal(row, colIndices.get("accountno")));
+                            if (accountNo.isEmpty()) continue;
 
                             Map<String, Object> profile = new HashMap<>();
-                            profile.put("customerName",    getVal(row, colIndices.get("customername")));
-                            profile.put("customerAddress", getVal(row, colIndices.get("customeraddress")));
-                            profile.put("mobileNo",        getVal(row, colIndices.get("mobileno")));
+                            profile.put("sheetName",       currentSheetName);
+                            profile.put("rowNum",          r + 1);
+                            profile.put("accountNo",       accountNo);
+                            profile.put("customerName",    normalize(getVal(row, colIndices.get("customername"))));
+                            profile.put("customerAddress", normalize(getVal(row, colIndices.get("customeraddress"))));
+                            profile.put("mobileNo",        normalize(getVal(row, colIndices.get("mobileno"))));
                             profile.put("agreementDate",   getDateStr(row, colIndices.get("agreementdate")));
                             profile.put("panelCapacity",   parseDoubleVal(row, colIndices.get("panelcapacity")));
-                            profile.put("solarType",       getVal(row, colIndices.get("solartype")));
-                            profile.put("bankCode",        getVal(row, colIndices.get("bankcode")));
-                            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
-                            profile.put("branchCode",      detBranch != null ? detBranch : getVal(row, colIndices.get("branchcode")));
-                            profile.put("bankAccountNo",   getVal(row, colIndices.get("bankaccountno")));
+                            profile.put("solarType",       normalize(getVal(row, colIndices.get("solartype"))));
+                            profile.put("bankCode",        normalize(getVal(row, colIndices.get("bankcode"))));
+                            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+                            profile.put("branchCode",      detBranch != null ? detBranch : normalize(getVal(row, colIndices.get("branchcode"))));
+                            profile.put("bankAccountNo",   normalize(getVal(row, colIndices.get("bankaccountno"))));
 
-                            customerProfiles.put(accountNo.trim(), profile);
+                            // Overlay client-side edits/corrections if present
+                            if (corrections != null && corrections.containsKey(key)) {
+                                Map<String, Object> corr = corrections.get(key);
+                                profile.putAll(corr);
+                            }
+
+                            customerProfiles.put((String) profile.get("accountNo"), profile);
                         }
                     } else {
-                        // Parse billing record rows
+                        // ── BILLING sheet: collect billing rows ──
                         for (int r = 1; r <= lastRowNum; r++) {
                             Row row = sheet.getRow(r);
                             if (row == null || isRowEmpty(row)) continue;
 
-                            String accountNo = getVal(row, colIndices.get("accountno"));
-                            if (accountNo == null || accountNo.trim().isEmpty()) continue;
+                            String key = currentSheetName + "|" + (r + 1);
+                            if (ignoredRows != null && ignoredRows.contains(key)) {
+                                continue;
+                            }
+
+                            String accountNo = normalize(getVal(row, colIndices.get("accountno")));
+                            if (accountNo.isEmpty()) continue;
+
+                            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
 
                             Map<String, Object> bill = new HashMap<>();
-                            bill.put("accountNo",      accountNo.trim());
-                            bill.put("customerName",   getVal(row, colIndices.get("customername")));
-                            bill.put("refNo",          getVal(row, colIndices.get("refno")));
-                            bill.put("fromDate",       getDateStr(row, colIndices.get("fromdate")));
-                            bill.put("toDate",         getDateStr(row, colIndices.get("todate")));
-                            bill.put("importUnits",    parseDoubleVal(row, colIndices.get("imports")));
-                            bill.put("exportUnits",    parseDoubleVal(row, colIndices.get("exports")));
-                            bill.put("unitCost",       parseDoubleVal(row, colIndices.get("unitcost")));
-                            bill.put("billingMode",    getVal(row, colIndices.get("billingmode")));
-                            bill.put("customerAddress",getVal(row, colIndices.get("customeraddress")));
-                            bill.put("mobileNo",       getVal(row, colIndices.get("mobileno")));
-                            bill.put("agreementDate",  getDateStr(row, colIndices.get("agreementdate")));
-                            bill.put("panelCapacity",  parseDoubleVal(row, colIndices.get("panelcapacity")));
-                            bill.put("solarType",      getVal(row, colIndices.get("solartype")));
-                            bill.put("bankCode",       getVal(row, colIndices.get("bankcode")));
-                            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
-                            bill.put("branchCode",     detBranch != null ? detBranch : getVal(row, colIndices.get("branchcode")));
-                            bill.put("bankAccountNo",  getVal(row, colIndices.get("bankaccountno")));
+                            bill.put("sheetName",       currentSheetName);
+                            bill.put("rowNum",          r + 1);
+                            bill.put("accountNo",       accountNo);
+                            bill.put("customerName",    normalize(getVal(row, colIndices.get("customername"))));
+                            bill.put("refNo",           normalize(getVal(row, colIndices.get("refno"))));
+                            bill.put("fromDate",        getDateStr(row, colIndices.get("fromdate")));
+                            bill.put("toDate",          getDateStr(row, colIndices.get("todate")));
+                            bill.put("importUnits",     parseDoubleVal(row, colIndices.get("imports")));
+                            bill.put("exportUnits",     parseDoubleVal(row, colIndices.get("exports")));
+                            bill.put("unitCost",        parseDoubleVal(row, colIndices.get("unitcost")));
+                            bill.put("billingMode",     normalize(getVal(row, colIndices.get("billingmode"))));
+                            bill.put("customerAddress", normalize(getVal(row, colIndices.get("customeraddress"))));
+                            bill.put("mobileNo",        normalize(getVal(row, colIndices.get("mobileno"))));
+                            bill.put("agreementDate",   getDateStr(row, colIndices.get("agreementdate")));
+                            bill.put("panelCapacity",   parseDoubleVal(row, colIndices.get("panelcapacity")));
+                            bill.put("solarType",       normalize(getVal(row, colIndices.get("solartype"))));
+                            bill.put("bankCode",        normalize(getVal(row, colIndices.get("bankcode"))));
+                            bill.put("branchCode",      detBranch != null ? detBranch : normalize(getVal(row, colIndices.get("branchcode"))));
+                            bill.put("bankAccountNo",   normalize(getVal(row, colIndices.get("bankaccountno"))));
+
+                            // Overlay client-side edits/corrections if present
+                            if (corrections != null && corrections.containsKey(key)) {
+                                Map<String, Object> corr = corrections.get(key);
+                                for (Map.Entry<String, Object> e : corr.entrySet()) {
+                                    bill.put(e.getKey(), e.getValue());
+                                }
+                            }
 
                             billingRecordsList.add(bill);
                         }
@@ -329,80 +382,131 @@ public class ExcelImportValidationController {
                 }
             }
 
-            // If only customer sheets found, treat each customer as a billing placeholder
-            if (billingRecordsList.isEmpty() && !customerProfiles.isEmpty()) {
-                for (Map.Entry<String, Map<String, Object>> entry : customerProfiles.entrySet()) {
-                    Map<String, Object> bill = new HashMap<>(entry.getValue());
-                    bill.put("accountNo", entry.getKey());
-                    billingRecordsList.add(bill);
+            int insertedStaging = 0;
+
+            // ── Stage CUSTOMER_PROFILE rows ──
+            for (Map.Entry<String, Map<String, Object>> entry : customerProfiles.entrySet()) {
+                Map<String, Object> profile = entry.getValue();
+                String accountNo   = (String) profile.get("accountNo");
+                String customerName = (String) profile.get("customerName");
+                String sheetName   = (String) profile.get("sheetName");
+                Integer rowNum     = (Integer) profile.get("rowNum");
+
+                ExcelValidationService.RowValidationResult valResult =
+                        excelValidationService.validateCustomerRow(
+                                sheetName != null ? sheetName : "CustomerSheet",
+                                rowNum != null ? rowNum : (insertedStaging + 2),
+                                accountNo,
+                                customerName);
+
+                String rowStatus = valResult.hasErrors() ? "INVALID"
+                        : valResult.hasWarnings() ? "WARNING" : "VALID";
+
+                List<String> errorMsgs = new ArrayList<>();
+                for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
+                    errorMsgs.add(err.getErrorMessage());
                 }
+
+                String rawJson   = objectMapper.writeValueAsString(profile);
+                String errJson   = objectMapper.writeValueAsString(errorMsgs);
+
+                BillingUploadStaging stagingRow = new BillingUploadStaging(
+                        stagingBatchId, rawJson, rowStatus, errJson, "CUSTOMER_PROFILE");
+                stagingRepository.save(stagingRow);
+                insertedStaging++;
             }
 
-            // Validate and stage rows
-            int insertedStaging = 0;
+            // ── Stage BILLING rows ──
             for (Map<String, Object> bill : billingRecordsList) {
-                String accountNo = (String) bill.get("accountNo");
+                String accountNo = normalize((String) bill.get("accountNo"));
+                String sheetName = (String) bill.get("sheetName");
+                Integer rowNum   = (Integer) bill.get("rowNum");
+                String key       = sheetName + "|" + rowNum;
 
-                // Merge customer profile if available
+                boolean isForceImport = importAnywayRows != null && importAnywayRows.contains(key);
+
+                // Merge customer profile data into the billing row (fill blanks only)
                 Map<String, Object> profile = customerProfiles.get(accountNo);
                 if (profile != null) {
-                    for (Map.Entry<String, Object> entry : profile.entrySet()) {
-                        if (bill.get(entry.getKey()) == null || "".equals(bill.get(entry.getKey()))) {
-                            bill.put(entry.getKey(), entry.getValue());
+                    for (Map.Entry<String, Object> pe : profile.entrySet()) {
+                        if (bill.get(pe.getKey()) == null || "".equals(bill.get(pe.getKey()))) {
+                            bill.put(pe.getKey(), pe.getValue());
                         }
                     }
                 }
 
-                // Resolve ref no if missing
-                String refNo = (String) bill.get("refNo");
+                // Generate refNo if missing — use formatted date string (not stripped digits)
+                String refNo       = (String) bill.get("refNo");
                 String rawFromDate = (String) bill.get("fromDate");
-                if ((refNo == null || refNo.trim().isEmpty()) && rawFromDate != null) {
-                    bill.put("refNo", "REF-" + accountNo + "-" + rawFromDate.replaceAll("[^0-9]", ""));
+                if ((refNo == null || refNo.trim().isEmpty()) && rawFromDate != null && !rawFromDate.isEmpty()) {
+                    bill.put("refNo", "REF-" + accountNo + "-" + rawFromDate.replace("-", ""));
                 }
 
-                String customerName = (String) bill.get("customerName");
-                String rawToDate   = (String) bill.get("toDate");
-                Double imports  = bill.get("importUnits") != null ? Double.valueOf(bill.get("importUnits").toString()) : null;
-                Double exports  = bill.get("exportUnits") != null ? Double.valueOf(bill.get("exportUnits").toString()) : null;
-                Double unitCost = bill.get("unitCost") != null ? Double.valueOf(bill.get("unitCost").toString()) : null;
-                String bankCode = (String) bill.get("bankCode");
+                // Extract typed values for validation (normalize nulls to "")
+                String customerName = (String) bill.getOrDefault("customerName", "");
+                String rawToDate    = (String) bill.getOrDefault("toDate", "");
+                Object iuVal = bill.get("importUnits");
+                Double importUnits = iuVal == null || "".equals(iuVal) ? null 
+                        : (iuVal instanceof Number ? Double.valueOf(((Number) iuVal).doubleValue()) : Double.valueOf(iuVal.toString()));
+
+                Object euVal = bill.get("exportUnits");
+                Double exportUnits = euVal == null || "".equals(euVal) ? null 
+                        : (euVal instanceof Number ? Double.valueOf(((Number) euVal).doubleValue()) : Double.valueOf(euVal.toString()));
+
+                Object ucVal = bill.get("unitCost");
+                Double unitCost = ucVal == null || "".equals(ucVal) ? null 
+                        : (ucVal instanceof Number ? Double.valueOf(((Number) ucVal).doubleValue()) : Double.valueOf(ucVal.toString()));
+                String bankCode     = (String) bill.getOrDefault("bankCode", "");
 
                 LocalDate fromDate = null, toDate = null;
-                try { if (rawFromDate != null) fromDate = LocalDate.parse(rawFromDate); } catch (Exception ignored) {}
-                try { if (rawToDate != null)   toDate   = LocalDate.parse(rawToDate); }   catch (Exception ignored) {}
+                try { if (rawFromDate != null && !rawFromDate.isEmpty()) fromDate = LocalDate.parse(rawFromDate); } catch (Exception ignored) {}
+                try { if (rawToDate  != null && !rawToDate.isEmpty())   toDate   = LocalDate.parse(rawToDate);   } catch (Exception ignored) {}
 
                 ExcelValidationService.RowValidationResult validationResult = excelValidationService.validateRow(
-                        "Import", insertedStaging + 2,
-                        accountNo, customerName,
-                        rawFromDate, fromDate,
-                        rawToDate, toDate,
-                        imports != null ? imports.toString() : "",
-                        imports,
-                        exports != null ? exports.toString() : "",
-                        exports,
-                        unitCost != null ? unitCost.toString() : "",
+                        sheetName != null ? sheetName : "Import",
+                        rowNum != null ? rowNum : (insertedStaging + 2),
+                        accountNo,
+                        customerName,
+                        rawFromDate  != null ? rawFromDate : "",
+                        fromDate,
+                        rawToDate    != null ? rawToDate : "",
+                        toDate,
+                        importUnits  != null ? importUnits.toString() : "",
+                        importUnits,
+                        exportUnits  != null ? exportUnits.toString() : "",
+                        exportUnits,
+                        unitCost     != null ? unitCost.toString() : "",
                         unitCost,
                         bankCode,
                         processedRecordsInUpload
                 );
 
+                // Track duplicates within this upload session
                 if (fromDate != null && accountNo != null) {
                     processedRecordsInUpload.add(accountNo + "|" + fromDate.getYear() + "|" + fromDate.getMonthValue());
                 }
 
-                String rowStatus = validationResult.hasErrors() ? "INVALID"
-                        : validationResult.hasDuplicate() ? "DUPLICATE"
-                        : validationResult.hasWarnings() ? "WARNING" : "VALID";
+                String rowStatus = validationResult.hasErrors()    ? "INVALID"
+                                 : (validationResult.hasDuplicate() && !isForceImport) ? "DUPLICATE"
+                                 : validationResult.hasWarnings()  ? "WARNING" : "VALID";
+
+                if (isForceImport) {
+                    bill.put("forceImport", true);
+                }
 
                 List<String> errorMsgs = new ArrayList<>();
-                for (ExcelValidationError error : validationResult.getValidationMessages()) {
+                for (com.ceb.billing.models.ExcelValidationError error : validationResult.getValidationMessages()) {
+                    if (validationResult.hasDuplicate() && isForceImport && "Duplicate".equals(error.getField())) {
+                        continue; // Skip register duplicate validation errors if force imported
+                    }
                     errorMsgs.add(error.getErrorMessage());
                 }
 
                 String rawJson = objectMapper.writeValueAsString(bill);
-                String validationErrorsJson = objectMapper.writeValueAsString(errorMsgs);
+                String errJson = objectMapper.writeValueAsString(errorMsgs);
 
-                BillingUploadStaging stagingRow = new BillingUploadStaging(stagingBatchId, rawJson, rowStatus, validationErrorsJson);
+                BillingUploadStaging stagingRow = new BillingUploadStaging(
+                        stagingBatchId, rawJson, rowStatus, errJson, "BILLING");
                 stagingRepository.save(stagingRow);
                 insertedStaging++;
             }
@@ -418,11 +522,16 @@ public class ExcelImportValidationController {
             importBatchRepository.save(batch);
 
             auditLogService.log("VALIDATION_ENGINE_APPROVE",
-                    String.format("Import Batch ID %d ('%s') approved. Migrated %d rows.", id, batch.getFilename(), insertedStaging));
+                    String.format("Import Batch ID %d ('%s') approved. Staged %d rows (%d billing, %d customer-profile).",
+                            id, batch.getFilename(), insertedStaging,
+                            billingRecordsList.size(), customerProfiles.size()));
 
             Map<String, Object> approveResponse = new HashMap<>();
             approveResponse.put("message", "Import batch successfully validated, approved, and migrated to live tables.");
-            approveResponse.put("rowsMigrated", insertedStaging);
+            approveResponse.put("rowsStaged", insertedStaging);
+            approveResponse.put("billingRows", billingRecordsList.size());
+            approveResponse.put("customerProfileRows", customerProfiles.size());
+            approveResponse.put("uploadHistoryId", stagingBatchId);
             return ResponseEntity.ok(approveResponse);
 
         } catch (Exception e) {
@@ -430,6 +539,38 @@ public class ExcelImportValidationController {
             return ResponseEntity.internalServerError().body(Map.of("message", "Approve failed: " + e.getMessage()));
         }
     }
+
+    /**
+     * DELETE /api/admin/import/batches/{id}
+     * Removes an import batch and all its associated staging rows.
+     * Useful when a bad upload needs to be completely cleared before re-uploading.
+     */
+    @DeleteMapping("/admin/import/batches/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> deleteImportBatch(@PathVariable @NonNull Long id) {
+        Optional<ImportBatch> optBatch = importBatchRepository.findById(id);
+        if (optBatch.isEmpty()) return ResponseEntity.notFound().build();
+
+        ImportBatch batch = optBatch.get();
+        if (batch.getIsApproved()) {
+            return ResponseEntity.badRequest().body(
+                    Map.of("message", "Cannot delete a batch that has already been approved and migrated."));
+        }
+
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        String filename = batch.getFilename();
+
+        // Delete the batch record (cascade staging rows via DB or explicit delete)
+        importBatchRepository.delete(batch);
+
+        auditLogService.log("IMPORT_BATCH_DELETED",
+                String.format("Import batch ID %d ('%s') deleted by %s.", id, filename, username));
+
+        return ResponseEntity.ok(Map.of("message",
+                "Import batch '" + filename + "' (ID " + id + ") has been permanently deleted."));
+    }
+
+
 
     @PostMapping("/admin/import/batches/{id}/reject")
     @PreAuthorize("hasRole('ADMIN')")
@@ -580,7 +721,13 @@ public class ExcelImportValidationController {
     private String getVal(Row row, Integer idx) {
         if (idx == null) return "";
         Cell cell = row.getCell(idx);
-        return getCellValueAsString(cell);
+        String val = getCellValueAsString(cell);
+        return val != null ? val.trim() : "";
+    }
+
+    /** Converts null and blank strings to "". Used to ensure non-null values reach the validator. */
+    private String normalize(String val) {
+        return val == null ? "" : val.trim();
     }
 
     private String getDateStr(Row row, Integer idx) {

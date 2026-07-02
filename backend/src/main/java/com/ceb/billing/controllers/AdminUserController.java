@@ -5,6 +5,9 @@ import com.ceb.billing.entities.User;
 import com.ceb.billing.entities.UploadHistory;
 import com.ceb.billing.entities.BillingUploadStaging;
 import com.ceb.billing.repositories.AuditLogRepository;
+import com.ceb.billing.repositories.BillingRecordRepository;
+import com.ceb.billing.repositories.CustomerRepository;
+import com.ceb.billing.repositories.ImportBatchRepository;
 import com.ceb.billing.repositories.UserRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
 import com.ceb.billing.repositories.BillingUploadStagingRepository;
@@ -18,9 +21,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
+
 
 // Admin user management controller
 @RestController
@@ -42,6 +48,15 @@ public class AdminUserController {
     private BillingUploadStagingRepository stagingRepository;
 
     @Autowired
+    private BillingRecordRepository billingRecordRepository;
+
+    @Autowired
+    private CustomerRepository customerRepository;
+
+    @Autowired
+    private ImportBatchRepository importBatchRepository;
+
+    @Autowired
     private StagingMigrationService stagingMigrationService;
 
     @Autowired
@@ -49,6 +64,7 @@ public class AdminUserController {
 
     @Autowired
     private AuditLogService auditLogService;
+
 
     @GetMapping("/users")
     public ResponseEntity<List<User>> getAllUsers() {
@@ -168,6 +184,75 @@ public class AdminUserController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(new MessageResponse("Failed to reject staging batch: " + e.getMessage()));
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  DATA MANAGEMENT
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * DELETE /api/admin/data/customers
+     *
+     * Purges customer and billing data from the database.
+     *
+     * Supported scopes (query param ?scope=):
+     *   customers-only (default) — deletes billing_records then customers
+     *   full                     — also deletes upload_history, billing_upload_staging, import_batches
+     *
+     * Billing records must be deleted before customers due to the FK constraint.
+     */
+    @DeleteMapping("/data/customers")
+    public ResponseEntity<?> purgeCustomerData(
+            @RequestParam(value = "scope", defaultValue = "customers-only") String scope) {
+
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        boolean fullScope = "full".equalsIgnoreCase(scope.trim());
+
+        long billingDeleted  = billingRecordRepository.count();
+        long customerDeleted = customerRepository.count();
+        long historyDeleted  = 0;
+        long stagingDeleted  = 0;
+        long batchesDeleted  = 0;
+
+        // 1. Delete billing records first (FK: billing_records.account_no → customers.account_no)
+        billingRecordRepository.deleteAll();
+
+        // 2. Delete all customers
+        customerRepository.deleteAll();
+
+        if (fullScope) {
+            // 3. Delete staging rows
+            stagingDeleted = stagingRepository.count();
+            stagingRepository.deleteAll();
+
+            // 4. Delete upload history
+            historyDeleted = uploadHistoryRepository.count();
+            uploadHistoryRepository.deleteAll();
+
+            // 5. Delete import batches
+            batchesDeleted = importBatchRepository.count();
+            importBatchRepository.deleteAll();
+        }
+
+        String auditDetails = String.format(
+                "[DATA PURGE] scope=%s — deleted: %d billing records, %d customers%s. Performed by: %s",
+                scope, billingDeleted, customerDeleted,
+                fullScope ? String.format(", %d upload histories, %d staging rows, %d import batches",
+                        historyDeleted, stagingDeleted, batchesDeleted) : "",
+                currentUsername);
+        auditLogService.log("DATA_PURGE", auditDetails);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "Customer data purge completed successfully.");
+        result.put("scope", scope);
+        result.put("billingRecordsDeleted", billingDeleted);
+        result.put("customersDeleted", customerDeleted);
+        if (fullScope) {
+            result.put("uploadHistoriesDeleted", historyDeleted);
+            result.put("stagingRowsDeleted", stagingDeleted);
+            result.put("importBatchesDeleted", batchesDeleted);
+        }
+        return ResponseEntity.ok(result);
     }
 }
 

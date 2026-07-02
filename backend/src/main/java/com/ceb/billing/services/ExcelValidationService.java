@@ -119,8 +119,8 @@ public class ExcelValidationService {
             return result;
         }
 
-        // 3. Bank Code warnings (Invalid bank code check)
-        if (bankCode != null && !bankCode.isEmpty()) {
+        // 3. Bank Code warnings — only flag if a non-empty value was actually supplied
+        if (bankCode != null && !bankCode.trim().isEmpty()) {
             String cleanBank = bankCode.trim().toUpperCase();
             if (!VALID_BANK_CODES.contains(cleanBank)) {
                 result.addWarning(new ExcelValidationError(sheetName, rowNum, "Bank Code",
@@ -128,6 +128,25 @@ public class ExcelValidationService {
             }
         }
 
+        return result;
+    }
+
+    /**
+     * Lightweight validation for customer-profile-only rows.
+     * These rows have no billing fields (imports/exports/dates), so we only
+     * check that accountNo and customerName are present.
+     */
+    public RowValidationResult validateCustomerRow(String sheetName, int rowNum,
+                                                   String accountNo, String customerName) {
+        RowValidationResult result = new RowValidationResult();
+        if (accountNo == null || accountNo.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Account No",
+                    "Account number is missing or empty", false));
+        }
+        if (customerName == null || customerName.trim().isEmpty()) {
+            result.addWarning(new ExcelValidationError(sheetName, rowNum, "Customer Name",
+                    "Customer name is missing or empty; record will be imported with a blank name", true));
+        }
         return result;
     }
 

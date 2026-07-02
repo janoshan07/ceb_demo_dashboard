@@ -24,6 +24,14 @@ public class BillingUploadStaging {
     @Column(name = "validation_errors", columnDefinition = "TEXT")
     private String validationErrors;
 
+    /**
+     * Distinguishes the kind of data in raw_json:
+     * "BILLING"          — a billing record row (has fromDate, importUnits, exportUnits, unitCost)
+     * "CUSTOMER_PROFILE" — a customer-profile-only row (no billing fields)
+     */
+    @Column(name = "row_type", nullable = false, length = 30)
+    private String rowType = "BILLING";
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -40,6 +48,16 @@ public class BillingUploadStaging {
         this.rawJson = rawJson;
         this.validationStatus = validationStatus;
         this.validationErrors = validationErrors;
+        this.rowType = "BILLING";
+    }
+
+    public BillingUploadStaging(Long uploadBatchId, String rawJson, String validationStatus,
+                                String validationErrors, String rowType) {
+        this.uploadBatchId = uploadBatchId;
+        this.rawJson = rawJson;
+        this.validationStatus = validationStatus;
+        this.validationErrors = validationErrors;
+        this.rowType = rowType != null ? rowType : "BILLING";
     }
 
     // Getters and Setters
@@ -81,6 +99,14 @@ public class BillingUploadStaging {
 
     public void setValidationErrors(String validationErrors) {
         this.validationErrors = validationErrors;
+    }
+
+    public String getRowType() {
+        return rowType;
+    }
+
+    public void setRowType(String rowType) {
+        this.rowType = rowType;
     }
 
     public LocalDateTime getCreatedAt() {

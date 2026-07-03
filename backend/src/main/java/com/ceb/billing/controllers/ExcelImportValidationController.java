@@ -44,6 +44,9 @@ public class ExcelImportValidationController {
     private UploadHistoryRepository uploadHistoryRepository;
 
     @Autowired
+    private ImportAuditLogRepository importAuditLogRepository;
+
+    @Autowired
     private WorkbookScannerService scannerService;
 
     @Autowired
@@ -272,6 +275,8 @@ public class ExcelImportValidationController {
             // Duplicate guard: account+year+month already staged in this upload
             Set<String> processedRecordsInUpload = new HashSet<>();
 
+            List<Map<String, Object>> originalErrorsList = new ArrayList<>();
+
             try (InputStream is = new ByteArrayInputStream(fileBytes);
                  Workbook workbook = WorkbookFactory.create(is)) {
 
@@ -285,8 +290,12 @@ public class ExcelImportValidationController {
                         continue;
                     }
 
+                    int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+                    boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+                    int dataStartRow = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+
                     // Intelligent column detection
-                    Map<String, Integer> colIndices = previewService.autoDetectColumns(sheet);
+                    Map<String, Integer> colIndices = previewService.autoDetectColumns(sheet, headerRowIdx);
 
                     // A billing sheet must have all four required columns
                     boolean hasBilling = Arrays.asList("accountno", "fromdate", "imports", "exports")
@@ -301,7 +310,7 @@ public class ExcelImportValidationController {
 
                     if (hasCustomer) {
                         // ── CUSTOMER_PROFILE sheet: collect profiles ──
-                        for (int r = 1; r <= lastRowNum; r++) {
+                        for (int r = dataStartRow; r <= lastRowNum; r++) {
                             Row row = sheet.getRow(r);
                             if (row == null || isRowEmpty(row)) continue;
 
@@ -313,20 +322,51 @@ public class ExcelImportValidationController {
                             String accountNo = normalize(getVal(row, colIndices.get("accountno")));
                             if (accountNo.isEmpty()) continue;
 
+                            String customerName = normalize(getVal(row, colIndices.get("customername")));
+                            String customerAddress = normalize(getVal(row, colIndices.get("customeraddress")));
+                            String mobileNo        = normalize(getVal(row, colIndices.get("mobileno")));
+                            String bankCode        = normalize(getVal(row, colIndices.get("bankcode")));
+                            String branchCode      = normalize(getVal(row, colIndices.get("branchcode")));
+                            String bankAccountNo   = normalize(getVal(row, colIndices.get("bankaccountno")));
+                            String agreementDate   = getDateStr(row, colIndices.get("agreementdate"));
+                            Double panelCapacity   = parseDoubleVal(row, colIndices.get("panelcapacity"));
+                            String solarType       = normalize(getVal(row, colIndices.get("solartype")));
+
+                            // Validate original row (before any corrections)
+                            ExcelValidationService.RowValidationResult origValResult =
+                                    excelValidationService.validateCustomerRow(
+                                            currentSheetName, r + 1,
+                                            accountNo, customerName,
+                                            customerAddress, mobileNo, bankCode, branchCode, bankAccountNo,
+                                            agreementDate, panelCapacity, solarType);
+
+                            if (origValResult.hasErrors() || origValResult.hasWarnings()) {
+                                Map<String, Object> errItem = new HashMap<>();
+                                errItem.put("sheetName", currentSheetName);
+                                errItem.put("rowNum", r + 1);
+                                errItem.put("accountNo", accountNo);
+                                List<String> messages = new ArrayList<>();
+                                for (com.ceb.billing.models.ExcelValidationError err : origValResult.getValidationMessages()) {
+                                    messages.add(err.getErrorMessage());
+                                }
+                                errItem.put("errors", messages);
+                                originalErrorsList.add(errItem);
+                            }
+
                             Map<String, Object> profile = new HashMap<>();
                             profile.put("sheetName",       currentSheetName);
                             profile.put("rowNum",          r + 1);
                             profile.put("accountNo",       accountNo);
-                            profile.put("customerName",    normalize(getVal(row, colIndices.get("customername"))));
-                            profile.put("customerAddress", normalize(getVal(row, colIndices.get("customeraddress"))));
-                            profile.put("mobileNo",        normalize(getVal(row, colIndices.get("mobileno"))));
-                            profile.put("agreementDate",   getDateStr(row, colIndices.get("agreementdate")));
-                            profile.put("panelCapacity",   parseDoubleVal(row, colIndices.get("panelcapacity")));
-                            profile.put("solarType",       normalize(getVal(row, colIndices.get("solartype"))));
-                            profile.put("bankCode",        normalize(getVal(row, colIndices.get("bankcode"))));
+                            profile.put("customerName",    customerName);
+                            profile.put("customerAddress", customerAddress);
+                            profile.put("mobileNo",        mobileNo);
+                            profile.put("agreementDate",   agreementDate);
+                            profile.put("panelCapacity",   panelCapacity);
+                            profile.put("solarType",       solarType);
+                            profile.put("bankCode",        bankCode);
                             String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
-                            profile.put("branchCode",      detBranch != null ? detBranch : normalize(getVal(row, colIndices.get("branchcode"))));
-                            profile.put("bankAccountNo",   normalize(getVal(row, colIndices.get("bankaccountno"))));
+                            profile.put("branchCode",      detBranch != null ? detBranch : branchCode);
+                            profile.put("bankAccountNo",   bankAccountNo);
 
                             // Overlay client-side edits/corrections if present
                             if (corrections != null && corrections.containsKey(key)) {
@@ -338,7 +378,7 @@ public class ExcelImportValidationController {
                         }
                     } else {
                         // ── BILLING sheet: collect billing rows ──
-                        for (int r = 1; r <= lastRowNum; r++) {
+                        for (int r = dataStartRow; r <= lastRowNum; r++) {
                             Row row = sheet.getRow(r);
                             if (row == null || isRowEmpty(row)) continue;
 
@@ -350,28 +390,80 @@ public class ExcelImportValidationController {
                             String accountNo = normalize(getVal(row, colIndices.get("accountno")));
                             if (accountNo.isEmpty()) continue;
 
+                            String customerName = normalize(getVal(row, colIndices.get("customername")));
+                            String origRawFromDate = getDateStr(row, colIndices.get("fromdate"));
+                            String origRawToDate = getDateStr(row, colIndices.get("todate"));
+                            Double origImportUnits = parseDoubleVal(row, colIndices.get("imports"));
+                            Double origExportUnits = parseDoubleVal(row, colIndices.get("exports"));
+                            Double origUnitCost = parseDoubleVal(row, colIndices.get("unitcost"));
+                            String origBankCode = normalize(getVal(row, colIndices.get("bankcode")));
+
+                            String origAddress = normalize(getVal(row, colIndices.get("customeraddress")));
+                            String origMobile = normalize(getVal(row, colIndices.get("mobileno")));
+                            String origBankAccountNo = normalize(getVal(row, colIndices.get("bankaccountno")));
+                            String origBranchCode = normalize(getVal(row, colIndices.get("branchcode")));
+                            String origBillingMode = normalize(getVal(row, colIndices.get("billingmode")));
+                            String origAgreementDate = getDateStr(row, colIndices.get("agreementdate"));
+                            Double origPanelCapacity = parseDoubleVal(row, colIndices.get("panelcapacity"));
+                            String origSolarType = normalize(getVal(row, colIndices.get("solartype")));
+                            
+                            LocalDate origFromDate = null, origToDate = null;
+                            try { if (origRawFromDate != null && !origRawFromDate.isEmpty()) origFromDate = LocalDate.parse(origRawFromDate); } catch (Exception ignored) {}
+                            try { if (origRawToDate != null && !origRawToDate.isEmpty()) origToDate = LocalDate.parse(origRawToDate); } catch (Exception ignored) {}
+                            
+                            ExcelValidationService.RowValidationResult origVal = excelValidationService.validateRow(
+                                    currentSheetName, r + 1, accountNo, customerName,
+                                    origRawFromDate != null ? origRawFromDate : "", origFromDate,
+                                    origRawToDate != null ? origRawToDate : "", origToDate,
+                                    origImportUnits != null ? origImportUnits.toString() : "", origImportUnits,
+                                    origExportUnits != null ? origExportUnits.toString() : "", origExportUnits,
+                                    origUnitCost != null ? origUnitCost.toString() : "", origUnitCost,
+                                    origBankCode,
+                                    origAddress,
+                                    origMobile,
+                                    origBankAccountNo,
+                                    origBranchCode,
+                                    origBillingMode,
+                                    origAgreementDate,
+                                    origPanelCapacity,
+                                    origSolarType,
+                                    new HashSet<>()
+                            );
+                            if (origVal.hasErrors() || origVal.hasWarnings()) {
+                                Map<String, Object> errItem = new HashMap<>();
+                                errItem.put("sheetName", currentSheetName);
+                                errItem.put("rowNum", r + 1);
+                                errItem.put("accountNo", accountNo);
+                                List<String> msgs = new ArrayList<>();
+                                for (com.ceb.billing.models.ExcelValidationError ev : origVal.getValidationMessages()) {
+                                    msgs.add(ev.getErrorMessage());
+                                }
+                                errItem.put("errors", msgs);
+                                originalErrorsList.add(errItem);
+                            }
+
                             String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
 
                             Map<String, Object> bill = new HashMap<>();
                             bill.put("sheetName",       currentSheetName);
                             bill.put("rowNum",          r + 1);
                             bill.put("accountNo",       accountNo);
-                            bill.put("customerName",    normalize(getVal(row, colIndices.get("customername"))));
+                            bill.put("customerName",    customerName);
                             bill.put("refNo",           normalize(getVal(row, colIndices.get("refno"))));
-                            bill.put("fromDate",        getDateStr(row, colIndices.get("fromdate")));
-                            bill.put("toDate",          getDateStr(row, colIndices.get("todate")));
-                            bill.put("importUnits",     parseDoubleVal(row, colIndices.get("imports")));
-                            bill.put("exportUnits",     parseDoubleVal(row, colIndices.get("exports")));
-                            bill.put("unitCost",        parseDoubleVal(row, colIndices.get("unitcost")));
-                            bill.put("billingMode",     normalize(getVal(row, colIndices.get("billingmode"))));
-                            bill.put("customerAddress", normalize(getVal(row, colIndices.get("customeraddress"))));
-                            bill.put("mobileNo",        normalize(getVal(row, colIndices.get("mobileno"))));
-                            bill.put("agreementDate",   getDateStr(row, colIndices.get("agreementdate")));
-                            bill.put("panelCapacity",   parseDoubleVal(row, colIndices.get("panelcapacity")));
-                            bill.put("solarType",       normalize(getVal(row, colIndices.get("solartype"))));
-                            bill.put("bankCode",        normalize(getVal(row, colIndices.get("bankcode"))));
-                            bill.put("branchCode",      detBranch != null ? detBranch : normalize(getVal(row, colIndices.get("branchcode"))));
-                            bill.put("bankAccountNo",   normalize(getVal(row, colIndices.get("bankaccountno"))));
+                            bill.put("fromDate",        origRawFromDate);
+                            bill.put("toDate",          origRawToDate);
+                            bill.put("importUnits",     origImportUnits);
+                            bill.put("exportUnits",     origExportUnits);
+                            bill.put("unitCost",        origUnitCost);
+                            bill.put("billingMode",     origBillingMode);
+                            bill.put("customerAddress", origAddress);
+                            bill.put("mobileNo",        origMobile);
+                            bill.put("agreementDate",   origAgreementDate);
+                            bill.put("panelCapacity",   origPanelCapacity);
+                            bill.put("solarType",       origSolarType);
+                            bill.put("bankCode",        origBankCode);
+                            bill.put("branchCode",      detBranch != null ? detBranch : origBranchCode);
+                            bill.put("bankAccountNo",   origBankAccountNo);
 
                             // Overlay client-side edits/corrections if present
                             if (corrections != null && corrections.containsKey(key)) {
@@ -402,7 +494,15 @@ public class ExcelImportValidationController {
                                 sheetName != null ? sheetName : "CustomerSheet",
                                 rowNum != null ? rowNum : (insertedStaging + 2),
                                 accountNo,
-                                customerName);
+                                customerName,
+                                (String) profile.get("customerAddress"),
+                                (String) profile.get("mobileNo"),
+                                (String) profile.get("bankCode"),
+                                (String) profile.get("branchCode"),
+                                (String) profile.get("bankAccountNo"),
+                                (String) profile.get("agreementDate"),
+                                profile.get("panelCapacity") != null ? Double.valueOf(profile.get("panelCapacity").toString()) : null,
+                                (String) profile.get("solarType"));
 
                 String rowStatus = valResult.hasErrors() ? "INVALID"
                         : valResult.hasWarnings() ? "WARNING" : "VALID";
@@ -483,6 +583,14 @@ public class ExcelImportValidationController {
                         unitCost     != null ? unitCost.toString() : "",
                         unitCost,
                         bankCode,
+                        (String) bill.getOrDefault("customerAddress", ""),
+                        (String) bill.getOrDefault("mobileNo", ""),
+                        (String) bill.getOrDefault("bankAccountNo", ""),
+                        (String) bill.getOrDefault("branchCode", ""),
+                        (String) bill.getOrDefault("billingMode", ""),
+                        (String) bill.getOrDefault("agreementDate", ""),
+                        bill.get("panelCapacity") != null ? Double.valueOf(bill.get("panelCapacity").toString()) : null,
+                        (String) bill.getOrDefault("solarType", ""),
                         processedRecordsInUpload
                 );
 
@@ -491,8 +599,8 @@ public class ExcelImportValidationController {
                     processedRecordsInUpload.add(accountNo + "|" + fromDate.getYear() + "|" + fromDate.getMonthValue());
                 }
 
-                String rowStatus = validationResult.hasErrors()    ? "INVALID"
-                                 : (validationResult.hasDuplicate() && !isForceImport) ? "DUPLICATE"
+                String rowStatus = (validationResult.hasDuplicate() && !isForceImport) ? "DUPLICATE"
+                                 : validationResult.hasErrors()    ? "INVALID"
                                  : validationResult.hasWarnings()  ? "WARNING" : "VALID";
 
                 if (isForceImport) {
@@ -530,6 +638,28 @@ public class ExcelImportValidationController {
                     String.format("Import Batch ID %d ('%s') approved. Staged %d rows (%d billing, %d customer-profile).",
                             id, batch.getFilename(), insertedStaging,
                             billingRecordsList.size(), customerProfiles.size()));
+
+            // Persist the ImportAuditLog details
+            try {
+                String originalErrorsJson = objectMapper.writeValueAsString(originalErrorsList);
+                String correctionsJson = corrections != null ? objectMapper.writeValueAsString(corrections) : "{}";
+                String duplicatesAcceptedJson = importAnywayList != null ? objectMapper.writeValueAsString(importAnywayList) : "[]";
+                String duplicatesIgnoredJson = ignoredList != null ? objectMapper.writeValueAsString(ignoredList) : "[]";
+
+                ImportAuditLog importAuditLog = new ImportAuditLog(
+                        stagingBatchId,
+                        batch.getFilename(),
+                        username,
+                        LocalDateTime.now(),
+                        originalErrorsJson,
+                        correctionsJson,
+                        duplicatesAcceptedJson,
+                        duplicatesIgnoredJson
+                );
+                importAuditLogRepository.save(importAuditLog);
+            } catch (Exception auditEx) {
+                auditEx.printStackTrace();
+            }
 
             Map<String, Object> approveResponse = new HashMap<>();
             approveResponse.put("message", "Import batch successfully validated, approved, and migrated to live tables.");
@@ -819,5 +949,15 @@ public class ExcelImportValidationController {
             }
         }
         return true;
+    }
+
+    @GetMapping({"/admin/import/audit-logs/{uploadHistoryId}", "/officer/import/audit-logs/{uploadHistoryId}"})
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getImportAuditLog(@PathVariable @NonNull Long uploadHistoryId) {
+        Optional<ImportAuditLog> optLog = importAuditLogRepository.findByUploadHistoryId(uploadHistoryId);
+        if (optLog.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(optLog.get());
     }
 }

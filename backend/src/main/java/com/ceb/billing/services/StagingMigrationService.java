@@ -155,10 +155,10 @@ public class StagingMigrationService {
             // Guard: skip if a billing record already exists for this account + period (unless forceImport is true)
             Boolean forceImport = data.get("forceImport") instanceof Boolean ? (Boolean) data.get("forceImport") : false;
             if (!forceImport) {
-                boolean alreadyExists = billingRecordRepository
+                boolean alreadyExists = !billingRecordRepository
                         .findByCustomerAccountNoAndFromDateYearAndMonth(accountNo,
                                 fromDate.getYear(), fromDate.getMonthValue())
-                        .isPresent();
+                        .isEmpty();
                 if (alreadyExists) {
                     duplicateCount++;
                     continue;

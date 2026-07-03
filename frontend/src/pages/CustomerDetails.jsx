@@ -374,6 +374,224 @@ const CustomerDetails = () => {
     }
   };
 
+  // --- ADD CUSTOMER HANDLERS ---
+  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
+  const [newCustAccNo, setNewCustAccNo] = useState('');
+  const [newCustName, setNewCustName] = useState('');
+  const [newCustAddress, setNewCustAddress] = useState('');
+  const [newCustMobile, setNewCustMobile] = useState('');
+  const [newCustAgreementDate, setNewCustAgreementDate] = useState('');
+  const [newCustCapacity, setNewCustCapacity] = useState('');
+  const [newCustSolarType, setNewCustSolarType] = useState('Net Plus');
+  const [newCustBankCode, setNewCustBankCode] = useState('');
+  const [newCustBranchCode, setNewCustBranchCode] = useState('');
+  const [newCustBankAccountNo, setNewCustBankAccountNo] = useState('');
+  const [addCustError, setAddCustError] = useState(null);
+  const [addCustLoading, setAddCustLoading] = useState(false);
+
+  const openAddCustomerModal = () => {
+    setNewCustAccNo('');
+    setNewCustName('');
+    setNewCustAddress('');
+    setNewCustMobile('');
+    setNewCustAgreementDate('');
+    setNewCustCapacity('');
+    setNewCustSolarType('Net Plus');
+    setNewCustBankCode('');
+    setNewCustBranchCode('');
+    setNewCustBankAccountNo('');
+    setAddCustError(null);
+    setAddCustomerModalOpen(true);
+  };
+
+  const handleAddCustomerSubmit = async (e) => {
+    e.preventDefault();
+    if (!newCustAccNo.trim() || newCustAccNo.trim().length !== 10 || !/^\d+$/.test(newCustAccNo.trim())) {
+      setAddCustError('Account number must be exactly 10 digits and numeric.');
+      return;
+    }
+    if (!newCustName.trim()) {
+      setAddCustError('Customer name is required.');
+      return;
+    }
+
+    try {
+      setAddCustLoading(true);
+      setAddCustError(null);
+      const postPrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
+      const res = await authFetch(`/api/${postPrefix}/customers`, {
+        method: 'POST',
+        body: JSON.stringify({
+          accountNo: newCustAccNo.trim(),
+          customerName: newCustName.trim(),
+          customerAddress: newCustAddress.trim(),
+          mobileNo: newCustMobile.trim(),
+          agreementDate: newCustAgreementDate || null,
+          panelCapacity: newCustCapacity ? parseFloat(newCustCapacity) : null,
+          solarType: newCustSolarType,
+          bankCode: newCustBankCode.trim(),
+          branchCode: newCustBranchCode.trim(),
+          bankAccountNo: newCustBankAccountNo.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to create customer.');
+      }
+      
+      if (data.status === 'PENDING') {
+        showToast('Customer creation request queued for Admin approval.', 'warning');
+      } else {
+        showToast('Customer created successfully.', 'success');
+      }
+      setAddCustomerModalOpen(false);
+      fetchCustomers(currentPage, searchQuery);
+    } catch (err) {
+      setAddCustError(err.message || 'Failed to add customer.');
+    } finally {
+      setAddCustLoading(false);
+    }
+  };
+
+  const handleDeleteCustomer = async () => {
+    if (!window.confirm(`Are you absolutely sure you want to delete customer ${selectedCustomer.accountNo} (${selectedCustomer.customerName})? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const deletePrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
+      const res = await authFetch(`/api/${deletePrefix}/customers/${selectedCustomer.accountNo}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to delete customer.');
+      }
+      
+      if (data.status === 'PENDING') {
+        showToast('Customer deletion request submitted for Admin approval.', 'warning');
+      } else {
+        showToast('Customer deleted successfully.', 'success');
+      }
+      setDrawerOpen(false);
+      fetchCustomers(currentPage, searchQuery);
+    } catch (err) {
+      showToast(err.message || 'Failed to delete customer.', 'error');
+    }
+  };
+
+  // --- ADD BILL HANDLERS ---
+  const [addBillModalOpen, setAddBillModalOpen] = useState(false);
+  const [newBillRefNo, setNewBillRefNo] = useState('');
+  const [newBillFromDate, setNewBillFromDate] = useState('');
+  const [newBillToDate, setNewBillToDate] = useState('');
+  const [newBillImportUnits, setNewBillImportUnits] = useState('');
+  const [newBillExportUnits, setNewBillExportUnits] = useState('');
+  const [newBillUnitCost, setNewBillUnitCost] = useState('37.0');
+  const [newBillMode, setNewBillMode] = useState('Fixed');
+  const [newBillCycle, setNewBillCycle] = useState('');
+  const [newBillSetOff, setNewBillSetOff] = useState('');
+  const [newBillRetentionMoney, setNewBillRetentionMoney] = useState('');
+  const [newBillPayment, setNewBillPayment] = useState('');
+  const [addBillError, setAddBillError] = useState(null);
+  const [addBillLoading, setAddBillLoading] = useState(false);
+
+  const openAddBillModal = () => {
+    setNewBillRefNo('');
+    setNewBillFromDate('');
+    setNewBillToDate('');
+    setNewBillImportUnits('');
+    setNewBillExportUnits('');
+    setNewBillUnitCost('37.0');
+    setNewBillMode('Fixed');
+    setNewBillCycle('');
+    setNewBillSetOff('');
+    setNewBillRetentionMoney('');
+    setNewBillPayment('');
+    setAddBillError(null);
+    setAddBillModalOpen(true);
+  };
+
+  const handleAddBillSubmit = async (e) => {
+    e.preventDefault();
+    if (!newBillFromDate || !newBillToDate || newBillImportUnits === '' || newBillExportUnits === '' || newBillUnitCost === '') {
+      setAddBillError('Billing period, units, and unit cost are required.');
+      return;
+    }
+
+    try {
+      setAddBillLoading(true);
+      setAddBillError(null);
+      const postPrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
+      
+      let ref = newBillRefNo.trim();
+      if (!ref) {
+        ref = `REF-${selectedCustomer.accountNo}-${newBillFromDate.replace(/-/g, '')}`;
+      }
+
+      const res = await authFetch(`/api/${postPrefix}/billing`, {
+        method: 'POST',
+        body: JSON.stringify({
+          accountNo: selectedCustomer.accountNo,
+          refNo: ref,
+          fromDate: newBillFromDate,
+          toDate: newBillToDate,
+          importUnits: parseFloat(newBillImportUnits),
+          exportUnits: parseFloat(newBillExportUnits),
+          unitCost: parseFloat(newBillUnitCost),
+          billingMode: newBillMode,
+          billCycle: newBillCycle !== '' ? parseInt(newBillCycle) : null,
+          billSetOff: newBillSetOff !== '' ? parseFloat(newBillSetOff) : null,
+          retentionMoney: newBillRetentionMoney !== '' ? parseFloat(newBillRetentionMoney) : null,
+          payment: newBillPayment !== '' ? parseFloat(newBillPayment) : null
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to create billing record.');
+      }
+      
+      if (data.status === 'PENDING') {
+        showToast('Manual bill addition queued for Admin approval.', 'warning');
+      } else {
+        showToast('Billing record created successfully.', 'success');
+        fetchBillingHistory(selectedCustomer.accountNo);
+      }
+      setAddBillModalOpen(false);
+    } catch (err) {
+      setAddBillError(err.message || 'Failed to create bill.');
+    } finally {
+      setAddBillLoading(false);
+    }
+  };
+
+  // --- DELETE BILL HANDLER ---
+  const handleDeleteBill = async (billingId) => {
+    if (!window.confirm(`Are you sure you want to delete this billing record? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const deletePrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
+      const res = await authFetch(`/api/${deletePrefix}/billing/${billingId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to delete billing record.');
+      }
+
+      if (data.status === 'PENDING') {
+        showToast('Billing record deletion queued for Admin approval.', 'warning');
+      } else {
+        showToast('Billing record deleted successfully.', 'success');
+        fetchBillingHistory(selectedCustomer.accountNo);
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to delete billing record.', 'error');
+    }
+  };
+
   const formatLKR = (val) => {
     return new Intl.NumberFormat('en-LK', {
       style: 'currency',
@@ -404,26 +622,38 @@ const CustomerDetails = () => {
 
       {/* Filter and Search Bar */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <form onSubmit={handleSearchSubmit} className="search-filter-bar">
-          <div className="input-group">
-            <Search className="input-icon" size={18} />
-            <input
-              type="text"
-              className="form-input"
-              placeholder="Search by Account Number or Customer Name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <button type="submit" className="btn btn-primary">
-            Search
-          </button>
-          {searchQuery && (
-            <button type="button" className="btn btn-secondary" onClick={handleSearchClear}>
-              Clear
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', width: '100%', flexWrap: 'wrap' }}>
+          <form onSubmit={handleSearchSubmit} className="search-filter-bar" style={{ flex: 1, margin: 0 }}>
+            <div className="input-group">
+              <Search className="input-icon" size={18} />
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Search by Account Number or Customer Name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <button type="submit" className="btn btn-primary">
+              Search
+            </button>
+            {searchQuery && (
+              <button type="button" className="btn btn-secondary" onClick={handleSearchClear}>
+                Clear
+              </button>
+            )}
+          </form>
+          {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--success)', borderColor: 'var(--success)' }}
+              onClick={openAddCustomerModal}
+            >
+              Add Customer
             </button>
           )}
-        </form>
+        </div>
       </div>
 
       {/* Customer List Table */}
@@ -620,19 +850,30 @@ const CustomerDetails = () => {
                       <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--primary)', marginTop: '0.1rem' }}>{selectedCustomer.accountNo}</div>
                     </div>
                     {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && !isEditing && (
-                      <button 
-                        type="button"
-                        className="btn btn-secondary" 
-                        style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
-                        onClick={() => {
-                          setIsEditing(true);
-                          setEditMessage(null);
-                          setEditError(null);
-                        }}
-                      >
-                        <Edit size={12} />
-                        Edit Profile
-                      </button>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button 
+                          type="button"
+                          className="btn btn-secondary" 
+                          style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          onClick={() => {
+                            setIsEditing(true);
+                            setEditMessage(null);
+                            setEditError(null);
+                          }}
+                        >
+                          <Edit size={12} />
+                          Edit Profile
+                        </button>
+                        <button 
+                          type="button"
+                          className="btn btn-primary" 
+                          style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', background: 'var(--danger)', borderColor: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                          onClick={handleDeleteCustomer}
+                        >
+                          <X size={12} />
+                          Delete Customer
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -897,10 +1138,22 @@ const CustomerDetails = () => {
             {/* TAB CONTENT: BILLING HISTORY */}
             {activeTab === 'billing' && (
               <div className="animate-fade-in">
-                <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem', fontSize: '1rem' }}>
-                  <History size={16} className="text-accent" style={{ color: 'var(--accent-teal)' }} />
-                  Monthly Billing Ledger
-                </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontSize: '1rem' }}>
+                    <History size={16} className="text-accent" style={{ color: 'var(--accent-teal)' }} />
+                    Monthly Billing Ledger
+                  </h3>
+                  {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', background: 'var(--success)', borderColor: 'var(--success)' }}
+                      onClick={openAddBillModal}
+                    >
+                      Add Bill Record
+                    </button>
+                  )}
+                </div>
                 
                 <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                   {historyLoading ? (
@@ -996,11 +1249,21 @@ const CustomerDetails = () => {
                                 <button 
                                   type="button"
                                   className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }}
+                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', marginRight: '0.35rem' }}
                                   onClick={() => handleOpenBillEdit(bill)}
                                 >
                                   Edit
                                 </button>
+                                {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+                                  <button 
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'var(--danger)', borderColor: 'var(--danger)' }}
+                                    onClick={() => handleDeleteBill(bill.billingId)}
+                                  >
+                                    Delete
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           );
@@ -1267,6 +1530,304 @@ const CustomerDetails = () => {
                   disabled={billEditLoading}
                 >
                   {billEditLoading ? 'Submitting...' : 'Save Statement'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {addCustomerModalOpen && (
+        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000 }}>
+          <div className="modal-content card animate-fade-in" style={{ maxWidth: 650, padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'white' }}>Add Customer Profile</h3>
+              <button onClick={() => setAddCustomerModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {addCustError && (
+              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 8, color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                {addCustError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddCustomerSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Account Number (10 digits)*</label>
+                  <input
+                    type="text"
+                    maxLength={10}
+                    className="login-form-input"
+                    value={newCustAccNo}
+                    onChange={(e) => setNewCustAccNo(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Customer Name*</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustName}
+                    onChange={(e) => setNewCustName(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Customer Address</label>
+                <input
+                  type="text"
+                  className="login-form-input"
+                  value={newCustAddress}
+                  onChange={(e) => setNewCustAddress(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustMobile}
+                    onChange={(e) => setNewCustMobile(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Agreement Date</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={newCustAgreementDate}
+                    onChange={(e) => setNewCustAgreementDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Panel Capacity (kW)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={newCustCapacity}
+                    onChange={(e) => setNewCustCapacity(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Solar Type</label>
+                  <select
+                    className="login-form-input"
+                    value={newCustSolarType}
+                    onChange={(e) => setNewCustSolarType(e.target.value)}
+                    style={{ appearance: 'auto' }}
+                  >
+                    <option value="Net Plus">Net Plus</option>
+                    <option value="Net Metering">Net Metering</option>
+                    <option value="Net Accounting">Net Accounting</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Bank Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustBankCode}
+                    onChange={(e) => setNewCustBankCode(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branch Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustBranchCode}
+                    onChange={(e) => setNewCustBranchCode(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustBankAccountNo}
+                    onChange={(e) => setNewCustBankAccountNo(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setAddCustomerModalOpen(false)} disabled={addCustLoading}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={addCustLoading}>
+                  {addCustLoading ? 'Adding...' : 'Add Profile'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {addBillModalOpen && (
+        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000 }}>
+          <div className="modal-content card animate-fade-in" style={{ maxWidth: 650, padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'white' }}>Add Billing Ledger Entry</h3>
+              <button onClick={() => setAddBillModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {addBillError && (
+              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 8, color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+                {addBillError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddBillSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">From Date*</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={newBillFromDate}
+                    onChange={(e) => setNewBillFromDate(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">To Date*</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={newBillToDate}
+                    onChange={(e) => setNewBillToDate(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Import Units (kWh)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={newBillImportUnits}
+                    onChange={(e) => setNewBillImportUnits(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Export Units (kWh)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={newBillExportUnits}
+                    onChange={(e) => setNewBillExportUnits(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Cost (LKR)*</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={newBillUnitCost}
+                    onChange={(e) => setNewBillUnitCost(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Reference Number (optional)</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    placeholder="Generates if empty"
+                    value={newBillRefNo}
+                    onChange={(e) => setNewBillRefNo(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Billing Mode</label>
+                  <select
+                    className="login-form-input"
+                    value={newBillMode}
+                    onChange={(e) => setNewBillMode(e.target.value)}
+                    style={{ appearance: 'auto' }}
+                  >
+                    <option value="Fixed">Fixed</option>
+                    <option value="Variable">Variable</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Bill Cycle</label>
+                  <input
+                    type="number"
+                    className="login-form-input"
+                    value={newBillCycle}
+                    onChange={(e) => setNewBillCycle(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bill Set Off (LKR)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={newBillSetOff}
+                    onChange={(e) => setNewBillSetOff(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Retention Money</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={newBillRetentionMoney}
+                    onChange={(e) => setNewBillRetentionMoney(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="form-label">Payment Received (LKR)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="login-form-input"
+                  value={newBillPayment}
+                  onChange={(e) => setNewBillPayment(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setAddBillModalOpen(false)} disabled={addBillLoading}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={addBillLoading}>
+                  {addBillLoading ? 'Adding...' : 'Add Ledger Entry'}
                 </button>
               </div>
             </form>

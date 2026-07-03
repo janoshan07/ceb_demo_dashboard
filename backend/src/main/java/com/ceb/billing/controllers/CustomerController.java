@@ -216,4 +216,156 @@ public class CustomerController {
         map.put("solarType", customer.getSolarType());
         return map;
     }
+
+    @PostMapping("/api/admin/customers")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> adminCreateCustomer(@RequestBody Map<String, Object> payload) {
+        try {
+            String accountNo = (String) payload.get("accountNo");
+            if (accountNo == null || accountNo.trim().length() != 10 || !accountNo.trim().matches("\\d+")) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Account number must be a valid 10-digit numeric string."));
+            }
+            Optional<Customer> optCustomer = customerRepository.findById(accountNo.trim());
+            if (optCustomer.isPresent()) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Customer account already exists: " + accountNo));
+            }
+            Customer customer = new Customer();
+            customer.setAccountNo(accountNo.trim());
+            applyCustomerEdits(customer, payload);
+            customerRepository.save(customer);
+
+            String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+            auditLogService.log("CUSTOMER_CREATE", "Admin " + actor + " manually created customer account: " + accountNo);
+            return ResponseEntity.ok(customer);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to create customer: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/api/officer/customers")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> officerCreateCustomer(@RequestBody Map<String, Object> payload) {
+        try {
+            String accountNo = (String) payload.get("accountNo");
+            if (accountNo == null || accountNo.trim().length() != 10 || !accountNo.trim().matches("\\d+")) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Account number must be a valid 10-digit numeric string."));
+            }
+            Optional<Customer> optCustomer = customerRepository.findById(accountNo.trim());
+            if (optCustomer.isPresent()) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Customer account already exists: " + accountNo));
+            }
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+            String newJson = objectMapper.writeValueAsString(payload);
+            ApprovalRequest request = new ApprovalRequest(
+                    null,
+                    accountNo.trim(),
+                    username,
+                    "{}",
+                    newJson,
+                    "PENDING",
+                    "CREATE",
+                    "CUSTOMER"
+            );
+            approvalRequestRepository.save(request);
+            auditLogService.log("CUSTOMER_CREATE_REQUEST", "Officer " + username + " submitted manual customer creation request for " + accountNo);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("requestId", request.getRequestId());
+            response.put("status", "PENDING");
+            response.put("message", "Manual customer creation request queued for approval.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to queue creation request: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/api/admin/customers/{accountNo}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> adminDeleteCustomer(@PathVariable String accountNo) {
+        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+        if (optCustomer.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(accountNo);
+        if (activeRecordsCount > 0) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + accountNo + " because they have " + activeRecordsCount + " active billing records. Delete the billing records first."));
+        }
+
+        customerRepository.delete(optCustomer.get());
+        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+        auditLogService.log("CUSTOMER_DELETE", "Admin " + actor + " manually deleted customer account: " + accountNo);
+        return ResponseEntity.ok(new MessageResponse("Customer account deleted successfully."));
+    }
+
+    @DeleteMapping("/api/officer/customers/{accountNo}")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> officerDeleteCustomer(@PathVariable String accountNo) {
+        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+        if (optCustomer.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(accountNo);
+        if (activeRecordsCount > 0) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + accountNo + " because they have " + activeRecordsCount + " active billing records."));
+        }
+
+        Customer customer = optCustomer.get();
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+            Map<String, Object> oldMap = getCustomerFieldMap(customer);
+            String oldJson = objectMapper.writeValueAsString(oldMap);
+
+            ApprovalRequest request = new ApprovalRequest(
+                    null,
+                    accountNo,
+                    username,
+                    oldJson,
+                    "{}",
+                    "PENDING",
+                    "DELETE",
+                    "CUSTOMER"
+            );
+            approvalRequestRepository.save(request);
+            auditLogService.log("CUSTOMER_DELETE_REQUEST", "Officer " + username + " submitted deletion request for customer account " + accountNo);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("requestId", request.getRequestId());
+            response.put("status", "PENDING");
+            response.put("message", "Customer deletion request queued for approval.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to queue deletion request: " + e.getMessage()));
+        }
+    }
+
+    private void applyCustomerEdits(Customer customer, Map<String, Object> values) {
+        if (values.containsKey("customerName"))
+            customer.setCustomerName((String) values.get("customerName"));
+        if (values.containsKey("customerAddress"))
+            customer.setCustomerAddress((String) values.get("customerAddress"));
+        if (values.containsKey("mobileNo"))
+            customer.setMobileNo((String) values.get("mobileNo"));
+        if (values.containsKey("agreementDate") && values.get("agreementDate") != null && !values.get("agreementDate").toString().isEmpty()) {
+            customer.setAgreementDate(java.time.LocalDate.parse((String) values.get("agreementDate")));
+        }
+        if (values.containsKey("panelCapacity") && values.get("panelCapacity") != null && !values.get("panelCapacity").toString().isEmpty()) {
+            customer.setPanelCapacity(Double.valueOf(values.get("panelCapacity").toString()));
+        }
+        if (values.containsKey("bankCode"))
+            customer.setBankCode((String) values.get("bankCode"));
+        if (values.containsKey("branchCode"))
+            customer.setBranchCode((String) values.get("branchCode"));
+        if (values.containsKey("bankAccountNo"))
+            customer.setBankAccountNo((String) values.get("bankAccountNo"));
+        if (values.containsKey("solarType"))
+            customer.setSolarType((String) values.get("solarType"));
+    }
 }

@@ -114,6 +114,123 @@ const DeleteConfirmModal = ({ historyItem, onConfirm, onCancel, deleting }) => {
   );
 };
 
+const isStandardHeader = (h) => {
+  if (!h) return false;
+  const clean = h.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const standardAliases = [
+    'accountno', 'accountnumber', 'account',
+    'customername', 'name', 'cname',
+    'refno', 'referenceno', 'referencenumber', 'ref',
+    'fromdate', 'startdate', 'billperiod', 'period', 'from',
+    'todate', 'enddate', 'to',
+    'imports', 'import', 'importunits',
+    'exports', 'export', 'exportunits',
+    'unitcost', 'rate', 'unitrate', 'rateunit', 'cost', 'sale', 'unitsale'
+  ];
+  return standardAliases.includes(clean);
+};
+
+const CompareDuplicateModal = ({ targetRow, onSelectAction, onCancel }) => {
+  if (!targetRow) return null;
+  const db = targetRow.dbRecord;
+
+  const renderComparisonRow = (label, excelVal, dbVal, highlightMismatch = true) => {
+    const isMismatch = highlightMismatch && excelVal !== undefined && dbVal !== undefined && excelVal?.toString()?.trim() !== dbVal?.toString()?.trim();
+    return (
+      <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+        <td style={{ padding: '0.6rem 0.8rem', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{label}</td>
+        <td style={{ padding: '0.6rem 0.8rem', color: isMismatch ? '#f59e0b' : 'white', fontSize: '0.85rem', fontWeight: isMismatch ? 700 : 400 }}>
+          {excelVal ?? '—'}
+          {isMismatch && <span style={{ marginLeft: '0.5rem', fontSize: '0.65rem', background: 'rgba(245,158,11,0.15)', color: '#f59e0b', padding: '0.1rem 0.35rem', borderRadius: '4px' }}>Mismatch</span>}
+        </td>
+        <td style={{ padding: '0.6rem 0.8rem', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          {dbVal ?? '—'}
+        </td>
+      </tr>
+    );
+  };
+
+  return (
+    <div className="modal-overlay animate-fade-in" style={{ zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)' }}>
+      <div
+        className="modal-content card animate-fade-in"
+        style={{ maxWidth: 640, width: '90%', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', backgroundColor: '#0f172a', border: '1px solid var(--border-color)', borderRadius: '12px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <AlertTriangle size={20} color="#f59e0b" />
+            Duplicate Record Comparison
+          </h3>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+        </div>
+
+        {db ? (
+          <div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1rem', lineHeight: '1.5' }}>
+              The uploaded sheet contains a record with a billing period that conflicts with an existing entry in the live database for Account Number <strong>{targetRow.accountNo}</strong>. Review the side-by-side details below:
+            </p>
+            <div style={{ overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', backgroundColor: 'rgba(255,255,255,0.01)' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-color)' }}>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Metric</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--primary)' }}>New Excel Value</th>
+                    <th style={{ padding: '0.6rem 0.8rem', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Live DB Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {renderComparisonRow("Customer Name", targetRow.customerName, db.customerName)}
+                  {renderComparisonRow("From Date", targetRow.fromDate, db.fromDate, false)}
+                  {renderComparisonRow("To Date", targetRow.toDate, db.toDate, false)}
+                  {renderComparisonRow("Imports (kWh)", targetRow.imports, db.imports)}
+                  {renderComparisonRow("Exports (kWh)", targetRow.exports, db.exports)}
+                  {renderComparisonRow("Unit Cost (LKR)", targetRow.unitCost, db.unitCost)}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div style={{ padding: '2rem 1rem', textAlign: 'center', display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'center' }}>
+            <AlertCircle size={28} color="#f59e0b" />
+            <h4 style={{ margin: 0, fontWeight: 600 }}>Sheet-Level Duplicate Conflict</h4>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', maxWidth: '400px', lineHeight: 1.5, margin: 0 }}>
+              This row is duplicated within the uploaded spreadsheet workbook itself for Account Number <strong>{targetRow.accountNo}</strong> (multiple rows have the same account number and billing period).
+            </p>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+          <button type="button" className="btn btn-secondary" style={{ padding: '0.45rem 1rem', fontSize: '0.82rem' }} onClick={onCancel}>
+            Close
+          </button>
+          <button
+            type="button"
+            className="btn btn-logout"
+            style={{ padding: '0.45rem 1.25rem', fontSize: '0.82rem', width: 'auto', border: '1px solid var(--border-color)' }}
+            onClick={() => {
+              onSelectAction(targetRow, 'IGNORE');
+              onCancel();
+            }}
+          >
+            Ignore / Exclude
+          </button>
+          <button
+            type="button"
+            className="btn"
+            style={{ padding: '0.45rem 1.25rem', fontSize: '0.82rem', backgroundColor: 'var(--success)', color: 'white' }}
+            onClick={() => {
+              onSelectAction(targetRow, 'IMPORT');
+              onCancel();
+            }}
+          >
+            Import anyway
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ────────────────────────────────────────────────────────
 //  Main Page Component
 // ────────────────────────────────────────────────────────
@@ -145,6 +262,7 @@ const UploadPage = () => {
   const [editingRowKey, setEditingRowKey] = useState(null); // 'sheetName|rowNum'
   const [editRowState, setEditRowState] = useState({}); // values of the row currently edited
   const [editErrors, setEditErrors] = useState({}); // client side validation errors
+  const [compareTarget, setCompareTarget] = useState(null); // row selected for duplicate comparison
 
   // Template Configurations State
   const [templates, setTemplates] = useState([]);
@@ -675,6 +793,16 @@ const UploadPage = () => {
         onConfirm={handleConfirmDelete}
         onCancel={closeDeleteModal}
         deleting={deleting}
+      />
+
+      <CompareDuplicateModal
+        targetRow={compareTarget}
+        onSelectAction={(row, action) => {
+          const key = `${row.sheetName || previewActiveSheet}|${row.rowNum}`;
+          setDuplicateActions(prev => ({ ...prev, [key]: action }));
+          showToast(`Duplicate action for Row ${row.rowNum} set to ${action === 'IMPORT' ? 'FORCE IMPORT' : 'IGNORE / EXCLUDE'}`, 'success');
+        }}
+        onCancel={() => setCompareTarget(null)}
       />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1238,119 +1366,140 @@ const UploadPage = () => {
                         {!activeSheet ? (
                           <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>No sheet selected. Choose a sheet tab above to preview its data.</div>
                         ) : activeSheet.detectedType === 'BILLING' ? (
-                          <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '900px' }}>
-                            <thead>
-                              <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                                <th style={{ width: '50px' }}>Row</th>
-                                <th>Account No</th>
-                                <th>Customer Name</th>
-                                <th>From Date</th>
-                                <th>To Date</th>
-                                <th>Imports</th>
-                                <th>Exports</th>
-                                <th>Unit Cost</th>
-                                <th>Status</th>
-                                <th style={{ width: '25%' }}>Validation Notes</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {paginatedRows.map((row, i) => {
-                                const key = `${activeSheet.sheetName}|${row.rowNum}`;
-                                const isIgnored = duplicateActions[key] === 'IGNORE';
-                                const isAnyway = duplicateActions[key] === 'IMPORT';
+                           <table className="custom-table" style={{ fontSize: '0.76rem', minWidth: '1000px', borderCollapse: 'collapse' }}>
+                             <thead>
+                               <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                                 <th style={{ width: '45px', padding: '0.35rem 0.5rem' }}>Row</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Account No</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Customer Name</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>From Date</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>To Date</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Imports</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Exports</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Unit Cost</th>
+                                 {/* Dynamic extra columns */}
+                                 {activeSheet.headers?.filter(h => !isStandardHeader(h)).map((h, hi) => (
+                                   <th key={hi} style={{ padding: '0.35rem 0.5rem' }}>{h}</th>
+                                 ))}
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Status</th>
+                                 <th style={{ width: '22%', padding: '0.35rem 0.5rem' }}>Validation Notes</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {paginatedRows.map((row, i) => {
+                                 const key = `${activeSheet.sheetName}|${row.rowNum}`;
+                                 const isIgnored = duplicateActions[key] === 'IGNORE';
+                                 const isAnyway = duplicateActions[key] === 'IMPORT';
 
-                                let displayStatus = row.validationStatus;
-                                if (row.validationStatus === 'DUPLICATE') {
-                                  displayStatus = isAnyway ? 'FORCE IMPORT' : 'DUPLICATE (SKIPPED)';
-                                } else if (row.validationStatus === 'INVALID' && isIgnored) {
-                                  displayStatus = 'EXCLUDED';
-                                }
+                                 let displayStatus = row.validationStatus;
+                                 if (row.validationStatus === 'DUPLICATE') {
+                                   displayStatus = isAnyway ? 'FORCE IMPORT' : 'DUPLICATE (SKIPPED)';
+                                 } else if (row.validationStatus === 'INVALID' && isIgnored) {
+                                   displayStatus = 'EXCLUDED';
+                                 }
 
-                                return (
-                                  <tr key={i} style={{ 
-                                    opacity: isIgnored ? 0.4 : 1,
-                                    backgroundColor: displayStatus === 'INVALID' ? 'rgba(239,68,68,0.04)' 
-                                      : row.validationStatus === 'DUPLICATE' ? 'rgba(234,179,8,0.04)' : 'transparent' 
-                                  }}>
-                                    <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
-                                    <td>{row.customerName || '—'}</td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>{row.fromDate || '—'}</td>
-                                    <td style={{ color: 'var(--text-secondary)' }}>{row.toDate || '—'}</td>
-                                    <td style={{ color: '#f59e0b' }}>{row.imports ?? '—'}</td>
-                                    <td style={{ color: 'var(--success)' }}>{row.exports ?? '—'}</td>
-                                    <td>{row.unitCost ?? '—'}</td>
-                                    <td>
-                                      <span className={`badge ${
-                                        displayStatus === 'INVALID' ? 'danger' 
-                                          : displayStatus === 'EXCLUDED' ? 'secondary'
-                                          : displayStatus === 'FORCE IMPORT' ? 'success'
-                                          : row.validationStatus === 'DUPLICATE' ? 'warning' : 'success'
-                                      }`} style={{ fontSize: '0.7rem' }}>
-                                        {displayStatus}
-                                      </span>
-                                    </td>
-                                    <td style={{ fontSize: '0.75rem' }}>
-                                      {row.errors && row.errors.length > 0 && displayStatus !== 'EXCLUDED' ? (
-                                        <div style={{ color: 'var(--danger)' }}>
-                                          {row.errors.map((err, ei) => <div key={ei}>· {err}</div>)}
-                                        </div>
-                                      ) : displayStatus === 'EXCLUDED' ? (
-                                        <span style={{ color: 'var(--text-muted)' }}>Row excluded from import</span>
-                                      ) : (
-                                        <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                          <Check size={10} /> OK
-                                        </span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {paginatedRows.length === 0 && (
-                                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        ) : (
-                          /* CUSTOMER PROFILE or UNKNOWN sheet */
-                          <table className="custom-table" style={{ fontSize: '0.8rem', minWidth: '600px' }}>
-                            <thead>
-                              <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                                <th style={{ width: '50px' }}>Row</th>
-                                <th>Account No</th>
-                                <th>Customer Name</th>
-                                {activeSheet.headers?.filter(h => h && !['accountno','customername','account no','customer name'].includes(h.toLowerCase().replace(/\s/g,''))).slice(0,6).map((h, hi) => (
-                                  <th key={hi}>{h}</th>
-                                ))}
-                                <th>Status</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {paginatedRows.map((row, i) => {
-                                const key = `${activeSheet.sheetName}|${row.rowNum}`;
-                                const isIgnored = duplicateActions[key] === 'IGNORE';
-                                return (
-                                  <tr key={i} style={{ opacity: isIgnored ? 0.4 : 1 }}>
-                                    <td style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
-                                    <td>{row.customerName || '—'}</td>
-                                    {activeSheet.headers?.filter(h => h && !['accountno','customername','account no','customer name'].includes(h.toLowerCase().replace(/\s/g,''))).slice(0,6).map((h, hi) => (
-                                      <td key={hi} style={{ color: 'var(--text-secondary)' }}>{row.rawValues?.[h] ?? '—'}</td>
-                                    ))}
-                                    <td>
-                                      <span className={`badge ${isIgnored ? 'secondary' : row.validationStatus === 'INVALID' ? 'danger' : 'success'}`} style={{ fontSize: '0.7rem' }}>
-                                        {isIgnored ? 'EXCLUDED' : row.validationStatus}
-                                      </span>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                              {paginatedRows.length === 0 && (
-                                <tr><td colSpan="10" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
-                              )}
-                            </tbody>
-                          </table>
-                        )}
+                                 return (
+                                   <tr key={i} style={{ 
+                                     opacity: isIgnored ? 0.4 : 1,
+                                     backgroundColor: displayStatus === 'INVALID' ? 'rgba(239,68,68,0.04)' 
+                                       : row.validationStatus === 'DUPLICATE' ? 'rgba(234,179,8,0.04)' : 'transparent' 
+                                   }}>
+                                     <td style={{ fontWeight: 600, color: 'var(--text-muted)', padding: '0.35rem 0.5rem' }}>{row.rowNum}</td>
+                                     <td style={{ fontWeight: 600, color: 'var(--primary)', padding: '0.35rem 0.5rem' }}>{row.accountNo || '—'}</td>
+                                     <td style={{ padding: '0.35rem 0.5rem' }}>{row.customerName || '—'}</td>
+                                     <td style={{ color: 'var(--text-secondary)', padding: '0.35rem 0.5rem' }}>{row.fromDate || '—'}</td>
+                                     <td style={{ color: 'var(--text-secondary)', padding: '0.35rem 0.5rem' }}>{row.toDate || '—'}</td>
+                                     <td style={{ color: '#f59e0b', padding: '0.35rem 0.5rem' }}>{row.imports ?? '—'}</td>
+                                     <td style={{ color: 'var(--success)', padding: '0.35rem 0.5rem' }}>{row.exports ?? '—'}</td>
+                                     <td style={{ padding: '0.35rem 0.5rem' }}>{row.unitCost ?? '—'}</td>
+                                     {/* Render values for dynamic extra columns */}
+                                     {activeSheet.headers?.filter(h => !isStandardHeader(h)).map((h, hi) => (
+                                       <td key={hi} style={{ color: 'var(--text-secondary)', padding: '0.35rem 0.5rem' }}>{row.rawValues?.[h] ?? '—'}</td>
+                                     ))}
+                                     <td style={{ padding: '0.35rem 0.5rem' }}>
+                                       <span className={`badge ${
+                                         displayStatus === 'INVALID' ? 'danger' 
+                                           : displayStatus === 'EXCLUDED' ? 'secondary'
+                                           : displayStatus === 'FORCE IMPORT' ? 'success'
+                                           : row.validationStatus === 'DUPLICATE' ? 'warning' : 'success'
+                                       }`} style={{ fontSize: '0.68rem' }}>
+                                         {displayStatus}
+                                       </span>
+                                     </td>
+                                     <td style={{ fontSize: '0.72rem', padding: '0.35rem 0.5rem' }}>
+                                       {row.errors && row.errors.length > 0 && displayStatus !== 'EXCLUDED' ? (
+                                         <div style={{ color: 'var(--danger)' }}>
+                                           {row.errors.map((err, ei) => <div key={ei}>· {err}</div>)}
+                                         </div>
+                                       ) : displayStatus === 'EXCLUDED' ? (
+                                         <span style={{ color: 'var(--text-muted)' }}>Row excluded from import</span>
+                                       ) : (
+                                         <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                           <Check size={10} /> OK
+                                         </span>
+                                       )}
+                                     </td>
+                                   </tr>
+                                 );
+                               })}
+                               {paginatedRows.length === 0 && (
+                                 <tr><td colSpan="30" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
+                               )}
+                             </tbody>
+                           </table>
+                         ) : (
+                           /* CUSTOMER PROFILE or UNKNOWN sheet */
+                           <table className="custom-table" style={{ fontSize: '0.76rem', minWidth: '800px', borderCollapse: 'collapse' }}>
+                             <thead>
+                               <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                                 <th style={{ width: '45px', padding: '0.35rem 0.5rem' }}>Row</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Account No</th>
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Customer Name</th>
+                                 {/* Dynamic extra columns */}
+                                 {activeSheet.headers?.filter(h => !isStandardHeader(h)).map((h, hi) => (
+                                   <th key={hi} style={{ padding: '0.35rem 0.5rem' }}>{h}</th>
+                                 ))}
+                                 <th style={{ padding: '0.35rem 0.5rem' }}>Status</th>
+                                 <th style={{ width: '22%', padding: '0.35rem 0.5rem' }}>Validation Notes</th>
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {paginatedRows.map((row, i) => {
+                                 const key = `${activeSheet.sheetName}|${row.rowNum}`;
+                                 const isIgnored = duplicateActions[key] === 'IGNORE';
+                                 return (
+                                   <tr key={i} style={{ opacity: isIgnored ? 0.4 : 1 }}>
+                                     <td style={{ fontWeight: 600, color: 'var(--text-muted)', padding: '0.35rem 0.5rem' }}>{row.rowNum}</td>
+                                     <td style={{ fontWeight: 600, color: 'var(--primary)', padding: '0.35rem 0.5rem' }}>{row.accountNo || '—'}</td>
+                                     <td style={{ padding: '0.35rem 0.5rem' }}>{row.customerName || '—'}</td>
+                                     {activeSheet.headers?.filter(h => !isStandardHeader(h)).map((h, hi) => (
+                                       <td key={hi} style={{ color: 'var(--text-secondary)', padding: '0.35rem 0.5rem' }}>{row.rawValues?.[h] ?? '—'}</td>
+                                     ))}
+                                     <td style={{ padding: '0.35rem 0.5rem' }}>
+                                       <span className={`badge ${isIgnored ? 'secondary' : row.validationStatus === 'INVALID' ? 'danger' : 'success'}`} style={{ fontSize: '0.68rem' }}>
+                                         {isIgnored ? 'EXCLUDED' : row.validationStatus}
+                                       </span>
+                                     </td>
+                                     <td style={{ fontSize: '0.72rem', padding: '0.35rem 0.5rem' }}>
+                                       {row.errors && row.errors.length > 0 && !isIgnored ? (
+                                         <div style={{ color: 'var(--danger)' }}>
+                                           {row.errors.map((err, ei) => <div key={ei}>· {err}</div>)}
+                                         </div>
+                                       ) : (
+                                         <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                           <Check size={10} /> OK
+                                         </span>
+                                       )}
+                                     </td>
+                                   </tr>
+                                 );
+                               })}
+                               {paginatedRows.length === 0 && (
+                                 <tr><td colSpan="30" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No data rows in this sheet.</td></tr>
+                               )}
+                             </tbody>
+                           </table>
+                         )}
                       </div>
 
                       {/* Bottom pagination */}
@@ -1427,142 +1576,214 @@ const UploadPage = () => {
 
                                     if (isEditing) {
                                       return (
-                                        <tr key={row.rowNum} style={{ backgroundColor: 'rgba(59,130,246,0.06)' }}>
-                                          <td style={{ fontWeight: 600 }}>{row.rowNum}</td>
-                                          <td>
-                                            <input
-                                              type="text"
-                                              className="form-control"
-                                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '90px', borderColor: editErrors.accountNo ? 'var(--danger)' : 'var(--border-color)' }}
-                                              value={editRowState.accountNo}
-                                              onChange={e => handleEditChange('accountNo', e.target.value)}
-                                              title={editErrors.accountNo}
-                                            />
-                                          </td>
-                                          <td>
-                                            <input
-                                              type="text"
-                                              className="form-control"
-                                              style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '120px', borderColor: editErrors.customerName ? 'var(--danger)' : 'var(--border-color)' }}
-                                              value={editRowState.customerName}
-                                              onChange={e => handleEditChange('customerName', e.target.value)}
-                                              title={editErrors.customerName}
-                                            />
-                                          </td>
-                                          {detectedType === 'BILLING' ? (
-                                            <>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  placeholder="YYYY-MM-DD"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '90px', borderColor: editErrors.fromDate ? 'var(--danger)' : 'var(--border-color)' }}
-                                                  value={editRowState.fromDate}
-                                                  onChange={e => handleEditChange('fromDate', e.target.value)}
-                                                  title={editErrors.fromDate}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  placeholder="YYYY-MM-DD"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '90px', borderColor: editErrors.toDate ? 'var(--danger)' : 'var(--border-color)' }}
-                                                  value={editRowState.toDate}
-                                                  onChange={e => handleEditChange('toDate', e.target.value)}
-                                                  title={editErrors.toDate}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '60px', borderColor: editErrors.imports ? 'var(--danger)' : 'var(--border-color)' }}
-                                                  value={editRowState.imports}
-                                                  onChange={e => handleEditChange('imports', e.target.value)}
-                                                  title={editErrors.imports}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '60px', borderColor: editErrors.exports ? 'var(--danger)' : 'var(--border-color)' }}
-                                                  value={editRowState.exports}
-                                                  onChange={e => handleEditChange('exports', e.target.value)}
-                                                  title={editErrors.exports}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '50px', borderColor: editErrors.unitCost ? 'var(--danger)' : 'var(--border-color)' }}
-                                                  value={editRowState.unitCost}
-                                                  onChange={e => handleEditChange('unitCost', e.target.value)}
-                                                  title={editErrors.unitCost}
-                                                />
-                                              </td>
-                                            </>
-                                          ) : (
-                                            <>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '100px' }}
-                                                  value={editRowState.customerAddress}
-                                                  onChange={e => handleEditChange('customerAddress', e.target.value)}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '80px' }}
-                                                  value={editRowState.mobileNo}
-                                                  onChange={e => handleEditChange('mobileNo', e.target.value)}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '80px' }}
-                                                  value={editRowState.solarType}
-                                                  onChange={e => handleEditChange('solarType', e.target.value)}
-                                                />
-                                              </td>
-                                              <td>
-                                                <input
-                                                  type="text"
-                                                  className="form-control"
-                                                  style={{ padding: '0.2rem 0.4rem', fontSize: '0.78rem', minWidth: '50px' }}
-                                                  value={editRowState.bankCode}
-                                                  onChange={e => handleEditChange('bankCode', e.target.value)}
-                                                />
-                                              </td>
-                                            </>
-                                          )}
-                                          <td style={{ color: 'var(--danger)', fontSize: '0.72rem' }}>
-                                            {Object.keys(editErrors).length > 0 ? (
-                                              <div>
-                                                {Object.entries(editErrors).map(([f, msg]) => (
-                                                  <div key={f}><strong>{f}:</strong> {msg}</div>
-                                                ))}
+                                        <tr key={row.rowNum} style={{ backgroundColor: 'rgba(59,130,246,0.04)' }}>
+                                          <td colSpan={detectedType === 'BILLING' ? 10 : 9} style={{ padding: '1rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
+                                                <span>Correcting Row {row.rowNum} Data</span>
+                                                {Object.keys(editErrors).length > 0 && <span style={{ color: 'var(--danger)' }}>({Object.keys(editErrors).length} validation error(s))</span>}
                                               </div>
-                                            ) : (
-                                              <span>Editing raw cell fields...</span>
-                                            )}
-                                          </td>
-                                          <td style={{ textAlign: 'center' }}>
-                                            <div style={{ display: 'flex', gap: '0.25rem', justifyContent: 'center' }}>
-                                              <button type="button" className="btn btn-primary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', backgroundColor: 'var(--success)' }} onClick={() => saveEditedRow(row.rowNum, sheetName)}>
-                                                Save
-                                              </button>
-                                              <button type="button" className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem' }} onClick={cancelEditRow}>
-                                                Cancel
-                                              </button>
+                                              
+                                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Account No</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.accountNo ? 'var(--danger)' : 'var(--border-color)' }}
+                                                    value={editRowState.accountNo}
+                                                    onChange={e => handleEditChange('accountNo', e.target.value)}
+                                                  />
+                                                  {editErrors.accountNo && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.accountNo}</span>}
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Customer Name</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.customerName ? 'var(--danger)' : 'var(--border-color)' }}
+                                                    value={editRowState.customerName}
+                                                    onChange={e => handleEditChange('customerName', e.target.value)}
+                                                  />
+                                                  {editErrors.customerName && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.customerName}</span>}
+                                                </div>
+
+                                                {detectedType === 'BILLING' && (
+                                                  <>
+                                                    <div>
+                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>From Date</label>
+                                                      <input
+                                                        type="text"
+                                                        placeholder="YYYY-MM-DD"
+                                                        className="form-control"
+                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.fromDate ? 'var(--danger)' : 'var(--border-color)' }}
+                                                        value={editRowState.fromDate}
+                                                        onChange={e => handleEditChange('fromDate', e.target.value)}
+                                                      />
+                                                      {editErrors.fromDate && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.fromDate}</span>}
+                                                    </div>
+
+                                                    <div>
+                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>To Date</label>
+                                                      <input
+                                                        type="text"
+                                                        placeholder="YYYY-MM-DD"
+                                                        className="form-control"
+                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.toDate ? 'var(--danger)' : 'var(--border-color)' }}
+                                                        value={editRowState.toDate}
+                                                        onChange={e => handleEditChange('toDate', e.target.value)}
+                                                      />
+                                                      {editErrors.toDate && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.toDate}</span>}
+                                                    </div>
+
+                                                    <div>
+                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Imports (KWh)</label>
+                                                      <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.imports ? 'var(--danger)' : 'var(--border-color)' }}
+                                                        value={editRowState.imports}
+                                                        onChange={e => handleEditChange('imports', e.target.value)}
+                                                      />
+                                                      {editErrors.imports && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.imports}</span>}
+                                                    </div>
+
+                                                    <div>
+                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Exports (KWh)</label>
+                                                      <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.exports ? 'var(--danger)' : 'var(--border-color)' }}
+                                                        value={editRowState.exports}
+                                                        onChange={e => handleEditChange('exports', e.target.value)}
+                                                      />
+                                                      {editErrors.exports && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.exports}</span>}
+                                                    </div>
+
+                                                    <div>
+                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Unit Cost</label>
+                                                      <input
+                                                        type="text"
+                                                        className="form-control"
+                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.unitCost ? 'var(--danger)' : 'var(--border-color)' }}
+                                                        value={editRowState.unitCost}
+                                                        onChange={e => handleEditChange('unitCost', e.target.value)}
+                                                      />
+                                                      {editErrors.unitCost && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.unitCost}</span>}
+                                                    </div>
+                                                  </>
+                                                )}
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Address</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.customerAddress}
+                                                    onChange={e => handleEditChange('customerAddress', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Mobile No</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.mobileNo}
+                                                    onChange={e => handleEditChange('mobileNo', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Billing Mode (Exp Code)</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.billingMode}
+                                                    onChange={e => handleEditChange('billingMode', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Agreement Date</label>
+                                                  <input
+                                                    type="text"
+                                                    placeholder="YYYY-MM-DD"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.agreementDate}
+                                                    onChange={e => handleEditChange('agreementDate', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Panel Capacity (KW)</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.panelCapacity}
+                                                    onChange={e => handleEditChange('panelCapacity', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Solar Type</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.solarType}
+                                                    onChange={e => handleEditChange('solarType', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Bank Code</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.bankCode}
+                                                    onChange={e => handleEditChange('bankCode', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Branch Code</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.branchCode}
+                                                    onChange={e => handleEditChange('branchCode', e.target.value)}
+                                                  />
+                                                </div>
+
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Bank Account No</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
+                                                    value={editRowState.bankAccountNo}
+                                                    onChange={e => handleEditChange('bankAccountNo', e.target.value)}
+                                                  />
+                                                </div>
+                                              </div>
+                                              
+                                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                                                <button type="button" className="btn btn-secondary" style={{ padding: '0.35rem 1rem', fontSize: '0.78rem' }} onClick={cancelEditRow}>
+                                                  Cancel
+                                                </button>
+                                                <button type="button" className="btn" style={{ padding: '0.35rem 1.25rem', fontSize: '0.78rem', backgroundColor: 'var(--success)', color: 'white' }} onClick={() => saveEditedRow(row.rowNum, sheetName)}>
+                                                  Save Correction
+                                                </button>
+                                              </div>
                                             </div>
                                           </td>
                                         </tr>
@@ -1647,7 +1868,7 @@ const UploadPage = () => {
                                     <th>Exports</th>
                                     <th>Duplicate Check Message</th>
                                     <th style={{ width: '130px', textAlign: 'center' }}>Import Decision</th>
-                                    <th style={{ width: '220px', textAlign: 'center' }}>Conflict Resolution</th>
+                                    <th style={{ width: '300px', textAlign: 'center' }}>Conflict Resolution</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1673,6 +1894,18 @@ const UploadPage = () => {
                                         </td>
                                         <td style={{ textAlign: 'center' }}>
                                           <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                                            <button 
+                                              type="button" 
+                                              className="btn btn-secondary" 
+                                              style={{ 
+                                                padding: '0.25rem 0.5rem', 
+                                                fontSize: '0.72rem',
+                                                border: '1px solid var(--border-color)'
+                                              }} 
+                                              onClick={() => setCompareTarget({ ...row, sheetName })}
+                                            >
+                                              Compare Data
+                                            </button>
                                             <button 
                                               type="button" 
                                               className="btn btn-secondary" 

@@ -22,7 +22,7 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
     );
 
     @Query("SELECT b FROM BillingRecord b WHERE b.customer.accountNo = ?1 AND YEAR(b.fromDate) = ?2 AND MONTH(b.fromDate) = ?3")
-    Optional<BillingRecord> findByCustomerAccountNoAndFromDateYearAndMonth(String accountNo, int year, int month);
+    List<BillingRecord> findByCustomerAccountNoAndFromDateYearAndMonth(String accountNo, int year, int month);
 
     @Query("SELECT COALESCE(SUM(b.totalAmount), 0.0) FROM BillingRecord b")
     Double sumTotalAmount();

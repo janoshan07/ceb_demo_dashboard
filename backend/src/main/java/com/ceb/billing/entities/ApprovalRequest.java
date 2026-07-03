@@ -30,6 +30,12 @@ public class ApprovalRequest {
     @Column(nullable = false, length = 50)
     private String status; // PENDING, APPROVED, REJECTED
 
+    @Column(name = "action_type", length = 50)
+    private String actionType = "UPDATE"; // CREATE, UPDATE, DELETE
+
+    @Column(name = "entity_type", length = 50)
+    private String entityType; // CUSTOMER, BILLING
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -48,6 +54,19 @@ public class ApprovalRequest {
         this.oldValues = oldValues;
         this.newValues = newValues;
         this.status = status;
+        this.actionType = "UPDATE";
+        this.entityType = (billingId == null) ? "CUSTOMER" : "BILLING";
+    }
+
+    public ApprovalRequest(Long billingId, String accountNo, String changedBy, String oldValues, String newValues, String status, String actionType, String entityType) {
+        this.billingId = billingId;
+        this.accountNo = accountNo;
+        this.changedBy = changedBy;
+        this.oldValues = oldValues;
+        this.newValues = newValues;
+        this.status = status;
+        this.actionType = actionType;
+        this.entityType = entityType;
     }
 
     // Getters and Setters
@@ -113,5 +132,21 @@ public class ApprovalRequest {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getActionType() {
+        return actionType;
+    }
+
+    public void setActionType(String actionType) {
+        this.actionType = actionType;
+    }
+
+    public String getEntityType() {
+        return entityType;
+    }
+
+    public void setEntityType(String entityType) {
+        this.entityType = entityType;
     }
 }

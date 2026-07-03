@@ -67,32 +67,77 @@ public class ApprovalController {
                     new TypeReference<Map<String, Object>>() {
                     });
 
-            if (request.getBillingId() == null) {
-                // Customer Profile Edit
-                Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
-                if (optCustomer.isEmpty()) {
-                    return ResponseEntity.badRequest().body(new MessageResponse("Customer account no longer exists."));
-                }
-                Customer customer = optCustomer.get();
-                applyCustomerEdits(customer, newValues);
-                customerRepository.save(Objects.requireNonNull(customer));
+            String eType = request.getEntityType() != null ? request.getEntityType() : (request.getBillingId() == null ? "CUSTOMER" : "BILLING");
+            String aType = request.getActionType() != null ? request.getActionType() : "UPDATE";
 
-                auditLogService.log("CUSTOMER_EDIT_APPROVED",
-                        String.format("Admin %s approved customer %s changes from %s", adminUsername,
-                                request.getAccountNo(), request.getChangedBy()));
+            if ("CUSTOMER".equals(eType)) {
+                if ("CREATE".equals(aType)) {
+                    Customer customer = new Customer();
+                    customer.setAccountNo(request.getAccountNo());
+                    applyCustomerEdits(customer, newValues);
+                    customerRepository.save(Objects.requireNonNull(customer));
+                    auditLogService.log("CUSTOMER_CREATE_APPROVED",
+                            String.format("Admin %s approved manual customer creation for %s requested by %s", adminUsername,
+                                    request.getAccountNo(), request.getChangedBy()));
+                } else if ("DELETE".equals(aType)) {
+                    Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
+                    if (optCustomer.isPresent()) {
+                        customerRepository.delete(optCustomer.get());
+                    }
+                    auditLogService.log("CUSTOMER_DELETE_APPROVED",
+                            String.format("Admin %s approved customer deletion for %s requested by %s", adminUsername,
+                                    request.getAccountNo(), request.getChangedBy()));
+                } else {
+                    // UPDATE
+                    Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
+                    if (optCustomer.isEmpty()) {
+                        return ResponseEntity.badRequest().body(new MessageResponse("Customer account no longer exists."));
+                    }
+                    Customer customer = optCustomer.get();
+                    applyCustomerEdits(customer, newValues);
+                    customerRepository.save(Objects.requireNonNull(customer));
+                    auditLogService.log("CUSTOMER_EDIT_APPROVED",
+                            String.format("Admin %s approved customer %s changes from %s", adminUsername,
+                                    request.getAccountNo(), request.getChangedBy()));
+                }
             } else {
-                // Billing Record Edit
-                Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
-                if (optBilling.isEmpty()) {
-                    return ResponseEntity.badRequest().body(new MessageResponse("Billing record no longer exists."));
+                // BILLING
+                if ("CREATE".equals(aType)) {
+                    Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
+                    if (optCustomer.isEmpty()) {
+                        return ResponseEntity.badRequest().body(new MessageResponse("Customer account no longer exists."));
+                    }
+                    BillingRecord billing = new BillingRecord();
+                    billing.setCustomer(optCustomer.get());
+                    applyBillingEdits(billing, newValues);
+                    if (newValues.containsKey("refNo")) {
+                        billing.setRefNo((String) newValues.get("refNo"));
+                    }
+                    billingRecordRepository.save(Objects.requireNonNull(billing));
+                    auditLogService.log("BILLING_CREATE_APPROVED",
+                            String.format("Admin %s approved manual billing creation for customer %s requested by %s", adminUsername,
+                                    request.getAccountNo(), request.getChangedBy()));
+                } else if ("DELETE".equals(aType)) {
+                    Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
+                    if (optBilling.isPresent()) {
+                        billingRecordRepository.delete(optBilling.get());
+                    }
+                    auditLogService.log("BILLING_DELETE_APPROVED",
+                            String.format("Admin %s approved billing ID %d deletion requested by %s", adminUsername,
+                                    request.getBillingId(), request.getChangedBy()));
+                } else {
+                    // UPDATE
+                    Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
+                    if (optBilling.isEmpty()) {
+                        return ResponseEntity.badRequest().body(new MessageResponse("Billing record no longer exists."));
+                    }
+                    BillingRecord billing = optBilling.get();
+                    applyBillingEdits(billing, newValues);
+                    billingRecordRepository.save(Objects.requireNonNull(billing));
+                    auditLogService.log("BILLING_EDIT_APPROVED",
+                            String.format("Admin %s approved billing ID %d changes from %s", adminUsername,
+                                    request.getBillingId(), request.getChangedBy()));
                 }
-                BillingRecord billing = optBilling.get();
-                applyBillingEdits(billing, newValues);
-                billingRecordRepository.save(Objects.requireNonNull(billing));
-
-                auditLogService.log("BILLING_EDIT_APPROVED",
-                        String.format("Admin %s approved billing ID %d changes from %s", adminUsername,
-                                request.getBillingId(), request.getChangedBy()));
             }
 
             request.setStatus("APPROVED");

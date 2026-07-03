@@ -39,62 +39,126 @@ public class ExcelValidationService {
             String rawUnitCost,
             Double unitCost,
             String bankCode,
+            String customerAddress,
+            String mobileNo,
+            String bankAccountNo,
+            String branchCode,
+            String billingMode,
+            String agreementDate,
+            Double panelCapacity,
+            String solarType,
             Set<String> processedRecordsInUpload
     ) {
         RowValidationResult result = new RowValidationResult();
+        boolean hasCriticalErrors = false;
+        boolean hasKeyFieldsErrors = false;
 
         // 1. Mandatory Columns presence/missing value checks
         if (accountNo == null || accountNo.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Account No", "Account number is missing or empty", false));
+            hasCriticalErrors = true;
+            hasKeyFieldsErrors = true;
+        } else {
+            String cleanAcc = accountNo.trim();
+            if (cleanAcc.length() != 10 || !cleanAcc.matches("\\d+")) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Account No", "Account number must be a valid 10-digit numeric string: '" + accountNo + "'", false));
+                hasCriticalErrors = true;
+                hasKeyFieldsErrors = true;
+            }
         }
 
         if (customerName == null || customerName.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Customer Name", "Customer name is missing or empty", false));
+            hasCriticalErrors = true;
         }
 
         // From Date check
         if (rawFromDate == null || rawFromDate.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "From Date", "From Date is missing or empty", false));
+            hasCriticalErrors = true;
+            hasKeyFieldsErrors = true;
         } else if (fromDate == null) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "From Date", "Invalid date format for From Date: '" + rawFromDate + "'. Expected format: YYYY-MM-DD", false));
+            hasCriticalErrors = true;
+            hasKeyFieldsErrors = true;
         }
 
         // To Date check
         if (rawToDate == null || rawToDate.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "To Date", "To Date is missing or empty", false));
+            hasCriticalErrors = true;
         } else if (toDate == null) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "To Date", "Invalid date format for To Date: '" + rawToDate + "'. Expected format: YYYY-MM-DD", false));
+            hasCriticalErrors = true;
         }
 
         // Imports check
         if (rawImports == null || rawImports.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units is missing or empty", false));
+            hasCriticalErrors = true;
         } else if (importUnits == null) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units must be a valid numeric value: '" + rawImports + "'", false));
+            hasCriticalErrors = true;
         } else if (importUnits < 0) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units cannot be negative: " + importUnits, false));
+            hasCriticalErrors = true;
         }
 
         // Exports check
         if (rawExports == null || rawExports.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units is missing or empty", false));
+            hasCriticalErrors = true;
         } else if (exportUnits == null) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units must be a valid numeric value: '" + rawExports + "'", false));
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units must be a valid numeric value: '" + rawImports + "'", false));
+            hasCriticalErrors = true;
         } else if (exportUnits < 0) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units cannot be negative: " + exportUnits, false));
+            hasCriticalErrors = true;
         }
 
         // Unit Cost check
         if (rawUnitCost == null || rawUnitCost.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost is missing or empty", false));
+            hasCriticalErrors = true;
         } else if (unitCost == null) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost must be a valid numeric value: '" + rawUnitCost + "'", false));
+            hasCriticalErrors = true;
         } else if (unitCost < 0) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost cannot be negative: " + unitCost, false));
+            hasCriticalErrors = true;
         }
 
-        // If we found any critical format or missing value errors, stop and do not run duplicate or warning checks
-        if (result.hasErrors() || fromDate == null) {
+        // Missing optional fields warnings check -> treated as non-critical errors
+        if (customerAddress == null || customerAddress.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Address", "Address is missing", false));
+        }
+        if (mobileNo == null || mobileNo.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Mobile No", "Mobile No is missing", false));
+        }
+        if (bankCode == null || bankCode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Code", "Bank Code is missing", false));
+        }
+        if (branchCode == null || branchCode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Branch Code", "Branch Code is missing", false));
+        }
+        if (bankAccountNo == null || bankAccountNo.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Account No", "Bank Account No is missing", false));
+        }
+        if (billingMode == null || billingMode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Exp. Code (Billing Mode) is missing", false));
+        }
+        if (agreementDate == null || agreementDate.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Agreement Date", "Agreement Date is missing", false));
+        }
+        if (panelCapacity == null) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Panel Capacity", "Panel Capacity is missing", false));
+        }
+        if (solarType == null || solarType.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Solar Type is missing", false));
+        }
+
+        // If key duplicate check fields are missing/invalid, stop and do not run duplicate checks
+        if (hasKeyFieldsErrors || fromDate == null) {
             return result;
         }
 
@@ -112,14 +176,14 @@ public class ExcelValidationService {
         }
 
         // Check against database
-        Optional<BillingRecord> dbRecord = billingRecordRepository.findByCustomerAccountNoAndFromDateYearAndMonth(accountNo, year, month);
-        if (dbRecord.isPresent()) {
+        List<BillingRecord> dbRecords = billingRecordRepository.findByCustomerAccountNoAndFromDateYearAndMonth(accountNo, year, month);
+        if (!dbRecords.isEmpty()) {
             result.addDuplicate(new ExcelValidationError(sheetName, rowNum, "Duplicate",
                 "Duplicate billing record already exists in database for Account: " + accountNo + " in billing month: " + billingMonthStr, false));
             return result;
         }
 
-        // 3. Bank Code warnings — only flag if a non-empty value was actually supplied
+        // 3. Bank Code warnings — only flag if a non-empty value was actually supplied and invalid
         if (bankCode != null && !bankCode.trim().isEmpty()) {
             String cleanBank = bankCode.trim().toUpperCase();
             if (!VALID_BANK_CODES.contains(cleanBank)) {
@@ -133,20 +197,70 @@ public class ExcelValidationService {
 
     /**
      * Lightweight validation for customer-profile-only rows.
-     * These rows have no billing fields (imports/exports/dates), so we only
-     * check that accountNo and customerName are present.
+     * These rows have no billing fields (imports/exports/dates), so we check
+     * that accountNo and customerName are present and check optional fields.
      */
-    public RowValidationResult validateCustomerRow(String sheetName, int rowNum,
-                                                   String accountNo, String customerName) {
+    public RowValidationResult validateCustomerRow(
+            String sheetName,
+            int rowNum,
+            String accountNo,
+            String customerName,
+            String customerAddress,
+            String mobileNo,
+            String bankCode,
+            String branchCode,
+            String bankAccountNo,
+            String agreementDate,
+            Double panelCapacity,
+            String solarType
+    ) {
         RowValidationResult result = new RowValidationResult();
         if (accountNo == null || accountNo.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Account No",
                     "Account number is missing or empty", false));
+        } else {
+            String cleanAcc = accountNo.trim();
+            if (cleanAcc.length() != 10 || !cleanAcc.matches("\\d+")) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Account No",
+                        "Account number must be a valid 10-digit numeric string: '" + accountNo + "'", false));
+            }
         }
         if (customerName == null || customerName.trim().isEmpty()) {
-            result.addWarning(new ExcelValidationError(sheetName, rowNum, "Customer Name",
-                    "Customer name is missing or empty; record will be imported with a blank name", true));
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Customer Name",
+                    "Customer name is missing or empty", false));
         }
+
+        if (customerAddress == null || customerAddress.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Address", "Address is missing", false));
+        }
+        if (mobileNo == null || mobileNo.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Mobile No", "Mobile No is missing", false));
+        }
+        if (bankCode == null || bankCode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Code", "Bank Code is missing", false));
+        } else {
+            String cleanBank = bankCode.trim().toUpperCase();
+            if (!VALID_BANK_CODES.contains(cleanBank)) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Code",
+                    "Unrecognized bank code: '" + bankCode + "'. Verified codes are standard Sri Lankan bank acronyms (e.g., BOC, HNB, SAMP, COM)", false));
+            }
+        }
+        if (branchCode == null || branchCode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Branch Code", "Branch Code is missing", false));
+        }
+        if (bankAccountNo == null || bankAccountNo.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Account No", "Bank Account No is missing", false));
+        }
+        if (agreementDate == null || agreementDate.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Agreement Date", "Agreement Date is missing", false));
+        }
+        if (panelCapacity == null) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Panel Capacity", "Panel Capacity is missing", false));
+        }
+        if (solarType == null || solarType.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Solar Type is missing", false));
+        }
+
         return result;
     }
 

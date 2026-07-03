@@ -4,6 +4,7 @@ import com.ceb.billing.entities.HeaderMapping;
 import com.ceb.billing.entities.SheetConfiguration;
 import com.ceb.billing.models.ExcelValidationError;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.ss.util.CellRangeAddress;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +20,9 @@ public class PreviewService {
 
     @Autowired
     private ExcelValidationService excelValidationService;
+
+    @Autowired
+    private com.ceb.billing.repositories.BillingRecordRepository billingRecordRepository;
 
     // Comprehensive alias map for all logical billing/customer fields
     private static final Map<String, List<String>> FIELD_ALIASES = new LinkedHashMap<>();
@@ -117,65 +121,69 @@ public class PreviewService {
 
                 // Detect the header row index
                 int headerRowIdx = findHeaderRowIndex(sheet);
+                boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && isSubHeaderRow(sheet, headerRowIdx + 1);
 
-                // Build clean list of actual headers (index -> clean header) to allow duplicate headers
-                List<String> colCleanHeaders = new ArrayList<>();
+                // Auto-detect logical column mapping using the detected header row and sub-header row presence
+                Map<String, Integer> colIndices = autoDetectColumns(sheet, headerRowIdx);
+
+                // Parse raw headers from the detected header rows, merging parent + sub-headers if present
+                List<String> rawHeaders = new ArrayList<>();
+                Map<String, Integer> headerCounts = new HashMap<>();
                 Row headerRow = sheet.getRow(headerRowIdx);
-                if (headerRow != null) {
-                    for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                        Cell cell = headerRow.getCell(col);
-                        String txt = getCellValueAsString(cell);
-                        if (txt != null && !txt.trim().isEmpty()) {
-                            colCleanHeaders.add(txt.toLowerCase().replaceAll("[^a-z0-9]", ""));
-                        } else {
-                            colCleanHeaders.add("");
-                        }
+                int lastCellNum = headerRow != null ? headerRow.getLastCellNum() : 0;
+                if (hasSubHeader) {
+                    Row subRow = sheet.getRow(headerRowIdx + 1);
+                    if (subRow != null && subRow.getLastCellNum() > lastCellNum) {
+                        lastCellNum = subRow.getLastCellNum();
                     }
                 }
 
-                // Auto-detect logical column mapping using the detected header row
-                Map<String, Integer> colIndices = autoDetectColumns(sheet, headerRowIdx);
-
-                // Parse raw headers from the detected header row, assign friendly names to empty mapped columns, and ensure they are unique
-                List<String> rawHeaders = new ArrayList<>();
-                Map<String, Integer> headerCounts = new HashMap<>();
-                if (headerRow != null) {
-                    for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                        Cell cell = headerRow.getCell(col);
-                        String hdr = getCellValueAsString(cell);
-                        String trimmedHdr = hdr != null ? hdr.trim() : "";
-                        
-                        if (trimmedHdr.isEmpty()) {
-                            // If this empty column maps to a logical field, give it a friendly name
-                            if (colIndices.containsValue(col)) {
-                                for (Map.Entry<String, Integer> entry : colIndices.entrySet()) {
-                                    if (entry.getValue() == col) {
-                                        String field = entry.getKey();
-                                        if ("todate".equals(field)) {
-                                            trimmedHdr = "To Date";
-                                        } else if ("fromdate".equals(field)) {
-                                            trimmedHdr = "From Date";
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
+                for (int col = 0; col < lastCellNum; col++) {
+                    String h1 = getMergedCellValue(sheet, headerRowIdx, col).trim();
+                    String h2 = hasSubHeader ? getMergedCellValue(sheet, headerRowIdx + 1, col).trim() : "";
+                    String trimmedHdr = "";
+                    if (!h1.isEmpty() && !h2.isEmpty()) {
+                        if (h1.equalsIgnoreCase(h2)) {
+                            trimmedHdr = h1;
+                        } else {
+                            trimmedHdr = h1 + " (" + h2 + ")";
                         }
-
-                        if (!trimmedHdr.isEmpty()) {
-                            int count = headerCounts.getOrDefault(trimmedHdr, 0) + 1;
-                            headerCounts.put(trimmedHdr, count);
-                            if (count > 1) {
-                                // If it's a duplicate of "Account No", label the second one as "Account No: (Bank)"
-                                if (trimmedHdr.toLowerCase().replaceAll("[^a-z0-9]", "").equals("accountno")) {
-                                    trimmedHdr = trimmedHdr + " (Bank)";
-                                } else {
-                                    trimmedHdr = trimmedHdr + " (" + count + ")";
-                                }
-                            }
-                        }
-                        rawHeaders.add(trimmedHdr);
+                    } else if (!h1.isEmpty()) {
+                        trimmedHdr = h1;
+                    } else if (!h2.isEmpty()) {
+                        trimmedHdr = h2;
                     }
+
+                    if (trimmedHdr.isEmpty()) {
+                        // If this empty column maps to a logical field, give it a friendly name
+                        if (colIndices.containsValue(col)) {
+                            for (Map.Entry<String, Integer> entry : colIndices.entrySet()) {
+                                if (entry.getValue() == col) {
+                                    String field = entry.getKey();
+                                    if ("todate".equals(field)) {
+                                        trimmedHdr = "To Date";
+                                    } else if ("fromdate".equals(field)) {
+                                        trimmedHdr = "From Date";
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!trimmedHdr.isEmpty()) {
+                        int count = headerCounts.getOrDefault(trimmedHdr, 0) + 1;
+                        headerCounts.put(trimmedHdr, count);
+                        if (count > 1) {
+                            // If it's a duplicate of "Account No", label the second one as "Account No: (Bank)"
+                            if (trimmedHdr.toLowerCase().replaceAll("[^a-z0-9]", "").equals("accountno")) {
+                                trimmedHdr = trimmedHdr + " (Bank)";
+                            } else {
+                                trimmedHdr = trimmedHdr + " (" + count + ")";
+                            }
+                        }
+                    }
+                    rawHeaders.add(trimmedHdr);
                 }
 
                 boolean hasBillingCols  = BILLING_REQUIRED.stream().allMatch(colIndices::containsKey);
@@ -192,7 +200,8 @@ public class PreviewService {
                 int sheetDuplicates = 0;
 
                 int lastRowNum = sheet.getLastRowNum();
-                for (int r = headerRowIdx + 1; r <= lastRowNum; r++) {
+                int dataStartRow = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+                for (int r = dataStartRow; r <= lastRowNum; r++) {
                     Row row = sheet.getRow(r);
                     if (row == null || isRowEmpty(row)) continue;
 
@@ -204,14 +213,12 @@ public class PreviewService {
 
                     // Always capture raw values keyed by actual Excel column header
                     Map<String, String> rawValues = new LinkedHashMap<>();
-                    if (headerRow != null) {
-                        for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                            String hdr    = rawHeaders.get(col);
-                            Cell dataCell = row.getCell(col);
-                            String val    = getCellValueAsString(dataCell);
-                            if (hdr != null && !hdr.trim().isEmpty()) {
-                                rawValues.put(hdr, val != null ? val : "");
-                            }
+                    for (int col = 0; col < lastCellNum; col++) {
+                        String hdr    = rawHeaders.size() > col ? rawHeaders.get(col) : "";
+                        Cell dataCell = row.getCell(col);
+                        String val    = getCellValueAsString(dataCell);
+                        if (hdr != null && !hdr.trim().isEmpty()) {
+                            rawValues.put(hdr, val != null ? val : "");
                         }
                     }
                     rowData.put("rawValues", rawValues);
@@ -230,6 +237,16 @@ public class PreviewService {
                         String rawUnitCost  = getVal(row, colIndices.get("unitcost"));
                         String bankCode     = getVal(row, colIndices.get("bankcode"));
 
+                        String customerAddress = getVal(row, colIndices.get("customeraddress"));
+                        String mobileNo        = getVal(row, colIndices.get("mobileno"));
+                        String bankAccountNo   = getVal(row, colIndices.get("bankaccountno"));
+                        String branchCode      = getVal(row, colIndices.get("branchcode"));
+                        String billingMode     = getVal(row, colIndices.get("billingmode"));
+                        String agreementDate   = getDateVal(row, colIndices.get("agreementdate"));
+                        String rawPanelCapacity = getVal(row, colIndices.get("panelcapacity"));
+                        Double panelCapacity   = parseDoubleStr(rawPanelCapacity);
+                        String solarType       = getVal(row, colIndices.get("solartype"));
+
                         LocalDate fromDate = parseDate(row, colIndices.get("fromdate"));
                         LocalDate toDate   = parseDate(row, colIndices.get("todate"));
                         Double imports  = parseDoubleStr(rawImports);
@@ -245,15 +262,24 @@ public class PreviewService {
                                         rawImports, imports,
                                         rawExports, exports,
                                         rawUnitCost, unitCost,
-                                        bankCode, processedRecordsInUpload);
+                                        bankCode,
+                                        customerAddress,
+                                        mobileNo,
+                                        bankAccountNo,
+                                        branchCode,
+                                        billingMode,
+                                        agreementDate,
+                                        panelCapacity,
+                                        solarType,
+                                        processedRecordsInUpload);
 
                         // Track duplicates within this upload
                         if (fromDate != null && accountNo != null && !accountNo.isEmpty()) {
                             processedRecordsInUpload.add(accountNo + "|" + fromDate.getYear() + "|" + fromDate.getMonthValue());
                         }
 
-                        String status = rowResult.hasErrors()    ? "INVALID"
-                                      : rowResult.hasDuplicate() ? "DUPLICATE"
+                        String status = rowResult.hasDuplicate() ? "DUPLICATE"
+                                      : rowResult.hasErrors()    ? "INVALID"
                                       : rowResult.hasWarnings()  ? "WARNING"
                                       : "VALID";
 
@@ -272,6 +298,22 @@ public class PreviewService {
                         rowData.put("validationStatus", status);
                         rowData.put("errors", errMsgs);
 
+                        if ("DUPLICATE".equals(status) && fromDate != null && accountNo != null && !accountNo.isEmpty()) {
+                            List<com.ceb.billing.entities.BillingRecord> dbRecords =
+                                    billingRecordRepository.findByCustomerAccountNoAndFromDateYearAndMonth(accountNo, fromDate.getYear(), fromDate.getMonthValue());
+                            if (dbRecords != null && !dbRecords.isEmpty()) {
+                                com.ceb.billing.entities.BillingRecord firstDb = dbRecords.get(0);
+                                Map<String, Object> dbRecordMap = new HashMap<>();
+                                dbRecordMap.put("customerName", firstDb.getCustomer() != null ? firstDb.getCustomer().getCustomerName() : "");
+                                dbRecordMap.put("fromDate", firstDb.getFromDate() != null ? firstDb.getFromDate().toString() : "");
+                                dbRecordMap.put("toDate", firstDb.getToDate() != null ? firstDb.getToDate().toString() : "");
+                                dbRecordMap.put("imports", firstDb.getImportUnits());
+                                dbRecordMap.put("exports", firstDb.getExportUnits());
+                                dbRecordMap.put("unitCost", firstDb.getUnitCost());
+                                rowData.put("dbRecord", dbRecordMap);
+                            }
+                        }
+
                         if (rowResult.hasErrors())    { sheetErrors++;     errorCount++;     }
                         if (rowResult.hasWarnings())  { sheetWarnings++;   warningCount++;   }
                         if (rowResult.hasDuplicate()) { sheetDuplicates++; duplicateCount++; }
@@ -283,12 +325,48 @@ public class PreviewService {
                             continue; // Skip summation / footer rows
                         }
                         String customerName = getVal(row, colIndices.get("customername"));
-                        String status = (accountNo == null || accountNo.isEmpty()) ? "INVALID" : "VALID";
+
+                        String customerAddress = getVal(row, colIndices.get("customeraddress"));
+                        String mobileNo        = getVal(row, colIndices.get("mobileno"));
+                        String bankCode        = getVal(row, colIndices.get("bankcode"));
+                        String branchCode      = getVal(row, colIndices.get("branchcode"));
+                        String bankAccountNo   = getVal(row, colIndices.get("bankaccountno"));
+                        String agreementDate   = getDateVal(row, colIndices.get("agreementdate"));
+                        String rawPanelCapacity = getVal(row, colIndices.get("panelcapacity"));
+                        Double panelCapacity   = parseDoubleStr(rawPanelCapacity);
+                        String solarType       = getVal(row, colIndices.get("solartype"));
+
+                        ExcelValidationService.RowValidationResult rowResult =
+                                excelValidationService.validateCustomerRow(
+                                        sheetName, r + 1,
+                                        accountNo,
+                                        customerName,
+                                        customerAddress,
+                                        mobileNo,
+                                        bankCode,
+                                        branchCode,
+                                        bankAccountNo,
+                                        agreementDate,
+                                        panelCapacity,
+                                        solarType);
+
+                        String status = rowResult.hasErrors()    ? "INVALID"
+                                      : rowResult.hasDuplicate() ? "DUPLICATE"
+                                      : rowResult.hasWarnings()  ? "WARNING"
+                                      : "VALID";
+
+                        List<String> errMsgs = new ArrayList<>();
+                        for (ExcelValidationError msg : rowResult.getValidationMessages()) {
+                            errMsgs.add(msg.getErrorMessage());
+                        }
+
                         rowData.put("accountNo",    accountNo    != null ? accountNo    : "");
                         rowData.put("customerName", customerName != null ? customerName : "");
                         rowData.put("validationStatus", status);
-                        rowData.put("errors", new ArrayList<>());
-                        if ("INVALID".equals(status)) { sheetErrors++; errorCount++; }
+                        rowData.put("errors", errMsgs);
+
+                        if (rowResult.hasErrors())    { sheetErrors++;     errorCount++;     }
+                        if (rowResult.hasWarnings())  { sheetWarnings++;   warningCount++;   }
 
                     } else {
                         // ── Unknown sheet — raw data only ──
@@ -335,16 +413,19 @@ public class PreviewService {
         Row headerRow = sheet.getRow(headerRowIdx);
         if (headerRow == null) return colIndices;
 
+        boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && isSubHeaderRow(sheet, headerRowIdx + 1);
+        int lastCellNum = headerRow.getLastCellNum();
+        if (hasSubHeader) {
+            Row subRow = sheet.getRow(headerRowIdx + 1);
+            if (subRow != null && subRow.getLastCellNum() > lastCellNum) {
+                lastCellNum = subRow.getLastCellNum();
+            }
+        }
+
         // Build clean list of actual headers (index -> clean header) to allow duplicate headers
         List<String> colCleanHeaders = new ArrayList<>();
-        for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-            Cell cell = headerRow.getCell(col);
-            String txt = getCellValueAsString(cell);
-            if (txt != null && !txt.trim().isEmpty()) {
-                colCleanHeaders.add(txt.toLowerCase().replaceAll("[^a-z0-9]", ""));
-            } else {
-                colCleanHeaders.add("");
-            }
+        for (int col = 0; col < lastCellNum; col++) {
+            colCleanHeaders.add(getColCleanHeader(sheet, headerRowIdx, hasSubHeader, col));
         }
 
         // Handle duplicate accountno columns mapping (e.g. two columns with "Account No:")
@@ -406,6 +487,78 @@ public class PreviewService {
             }
         }
         return colIndices;
+    }
+
+    public boolean isSubHeaderRow(Sheet sheet, int r) {
+        Row row = sheet.getRow(r);
+        if (row == null) return false;
+        for (int c = 0; c < row.getLastCellNum(); c++) {
+            Cell cell = row.getCell(c);
+            if (cell == null) continue;
+            String val = getCellValueAsString(cell);
+            if (val != null && !val.trim().isEmpty()) {
+                String clean = val.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (clean.equals("from") || clean.equals("to") || clean.equals("imports") || 
+                    clean.equals("exports") || clean.equals("net") || clean.equals("e3131") ||
+                    clean.equals("l5229") || clean.equals("l9001")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public String getMergedCellValue(Sheet sheet, int rowNum, int columnNum) {
+        int numMergedRegions = sheet.getNumMergedRegions();
+        for (int i = 0; i < numMergedRegions; i++) {
+            CellRangeAddress range = sheet.getMergedRegion(i);
+            if (range.isInRange(rowNum, columnNum)) {
+                Row firstRow = sheet.getRow(range.getFirstRow());
+                if (firstRow != null) {
+                    Cell firstCell = firstRow.getCell(range.getFirstColumn());
+                    if (firstCell != null) {
+                        String val = getCellValueAsString(firstCell);
+                        return val != null ? val : "";
+                    }
+                }
+            }
+        }
+        Row row = sheet.getRow(rowNum);
+        if (row != null) {
+            Cell cell = row.getCell(columnNum);
+            if (cell != null) {
+                String val = getCellValueAsString(cell);
+                return val != null ? val : "";
+            }
+        }
+        return "";
+    }
+
+    public String getColCleanHeader(Sheet sheet, int headerRowIdx, boolean hasSubHeader, int col) {
+        String mainText = getMergedCellValue(sheet, headerRowIdx, col);
+        if (mainText == null) mainText = "";
+        String cleanMain = mainText.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (!hasSubHeader) {
+            return cleanMain;
+        }
+        String subText = getMergedCellValue(sheet, headerRowIdx + 1, col);
+        if (subText == null) subText = "";
+        String cleanSub = subText.toLowerCase().replaceAll("[^a-z0-9]", "");
+        if (cleanSub.isEmpty()) {
+            return cleanMain;
+        }
+        for (List<String> aliases : FIELD_ALIASES.values()) {
+            for (String alias : aliases) {
+                String cleanAlias = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (cleanSub.equals(cleanAlias)) {
+                    return cleanSub;
+                }
+            }
+        }
+        if (cleanSub.equals("e3131") || cleanSub.equals("l5229") || cleanSub.equals("l9001")) {
+            return cleanSub;
+        }
+        return cleanMain.isEmpty() ? cleanSub : cleanMain + "_" + cleanSub;
     }
 
     private boolean isSubstringMatch(String fieldName, String cleanActual) {

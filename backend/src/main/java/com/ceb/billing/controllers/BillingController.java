@@ -10,6 +10,7 @@ import com.ceb.billing.repositories.ApprovalRequestRepository;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
 import com.ceb.billing.repositories.CustomerRepository;
+import com.ceb.billing.repositories.ImportAuditLogRepository;
 import com.ceb.billing.entities.Customer;
 import com.ceb.billing.services.ExcelParsingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +27,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Objects;
+import java.time.LocalDate;
+import org.springframework.transaction.annotation.Transactional;
 
 @RestController
 @RequestMapping
@@ -45,6 +49,9 @@ public class BillingController {
 
     @Autowired
     private CustomerRepository customerRepository;
+
+    @Autowired
+    private ImportAuditLogRepository importAuditLogRepository;
 
     @Autowired
     private com.ceb.billing.services.AuditLogService auditLogService;
@@ -78,6 +85,7 @@ public class BillingController {
 
     @DeleteMapping("/api/officer/billing/uploads/{uploadId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @Transactional
     public ResponseEntity<?> deleteUploadHistory(@PathVariable long uploadId) {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(uploadId);
         if (optHistory.isEmpty()) {
@@ -94,6 +102,13 @@ public class BillingController {
 
         // Delete all billing records linked to this upload first
         billingRecordRepository.deleteByUploadHistoryId(uploadId);
+
+        // Delete associated audit log if exists
+        try {
+            importAuditLogRepository.deleteByUploadHistoryId(uploadId);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
 
         // Delete newly created customers if they have no other billing records
         for (Customer customer : createdCustomers) {
@@ -221,5 +236,151 @@ public class BillingController {
         map.put("unitCost", record.getUnitCost());
         map.put("billingMode", record.getBillingMode());
         return map;
+    }
+
+    @PostMapping("/api/admin/billing")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> adminCreateBillingRecord(@RequestBody Map<String, Object> payload) {
+        try {
+            String accountNo = (String) payload.get("accountNo");
+            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            if (optCustomer.isEmpty()) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Customer account not found: " + accountNo));
+            }
+            BillingRecord record = new BillingRecord();
+            record.setCustomer(optCustomer.get());
+            mapBillingRecordFields(record, payload);
+            billingRecordRepository.save(record);
+            
+            String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+            auditLogService.log("BILLING_CREATE", "Admin " + actor + " manually created billing record ID: " + record.getBillingId() + " for customer " + accountNo);
+            return ResponseEntity.ok(record);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to create billing record: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/api/officer/billing")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> officerCreateBillingRecord(@RequestBody Map<String, Object> payload) {
+        try {
+            String accountNo = (String) payload.get("accountNo");
+            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            if (optCustomer.isEmpty()) {
+                return ResponseEntity.badRequest().body(new MessageResponse("Customer account not found: " + accountNo));
+            }
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            
+            String newJson = objectMapper.writeValueAsString(payload);
+            ApprovalRequest request = new ApprovalRequest(
+                    null,
+                    accountNo,
+                    username,
+                    "{}",
+                    newJson,
+                    "PENDING",
+                    "CREATE",
+                    "BILLING"
+            );
+            approvalRequestRepository.save(request);
+            auditLogService.log("BILLING_CREATE_REQUEST", "Officer " + username + " submitted manual billing creation request for customer " + accountNo);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("requestId", request.getRequestId());
+            response.put("status", "PENDING");
+            response.put("message", "Manual billing creation request queued for approval.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to queue creation request: " + e.getMessage()));
+        }
+    }
+
+    @DeleteMapping("/api/admin/billing/{billingId}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> adminDeleteBillingRecord(@PathVariable long billingId) {
+        Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
+        if (optRecord.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        billingRecordRepository.delete(optRecord.get());
+        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+        auditLogService.log("BILLING_DELETE", "Admin " + actor + " manually deleted billing record ID: " + billingId);
+        return ResponseEntity.ok(new MessageResponse("Billing record deleted successfully."));
+    }
+
+    @DeleteMapping("/api/officer/billing/{billingId}")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> officerDeleteBillingRecord(@PathVariable long billingId) {
+        Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
+        if (optRecord.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        BillingRecord record = optRecord.get();
+        try {
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            
+            Map<String, Object> oldMap = getBillingFieldMap(record);
+            String oldJson = objectMapper.writeValueAsString(oldMap);
+            
+            ApprovalRequest request = new ApprovalRequest(
+                    billingId,
+                    record.getCustomer().getAccountNo(),
+                    username,
+                    oldJson,
+                    "{}",
+                    "PENDING",
+                    "DELETE",
+                    "BILLING"
+            );
+            approvalRequestRepository.save(request);
+            auditLogService.log("BILLING_DELETE_REQUEST", "Officer " + username + " submitted billing deletion request for bill ID " + billingId);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("requestId", request.getRequestId());
+            response.put("status", "PENDING");
+            response.put("message", "Billing deletion request queued for approval.");
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to queue deletion request: " + e.getMessage()));
+        }
+    }
+
+    private void mapBillingRecordFields(BillingRecord record, Map<String, Object> values) {
+        if (values.containsKey("refNo"))
+            record.setRefNo((String) values.get("refNo"));
+        if (values.containsKey("fromDate") && values.get("fromDate") != null) {
+            record.setFromDate(LocalDate.parse((String) values.get("fromDate")));
+        }
+        if (values.containsKey("toDate") && values.get("toDate") != null) {
+            record.setToDate(LocalDate.parse((String) values.get("toDate")));
+        }
+        if (values.containsKey("importUnits") && values.get("importUnits") != null) {
+            record.setImportUnits(Double.valueOf(values.get("importUnits").toString()));
+        }
+        if (values.containsKey("exportUnits") && values.get("exportUnits") != null) {
+            record.setExportUnits(Double.valueOf(values.get("exportUnits").toString()));
+        }
+        if (values.containsKey("unitCost") && values.get("unitCost") != null) {
+            record.setUnitCost(Double.valueOf(values.get("unitCost").toString()));
+        }
+        if (values.containsKey("billingMode"))
+            record.setBillingMode((String) values.get("billingMode"));
+        if (values.containsKey("billCycle") && values.get("billCycle") != null && !values.get("billCycle").toString().isEmpty()) {
+            record.setBillCycle(Integer.valueOf(values.get("billCycle").toString()));
+        }
+        if (values.containsKey("billSetOff") && values.get("billSetOff") != null && !values.get("billSetOff").toString().isEmpty()) {
+            record.setBillSetOff(Double.valueOf(values.get("billSetOff").toString()));
+        }
+        if (values.containsKey("retentionMoney") && values.get("retentionMoney") != null && !values.get("retentionMoney").toString().isEmpty()) {
+            record.setRetentionMoney(Double.valueOf(values.get("retentionMoney").toString()));
+        }
+        if (values.containsKey("payment") && values.get("payment") != null && !values.get("payment").toString().isEmpty()) {
+            record.setPayment(Double.valueOf(values.get("payment").toString()));
+        }
+        record.calculateFields();
     }
 }

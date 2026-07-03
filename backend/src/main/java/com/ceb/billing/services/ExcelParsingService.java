@@ -33,6 +33,9 @@ public class ExcelParsingService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private PreviewService previewService;
+
     // Keywords for detecting the header row index
     private static final Set<String> HEADER_KEYWORDS = new HashSet<>(Arrays.asList(
         "accountno", "accountnumber", "customername", "name", "customeraddress", "address",
@@ -114,60 +117,18 @@ public class ExcelParsingService {
                     continue;
                 }
 
-                // Collect list of columns (index -> cleanHeader) to allow duplicate headers
-                List<String> colCleanHeaders = new ArrayList<>();
-                for (int col = 0; col < headerRow.getLastCellNum(); col++) {
-                    Cell cell = headerRow.getCell(col);
-                    String headerText = getCellValueAsString(cell);
-                    if (headerText != null) {
-                        colCleanHeaders.add(headerText.toLowerCase().replaceAll("[^a-z0-9]", ""));
-                    } else {
-                        colCleanHeaders.add("");
-                    }
-                }
+                // Auto-detect logical column mapping using the detected header row and sub-header row presence
+                Map<String, Integer> colIndices = previewService.autoDetectColumns(sheet, headerRowIdx);
 
-                // Get indices - handle duplicate Account No columns mapping (e.g. two columns with "Account No:")
-                int accountNoCol = -1;
-                Integer bankAccountNoCol = null;
-
-                List<Integer> accountNoIndices = new ArrayList<>();
-                for (int col = 0; col < colCleanHeaders.size(); col++) {
-                    String clean = colCleanHeaders.get(col);
-                    if (clean.equals("accountno") || clean.equals("accountnumber")) {
-                        accountNoIndices.add(col);
-                    }
-                }
-
-                if (!accountNoIndices.isEmpty()) {
-                    accountNoCol = accountNoIndices.get(0);
-                    if (accountNoIndices.size() >= 2) {
-                        bankAccountNoCol = accountNoIndices.get(1);
-                    }
-                }
-
-                if (bankAccountNoCol == null) {
-                    bankAccountNoCol = getHeaderColIndexNullable(colCleanHeaders,
-                            Arrays.asList("bankaccountno", "bankaccountnumber", "bankaccount"));
-                }
-
-                int customerNameCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("customername", "name"));
-                int refNoCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("refno", "referenceno", "referencenumber"));
-                int fromDateCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("fromdate", "startdate", "billperiod", "period"));
-                int toDateCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("todate", "enddate"));
-
-                // Fallback for todate if fromdate is mapped but todate is not
-                if (fromDateCol != -1 && toDateCol == -1) {
-                    if (fromDateCol + 1 < colCleanHeaders.size()) {
-                        String nextClean = colCleanHeaders.get(fromDateCol + 1);
-                        if (nextClean.isEmpty()) {
-                            toDateCol = fromDateCol + 1;
-                        }
-                    }
-                }
-
-                int importsCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("imports", "import", "importunits"));
-                int exportsCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("exports", "export", "exportunits"));
-                int unitCostCol = getHeaderColIndex(colCleanHeaders, Arrays.asList("unitcost", "rate"));
+                int accountNoCol = colIndices.getOrDefault("accountno", -1);
+                Integer bankAccountNoCol = colIndices.get("bankaccountno");
+                int customerNameCol = colIndices.getOrDefault("customername", -1);
+                int refNoCol = colIndices.getOrDefault("refno", -1);
+                int fromDateCol = colIndices.getOrDefault("fromdate", -1);
+                int toDateCol = colIndices.getOrDefault("todate", -1);
+                int importsCol = colIndices.getOrDefault("imports", -1);
+                int exportsCol = colIndices.getOrDefault("exports", -1);
+                int unitCostCol = colIndices.getOrDefault("unitcost", -1);
 
                 // Check required headers (mandatory columns list)
                 List<String> missingHeaders = new ArrayList<>();
@@ -186,25 +147,23 @@ public class ExcelParsingService {
                 }
 
                 // Optional indices
-                Integer bankCodeCol = getHeaderColIndexNullable(colCleanHeaders, Arrays.asList("bankcode"));
-                Integer branchCodeCol = getHeaderColIndexNullable(colCleanHeaders, Arrays.asList("branchcode"));
-                Integer billingModeCol = getHeaderColIndexNullable(colCleanHeaders,
-                        Arrays.asList("expcode", "exportcode", "billingmode", "mode"));
+                Integer bankCodeCol = colIndices.get("bankcode");
+                Integer branchCodeCol = colIndices.get("branchcode");
+                Integer billingModeCol = colIndices.get("billingmode");
 
                 // Extra optional solar details
-                Integer customerAddressCol = getHeaderColIndexNullable(colCleanHeaders,
-                        Arrays.asList("customeraddress", "address"));
-                Integer mobileNoCol = getHeaderColIndexNullable(colCleanHeaders,
-                        Arrays.asList("mobileno", "mobile", "phone"));
-                Integer agreementDateCol = getHeaderColIndexNullable(colCleanHeaders,
-                        Arrays.asList("agreementdate", "agreement"));
-                Integer panelCapacityCol = getHeaderColIndexNullable(colCleanHeaders,
-                        Arrays.asList("panelcapacity", "capacity"));
-                Integer solarTypeCol = getHeaderColIndexNullable(colCleanHeaders, Arrays.asList("solartype", "type"));
+                Integer customerAddressCol = colIndices.get("customeraddress");
+                Integer mobileNoCol = colIndices.get("mobileno");
+                Integer agreementDateCol = colIndices.get("agreementdate");
+                Integer panelCapacityCol = colIndices.get("panelcapacity");
+                Integer solarTypeCol = colIndices.get("solartype");
 
-                // 3. Parse rows starting immediately after the header row
+                boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+                int dataStartRow = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+
+                // 3. Parse rows starting immediately after the header row(s)
                 int lastRowNum = sheet.getLastRowNum();
-                for (int r = headerRowIdx + 1; r <= lastRowNum; r++) {
+                for (int r = dataStartRow; r <= lastRowNum; r++) {
                     Row row = sheet.getRow(r);
                     if (row == null || isRowEmpty(row)) {
                         continue;
@@ -271,6 +230,14 @@ public class ExcelParsingService {
                             rawUnitCost,
                             unitCost,
                             bankCode,
+                            customerAddress,
+                            mobileNo,
+                            bankAccountNo,
+                            branchCode,
+                            billingMode,
+                            agreementDate != null ? agreementDate.toString() : null,
+                            panelCapacity,
+                            solarType,
                             processedRecordsInUpload
                     );
 
@@ -278,13 +245,14 @@ public class ExcelParsingService {
                     errors.addAll(validationResult.getValidationMessages());
 
                     // Determine validation status for staging
+                    // Determine validation status for staging (DUPLICATE status takes precedence over INVALID)
                     String validationStatus = "VALID";
-                    if (validationResult.hasErrors()) {
-                        validationStatus = "INVALID";
-                        invalidRows++;
-                    } else if (validationResult.hasDuplicate()) {
+                    if (validationResult.hasDuplicate()) {
                         validationStatus = "DUPLICATE";
                         duplicateRows++;
+                    } else if (validationResult.hasErrors()) {
+                        validationStatus = "INVALID";
+                        invalidRows++;
                     } else if (validationResult.hasWarnings()) {
                         validationStatus = "WARNING";
                         long rowWarningsCount = 0;

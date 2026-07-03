@@ -10,6 +10,7 @@ import {
   Zap 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import edlLogo from '../assets/edl_logo.jpg';
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
@@ -29,8 +30,8 @@ const Sidebar = () => {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="sidebar-logo-icon">
-          <Zap size={20} fill="currentColor" />
+        <div className="sidebar-logo-icon" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '1.5px solid rgba(255, 255, 255, 0.15)', width: '32px', height: '32px', padding: 0 }}>
+          <img src={edlLogo} alt="EDL Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <div className="sidebar-title">EDL Billing</div>
       </div>

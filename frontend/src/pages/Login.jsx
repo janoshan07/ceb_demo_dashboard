@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import edlLogo from '../assets/edl_logo.jpg';
 
 /* ─── tiny SVG icons (no heavy lib) ─────────────────────────── */
 const IconUser = () => (
@@ -165,15 +166,12 @@ const Login = () => {
           {/* Logo */}
           <div style={{
             width: '88px', height: '88px', borderRadius: '50%',
-            background: 'linear-gradient(145deg, #1e3a8a, #0c2461)',
+            overflow: 'hidden',
             border: '2px solid rgba(96,165,250,0.4)',
             boxShadow: '0 0 40px rgba(37,99,235,0.4), 0 0 80px rgba(37,99,235,0.15), inset 0 1px 0 rgba(255,255,255,0.12)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', zIndex: 1,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#93c5fd' }}>
-              <IconZap />
-              <span style={{ fontSize: '21px', fontWeight: '800', letterSpacing: '0.04em', color: '#e0f2fe', lineHeight: 1 }}>EDL</span>
-            </div>
+            <img src={edlLogo} alt="EDL Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
 
           {/* Left text */}

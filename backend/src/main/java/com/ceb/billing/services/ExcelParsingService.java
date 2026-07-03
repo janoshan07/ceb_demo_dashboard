@@ -287,9 +287,14 @@ public class ExcelParsingService {
                         duplicateRows++;
                     } else if (validationResult.hasWarnings()) {
                         validationStatus = "WARNING";
-                        long rowWarningsCount = validationResult.getValidationMessages().stream()
-                                .filter(ExcelValidationError::isWarning)
-                                .count();
+                        long rowWarningsCount = 0;
+                        if (validationResult.getValidationMessages() != null) {
+                            for (ExcelValidationError error : validationResult.getValidationMessages()) {
+                                if (error != null && error.isWarning()) {
+                                    rowWarningsCount++;
+                                }
+                            }
+                        }
                         warningCount += (int) rowWarningsCount;
                     } else {
                         validRows++;

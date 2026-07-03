@@ -3,7 +3,6 @@ package com.ceb.billing.controllers;
 import com.ceb.billing.entities.*;
 import com.ceb.billing.repositories.*;
 import com.ceb.billing.services.*;
-import com.ceb.billing.models.ExcelValidationError;
 import org.springframework.lang.NonNull;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
@@ -226,9 +225,15 @@ public class ExcelImportValidationController {
         List<String> selectedSheets = (requestBody != null && requestBody.get("selectedSheets") != null)
                 ? (List<String>) requestBody.get("selectedSheets")
                 : null;
-        Set<String> selectedSheetSet = selectedSheets != null
-                ? new HashSet<>(selectedSheets.stream().map(String::trim).collect(java.util.stream.Collectors.toList()))
-                : null;
+        Set<String> selectedSheetSet = null;
+        if (selectedSheets != null) {
+            selectedSheetSet = new HashSet<>();
+            for (String sheet : selectedSheets) {
+                if (sheet != null) {
+                    selectedSheetSet.add(sheet.trim());
+                }
+            }
+        }
 
         @SuppressWarnings("unchecked")
         Map<String, Map<String, Object>> corrections = (requestBody != null && requestBody.get("corrections") != null)

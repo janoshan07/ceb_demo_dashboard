@@ -514,23 +514,88 @@ body {
   pointer-events: none;
 }
 
-.form-input {
+/* Input Fields & Forms Styling System */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  text-align: left;
   width: 100%;
-  padding: 0.75rem 1rem 0.75rem 2.5rem;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  color: var(--text-primary);
-  font-family: var(--font-family);
-  font-size: 0.95rem;
-  transition: var(--transition);
 }
 
-.form-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 10px var(--primary-glow);
+.form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+  display: block;
 }
+
+.login-form-input,
+.form-control,
+.form-input {
+  width: 100%;
+  padding: 0.7rem 0.9rem;
+  background-color: rgba(6, 9, 17, 0.5) !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 10px !important;
+  color: white !important;
+  font-size: 0.88rem !important;
+  font-family: var(--font-family);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.form-input {
+  padding-left: 2.5rem !important; /* Keep icon padding */
+}
+
+.login-form-input:focus,
+.form-control:focus,
+.form-input:focus {
+  outline: none !important;
+  background-color: rgba(6, 9, 17, 0.75) !important;
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 12px var(--primary-glow) !important;
+}
+
+.login-form-input:disabled,
+.form-control:disabled,
+.form-input:disabled {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+  color: var(--text-secondary) !important;
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+}
+
+select.login-form-input,
+select.form-control,
+select.form-input {
+  appearance: none !important;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+  background-repeat: no-repeat !important;
+  background-position: right 0.85rem center !important;
+  background-size: 1rem !important;
+  padding-right: 2.5rem !important;
+  cursor: pointer;
+}
+
+select.login-form-input option,
+select.form-control option,
+select.form-input option {
+  background-color: var(--bg-card) !important;
+  color: white !important;
+  padding: 0.5rem;
+}
+
+.modal-content {
+  background: var(--glass-bg) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), inset 0 0 15px rgba(255, 255, 255, 0.05) !important;
+  border-radius: var(--radius) !important;
+}
+
 
 .password-toggle-btn {
   position: absolute;

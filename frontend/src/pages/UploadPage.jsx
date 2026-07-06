@@ -263,6 +263,9 @@ const UploadPage = () => {
   const [editRowState, setEditRowState] = useState({}); // values of the row currently edited
   const [editErrors, setEditErrors] = useState({}); // client side validation errors
   const [compareTarget, setCompareTarget] = useState(null); // row selected for duplicate comparison
+  const [resolvedConflicts, setResolvedConflicts] = useState({}); // 'accountNo|field': val
+  const [editingMergedAcc, setEditingMergedAcc] = useState(null);
+  const [editMergedState, setEditMergedState] = useState({});
 
   // Template Configurations State
   const [templates, setTemplates] = useState([]);
@@ -296,6 +299,216 @@ const UploadPage = () => {
     } finally {
       setHistoryLoading(false);
     }
+  };
+
+  const propagateMergedField = (accountNo, field, val) => {
+    // 1. Update previewSheets state
+    setPreviewSheets(prev => prev.map(sheet => {
+      if (!sheet.rows) return sheet;
+      return {
+        ...sheet,
+        rows: sheet.rows.map(row => {
+          if (row.accountNo !== accountNo) return row;
+          return {
+            ...row,
+            [field]: val,
+            // Also update rawValues map for rendering extra columns
+            rawValues: {
+              ...(row.rawValues || {}),
+              [field]: val
+            }
+          };
+        })
+      };
+    }));
+
+    // 2. Update localCorrections state
+    setLocalCorrections(prev => {
+      const next = { ...prev };
+      previewSheets.forEach(sheet => {
+        if (!sheet.rows) return;
+        sheet.rows.forEach(row => {
+          if (row.accountNo === accountNo) {
+            const key = `${sheet.sheetName}|${row.rowNum}`;
+            next[key] = {
+              ...(next[key] || {}),
+              [field]: val
+            };
+          }
+        });
+      });
+      return next;
+    });
+  };
+
+  const handleResolveConflict = (accountNo, field, selectedValue) => {
+    setResolvedConflicts(prev => ({
+      ...prev,
+      [`${accountNo}|${field}`]: selectedValue
+    }));
+    propagateMergedField(accountNo, field, selectedValue);
+    showToast(`Resolved conflict for ${field} using: ${selectedValue}`, 'success');
+  };
+
+  const handleSaveMergedEdit = (accountNo) => {
+    Object.entries(editMergedState).forEach(([field, val]) => {
+      setResolvedConflicts(prev => ({
+        ...prev,
+        [`${accountNo}|${field}`]: val
+      }));
+      propagateMergedField(accountNo, field, val);
+    });
+    setEditingMergedAcc(null);
+    showToast(`Successfully updated merged customer profile for Account ${accountNo}`, 'success');
+  };
+
+  const performMergeAndCompare = () => {
+    const billingRows = [];
+    previewSheets.forEach(sheet => {
+      if (sheet.detectedType === 'BILLING' && importSelectedSheets.has(sheet.sheetName)) {
+        if (sheet.rows) {
+          sheet.rows.forEach(r => {
+            const key = `${sheet.sheetName}|${r.rowNum}`;
+            if (duplicateActions[key] !== 'IGNORE') {
+              billingRows.push({ ...r, sheetName: sheet.sheetName });
+            }
+          });
+        }
+      }
+    });
+
+    const profileRows = [];
+    previewSheets.forEach(sheet => {
+      if (sheet.detectedType === 'CUSTOMER_PROFILE' && importSelectedSheets.has(sheet.sheetName)) {
+        if (sheet.rows) {
+          sheet.rows.forEach(r => {
+            const key = `${sheet.sheetName}|${r.rowNum}`;
+            if (duplicateActions[key] !== 'IGNORE') {
+              profileRows.push({ ...r, sheetName: sheet.sheetName });
+            }
+          });
+        }
+      }
+    });
+
+    const mergedMap = new Map();
+
+    billingRows.forEach(row => {
+      const acc = row.accountNo;
+      if (!acc) return;
+      
+      if (!mergedMap.has(acc)) {
+        mergedMap.set(acc, {
+          accountNo: acc,
+          customerName: row.customerName || '',
+          customerAddress: row.customerAddress || '',
+          refNo: row.refNo || '',
+          fromDate: row.fromDate || '',
+          toDate: row.toDate || '',
+          billingCycle: row.billCycle || row.billingCycle || '',
+          imports: row.imports ?? null,
+          exports: row.exports ?? null,
+          unitCost: row.unitCost ?? null,
+          mobileNo: row.mobileNo || '',
+          panelCapacity: row.panelCapacity ?? null,
+          agreementDate: row.agreementDate || '',
+          bankCode: row.bankCode || '',
+          branchCode: row.branchCode || '',
+          bankAccountNo: row.bankAccountNo || '',
+          solarType: row.solarType || '',
+          billingMode: row.billingMode || '',
+          payment: row.payment ?? null,
+          billSetOff: row.billSetOff ?? null,
+          retentionMoney: row.retentionMoney ?? null,
+          errors: [],
+          conflicts: {},
+          billingSource: row.sheetName + " (Row " + row.rowNum + ")",
+          profileSource: ''
+        });
+      }
+    });
+
+    profileRows.forEach(row => {
+      const acc = row.accountNo;
+      if (!acc) return;
+
+      if (!mergedMap.has(acc)) {
+        mergedMap.set(acc, {
+          accountNo: acc,
+          customerName: row.customerName || '',
+          customerAddress: row.customerAddress || '',
+          refNo: row.refNo || '',
+          fromDate: '',
+          toDate: '',
+          billingCycle: '',
+          imports: null,
+          exports: null,
+          unitCost: null,
+          mobileNo: row.mobileNo || '',
+          panelCapacity: row.panelCapacity ?? null,
+          agreementDate: row.agreementDate || '',
+          bankCode: row.bankCode || '',
+          branchCode: row.branchCode || '',
+          bankAccountNo: row.bankAccountNo || '',
+          solarType: row.solarType || '',
+          billingMode: row.billingMode || '',
+          payment: null,
+          billSetOff: null,
+          retentionMoney: null,
+          errors: [],
+          conflicts: {},
+          billingSource: '',
+          profileSource: row.sheetName + " (Row " + row.rowNum + ")"
+        });
+      } else {
+        const existing = mergedMap.get(acc);
+        existing.profileSource = row.sheetName + " (Row " + row.rowNum + ")";
+
+        const fieldsToMerge = [
+          { name: 'customerName', key: 'customerName' },
+          { name: 'customerAddress', key: 'customerAddress' },
+          { name: 'refNo', key: 'refNo' },
+          { name: 'bankCode', key: 'bankCode' },
+          { name: 'branchCode', key: 'branchCode' },
+          { name: 'bankAccountNo', key: 'bankAccountNo' },
+          { name: 'solarType', key: 'solarType' },
+          { name: 'billingMode', key: 'billingMode' },
+          { name: 'mobileNo', key: 'mobileNo' },
+          { name: 'panelCapacity', key: 'panelCapacity' },
+          { name: 'agreementDate', key: 'agreementDate' }
+        ];
+
+        fieldsToMerge.forEach(({ name, key }) => {
+          const valBilling = existing[key];
+          const valProfile = row[key];
+
+          const hasValBilling = valBilling !== undefined && valBilling !== null && valBilling !== '';
+          const hasValProfile = valProfile !== undefined && valProfile !== null && valProfile !== '';
+
+          if (hasValBilling && hasValProfile) {
+            const normB = String(valBilling).trim().toLowerCase();
+            const normP = String(valProfile).trim().toLowerCase();
+
+            if (normB !== normP) {
+              existing.conflicts[name] = {
+                billingValue: valBilling,
+                profileValue: valProfile
+              };
+            }
+          } else if (!hasValBilling && hasValProfile) {
+            existing[key] = valProfile;
+          }
+          
+          const resolveKey = `${acc}|${name}`;
+          if (resolvedConflicts[resolveKey] !== undefined) {
+            existing[key] = resolvedConflicts[resolveKey];
+            delete existing.conflicts[name];
+          }
+        });
+      }
+    });
+
+    return Array.from(mergedMap.values());
   };
 
   // Fetch active configurations templates
@@ -1247,7 +1460,7 @@ const UploadPage = () => {
                       <AlertCircle size={14} />
                       <span>Errors ({totalErrors})</span>
                     </button>
-                    <button
+                     <button
                       type="button"
                       onClick={() => setPreviewTab('duplicates')}
                       className={`btn ${previewTab === 'duplicates' ? 'btn-primary' : 'btn-secondary'}`}
@@ -1264,6 +1477,24 @@ const UploadPage = () => {
                     >
                       <Layers size={14} />
                       <span>Duplicates ({totalDuplicates})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewTab('merge')}
+                      className={`btn ${previewTab === 'merge' ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ 
+                        padding: '0.5rem 1.25rem', 
+                        fontSize: '0.85rem', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '0.5rem',
+                        backgroundColor: previewTab === 'merge' ? 'var(--primary)' : 'transparent',
+                        borderColor: 'var(--border-color)',
+                        color: 'var(--text-secondary)'
+                      }}
+                    >
+                      <Layers size={14} />
+                      <span>Merge &amp; Compare</span>
                     </button>
                   </div>
 
@@ -1945,6 +2176,282 @@ const UploadPage = () => {
                           </div>
                         ))
                       )}
+                    </div>
+                  )}
+
+                  {/* TAB 4: MERGE & COMPARE PANEL */}
+                  {previewTab === 'merge' && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {totalErrors > 0 ? (
+                        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--danger)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem', backgroundColor: 'rgba(239,68,68,0.02)', border: '1px solid rgba(239,68,68,0.2)' }}>
+                          <AlertTriangle size={32} />
+                          <h4 style={{ fontWeight: 600, margin: 0 }}>Resolve Sheet Errors First</h4>
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0, maxWidth: '480px' }}>
+                            You have {totalErrors} unresolved row error(s) remaining on your worksheets. 
+                            Please correct these formatting or structural errors under the <strong>Errors</strong> tab before running the Merge &amp; Compare pipeline.
+                          </p>
+                          <button type="button" className="btn btn-logout" style={{ marginTop: '0.5rem', border: '1px solid var(--border-color)' }} onClick={() => setPreviewTab('errors')}>
+                            Go to Errors Tab
+                          </button>
+                        </div>
+                      ) : (() => {
+                        const mergedRecords = performMergeAndCompare();
+                        const totalConflicts = mergedRecords.reduce((sum, r) => sum + Object.keys(r.conflicts).length, 0);
+
+                        return (
+                          <div className="card" style={{ padding: '1.25rem', border: '1px solid var(--border-color)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '1rem' }}>
+                              <div>
+                                <h4 style={{ fontWeight: 600, margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                  <Layers size={16} className="text-primary" />
+                                  Unified Customer Profiles ({mergedRecords.length} unique customer{mergedRecords.length !== 1 ? 's' : ''})
+                                </h4>
+                                <p style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', margin: '0.2rem 0 0 0' }}>
+                                  Matched and merged Sheet 1 (Billing) and Sheet 2 (Profile) entries. Fill-in blanks completed automatically.
+                                </p>
+                              </div>
+                              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                <span className={`badge ${totalConflicts > 0 ? 'warning' : 'success'}`} style={{ fontSize: '0.7rem' }}>
+                                  {totalConflicts > 0 ? `${totalConflicts} Conflict(s) Pending` : 'All Clean & Merged'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Table of merged items */}
+                            <div style={{ overflowX: 'auto', maxHeight: '450px', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+                              <table className="custom-table" style={{ fontSize: '0.76rem', minWidth: '1300px', borderCollapse: 'collapse' }}>
+                                <thead>
+                                  <tr style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Account No</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Customer Name</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Address</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Ref No</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>From/To Date</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Imports / Exports (kWh)</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Unit Cost / Rate</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Mobile / Solar Details</th>
+                                    <th style={{ padding: '0.45rem 0.6rem' }}>Bank Details</th>
+                                    <th style={{ padding: '0.45rem 0.6rem', width: '220px' }}>Conflict Resolution / Status</th>
+                                    <th style={{ padding: '0.45rem 0.6rem', textAlign: 'center', width: '90px' }}>Action</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {mergedRecords.map((rec) => {
+                                    const hasConflicts = Object.keys(rec.conflicts).length > 0;
+                                    const isEditing = editingMergedAcc === rec.accountNo;
+
+                                    if (isEditing) {
+                                      return (
+                                        <tr key={rec.accountNo} style={{ backgroundColor: 'rgba(59,130,246,0.04)' }}>
+                                          <td colSpan="11" style={{ padding: '1rem' }}>
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                                              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.35rem' }}>
+                                                Editing Merged Profile: Account {rec.accountNo}
+                                              </div>
+                                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Customer Name</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.customerName ?? rec.customerName}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, customerName: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Customer Address</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.customerAddress ?? rec.customerAddress}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, customerAddress: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Mobile Number</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.mobileNo ?? rec.mobileNo}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, mobileNo: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Bank Code</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.bankCode ?? rec.bankCode}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, bankCode: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Branch Code</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.branchCode ?? rec.branchCode}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, branchCode: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Bank Account No</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.bankAccountNo ?? rec.bankAccountNo}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, bankAccountNo: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Solar Type</label>
+                                                  <input
+                                                    type="text"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.solarType ?? rec.solarType}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, solarType: e.target.value }))}
+                                                  />
+                                                </div>
+                                                <div>
+                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem' }}>Panel Capacity</label>
+                                                  <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    className="form-control"
+                                                    style={{ padding: '0.35rem 0.6rem', fontSize: '0.78rem' }}
+                                                    value={editMergedState.panelCapacity ?? rec.panelCapacity ?? ''}
+                                                    onChange={e => setEditMergedState(prev => ({ ...prev, panelCapacity: e.target.value }))}
+                                                  />
+                                                </div>
+                                              </div>
+                                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                                                <button type="button" className="btn btn-secondary" style={{ padding: '0.35rem 1rem', fontSize: '0.78rem' }} onClick={() => setEditingMergedAcc(null)}>Cancel</button>
+                                                <button type="button" className="btn btn-primary" style={{ padding: '0.35rem 1.25rem', fontSize: '0.78rem', backgroundColor: 'var(--success)' }} onClick={() => handleSaveMergedEdit(rec.accountNo)}>Save Changes</button>
+                                              </div>
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      );
+                                    }
+
+                                    return (
+                                      <tr key={rec.accountNo} style={{ backgroundColor: hasConflicts ? 'rgba(245,158,11,0.02)' : 'transparent' }}>
+                                        <td style={{ fontWeight: 600, color: 'var(--primary)', padding: '0.45rem 0.6rem' }}>{rec.accountNo}</td>
+                                        <td style={{ padding: '0.45rem 0.6rem', fontWeight: 500 }}>
+                                          {rec.customerName || '—'}
+                                          {rec.conflicts.customerName && (
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--danger)', marginTop: '0.1rem' }}>Mismatched profile name!</div>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem', color: 'var(--text-secondary)', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {rec.customerAddress || '—'}
+                                          {rec.conflicts.customerAddress && (
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--danger)', marginTop: '0.1rem' }}>Mismatched profile address!</div>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem', color: 'var(--text-secondary)' }}>{rec.refNo || '—'}</td>
+                                        <td style={{ padding: '0.45rem 0.6rem', color: 'var(--text-secondary)' }}>
+                                          {rec.fromDate ? `${rec.fromDate} to ${rec.toDate}` : <span style={{ color: 'var(--text-muted)' }}>No billing dates</span>}
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem' }}>
+                                          {rec.imports !== null ? (
+                                            <div>
+                                              <span style={{ color: '#f59e0b', fontWeight: 600 }}>{rec.imports}</span>
+                                              {' / '}
+                                              <span style={{ color: 'var(--success)', fontWeight: 600 }}>{rec.exports}</span>
+                                            </div>
+                                          ) : '—'}
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem' }}>{rec.unitCost !== null ? `${rec.unitCost} LKR` : '—'}</td>
+                                        <td style={{ padding: '0.45rem 0.6rem', color: 'var(--text-secondary)' }}>
+                                          <div>{rec.mobileNo ? `📞 ${rec.mobileNo}` : ''}</div>
+                                          <div style={{ fontSize: '0.72rem', marginTop: '0.1rem' }}>
+                                            {rec.solarType ? `${rec.solarType} (${rec.panelCapacity ?? 0} kW)` : ''}
+                                            {rec.conflicts.solarType && <span style={{ color: 'var(--danger)', display: 'block' }}>Conflict Solar Type</span>}
+                                            {rec.conflicts.panelCapacity && <span style={{ color: 'var(--danger)', display: 'block' }}>Conflict Capacity</span>}
+                                          </div>
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem', color: 'var(--text-secondary)' }}>
+                                          {rec.bankCode ? `${rec.bankCode} / ${rec.branchCode || '—'} / ${rec.bankAccountNo || '—'}` : '—'}
+                                          {(rec.conflicts.bankCode || rec.conflicts.branchCode || rec.conflicts.bankAccountNo) && (
+                                            <div style={{ fontSize: '0.65rem', color: 'var(--danger)', marginTop: '0.1rem' }}>Conflict in bank fields!</div>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem' }}>
+                                          {hasConflicts ? (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                              {Object.entries(rec.conflicts).map(([field, conf]) => (
+                                                <div key={field} style={{ border: '1px solid rgba(245,158,11,0.2)', padding: '0.3rem', borderRadius: '6px', backgroundColor: 'rgba(245,158,11,0.05)' }}>
+                                                  <div style={{ fontWeight: 600, fontSize: '0.7rem', textTransform: 'capitalize', color: '#f59e0b', marginBottom: '0.2rem' }}>
+                                                    {field.replace(/([A-Z])/g, ' $1')}:
+                                                  </div>
+                                                  <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap' }}>
+                                                    <button
+                                                      type="button"
+                                                      className="btn"
+                                                      style={{ padding: '0.15rem 0.35rem', fontSize: '0.65rem', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '4px' }}
+                                                      onClick={() => handleResolveConflict(rec.accountNo, field, conf.billingValue)}
+                                                      title={`Use billing sheet value: ${conf.billingValue}`}
+                                                    >
+                                                      Use S1: {String(conf.billingValue).substring(0, 15)}{String(conf.billingValue).length > 15 ? '...' : ''}
+                                                    </button>
+                                                    <button
+                                                      type="button"
+                                                      className="btn"
+                                                      style={{ padding: '0.15rem 0.35rem', fontSize: '0.65rem', backgroundColor: '#818cf8', color: 'white', borderRadius: '4px' }}
+                                                      onClick={() => handleResolveConflict(rec.accountNo, field, conf.profileValue)}
+                                                      title={`Use customer profile value: ${conf.profileValue}`}
+                                                    >
+                                                      Use S2: {String(conf.profileValue).substring(0, 15)}{String(conf.profileValue).length > 15 ? '...' : ''}
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <span style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 600 }}>
+                                              <CheckCircle size={13} /> Merged &amp; Ready
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td style={{ padding: '0.45rem 0.6rem', textAlign: 'center' }}>
+                                          <button
+                                            type="button"
+                                            className="btn btn-secondary"
+                                            style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem' }}
+                                            onClick={() => {
+                                              setEditingMergedAcc(rec.accountNo);
+                                              setEditMergedState({
+                                                customerName: rec.customerName,
+                                                customerAddress: rec.customerAddress,
+                                                mobileNo: rec.mobileNo,
+                                                bankCode: rec.bankCode,
+                                                branchCode: rec.branchCode,
+                                                bankAccountNo: rec.bankAccountNo,
+                                                solarType: rec.solarType,
+                                                panelCapacity: rec.panelCapacity
+                                              });
+                                            }}
+                                          >
+                                            Edit
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
 

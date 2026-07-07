@@ -82,7 +82,7 @@ public class ApprovalController {
                 } else if ("DELETE".equals(aType)) {
                     Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
                     if (optCustomer.isPresent()) {
-                        customerRepository.delete(optCustomer.get());
+                        customerRepository.delete(Objects.requireNonNull(optCustomer.get()));
                     }
                     auditLogService.log("CUSTOMER_DELETE_APPROVED",
                             String.format("Admin %s approved customer deletion for %s requested by %s", adminUsername,
@@ -120,7 +120,7 @@ public class ApprovalController {
                 } else if ("DELETE".equals(aType)) {
                     Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
                     if (optBilling.isPresent()) {
-                        billingRecordRepository.delete(optBilling.get());
+                        billingRecordRepository.delete(Objects.requireNonNull(optBilling.get()));
                     }
                     auditLogService.log("BILLING_DELETE_APPROVED",
                             String.format("Admin %s approved billing ID %d deletion requested by %s", adminUsername,

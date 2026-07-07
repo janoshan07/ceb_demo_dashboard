@@ -225,7 +225,7 @@ public class CustomerController {
             if (accountNo == null || accountNo.trim().length() != 10 || !accountNo.trim().matches("\\d+")) {
                 return ResponseEntity.badRequest().body(new MessageResponse("Account number must be a valid 10-digit numeric string."));
             }
-            Optional<Customer> optCustomer = customerRepository.findById(accountNo.trim());
+            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo.trim()));
             if (optCustomer.isPresent()) {
                 return ResponseEntity.badRequest().body(new MessageResponse("Customer account already exists: " + accountNo));
             }
@@ -250,7 +250,7 @@ public class CustomerController {
             if (accountNo == null || accountNo.trim().length() != 10 || !accountNo.trim().matches("\\d+")) {
                 return ResponseEntity.badRequest().body(new MessageResponse("Account number must be a valid 10-digit numeric string."));
             }
-            Optional<Customer> optCustomer = customerRepository.findById(accountNo.trim());
+            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo.trim()));
             if (optCustomer.isPresent()) {
                 return ResponseEntity.badRequest().body(new MessageResponse("Customer account already exists: " + accountNo));
             }
@@ -295,7 +295,7 @@ public class CustomerController {
             return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + accountNo + " because they have " + activeRecordsCount + " active billing records. Delete the billing records first."));
         }
 
-        customerRepository.delete(optCustomer.get());
+        customerRepository.delete(Objects.requireNonNull(optCustomer.get()));
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         auditLogService.log("CUSTOMER_DELETE", "Admin " + actor + " manually deleted customer account: " + accountNo);
         return ResponseEntity.ok(new MessageResponse("Customer account deleted successfully."));

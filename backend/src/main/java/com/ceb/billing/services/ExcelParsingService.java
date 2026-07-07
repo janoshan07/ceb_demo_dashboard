@@ -337,26 +337,6 @@ public class ExcelParsingService {
     }
 
 
-    private int getHeaderColIndex(List<String> colCleanHeaders, List<String> matchOptions) {
-        for (String option : matchOptions) {
-            int idx = colCleanHeaders.indexOf(option);
-            if (idx != -1) {
-                return idx;
-            }
-        }
-        return -1;
-    }
-
-    private Integer getHeaderColIndexNullable(List<String> colCleanHeaders, List<String> matchOptions) {
-        for (String option : matchOptions) {
-            int idx = colCleanHeaders.indexOf(option);
-            if (idx != -1) {
-                return idx;
-            }
-        }
-        return null;
-    }
-
     private String getCellValueAsString(Cell cell) {
         if (cell == null)
             return null;

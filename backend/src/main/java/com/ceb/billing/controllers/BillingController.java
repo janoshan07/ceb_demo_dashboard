@@ -304,7 +304,7 @@ public class BillingController {
         if (optRecord.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        billingRecordRepository.delete(optRecord.get());
+        billingRecordRepository.delete(Objects.requireNonNull(optRecord.get()));
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         auditLogService.log("BILLING_DELETE", "Admin " + actor + " manually deleted billing record ID: " + billingId);
         return ResponseEntity.ok(new MessageResponse("Billing record deleted successfully."));

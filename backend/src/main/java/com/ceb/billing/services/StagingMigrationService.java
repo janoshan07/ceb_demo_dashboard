@@ -8,6 +8,9 @@ import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
 import com.ceb.billing.repositories.BillingUploadStagingRepository;
+import com.ceb.billing.repositories.CostCodeRepository;
+import com.ceb.billing.repositories.NetTypeRepository;
+import com.ceb.billing.repositories.ExpenseCodeRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +44,15 @@ public class StagingMigrationService {
     @Autowired
     private AlertService alertService;
 
+    @Autowired
+    private CostCodeRepository costCodeRepository;
+
+    @Autowired
+    private NetTypeRepository netTypeRepository;
+
+    @Autowired
+    private ExpenseCodeRepository expenseCodeRepository;
+
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
@@ -55,6 +67,7 @@ public class StagingMigrationService {
         int invalidCount = 0;
         int duplicateCount = 0;
         int skippedCount = 0;
+        int successfulRows = 0;
         Set<String> impactedAccounts = new HashSet<>();
 
         for (BillingUploadStaging record : stagingRecords) {
@@ -85,6 +98,11 @@ public class StagingMigrationService {
             Double panelCapacity = data.get("panelCapacity") != null
                     ? Double.valueOf(data.get("panelCapacity").toString()) : null;
             String solarType   = (String) data.get("solarType");
+            String costCode    = (String) data.get("costCode");
+            String refNo       = (String) data.get("refNo");
+            Double unitRate    = data.get("unitRate") != null ? Double.valueOf(data.get("unitRate").toString()) : null;
+            String tariffType  = (String) data.get("tariffType");
+            String billingMode = (String) data.get("billingMode");
 
             if (accountNo == null || accountNo.trim().isEmpty()) {
                 skippedCount++;
@@ -99,6 +117,34 @@ public class StagingMigrationService {
                 customer = new Customer(accountNo, customerName, customerAddress, mobileNo,
                         agreementDate, panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
                 customer.setCreatedByUploadId(batchId); // Tag creation upload reference
+
+                if (isNotBlank(costCode)) {
+                    customer.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                }
+                if (isNotBlank(solarType)) {
+                    customer.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                }
+                if (isNotBlank(billingMode)) {
+                    String cleanEc = billingMode.trim();
+                    customer.setExpenseCode(expenseCodeRepository.findByExpCode(cleanEc)
+                        .orElseGet(() -> {
+                            try {
+                                return expenseCodeRepository.findById(Long.valueOf(cleanEc)).orElse(null);
+                            } catch (Exception ignored) {
+                                return null;
+                            }
+                        }));
+                }
+                if (isNotBlank(refNo)) {
+                    customer.setRefNo(refNo);
+                }
+                if (unitRate != null) {
+                    customer.setUnitRate(unitRate);
+                }
+                if (isNotBlank(tariffType)) {
+                    customer.setTariffType(tariffType);
+                }
+
                 customerRepository.save(Objects.requireNonNull(customer));
                 newCustomers++;
             } else {
@@ -122,16 +168,45 @@ public class StagingMigrationService {
                     customer.setPanelCapacity(panelCapacity);
                 if (isNotBlank(solarType) && isBlank(customer.getSolarType()))
                     customer.setSolarType(solarType);
+
+                if (isNotBlank(costCode) && customer.getCostCode() == null) {
+                    customer.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                }
+                if (isNotBlank(solarType) && customer.getNetType() == null) {
+                    customer.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                }
+                if (isNotBlank(billingMode) && customer.getExpenseCode() == null) {
+                    String cleanEc = billingMode.trim();
+                    customer.setExpenseCode(expenseCodeRepository.findByExpCode(cleanEc)
+                        .orElseGet(() -> {
+                            try {
+                                return expenseCodeRepository.findById(Long.valueOf(cleanEc)).orElse(null);
+                            } catch (Exception ignored) {
+                                return null;
+                            }
+                        }));
+                }
+                if (isNotBlank(refNo) && isBlank(customer.getRefNo())) {
+                    customer.setRefNo(refNo);
+                }
+                if (unitRate != null && customer.getUnitRate() == null) {
+                    customer.setUnitRate(unitRate);
+                }
+                if (isNotBlank(tariffType) && isBlank(customer.getTariffType())) {
+                    customer.setTariffType(tariffType);
+                }
+
                 customerRepository.save(Objects.requireNonNull(customer));
             }
 
             // ── CUSTOMER_PROFILE rows: no billing record to create ────────
             if ("CUSTOMER_PROFILE".equals(record.getRowType())) {
+                successfulRows++;
                 continue;
             }
 
             // ── BILLING rows: parse billing-specific fields ───────────────
-            String refNo   = (String) data.get("refNo");
+            refNo = (String) data.get("refNo");
             LocalDate fromDate = data.get("fromDate") != null
                     ? safeParseDate((String) data.get("fromDate")) : null;
             LocalDate toDate = data.get("toDate") != null
@@ -142,7 +217,7 @@ public class StagingMigrationService {
                     ? Double.valueOf(data.get("exportUnits").toString()) : 0.0;
             Double unitCost = data.get("unitCost") != null
                     ? Double.valueOf(data.get("unitCost").toString()) : 0.0;
-            String billingMode = (String) data.get("billingMode");
+            billingMode = (String) data.get("billingMode");
 
             // Guard: skip if dates are missing (DB constraint: fromDate NOT NULL)
             if (fromDate == null || toDate == null) {
@@ -170,12 +245,13 @@ public class StagingMigrationService {
                     importUnits, exportUnits, unitCost, billingMode, batchId);
             billingRecordRepository.save(Objects.requireNonNull(billingRecord));
             billingInserted++;
+            successfulRows++;
         }
 
         // ── Determine final status ────────────────────────────────────────
         String finalStatus;
-        if (billingInserted == 0 && newCustomers == 0) {
-            finalStatus = (invalidCount > 0 || duplicateCount > 0) ? "FAILED" : "SUCCESS";
+        if (successfulRows == 0) {
+            finalStatus = (invalidCount > 0 || duplicateCount > 0 || skippedCount > 0) ? "FAILED" : "SUCCESS";
         } else if (invalidCount > 0 || duplicateCount > 0 || skippedCount > 0) {
             finalStatus = "COMPLETED_WITH_ERRORS";
         } else {
@@ -185,6 +261,8 @@ public class StagingMigrationService {
         history.setStatus(finalStatus);
         history.setNewCustomers(newCustomers);
         history.setBillingInserted(billingInserted);
+        history.setRowsProcessed(successfulRows + invalidCount + duplicateCount + skippedCount);
+        history.setErrorsCount(invalidCount);
         uploadHistoryRepository.save(Objects.requireNonNull(history));
 
         // Delete staging rows for this batch

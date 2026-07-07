@@ -45,6 +45,27 @@ public class Customer {
     @Column(name = "created_by_upload_id")
     private Long createdByUploadId;
 
+    @Column(name = "ref_no", length = 100)
+    private String refNo;
+
+    @Column(name = "unit_rate")
+    private Double unitRate;
+
+    @Column(name = "tariff_type", length = 100)
+    private String tariffType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cost_code_id")
+    private CostCode costCode;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "net_type_id")
+    private NetType netType;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "expense_code_id")
+    private ExpenseCode expenseCode;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -185,5 +206,53 @@ public class Customer {
 
     public void setCreatedByUploadId(Long createdByUploadId) {
         this.createdByUploadId = createdByUploadId;
+    }
+
+    public String getRefNo() {
+        return refNo;
+    }
+
+    public void setRefNo(String refNo) {
+        this.refNo = refNo;
+    }
+
+    public Double getUnitRate() {
+        return unitRate;
+    }
+
+    public void setUnitRate(Double unitRate) {
+        this.unitRate = unitRate;
+    }
+
+    public String getTariffType() {
+        return tariffType;
+    }
+
+    public void setTariffType(String tariffType) {
+        this.tariffType = tariffType;
+    }
+
+    public CostCode getCostCode() {
+        return costCode;
+    }
+
+    public void setCostCode(CostCode costCode) {
+        this.costCode = costCode;
+    }
+
+    public NetType getNetType() {
+        return netType;
+    }
+
+    public void setNetType(NetType netType) {
+        this.netType = netType;
+    }
+
+    public ExpenseCode getExpenseCode() {
+        return expenseCode;
+    }
+
+    public void setExpenseCode(ExpenseCode expenseCode) {
+        this.expenseCode = expenseCode;
     }
 }

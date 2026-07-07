@@ -331,6 +331,8 @@ public class ExcelImportValidationController {
                             String agreementDate   = getDateStr(row, colIndices.get("agreementdate"));
                             Double panelCapacity   = parseDoubleVal(row, colIndices.get("panelcapacity"));
                             String solarType       = normalize(getVal(row, colIndices.get("solartype")));
+                            String costCode        = normalize(getVal(row, colIndices.get("costcode")));
+                            String billingMode     = normalize(getVal(row, colIndices.get("billingmode")));
 
                             // Validate original row (before any corrections)
                             ExcelValidationService.RowValidationResult origValResult =
@@ -338,7 +340,7 @@ public class ExcelImportValidationController {
                                             currentSheetName, r + 1,
                                             accountNo, customerName,
                                             customerAddress, mobileNo, bankCode, branchCode, bankAccountNo,
-                                            agreementDate, panelCapacity, solarType);
+                                            agreementDate, panelCapacity, solarType, costCode, billingMode);
 
                             if (origValResult.hasErrors() || origValResult.hasWarnings()) {
                                 Map<String, Object> errItem = new HashMap<>();
@@ -412,7 +414,7 @@ public class ExcelImportValidationController {
                             try { if (origRawToDate != null && !origRawToDate.isEmpty()) origToDate = LocalDate.parse(origRawToDate); } catch (Exception ignored) {}
                             
                             ExcelValidationService.RowValidationResult origVal = excelValidationService.validateRow(
-                                    currentSheetName, r + 1, accountNo, customerName,
+                                    currentSheetName, r + 1, "BILLING", accountNo, customerName,
                                     origRawFromDate != null ? origRawFromDate : "", origFromDate,
                                     origRawToDate != null ? origRawToDate : "", origToDate,
                                     origImportUnits != null ? origImportUnits.toString() : "", origImportUnits,
@@ -502,7 +504,9 @@ public class ExcelImportValidationController {
                                 (String) profile.get("bankAccountNo"),
                                 (String) profile.get("agreementDate"),
                                 profile.get("panelCapacity") != null ? Double.valueOf(profile.get("panelCapacity").toString()) : null,
-                                (String) profile.get("solarType"));
+                                (String) profile.get("solarType"),
+                                (String) profile.get("costCode"),
+                                (String) profile.get("billingMode"));
 
                 String rowStatus = valResult.hasErrors() ? "INVALID"
                         : valResult.hasWarnings() ? "WARNING" : "VALID";
@@ -570,6 +574,7 @@ public class ExcelImportValidationController {
                 ExcelValidationService.RowValidationResult validationResult = excelValidationService.validateRow(
                         sheetName != null ? sheetName : "Import",
                         rowNum != null ? rowNum : (insertedStaging + 2),
+                        "BILLING",
                         accountNo,
                         customerName,
                         rawFromDate  != null ? rawFromDate : "",
@@ -878,7 +883,7 @@ public class ExcelImportValidationController {
         if (str == null || str.trim().isEmpty()) return null;
         String trimmed = str.trim();
         String[] patterns = {"yyyy-MM-dd", "M/d/yyyy", "d/M/yyyy", "MM/dd/yyyy", "dd/MM/yyyy",
-                             "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd"};
+                             "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd", "yyyy.MM.dd", "dd.MM.yyyy", "MM.dd.yyyy", "yyyy.M.d", "d.M.yyyy"};
         for (String pattern : patterns) {
             try {
                 LocalDate ld = LocalDate.parse(trimmed, DateTimeFormatter.ofPattern(pattern));

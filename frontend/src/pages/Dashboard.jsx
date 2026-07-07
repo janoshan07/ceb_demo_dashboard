@@ -738,7 +738,7 @@ const Dashboard = () => {
                           <span className={`badge ${
                             upload.status === 'SUCCESS' ? 'success' : 
                             upload.status === 'PENDING_APPROVAL' ? 'warning' :
-                            upload.status === 'COMPLETED_WITH_ERRORS' ? 'warning' : 'danger'
+                            upload.status === 'COMPLETED_WITH_ERRORS' || upload.status === 'PARTIAL_SUCCESS' ? 'warning' : 'danger'
                           }`}>
                             {upload.status.replaceAll('_', ' ')}
                           </span>

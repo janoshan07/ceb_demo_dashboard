@@ -31,7 +31,7 @@ public class PreviewService {
         FIELD_ALIASES.put("accountno",      Arrays.asList("accountno", "accountnumber", "account_no", "acc_no", "accno", "account", "acctno"));
         FIELD_ALIASES.put("customername",   Arrays.asList("customername", "name", "customer_name", "cust_name", "clientname", "consumername"));
         FIELD_ALIASES.put("customeraddress",Arrays.asList("customeraddress", "address", "customer_address", "cust_address", "addr"));
-        FIELD_ALIASES.put("mobileno",       Arrays.asList("mobileno", "mobile", "phone", "contact", "mobile_no", "tel", "phoneno"));
+        FIELD_ALIASES.put("mobileno",       Arrays.asList("mobileno", "mobile", "phone", "contact", "mobile_no", "tel", "phoneno", "mobilenumber", "mobile_number", "mobnum"));
         FIELD_ALIASES.put("refno",          Arrays.asList("refno", "ref_no", "referenceno", "referencenumber", "reference", "billno", "invoiceno", "refnum"));
         FIELD_ALIASES.put("fromdate",       Arrays.asList("fromdate", "from_date", "startdate", "start_date", "billingfrom", "datefrom", "period_from", "from", "billperiod", "period"));
         FIELD_ALIASES.put("todate",         Arrays.asList("todate", "to_date", "enddate", "end_date", "billingto", "dateto", "period_to", "to"));
@@ -39,13 +39,14 @@ public class PreviewService {
         FIELD_ALIASES.put("exports",        Arrays.asList("exports", "export", "exportunits", "export_units", "kwhout", "units_export", "solar_export", "exportkwh", "exportunit"));
         FIELD_ALIASES.put("unitcost",       Arrays.asList("unitcost", "unit_cost", "rate", "cost", "tariff", "price_per_unit", "unitrate", "perunit"));
         FIELD_ALIASES.put("totalamount",    Arrays.asList("totalamount", "total_amount", "total", "amount", "bill_amount", "billamount", "netamount"));
-        FIELD_ALIASES.put("billingmode",    Arrays.asList("billingmode", "billing_mode", "expcode", "exportcode", "mode", "type_billing"));
+        FIELD_ALIASES.put("billingmode",    Arrays.asList("billingmode", "billing_mode", "expcode", "exportcode", "mode", "type_billing", "fixedvariable", "fixed_variable", "fixed/variable"));
+        FIELD_ALIASES.put("costcode",       Arrays.asList("costcode", "cost_code", "costcode_id"));
         FIELD_ALIASES.put("bankcode",       Arrays.asList("bankcode", "bank_code", "bank", "bankname"));
         FIELD_ALIASES.put("branchcode",     Arrays.asList("branchcode", "branch_code", "branch", "branchname"));
         FIELD_ALIASES.put("bankaccountno",  Arrays.asList("bankaccountno", "bankaccount", "bank_account_no", "bank_acc", "accountnumber_bank"));
         FIELD_ALIASES.put("agreementdate",  Arrays.asList("agreementdate", "agreement_date", "agreement", "contractdate", "installdate"));
         FIELD_ALIASES.put("panelcapacity",  Arrays.asList("panelcapacity", "panel_capacity", "capacity", "kw", "solarcapacity", "panel_kw"));
-        FIELD_ALIASES.put("solartype",      Arrays.asList("solartype", "solar_type", "systemtype", "system_type", "nettype"));
+        FIELD_ALIASES.put("solartype",      Arrays.asList("solartype", "solar_type", "systemtype", "system_type", "nettype", "type"));
     }
 
     // Minimum columns required to classify a sheet
@@ -58,7 +59,7 @@ public class PreviewService {
         "mobileno", "mobile", "phone", "contact", "refno", "referenceno", "fromdate", "startdate", "todate", "enddate",
         "imports", "import", "importunits", "exports", "export", "exportunits", "unitcost", "rate", "totalamount",
         "total", "amount", "billingmode", "expcode", "exportcode", "mode", "bankcode", "branchcode", "bankaccountno",
-        "bankaccount", "agreementdate", "panelcapacity", "capacity", "solartype", "nettype"
+        "bankaccount", "agreementdate", "panelcapacity", "capacity", "solartype", "nettype", "costcode", "cost_code"
     ));
 
     /**
@@ -256,6 +257,7 @@ public class PreviewService {
                         ExcelValidationService.RowValidationResult rowResult =
                                 excelValidationService.validateRow(
                                         sheetName, r + 1,
+                                        detectedType,
                                         accountNo, customerName,
                                         rawFromDate, fromDate,
                                         rawToDate, toDate,
@@ -295,6 +297,15 @@ public class PreviewService {
                         rowData.put("imports",      rawImports   != null ? rawImports   : "");
                         rowData.put("exports",      rawExports   != null ? rawExports   : "");
                         rowData.put("unitCost",     rawUnitCost  != null ? rawUnitCost  : "");
+                        rowData.put("customerAddress", customerAddress != null ? customerAddress : "");
+                        rowData.put("mobileNo",        mobileNo        != null ? mobileNo        : "");
+                        rowData.put("bankCode",        bankCode        != null ? bankCode        : "");
+                        rowData.put("branchCode",      branchCode      != null ? branchCode      : "");
+                        rowData.put("bankAccountNo",   bankAccountNo   != null ? bankAccountNo   : "");
+                        rowData.put("agreementDate",   agreementDate   != null ? agreementDate   : "");
+                        rowData.put("panelCapacity",   panelCapacity   != null ? panelCapacity   : "");
+                        rowData.put("solarType",       solarType       != null ? solarType       : "");
+                        rowData.put("billingMode",     billingMode     != null ? billingMode     : "");
                         rowData.put("validationStatus", status);
                         rowData.put("errors", errMsgs);
 
@@ -335,6 +346,11 @@ public class PreviewService {
                         String rawPanelCapacity = getVal(row, colIndices.get("panelcapacity"));
                         Double panelCapacity   = parseDoubleStr(rawPanelCapacity);
                         String solarType       = getVal(row, colIndices.get("solartype"));
+                        String costCode        = getVal(row, colIndices.get("costcode"));
+                        String billingMode     = getVal(row, colIndices.get("billingmode"));
+                        String refNo           = getVal(row, colIndices.get("refno"));
+                        String rawUnitRate     = getVal(row, colIndices.get("unitcost"));
+                        Double unitRate        = parseDoubleStr(rawUnitRate);
 
                         ExcelValidationService.RowValidationResult rowResult =
                                 excelValidationService.validateCustomerRow(
@@ -348,7 +364,9 @@ public class PreviewService {
                                         bankAccountNo,
                                         agreementDate,
                                         panelCapacity,
-                                        solarType);
+                                        solarType,
+                                        costCode,
+                                        billingMode);
 
                         String status = rowResult.hasErrors()    ? "INVALID"
                                       : rowResult.hasDuplicate() ? "DUPLICATE"
@@ -362,6 +380,18 @@ public class PreviewService {
 
                         rowData.put("accountNo",    accountNo    != null ? accountNo    : "");
                         rowData.put("customerName", customerName != null ? customerName : "");
+                        rowData.put("customerAddress", customerAddress != null ? customerAddress : "");
+                        rowData.put("mobileNo",        mobileNo        != null ? mobileNo        : "");
+                        rowData.put("bankCode",        bankCode        != null ? bankCode        : "");
+                        rowData.put("branchCode",      branchCode      != null ? branchCode      : "");
+                        rowData.put("bankAccountNo",   bankAccountNo   != null ? bankAccountNo   : "");
+                        rowData.put("agreementDate",   agreementDate   != null ? agreementDate   : "");
+                        rowData.put("panelCapacity",   panelCapacity   != null ? panelCapacity   : "");
+                        rowData.put("solarType",       solarType       != null ? solarType       : "");
+                        rowData.put("costCode",        costCode        != null ? costCode        : "");
+                        rowData.put("billingMode",     billingMode     != null ? billingMode     : "");
+                        rowData.put("refNo",           refNo           != null ? refNo           : "");
+                        rowData.put("unitRate",        unitRate        != null ? unitRate        : "");
                         rowData.put("validationStatus", status);
                         rowData.put("errors", errMsgs);
 
@@ -582,7 +612,18 @@ public class PreviewService {
             LocalDate ld = d.toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
             return ld.toString();
         }
-        return getCellValueAsString(cell);
+        String str = getCellValueAsString(cell);
+        if (str == null || str.trim().isEmpty()) return null;
+        String trimmed = str.trim();
+        String[] patterns = {"yyyy-MM-dd", "M/d/yyyy", "d/M/yyyy", "MM/dd/yyyy", "dd/MM/yyyy",
+                             "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd", "yyyy.MM.dd", "dd.MM.yyyy", "MM.dd.yyyy", "yyyy.M.d", "d.M.yyyy"};
+        for (String pattern : patterns) {
+            try {
+                LocalDate ld = LocalDate.parse(trimmed, DateTimeFormatter.ofPattern(pattern));
+                return ld.toString();
+            } catch (Exception ignored) {}
+        }
+        return trimmed;
     }
 
     private LocalDate parseDate(Row row, Integer idx) {
@@ -597,7 +638,7 @@ public class PreviewService {
         if (str == null || str.trim().isEmpty()) return null;
         String trimmed = str.trim();
         String[] patterns = {"yyyy-MM-dd", "M/d/yyyy", "d/M/yyyy", "MM/dd/yyyy",
-                             "dd/MM/yyyy", "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd"};
+                             "dd/MM/yyyy", "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd", "yyyy.MM.dd", "dd.MM.yyyy", "MM.dd.yyyy", "yyyy.M.d", "d.M.yyyy"};
         for (String pattern : patterns) {
             try { return LocalDate.parse(trimmed, DateTimeFormatter.ofPattern(pattern)); }
             catch (Exception ignored) {}

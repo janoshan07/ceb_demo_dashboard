@@ -231,6 +231,174 @@ const CompareDuplicateModal = ({ targetRow, onSelectAction, onCancel }) => {
   );
 };
 
+
+const EditRowModal = ({ isOpen, row, detectedType, editRowState, onChange, editErrors, onSave, onCancel }) => {
+  if (!isOpen || !row) return null;
+
+  const getFieldErrors = (field) => {
+    if (editErrors[field]) return editErrors[field];
+    if (row.errors && Array.isArray(row.errors)) {
+      const match = row.errors.find(err => {
+        const cleanErr = err.toLowerCase();
+        if (field === 'accountNo' && cleanErr.includes('account')) return true;
+        if (field === 'customerName' && cleanErr.includes('customer name')) return true;
+        if (field === 'customerAddress' && cleanErr.includes('address')) return true;
+        if (field === 'mobileNo' && cleanErr.includes('mobile')) return true;
+        if (field === 'bankCode' && cleanErr.includes('bank code')) return true;
+        if (field === 'branchCode' && cleanErr.includes('branch code')) return true;
+        if (field === 'bankAccountNo' && cleanErr.includes('bank account')) return true;
+        if (field === 'fromDate' && cleanErr.includes('from date')) return true;
+        if (field === 'toDate' && cleanErr.includes('to date')) return true;
+        if (field === 'imports' && cleanErr.includes('import')) return true;
+        if (field === 'exports' && cleanErr.includes('export')) return true;
+        if (field === 'unitCost' && cleanErr.includes('unit cost')) return true;
+        if (field === 'billingMode' && (cleanErr.includes('billing mode') || cleanErr.includes('exp. code'))) return true;
+        if (field === 'agreementDate' && cleanErr.includes('agreement date')) return true;
+        if (field === 'panelCapacity' && cleanErr.includes('panel capacity')) return true;
+        if (field === 'solarType' && cleanErr.includes('solar type')) return true;
+        return false;
+      });
+      return match || null;
+    }
+    return null;
+  };
+
+  const renderFormGroup = (label, field, type = 'text', placeholder = '') => {
+    const errorMsg = getFieldErrors(field);
+    const hasError = !!errorMsg;
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '0.75rem' }}>
+        <label style={{ 
+          fontSize: '0.78rem', 
+          fontWeight: 600, 
+          color: hasError ? 'var(--danger)' : 'var(--text-secondary)',
+          display: 'flex',
+          justifyContent: 'space-between'
+        }}>
+          <span>{label}</span>
+          {hasError && <span style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 500 }}>⚠️ Issue</span>}
+        </label>
+        <input
+          type={type}
+          placeholder={placeholder}
+          className="form-control"
+          style={{
+            padding: '0.5rem 0.75rem',
+            fontSize: '0.85rem',
+            borderRadius: '6px',
+            backgroundColor: hasError ? 'rgba(239, 68, 68, 0.03)' : 'var(--bg-primary)',
+            border: `1.5px solid ${hasError ? 'var(--danger)' : 'var(--border-color)'}`,
+            color: 'white',
+            outline: 'none',
+            transition: 'all 0.2s'
+          }}
+          value={editRowState[field] ?? ''}
+          onChange={e => onChange(field, e.target.value)}
+        />
+        {hasError && (
+          <span style={{ fontSize: '0.72rem', color: 'var(--danger)', marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+            <span>· {errorMsg}</span>
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="modal-overlay animate-fade-in" style={{ zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(4px)' }}>
+      <div
+        className="modal-content card animate-fade-in"
+        style={{ maxWidth: 850, width: '92%', maxHeight: '90vh', padding: '1.75rem', display: 'flex', flexDirection: 'column', gap: '1rem', backgroundColor: '#0f172a', border: '1px solid var(--border-color)', borderRadius: '14px', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.6)' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'white' }}>
+              👤 Correct Staging Validation Errors
+            </h3>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+              Modifying row <strong>{row.rowNum}</strong> of sheet <strong>{row.sheetName || 'Staging'}</strong>
+            </div>
+          </div>
+          <button type="button" onClick={onCancel} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.5rem', lineHeight: 1 }}>×</button>
+        </div>
+
+        {/* Validation Errors List Banner */}
+        {row.errors && row.errors.length > 0 && (
+          <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.22)', borderRadius: '8px', padding: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--danger)', fontWeight: 600, fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+              <span>⚠️ Validation Issues Detected:</span>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.78rem', color: 'var(--danger)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              {row.errors.map((err, i) => (
+                <li key={i}>{err}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Scrollable Form Body */}
+        <div style={{ maxHeight: '55vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
+            {/* Column 1: Identity & Customer Profile */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)', borderBottom: '1.5px solid rgba(59, 130, 246, 0.2)', paddingBottom: '0.35rem', marginBottom: '0.75rem' }}>
+                Customer Identity
+              </h4>
+              {renderFormGroup('Account Number', 'accountNo', 'text', 'e.g. 10-digit number')}
+              {renderFormGroup('Customer Name', 'customerName')}
+              {renderFormGroup('Customer Address', 'customerAddress')}
+              {renderFormGroup('Mobile Number', 'mobileNo')}
+
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)', borderBottom: '1.5px solid rgba(59, 130, 246, 0.2)', paddingBottom: '0.35rem', marginTop: '1rem', marginBottom: '0.75rem' }}>
+                Bank Account details
+              </h4>
+              {renderFormGroup('Bank Code', 'bankCode', 'text', 'e.g. BOC, HNB, SAMP')}
+              {renderFormGroup('Branch Code', 'branchCode')}
+              {renderFormGroup('Bank Account Number', 'bankAccountNo')}
+            </div>
+
+            {/* Column 2: Statement Details & Solar System */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)', borderBottom: '1.5px solid rgba(59, 130, 246, 0.2)', paddingBottom: '0.35rem', marginBottom: '0.75rem' }}>
+                Billing &amp; Usage Details
+              </h4>
+              {renderFormGroup('From Date', 'fromDate', 'text', 'YYYY-MM-DD')}
+              {renderFormGroup('To Date', 'toDate', 'text', 'YYYY-MM-DD')}
+              {renderFormGroup('Imports (kWh)', 'imports', 'number')}
+              {renderFormGroup('Exports (kWh)', 'exports', 'number')}
+              {renderFormGroup('Unit Cost (LKR)', 'unitCost', 'number')}
+              {renderFormGroup('Billing Mode (Exp Code)', 'billingMode')}
+
+              <h4 style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)', borderBottom: '1.5px solid rgba(59, 130, 246, 0.2)', paddingBottom: '0.35rem', marginTop: '1rem', marginBottom: '0.75rem' }}>
+                Solar Installation
+              </h4>
+              {renderFormGroup('Solar Type', 'solarType', 'text', 'e.g. Net Plus, Net Metering')}
+              {renderFormGroup('Panel Capacity (kW)', 'panelCapacity', 'number')}
+              {renderFormGroup('Agreement Date', 'agreementDate', 'text', 'YYYY-MM-DD')}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Actions Footer */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+          <button type="button" className="btn btn-secondary" style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }} onClick={onCancel}>
+            Cancel / Close
+          </button>
+          <button
+            type="button"
+            className="btn"
+            style={{ padding: '0.5rem 1.75rem', fontSize: '0.85rem', backgroundColor: 'var(--success)', color: 'white', fontWeight: 600 }}
+            onClick={() => onSave(row.rowNum, row.sheetName)}
+          >
+            Save Changes &amp; Re-validate
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ────────────────────────────────────────────────────────
 //  Main Page Component
 // ────────────────────────────────────────────────────────
@@ -794,8 +962,61 @@ const UploadPage = () => {
     
     // Client-side validation
     const errors = {};
+    
+    // Core details validations (required for all staging types)
     if (!editRowState.accountNo || !editRowState.accountNo.trim()) {
       errors.accountNo = 'Account number is required';
+    } else if (!/^\d{10}$/.test(editRowState.accountNo.trim())) {
+      errors.accountNo = 'Account number must be a valid 10-digit numeric string';
+    }
+
+    if (!editRowState.customerName || !editRowState.customerName.trim()) {
+      errors.customerName = 'Customer name is required';
+    }
+
+    if (!editRowState.customerAddress || !editRowState.customerAddress.trim()) {
+      errors.customerAddress = 'Customer Address is required';
+    }
+
+    if (!editRowState.mobileNo || !editRowState.mobileNo.trim()) {
+      errors.mobileNo = 'Mobile number is required';
+    } else if (!/^\d{9,10}$/.test(editRowState.mobileNo.trim())) {
+      errors.mobileNo = 'Mobile number must be a valid 9 or 10 digit numeric string';
+    }
+
+    if (!editRowState.bankCode || !editRowState.bankCode.trim()) {
+      errors.bankCode = 'Bank Code is required';
+    } else {
+      const validBanks = ['BOC', 'HNB', 'SAMP', 'COM', 'NDB', 'DFCC', 'NTB', 'PABC', 'SEYB', 'CBL', 'MCB', 'HSBC', 'SCB'];
+      if (!validBanks.includes(editRowState.bankCode.trim().toUpperCase())) {
+        errors.bankCode = 'Unrecognized bank code. Standard codes: BOC, HNB, SAMP, COM, etc.';
+      }
+    }
+
+    if (!editRowState.branchCode || !editRowState.branchCode.trim()) {
+      errors.branchCode = 'Branch Code is required';
+    }
+
+    if (!editRowState.bankAccountNo || !editRowState.bankAccountNo.trim()) {
+      errors.bankAccountNo = 'Bank Account number is required';
+    }
+
+    if (!editRowState.billingMode || !editRowState.billingMode.trim()) {
+      errors.billingMode = 'Billing Mode (Exp Code) is required';
+    }
+
+    if (!editRowState.agreementDate || !editRowState.agreementDate.trim()) {
+      errors.agreementDate = 'Agreement Date is required';
+    } else if (!/^\d{4}-\d{2}-\d{2}$/.test(editRowState.agreementDate.trim())) {
+      errors.agreementDate = 'Expected format: YYYY-MM-DD';
+    }
+
+    if (editRowState.panelCapacity === '' || isNaN(editRowState.panelCapacity) || Number(editRowState.panelCapacity) < 0) {
+      errors.panelCapacity = 'Panel Capacity must be a positive number';
+    }
+
+    if (!editRowState.solarType || !editRowState.solarType.trim()) {
+      errors.solarType = 'Solar Type is required';
     }
     
     // Verify sheet type
@@ -803,9 +1024,6 @@ const UploadPage = () => {
     const isBilling = sheet?.detectedType === 'BILLING';
     
     if (isBilling) {
-      if (!editRowState.customerName || !editRowState.customerName.trim()) {
-        errors.customerName = 'Customer name is required';
-      }
       if (!editRowState.fromDate || !editRowState.fromDate.trim()) {
         errors.fromDate = 'From Date is required';
       } else if (!/^\d{4}-\d{2}-\d{2}$/.test(editRowState.fromDate)) {
@@ -824,11 +1042,6 @@ const UploadPage = () => {
       }
       if (editRowState.unitCost === '' || isNaN(editRowState.unitCost) || Number(editRowState.unitCost) < 0) {
         errors.unitCost = 'Unit Cost must be a positive number';
-      }
-    } else {
-      // Customer profile
-      if (!editRowState.customerName || !editRowState.customerName.trim()) {
-        errors.customerName = 'Customer name is required';
       }
     }
 
@@ -1016,6 +1229,28 @@ const UploadPage = () => {
           showToast(`Duplicate action for Row ${row.rowNum} set to ${action === 'IMPORT' ? 'FORCE IMPORT' : 'IGNORE / EXCLUDE'}`, 'success');
         }}
         onCancel={() => setCompareTarget(null)}
+      />
+
+      <EditRowModal
+        isOpen={editingRowKey !== null}
+        row={(() => {
+          if (!editingRowKey) return null;
+          const [sheetName, rowNum] = editingRowKey.split('|');
+          const sheet = previewSheets.find(s => s.sheetName === sheetName);
+          const row = sheet?.rows?.find(r => r.rowNum === parseInt(rowNum));
+          return row ? { ...row, sheetName } : null;
+        })()}
+        detectedType={(() => {
+          if (!editingRowKey) return null;
+          const sheetName = editingRowKey.split('|')[0];
+          const sheet = previewSheets.find(s => s.sheetName === sheetName);
+          return sheet?.detectedType;
+        })()}
+        editRowState={editRowState}
+        onChange={handleEditChange}
+        editErrors={editErrors}
+        onSave={saveEditedRow}
+        onCancel={cancelEditRow}
       />
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1445,7 +1680,7 @@ const UploadPage = () => {
                     <button
                       type="button"
                       onClick={() => setPreviewTab('errors')}
-                      className={`btn ${previewTab === 'errors' ? 'btn-logout' : 'btn-secondary'}`}
+                      className="btn btn-secondary"
                       style={{ 
                         padding: '0.5rem 1.25rem', 
                         fontSize: '0.85rem', 
@@ -1805,224 +2040,11 @@ const UploadPage = () => {
                                     const rowKey = `${sheetName}|${row.rowNum}`;
                                     const isEditing = editingRowKey === rowKey;
 
-                                    if (isEditing) {
-                                      return (
-                                        <tr key={row.rowNum} style={{ backgroundColor: 'rgba(59,130,246,0.04)' }}>
-                                          <td colSpan={detectedType === 'BILLING' ? 10 : 9} style={{ padding: '1rem' }}>
-                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                                              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.35rem', display: 'flex', justifyContent: 'space-between' }}>
-                                                <span>Correcting Row {row.rowNum} Data</span>
-                                                {Object.keys(editErrors).length > 0 && <span style={{ color: 'var(--danger)' }}>({Object.keys(editErrors).length} validation error(s))</span>}
-                                              </div>
-                                              
-                                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Account No</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.accountNo ? 'var(--danger)' : 'var(--border-color)' }}
-                                                    value={editRowState.accountNo}
-                                                    onChange={e => handleEditChange('accountNo', e.target.value)}
-                                                  />
-                                                  {editErrors.accountNo && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.accountNo}</span>}
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Customer Name</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.customerName ? 'var(--danger)' : 'var(--border-color)' }}
-                                                    value={editRowState.customerName}
-                                                    onChange={e => handleEditChange('customerName', e.target.value)}
-                                                  />
-                                                  {editErrors.customerName && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.customerName}</span>}
-                                                </div>
-
-                                                {detectedType === 'BILLING' && (
-                                                  <>
-                                                    <div>
-                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>From Date</label>
-                                                      <input
-                                                        type="text"
-                                                        placeholder="YYYY-MM-DD"
-                                                        className="form-control"
-                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.fromDate ? 'var(--danger)' : 'var(--border-color)' }}
-                                                        value={editRowState.fromDate}
-                                                        onChange={e => handleEditChange('fromDate', e.target.value)}
-                                                      />
-                                                      {editErrors.fromDate && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.fromDate}</span>}
-                                                    </div>
-
-                                                    <div>
-                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>To Date</label>
-                                                      <input
-                                                        type="text"
-                                                        placeholder="YYYY-MM-DD"
-                                                        className="form-control"
-                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.toDate ? 'var(--danger)' : 'var(--border-color)' }}
-                                                        value={editRowState.toDate}
-                                                        onChange={e => handleEditChange('toDate', e.target.value)}
-                                                      />
-                                                      {editErrors.toDate && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.toDate}</span>}
-                                                    </div>
-
-                                                    <div>
-                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Imports (KWh)</label>
-                                                      <input
-                                                        type="text"
-                                                        className="form-control"
-                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.imports ? 'var(--danger)' : 'var(--border-color)' }}
-                                                        value={editRowState.imports}
-                                                        onChange={e => handleEditChange('imports', e.target.value)}
-                                                      />
-                                                      {editErrors.imports && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.imports}</span>}
-                                                    </div>
-
-                                                    <div>
-                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Exports (KWh)</label>
-                                                      <input
-                                                        type="text"
-                                                        className="form-control"
-                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.exports ? 'var(--danger)' : 'var(--border-color)' }}
-                                                        value={editRowState.exports}
-                                                        onChange={e => handleEditChange('exports', e.target.value)}
-                                                      />
-                                                      {editErrors.exports && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.exports}</span>}
-                                                    </div>
-
-                                                    <div>
-                                                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Unit Cost</label>
-                                                      <input
-                                                        type="text"
-                                                        className="form-control"
-                                                        style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem', borderColor: editErrors.unitCost ? 'var(--danger)' : 'var(--border-color)' }}
-                                                        value={editRowState.unitCost}
-                                                        onChange={e => handleEditChange('unitCost', e.target.value)}
-                                                      />
-                                                      {editErrors.unitCost && <span style={{ fontSize: '0.65rem', color: 'var(--danger)' }}>{editErrors.unitCost}</span>}
-                                                    </div>
-                                                  </>
-                                                )}
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Address</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.customerAddress}
-                                                    onChange={e => handleEditChange('customerAddress', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Mobile No</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.mobileNo}
-                                                    onChange={e => handleEditChange('mobileNo', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Billing Mode (Exp Code)</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.billingMode}
-                                                    onChange={e => handleEditChange('billingMode', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Agreement Date</label>
-                                                  <input
-                                                    type="text"
-                                                    placeholder="YYYY-MM-DD"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.agreementDate}
-                                                    onChange={e => handleEditChange('agreementDate', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Panel Capacity (KW)</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.panelCapacity}
-                                                    onChange={e => handleEditChange('panelCapacity', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Solar Type</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.solarType}
-                                                    onChange={e => handleEditChange('solarType', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Bank Code</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.bankCode}
-                                                    onChange={e => handleEditChange('bankCode', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Branch Code</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.branchCode}
-                                                    onChange={e => handleEditChange('branchCode', e.target.value)}
-                                                  />
-                                                </div>
-
-                                                <div>
-                                                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.25rem', fontWeight: 500 }}>Bank Account No</label>
-                                                  <input
-                                                    type="text"
-                                                    className="form-control"
-                                                    style={{ padding: '0.3rem 0.5rem', fontSize: '0.78rem' }}
-                                                    value={editRowState.bankAccountNo}
-                                                    onChange={e => handleEditChange('bankAccountNo', e.target.value)}
-                                                  />
-                                                </div>
-                                              </div>
-                                              
-                                              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                                                <button type="button" className="btn btn-secondary" style={{ padding: '0.35rem 1rem', fontSize: '0.78rem' }} onClick={cancelEditRow}>
-                                                  Cancel
-                                                </button>
-                                                <button type="button" className="btn" style={{ padding: '0.35rem 1.25rem', fontSize: '0.78rem', backgroundColor: 'var(--success)', color: 'white' }} onClick={() => saveEditedRow(row.rowNum, sheetName)}>
-                                                  Save Correction
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      );
-                                    }
-
                                     return (
-                                      <tr key={row.rowNum} style={{ backgroundColor: 'rgba(239,68,68,0.02)' }}>
+                                      <tr key={row.rowNum} style={{ 
+                                        backgroundColor: isEditing ? 'rgba(59,130,246,0.08)' : 'rgba(239,68,68,0.02)',
+                                        outline: isEditing ? '1.5px solid var(--primary)' : 'none'
+                                      }}>
                                         <td style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{row.rowNum}</td>
                                         <td style={{ fontWeight: 600, color: 'var(--danger)' }}>{row.accountNo || '—'}</td>
                                         <td>{row.customerName || '—'}</td>
@@ -2802,7 +2824,7 @@ const UploadPage = () => {
                         className={`badge ${
                           historyItem.status === 'SUCCESS'
                             ? 'success'
-                            : historyItem.status === 'COMPLETED_WITH_ERRORS'
+                            : historyItem.status === 'COMPLETED_WITH_ERRORS' || historyItem.status === 'PARTIAL_SUCCESS'
                             ? 'warning'
                             : 'danger'
                         }`}

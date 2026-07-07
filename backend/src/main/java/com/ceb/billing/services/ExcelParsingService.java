@@ -120,6 +120,17 @@ public class ExcelParsingService {
                 // Auto-detect logical column mapping using the detected header row and sub-header row presence
                 Map<String, Integer> colIndices = previewService.autoDetectColumns(sheet, headerRowIdx);
 
+                boolean hasBillingCols = colIndices.containsKey("accountno") && colIndices.containsKey("fromdate") && colIndices.containsKey("imports") && colIndices.containsKey("exports");
+                boolean hasCustomerCols = !hasBillingCols && colIndices.containsKey("accountno") && colIndices.containsKey("customername");
+                
+                if (!hasBillingCols && !hasCustomerCols) {
+                    errors.add(new ExcelValidationError(sheetName, headerRowIdx + 1, "Headers",
+                            "Unable to identify sheet structure. Sheet must be either a Billing Sheet (containing Account No, From Date, Imports, Exports) or a Customer Profile Sheet (containing Account No, Customer Name)."));
+                    continue;
+                }
+                
+                String detectedType = hasBillingCols ? "BILLING" : "CUSTOMER_PROFILE";
+
                 int accountNoCol = colIndices.getOrDefault("accountno", -1);
                 Integer bankAccountNoCol = colIndices.get("bankaccountno");
                 int customerNameCol = colIndices.getOrDefault("customername", -1);
@@ -134,11 +145,14 @@ public class ExcelParsingService {
                 List<String> missingHeaders = new ArrayList<>();
                 if (accountNoCol == -1) missingHeaders.add("Account No");
                 if (customerNameCol == -1) missingHeaders.add("Customer Name");
-                if (fromDateCol == -1) missingHeaders.add("From Date");
-                if (toDateCol == -1) missingHeaders.add("To Date");
-                if (importsCol == -1) missingHeaders.add("Imports");
-                if (exportsCol == -1) missingHeaders.add("Exports");
-                if (unitCostCol == -1) missingHeaders.add("Unit Cost");
+                
+                if ("BILLING".equals(detectedType)) {
+                    if (fromDateCol == -1) missingHeaders.add("From Date");
+                    if (toDateCol == -1) missingHeaders.add("To Date");
+                    if (importsCol == -1) missingHeaders.add("Imports");
+                    if (exportsCol == -1) missingHeaders.add("Exports");
+                    if (unitCostCol == -1) missingHeaders.add("Unit Cost");
+                }
 
                 if (!missingHeaders.isEmpty()) {
                     errors.add(new ExcelValidationError(sheetName, headerRowIdx + 1, "Headers",
@@ -150,6 +164,8 @@ public class ExcelParsingService {
                 Integer bankCodeCol = colIndices.get("bankcode");
                 Integer branchCodeCol = colIndices.get("branchcode");
                 Integer billingModeCol = colIndices.get("billingmode");
+                Integer costCodeCol = colIndices.get("costcode");
+                Integer tariffTypeCol = colIndices.get("tarifftype");
 
                 // Extra optional solar details
                 Integer customerAddressCol = colIndices.get("customeraddress");
@@ -212,34 +228,58 @@ public class ExcelParsingService {
                             : null;
                     String solarType = solarTypeCol != null ? getCellValueAsString(row.getCell(solarTypeCol))
                             : "Net Plus";
+                    String costCode = costCodeCol != null ? getCellValueAsString(row.getCell(costCodeCol)) : "";
+                    String tariffType = tariffTypeCol != null ? getCellValueAsString(row.getCell(tariffTypeCol)) : "";
+                    Double unitRate = unitCost;
 
                     // Call the ExcelValidationService to validate row data
-                    ExcelValidationService.RowValidationResult validationResult = excelValidationService.validateRow(
-                            sheetName,
-                            r + 1,
-                            accountNo,
-                            customerName,
-                            rawFromDate,
-                            fromDate,
-                            rawToDate,
-                            toDate,
-                            rawImports,
-                            importUnits,
-                            rawExports,
-                            exportUnits,
-                            rawUnitCost,
-                            unitCost,
-                            bankCode,
-                            customerAddress,
-                            mobileNo,
-                            bankAccountNo,
-                            branchCode,
-                            billingMode,
-                            agreementDate != null ? agreementDate.toString() : null,
-                            panelCapacity,
-                            solarType,
-                            processedRecordsInUpload
-                    );
+                    ExcelValidationService.RowValidationResult validationResult;
+                    if ("CUSTOMER_PROFILE".equals(detectedType)) {
+                        validationResult = excelValidationService.validateCustomerRow(
+                                sheetName,
+                                r + 1,
+                                accountNo,
+                                customerName,
+                                customerAddress,
+                                mobileNo,
+                                bankCode,
+                                branchCode,
+                                bankAccountNo,
+                                agreementDate != null ? agreementDate.toString() : null,
+                                panelCapacity,
+                                solarType,
+                                costCode,
+                                billingMode
+                        );
+                    } else {
+                        validationResult = excelValidationService.validateRow(
+                                sheetName,
+                                r + 1,
+                                detectedType,
+                                accountNo,
+                                customerName,
+                                rawFromDate,
+                                fromDate,
+                                rawToDate,
+                                toDate,
+                                rawImports,
+                                importUnits,
+                                rawExports,
+                                exportUnits,
+                                rawUnitCost,
+                                unitCost,
+                                bankCode,
+                                customerAddress,
+                                mobileNo,
+                                bankAccountNo,
+                                branchCode,
+                                billingMode,
+                                agreementDate != null ? agreementDate.toString() : null,
+                                panelCapacity,
+                                solarType,
+                                processedRecordsInUpload
+                        );
+                    }
 
                     // Add all messages (errors, duplicates, warnings) to validation log
                     errors.addAll(validationResult.getValidationMessages());
@@ -298,12 +338,15 @@ public class ExcelParsingService {
                     rowDataMap.put("agreementDate", agreementDate != null ? agreementDate.toString() : null);
                     rowDataMap.put("panelCapacity", panelCapacity);
                     rowDataMap.put("solarType", solarType);
+                    rowDataMap.put("costCode", costCode);
+                    rowDataMap.put("unitRate", unitRate != null ? unitRate : (unitCost != null ? unitCost : null));
+                    rowDataMap.put("tariffType", tariffType);
 
                     String rawJson = objectMapper.writeValueAsString(rowDataMap);
                     String validationErrorsJson = objectMapper.writeValueAsString(validationResult.getValidationMessages());
 
                     // Create staging record
-                    BillingUploadStaging stagingRecord = new BillingUploadStaging(historyId, rawJson, validationStatus, validationErrorsJson);
+                    BillingUploadStaging stagingRecord = new BillingUploadStaging(historyId, rawJson, validationStatus, validationErrorsJson, detectedType);
                     billingUploadStagingRepository.save(stagingRecord);
                 }
             }

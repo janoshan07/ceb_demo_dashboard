@@ -8,6 +8,9 @@ import com.ceb.billing.models.MessageResponse;
 import com.ceb.billing.repositories.ApprovalRequestRepository;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
+import com.ceb.billing.repositories.CostCodeRepository;
+import com.ceb.billing.repositories.NetTypeRepository;
+import com.ceb.billing.repositories.ExpenseCodeRepository;
 import com.ceb.billing.services.AuditLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +45,15 @@ public class CustomerController {
 
     @Autowired
     private AuditLogService auditLogService;
+
+    @Autowired
+    private CostCodeRepository costCodeRepository;
+
+    @Autowired
+    private NetTypeRepository netTypeRepository;
+
+    @Autowired
+    private ExpenseCodeRepository expenseCodeRepository;
 
     // --- Officer Customer Endpoints ---
 
@@ -214,6 +226,15 @@ public class CustomerController {
         map.put("branchCode", customer.getBranchCode());
         map.put("bankAccountNo", customer.getBankAccountNo());
         map.put("solarType", customer.getSolarType());
+        map.put("refNo", customer.getRefNo());
+        map.put("unitRate", customer.getUnitRate());
+        map.put("tariffType", customer.getTariffType());
+        map.put("costCodeId", customer.getCostCode() != null ? customer.getCostCode().getId() : null);
+        map.put("costCode", customer.getCostCode() != null ? customer.getCostCode().getCostCode() : null);
+        map.put("netTypeId", customer.getNetType() != null ? customer.getNetType().getId() : null);
+        map.put("netTypeName", customer.getNetType() != null ? customer.getNetType().getName() : null);
+        map.put("expenseCodeId", customer.getExpenseCode() != null ? customer.getExpenseCode().getId() : null);
+        map.put("expenseCode", customer.getExpenseCode() != null ? customer.getExpenseCode().getExpCode() : null);
         return map;
     }
 
@@ -367,5 +388,38 @@ public class CustomerController {
             customer.setBankAccountNo((String) values.get("bankAccountNo"));
         if (values.containsKey("solarType"))
             customer.setSolarType((String) values.get("solarType"));
+        if (values.containsKey("refNo"))
+            customer.setRefNo((String) values.get("refNo"));
+        if (values.containsKey("unitRate") && values.get("unitRate") != null && !values.get("unitRate").toString().isEmpty())
+            customer.setUnitRate(Double.valueOf(values.get("unitRate").toString()));
+        if (values.containsKey("tariffType"))
+            customer.setTariffType((String) values.get("tariffType"));
+
+        if (values.containsKey("costCodeId") && values.get("costCodeId") != null && !values.get("costCodeId").toString().isEmpty()) {
+            Long ccId = Long.valueOf(values.get("costCodeId").toString());
+            customer.setCostCode(costCodeRepository.findById(ccId).orElse(null));
+        } else if (values.containsKey("costCode") && values.get("costCode") != null && !values.get("costCode").toString().isEmpty()) {
+            String ccCode = values.get("costCode").toString();
+            customer.setCostCode(costCodeRepository.findByCostCode(ccCode).orElse(null));
+        }
+
+        if (values.containsKey("netTypeId") && values.get("netTypeId") != null && !values.get("netTypeId").toString().isEmpty()) {
+            Long ntId = Long.valueOf(values.get("netTypeId").toString());
+            customer.setNetType(netTypeRepository.findById(ntId).orElse(null));
+        } else if (values.containsKey("netTypeName") && values.get("netTypeName") != null && !values.get("netTypeName").toString().isEmpty()) {
+            String ntName = values.get("netTypeName").toString();
+            customer.setNetType(netTypeRepository.findByName(ntName).orElse(null));
+        } else if (values.containsKey("solarType") && values.get("solarType") != null && !values.get("solarType").toString().isEmpty()) {
+            String ntName = values.get("solarType").toString();
+            customer.setNetType(netTypeRepository.findByName(ntName).orElse(null));
+        }
+
+        if (values.containsKey("expenseCodeId") && values.get("expenseCodeId") != null && !values.get("expenseCodeId").toString().isEmpty()) {
+            Long ecId = Long.valueOf(values.get("expenseCodeId").toString());
+            customer.setExpenseCode(expenseCodeRepository.findById(ecId).orElse(null));
+        } else if (values.containsKey("expenseCode") && values.get("expenseCode") != null && !values.get("expenseCode").toString().isEmpty()) {
+            String ecCode = values.get("expenseCode").toString();
+            customer.setExpenseCode(expenseCodeRepository.findByExpCode(ecCode).orElse(null));
+        }
     }
 }

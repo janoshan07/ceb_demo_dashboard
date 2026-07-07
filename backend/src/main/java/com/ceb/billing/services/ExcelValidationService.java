@@ -3,6 +3,9 @@ package com.ceb.billing.services;
 import com.ceb.billing.entities.BillingRecord;
 import com.ceb.billing.models.ExcelValidationError;
 import com.ceb.billing.repositories.BillingRecordRepository;
+import com.ceb.billing.repositories.CostCodeRepository;
+import com.ceb.billing.repositories.NetTypeRepository;
+import com.ceb.billing.repositories.ExpenseCodeRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +18,15 @@ public class ExcelValidationService {
     @Autowired
     private BillingRecordRepository billingRecordRepository;
 
+    @Autowired
+    private CostCodeRepository costCodeRepository;
+
+    @Autowired
+    private NetTypeRepository netTypeRepository;
+
+    @Autowired
+    private ExpenseCodeRepository expenseCodeRepository;
+
     private static final Set<String> VALID_BANK_CODES = new HashSet<>(Arrays.asList(
         "BOC", "HNB", "SAMP", "COM", "COMB", "SEYB", "NTB", "PEOP", "DFCC", "NDB", "NSB", "HSBC", "PABC", "SCB",
         "CGL", "CARG", "SMIB", "RDB", "MCB", "UNI", "AIB", "UNION"
@@ -26,6 +38,7 @@ public class ExcelValidationService {
     public RowValidationResult validateRow(
             String sheetName,
             int rowNum,
+            String rowType,
             String accountNo,
             String customerName,
             String rawFromDate,
@@ -68,47 +81,50 @@ public class ExcelValidationService {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Customer Name", "Customer name is missing or empty", false));
         }
 
-        // From Date check
-        if (rawFromDate == null || rawFromDate.isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "From Date", "From Date is missing or empty", false));
-            hasKeyFieldsErrors = true;
-        } else if (fromDate == null) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "From Date", "Invalid date format for From Date: '" + rawFromDate + "'. Expected format: YYYY-MM-DD", false));
-            hasKeyFieldsErrors = true;
-        }
+        // Only run billing-specific validation if sheet structure is BILLING
+        if ("BILLING".equals(rowType)) {
+            // From Date check
+            if (rawFromDate == null || rawFromDate.isEmpty()) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "From Date", "From Date is missing or empty", false));
+                hasKeyFieldsErrors = true;
+            } else if (fromDate == null) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "From Date", "Invalid date format for From Date: '" + rawFromDate + "'. Expected format: YYYY-MM-DD", false));
+                hasKeyFieldsErrors = true;
+            }
 
-        // To Date check
-        if (rawToDate == null || rawToDate.isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "To Date", "To Date is missing or empty", false));
-        } else if (toDate == null) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "To Date", "Invalid date format for To Date: '" + rawToDate + "'. Expected format: YYYY-MM-DD", false));
-        }
+            // To Date check
+            if (rawToDate == null || rawToDate.isEmpty()) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "To Date", "To Date is missing or empty", false));
+            } else if (toDate == null) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "To Date", "Invalid date format for To Date: '" + rawToDate + "'. Expected format: YYYY-MM-DD", false));
+            }
 
-        // Imports check
-        if (rawImports == null || rawImports.isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units is missing or empty", false));
-        } else if (importUnits == null) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units must be a valid numeric value: '" + rawImports + "'", false));
-        } else if (importUnits < 0) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units cannot be negative: " + importUnits, false));
-        }
+            // Imports check
+            if (rawImports == null || rawImports.isEmpty()) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units is missing or empty", false));
+            } else if (importUnits == null) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units must be a valid numeric value: '" + rawImports + "'", false));
+            } else if (importUnits < 0) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Imports", "Imports units cannot be negative: " + importUnits, false));
+            }
 
-        // Exports check
-        if (rawExports == null || rawExports.isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units is missing or empty", false));
-        } else if (exportUnits == null) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units must be a valid numeric value: '" + rawImports + "'", false));
-        } else if (exportUnits < 0) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units cannot be negative: " + exportUnits, false));
-        }
+            // Exports check
+            if (rawExports == null || rawExports.isEmpty()) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units is missing or empty", false));
+            } else if (exportUnits == null) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units must be a valid numeric value: '" + rawImports + "'", false));
+            } else if (exportUnits < 0) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exports", "Exports units cannot be negative: " + exportUnits, false));
+            }
 
-        // Unit Cost check
-        if (rawUnitCost == null || rawUnitCost.isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost is missing or empty", false));
-        } else if (unitCost == null) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost must be a valid numeric value: '" + rawUnitCost + "'", false));
-        } else if (unitCost < 0) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost cannot be negative: " + unitCost, false));
+            // Unit Cost check
+            if (rawUnitCost == null || rawUnitCost.isEmpty()) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost is missing or empty", false));
+            } else if (unitCost == null) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost must be a valid numeric value: '" + rawUnitCost + "'", false));
+            } else if (unitCost < 0) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Cost", "Unit Cost cannot be negative: " + unitCost, false));
+            }
         }
 
         // Missing optional fields warnings check -> treated as non-critical errors
@@ -138,10 +154,36 @@ public class ExcelValidationService {
         }
         if (solarType == null || solarType.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Solar Type is missing", false));
+        } else {
+            boolean ntExists = netTypeRepository.findByName(solarType.trim()).isPresent();
+            if (!ntExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Unrecognized net type/solar type: '" + solarType + "'", false));
+            }
+        }
+
+        if (billingMode != null && !billingMode.trim().isEmpty()) {
+            String cleanEc = billingMode.trim();
+            boolean ecExists = expenseCodeRepository.findByExpCode(cleanEc).isPresent();
+            if (!ecExists) {
+                try {
+                    Long ecId = Long.valueOf(cleanEc);
+                    ecExists = expenseCodeRepository.existsById(ecId);
+                } catch (Exception ignored) {}
+            }
+            if (!ecExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Unrecognized expense code: '" + billingMode + "'", false));
+            }
         }
 
         // If key duplicate check fields are missing/invalid, stop and do not run duplicate checks
-        if (hasKeyFieldsErrors || fromDate == null) {
+        if (hasKeyFieldsErrors || !"BILLING".equals(rowType) || fromDate == null) {
+            if (bankCode != null && !bankCode.trim().isEmpty()) {
+                String cleanBank = bankCode.trim().toUpperCase();
+                if (!VALID_BANK_CODES.contains(cleanBank) && !cleanBank.matches("\\d{4}")) {
+                    result.addWarning(new ExcelValidationError(sheetName, rowNum, "Bank Code",
+                        "Unrecognized bank code: '" + bankCode + "'. Verified codes are standard Sri Lankan bank acronyms (e.g., BOC, HNB, SAMP, COM) or 4-digit numeric codes.", true));
+                }
+            }
             return result;
         }
 
@@ -169,9 +211,9 @@ public class ExcelValidationService {
         // 3. Bank Code warnings — only flag if a non-empty value was actually supplied and invalid
         if (bankCode != null && !bankCode.trim().isEmpty()) {
             String cleanBank = bankCode.trim().toUpperCase();
-            if (!VALID_BANK_CODES.contains(cleanBank)) {
+            if (!VALID_BANK_CODES.contains(cleanBank) && !cleanBank.matches("\\d{4}")) {
                 result.addWarning(new ExcelValidationError(sheetName, rowNum, "Bank Code",
-                    "Unrecognized bank code: '" + bankCode + "'. Verified codes are standard Sri Lankan bank acronyms (e.g., BOC, HNB, SAMP, COM)", true));
+                    "Unrecognized bank code: '" + bankCode + "'. Verified codes are standard Sri Lankan bank acronyms (e.g., BOC, HNB, SAMP, COM) or 4-digit numeric codes.", true));
             }
         }
 
@@ -195,7 +237,9 @@ public class ExcelValidationService {
             String bankAccountNo,
             String agreementDate,
             Double panelCapacity,
-            String solarType
+            String solarType,
+            String costCode,
+            String billingMode
     ) {
         RowValidationResult result = new RowValidationResult();
         if (accountNo == null || accountNo.trim().isEmpty()) {
@@ -223,9 +267,9 @@ public class ExcelValidationService {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Code", "Bank Code is missing", false));
         } else {
             String cleanBank = bankCode.trim().toUpperCase();
-            if (!VALID_BANK_CODES.contains(cleanBank)) {
+            if (!VALID_BANK_CODES.contains(cleanBank) && !cleanBank.matches("\\d{4}")) {
                 result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Code",
-                    "Unrecognized bank code: '" + bankCode + "'. Verified codes are standard Sri Lankan bank acronyms (e.g., BOC, HNB, SAMP, COM)", false));
+                    "Unrecognized bank code: '" + bankCode + "'. Verified codes are standard Sri Lankan bank acronyms (e.g., BOC, HNB, SAMP, COM) or 4-digit numeric codes.", false));
             }
         }
         if (branchCode == null || branchCode.trim().isEmpty()) {
@@ -240,8 +284,42 @@ public class ExcelValidationService {
         if (panelCapacity == null) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Panel Capacity", "Panel Capacity is missing", false));
         }
+
+        // Lookup validation for Cost Code
+        if (costCode == null || costCode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Cost Code", "Cost Code is missing", false));
+        } else {
+            boolean ccExists = costCodeRepository.findByCostCode(costCode.trim()).isPresent();
+            if (!ccExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Cost Code", "Unrecognized cost code: '" + costCode + "'", false));
+            }
+        }
+
+        // Lookup validation for Net Type / Solar Type
         if (solarType == null || solarType.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Solar Type is missing", false));
+        } else {
+            boolean ntExists = netTypeRepository.findByName(solarType.trim()).isPresent();
+            if (!ntExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Unrecognized net type/solar type: '" + solarType + "'", false));
+            }
+        }
+
+        // Lookup validation for Expense Code
+        if (billingMode == null || billingMode.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Exp. Code (Billing Mode) is missing", false));
+        } else {
+            String cleanEc = billingMode.trim();
+            boolean ecExists = expenseCodeRepository.findByExpCode(cleanEc).isPresent();
+            if (!ecExists) {
+                try {
+                    Long ecId = Long.valueOf(cleanEc);
+                    ecExists = expenseCodeRepository.existsById(ecId);
+                } catch (Exception ignored) {}
+            }
+            if (!ecExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Unrecognized expense code: '" + billingMode + "'", false));
+            }
         }
 
         return result;

@@ -24,15 +24,20 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
+import java.util.logging.Logger;
 
 @RestController
 @RequestMapping
 public class CustomerController {
+
+    private static final Logger log = Logger.getLogger(CustomerController.class.getName());
 
     @Autowired
     private CustomerRepository customerRepository;
@@ -55,6 +60,38 @@ public class CustomerController {
     @Autowired
     private ExpenseCodeRepository expenseCodeRepository;
 
+    /**
+     * Converts a Customer JPA entity to a plain Map of scalar values.
+     * This avoids Hibernate lazy-load proxy serialization issues that cause
+     * HTTP 500 errors when Jackson tries to serialize uninitialised proxies.
+     */
+    private Map<String, Object> toSafeDto(Customer c) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        try {
+            dto.put("accountNo",       c.getAccountNo());
+            dto.put("customerName",    c.getCustomerName());
+            dto.put("customerAddress", c.getCustomerAddress());
+            dto.put("mobileNo",        c.getMobileNo());
+            dto.put("agreementDate",   c.getAgreementDate() != null ? c.getAgreementDate().toString() : null);
+            dto.put("panelCapacity",   c.getPanelCapacity());
+            dto.put("bankCode",        c.getBankCode());
+            dto.put("branchCode",      c.getBranchCode());
+            dto.put("bankAccountNo",   c.getBankAccountNo());
+            dto.put("solarType",       c.getSolarType());
+            dto.put("refNo",           c.getRefNo());
+            dto.put("unitRate",        c.getUnitRate());
+            dto.put("tariffType",      c.getTariffType());
+            dto.put("createdAt",       c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
+            // Safely read lazy associations — returns null if not loaded rather than throwing
+            try { dto.put("costCode",     c.getCostCode()     != null ? c.getCostCode().getCostCode()   : null); } catch (Exception e) { dto.put("costCode",     null); }
+            try { dto.put("netTypeName",  c.getNetType()      != null ? c.getNetType().getName()         : null); } catch (Exception e) { dto.put("netTypeName",  null); }
+            try { dto.put("expenseCode",  c.getExpenseCode()  != null ? c.getExpenseCode().getExpCode() : null); } catch (Exception e) { dto.put("expenseCode",  null); }
+        } catch (Exception ex) {
+            log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
+        }
+        return dto;
+    }
+
     // --- Officer Customer Endpoints ---
 
     @GetMapping("/api/officer/customers")
@@ -64,37 +101,80 @@ public class CustomerController {
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("accountNo").ascending());
-        Page<Customer> customers;
+        try {
+            Pageable pageable = PageRequest.of(page, size, Sort.by("accountNo").ascending());
+            Page<Customer> customerPage;
 
-        if (query != null && !query.trim().isEmpty()) {
-            customers = customerRepository.searchCustomers(query.trim(), pageable);
-        } else {
-            customers = customerRepository.findAll(pageable);
+            if (query != null && !query.trim().isEmpty()) {
+                customerPage = customerRepository.searchCustomers(query.trim(), pageable);
+            } else {
+                customerPage = customerRepository.findAll(pageable);
+            }
+
+            // Map each Customer entity to a safe DTO to avoid Hibernate lazy-proxy serialization errors
+            List<Map<String, Object>> dtoList = new ArrayList<>();
+            for (Customer c : customerPage.getContent()) {
+                try {
+                    dtoList.add(toSafeDto(c));
+                } catch (Exception ex) {
+                    log.warning("Skipping customer " + c.getAccountNo() + " due to mapping error: " + ex.getMessage());
+                }
+            }
+
+            // Build a safe pageable response matching Spring Page structure
+            Map<String, Object> response = new LinkedHashMap<>();
+            response.put("content",          dtoList);
+            response.put("totalElements",    customerPage.getTotalElements());
+            response.put("totalPages",       customerPage.getTotalPages());
+            response.put("number",           customerPage.getNumber());
+            response.put("size",             customerPage.getSize());
+            response.put("numberOfElements", customerPage.getNumberOfElements());
+            response.put("first",            customerPage.isFirst());
+            response.put("last",             customerPage.isLast());
+            response.put("empty",            customerPage.isEmpty());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception ex) {
+            log.severe("GET /api/officer/customers failed: " + ex.getMessage());
+            ex.printStackTrace();
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("message", "Failed to load customers: " + ex.getMessage()));
         }
-
-        return ResponseEntity.ok(customers);
     }
 
     @GetMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomerByAccountNo(@PathVariable String accountNo) {
-        Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
-        if (customer.isPresent()) {
-            return ResponseEntity.ok(customer.get());
+        try {
+            Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            if (customer.isPresent()) {
+                return ResponseEntity.ok(toSafeDto(customer.get()));
+            }
+            return ResponseEntity.notFound().build();
+        } catch (Exception ex) {
+            log.severe("GET /api/officer/customers/" + accountNo + " failed: " + ex.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load customer: " + ex.getMessage()));
         }
-        return ResponseEntity.notFound().build();
     }
 
     @GetMapping("/api/officer/customers/{accountNo}/billing")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomerBillingHistory(@PathVariable String accountNo) {
-        Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
-        if (customer.isEmpty()) {
-            return ResponseEntity.notFound().build();
+        try {
+            Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            if (customer.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+            List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
+            List<Map<String, Object>> dtoList = new ArrayList<>();
+            for (BillingRecord br : history) {
+                dtoList.add(toBillingDto(br));
+            }
+            return ResponseEntity.ok(dtoList);
+        } catch (Exception ex) {
+            log.severe("GET /api/officer/customers/" + accountNo + "/billing failed: " + ex.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load billing history: " + ex.getMessage()));
         }
-        List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(Objects.requireNonNull(accountNo));
-        return ResponseEntity.ok(history);
     }
 
     @PutMapping("/api/officer/customers/{accountNo}")
@@ -148,32 +228,31 @@ public class CustomerController {
     @PutMapping("/api/admin/customers/{accountNo}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> adminUpdateCustomer(@PathVariable String accountNo,
-            @RequestBody Customer customerDetails) {
-        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
-        if (optCustomer.isEmpty()) {
-            return ResponseEntity.notFound().build();
+            @RequestBody Map<String, Object> payload) {
+        try {
+            Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            if (optCustomer.isEmpty()) {
+                return ResponseEntity.notFound().build();
+            }
+
+            Customer customer = optCustomer.get();
+            String oldName = customer.getCustomerName();
+            
+            applyCustomerEdits(customer, payload);
+
+            customerRepository.save(Objects.requireNonNull(customer));
+
+            // Audit Log Entry
+            String auditDetail = String.format("Admin updated customer account: %s. Name changed from '%s' to '%s'",
+                    accountNo, oldName, customer.getCustomerName());
+            auditLogService.log("CUSTOMER_UPDATE", auditDetail);
+
+            return ResponseEntity.ok(toSafeDto(customer));
+        } catch (Exception ex) {
+            log.severe("PUT /api/admin/customers/" + accountNo + " failed: " + ex.getMessage());
+            ex.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to update customer details: " + ex.getMessage()));
         }
-
-        Customer customer = optCustomer.get();
-        String oldName = customer.getCustomerName();
-        customer.setCustomerName(customerDetails.getCustomerName());
-        customer.setCustomerAddress(customerDetails.getCustomerAddress());
-        customer.setMobileNo(customerDetails.getMobileNo());
-        customer.setAgreementDate(customerDetails.getAgreementDate());
-        customer.setPanelCapacity(customerDetails.getPanelCapacity());
-        customer.setBankCode(customerDetails.getBankCode());
-        customer.setBranchCode(customerDetails.getBranchCode());
-        customer.setBankAccountNo(customerDetails.getBankAccountNo());
-        customer.setSolarType(customerDetails.getSolarType());
-
-        customerRepository.save(Objects.requireNonNull(customer));
-
-        // Audit Log Entry
-        String auditDetail = String.format("Admin updated customer account: %s. Name changed from '%s' to '%s'",
-                accountNo, oldName, customerDetails.getCustomerName());
-        auditLogService.log("CUSTOMER_UPDATE", auditDetail);
-
-        return ResponseEntity.ok(customer);
     }
 
     // --- User (Customer Self-Service) Endpoints ---
@@ -213,6 +292,39 @@ public class CustomerController {
         }
         List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
         return ResponseEntity.ok(history);
+    }
+
+    private Map<String, Object> toBillingDto(BillingRecord br) {
+        Map<String, Object> dto = new LinkedHashMap<>();
+        try {
+            dto.put("billingId",        br.getBillingId());
+            dto.put("accountNo",        br.getCustomer() != null ? br.getCustomer().getAccountNo() : null);
+            dto.put("customerName",     br.getCustomer() != null ? br.getCustomer().getCustomerName() : null);
+            dto.put("refNo",            br.getRefNo());
+            dto.put("fromDate",         br.getFromDate()         != null ? br.getFromDate().toString()         : null);
+            dto.put("toDate",           br.getToDate()           != null ? br.getToDate().toString()           : null);
+            dto.put("prevReadingDate",  br.getPrevReadingDate()  != null ? br.getPrevReadingDate().toString()  : null);
+            dto.put("currReadingDate",  br.getCurrReadingDate()  != null ? br.getCurrReadingDate().toString()  : null);
+            dto.put("importUnits",      br.getImportUnits());
+            dto.put("exportUnits",      br.getExportUnits());
+            dto.put("netUnit",          br.getNetUnit());
+            dto.put("unitCost",         br.getUnitCost());
+            dto.put("totalAmount",      br.getTotalAmount());
+            dto.put("billingMode",      br.getBillingMode());
+            dto.put("billCycle",        br.getBillCycle());
+            dto.put("billSetOff",       br.getBillSetOff());
+            dto.put("retentionMoney",   br.getRetentionMoney());
+            dto.put("payment",          br.getPayment());
+            dto.put("kwhImport",        br.getKwhImport());
+            dto.put("kwhExport",        br.getKwhExport());
+            dto.put("kwhSales",         br.getKwhSales());
+            dto.put("paymentSettled",   br.getPaymentSettled());
+            dto.put("uploadHistoryId",  br.getUploadHistoryId());
+            dto.put("createdAt",        br.getCreatedAt() != null ? br.getCreatedAt().toString() : null);
+        } catch (Exception ex) {
+            log.warning("toBillingDto error for billing id " + br.getBillingId() + ": " + ex.getMessage());
+        }
+        return dto;
     }
 
     private Map<String, Object> getCustomerFieldMap(Customer customer) {

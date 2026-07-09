@@ -60,6 +60,26 @@ public class BillingRecord {
     @Column(name = "payment")
     private Double payment;
 
+    // ── CEB Assist fields (Step 2) ────────────────────────────
+    @Column(name = "prev_reading_date")
+    private LocalDate prevReadingDate;
+
+    @Column(name = "curr_reading_date")
+    private LocalDate currReadingDate;
+
+    // ── NGEN fields (Step 3) ──────────────────────────────────
+    @Column(name = "kwh_import")
+    private Double kwhImport;
+
+    @Column(name = "kwh_export")
+    private Double kwhExport;
+
+    @Column(name = "kwh_sales")
+    private Double kwhSales;  // kWh Export − kWh Import
+
+    @Column(name = "payment_settled")
+    private Double paymentSettled;  // kWh Sales × Unit Rate
+
     @Column(name = "upload_history_id")
     private Long uploadHistoryId;
 
@@ -237,4 +257,22 @@ public class BillingRecord {
     public void setPayment(Double payment) {
         this.payment = payment;
     }
+
+    public LocalDate getPrevReadingDate() { return prevReadingDate; }
+    public void setPrevReadingDate(LocalDate prevReadingDate) { this.prevReadingDate = prevReadingDate; }
+
+    public LocalDate getCurrReadingDate() { return currReadingDate; }
+    public void setCurrReadingDate(LocalDate currReadingDate) { this.currReadingDate = currReadingDate; }
+
+    public Double getKwhImport() { return kwhImport; }
+    public void setKwhImport(Double kwhImport) { this.kwhImport = kwhImport; }
+
+    public Double getKwhExport() { return kwhExport; }
+    public void setKwhExport(Double kwhExport) { this.kwhExport = kwhExport; }
+
+    public Double getKwhSales() { return kwhSales; }
+    public void setKwhSales(Double kwhSales) { this.kwhSales = kwhSales; }
+
+    public Double getPaymentSettled() { return paymentSettled; }
+    public void setPaymentSettled(Double paymentSettled) { this.paymentSettled = paymentSettled; }
 }

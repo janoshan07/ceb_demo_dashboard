@@ -21,6 +21,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
+import com.ceb.billing.services.ExcelValidationService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +68,12 @@ public class AdminUserController {
 
     @Autowired
     private AuditLogService auditLogService;
+
+    @Autowired
+    private ExcelValidationService excelValidationService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
 
     @GetMapping("/users")
@@ -253,6 +263,169 @@ public class AdminUserController {
             result.put("importBatchesDeleted", batchesDeleted);
         }
         return ResponseEntity.ok(result);
+    }
+
+    @PutMapping("/staging/row/{stagingId}")
+    public ResponseEntity<?> updateStagingRow(@PathVariable long stagingId, @RequestBody Map<String, Object> updatedFields) {
+        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(stagingId);
+        if (optStaging.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        BillingUploadStaging row = optStaging.get();
+        try {
+            // 1. Parse current raw JSON
+            Map<String, Object> rawData = objectMapper.readValue(row.getRawJson(), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            
+            // 2. Overlay updated fields
+            rawData.putAll(updatedFields);
+            
+            // 3. Re-run validation based on row type
+            String validationStatus = "VALID";
+            List<String> errorMsgs = new ArrayList<>();
+            
+            String rowType = row.getRowType(); // "BILLING" or "CUSTOMER_PROFILE"
+            String sheetName = rawData.get("sheetName") != null ? rawData.get("sheetName").toString() : "Sheet";
+            int rowNum = rawData.get("rowNum") != null ? Integer.parseInt(rawData.get("rowNum").toString()) : 1;
+            String accountNo = rawData.get("accountNo") != null ? rawData.get("accountNo").toString() : "";
+            
+            if ("CUSTOMER_PROFILE".equalsIgnoreCase(rowType)) {
+                String customerName = rawData.get("customerName") != null ? rawData.get("customerName").toString() : "";
+                String customerAddress = rawData.get("customerAddress") != null ? rawData.get("customerAddress").toString() : "";
+                String mobileNo = rawData.get("mobileNo") != null ? rawData.get("mobileNo").toString() : "";
+                String bankCode = rawData.get("bankCode") != null ? rawData.get("bankCode").toString() : "";
+                String branchCode = rawData.get("branchCode") != null ? rawData.get("branchCode").toString() : "";
+                String bankAccountNo = rawData.get("bankAccountNo") != null ? rawData.get("bankAccountNo").toString() : "";
+                String agreementDate = rawData.get("agreementDate") != null ? rawData.get("agreementDate").toString() : "";
+                Double panelCapacity = rawData.get("panelCapacity") != null && !rawData.get("panelCapacity").toString().isEmpty() 
+                        ? Double.valueOf(rawData.get("panelCapacity").toString()) : null;
+                String solarType = rawData.get("solarType") != null ? rawData.get("solarType").toString() : "";
+                String costCode = rawData.get("costCode") != null ? rawData.get("costCode").toString() : "";
+                String billingMode = rawData.get("billingMode") != null ? rawData.get("billingMode").toString() : "";
+                
+                ExcelValidationService.RowValidationResult valResult =
+                        excelValidationService.validateCustomerRow(
+                                sheetName, rowNum, accountNo, customerName, customerAddress, mobileNo, 
+                                bankCode, branchCode, bankAccountNo, agreementDate, panelCapacity, solarType, 
+                                costCode, billingMode);
+                
+                validationStatus = valResult.hasErrors() ? "INVALID" : valResult.hasWarnings() ? "WARNING" : "VALID";
+                for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
+                    errorMsgs.add(err.getErrorMessage());
+                }
+            } else {
+                // BILLING row
+                String customerName = rawData.get("customerName") != null ? rawData.get("customerName").toString() : "";
+                String rawFromDate = rawData.get("fromDate") != null ? rawData.get("fromDate").toString() : "";
+                String rawToDate = rawData.get("toDate") != null ? rawData.get("toDate").toString() : "";
+                String importUnitsStr = rawData.get("importUnits") != null ? rawData.get("importUnits").toString() : "";
+                String exportUnitsStr = rawData.get("exportUnits") != null ? rawData.get("exportUnits").toString() : "";
+                String unitCostStr = rawData.get("unitCost") != null ? rawData.get("unitCost").toString() : "";
+                String bankCode = rawData.get("bankCode") != null ? rawData.get("bankCode").toString() : "";
+                
+                java.time.LocalDate fromDate = null, toDate = null;
+                try { if (!rawFromDate.isEmpty()) fromDate = java.time.LocalDate.parse(rawFromDate); } catch(Exception e) {}
+                try { if (!rawToDate.isEmpty()) toDate = java.time.LocalDate.parse(rawToDate); } catch(Exception e) {}
+                
+                Double importUnits = null, exportUnits = null, unitCost = null;
+                try { if (!importUnitsStr.isEmpty()) importUnits = Double.parseDouble(importUnitsStr); } catch(Exception e) {}
+                try { if (!exportUnitsStr.isEmpty()) exportUnits = Double.parseDouble(exportUnitsStr); } catch(Exception e) {}
+                try { if (!unitCostStr.isEmpty()) unitCost = Double.parseDouble(unitCostStr); } catch(Exception e) {}
+                
+                ExcelValidationService.RowValidationResult valResult =
+                        excelValidationService.validateRow(
+                                sheetName, rowNum, "BILLING", accountNo, customerName,
+                                rawFromDate, fromDate, rawToDate, toDate,
+                                importUnitsStr, importUnits, exportUnitsStr, exportUnits,
+                                unitCostStr, unitCost, bankCode,
+                                rawData.get("customerAddress") != null ? rawData.get("customerAddress").toString() : "",
+                                rawData.get("mobileNo") != null ? rawData.get("mobileNo").toString() : "",
+                                rawData.get("bankAccountNo") != null ? rawData.get("bankAccountNo").toString() : "",
+                                rawData.get("branchCode") != null ? rawData.get("branchCode").toString() : "",
+                                rawData.get("billingMode") != null ? rawData.get("billingMode").toString() : "",
+                                rawData.get("agreementDate") != null ? rawData.get("agreementDate").toString() : "",
+                                rawData.get("panelCapacity") != null && !rawData.get("panelCapacity").toString().isEmpty() 
+                                        ? Double.valueOf(rawData.get("panelCapacity").toString()) : null,
+                                rawData.get("solarType") != null ? rawData.get("solarType").toString() : "",
+                                new java.util.HashSet<>()
+                        );
+                
+                validationStatus = valResult.hasDuplicate() ? "DUPLICATE" : valResult.hasErrors() ? "INVALID" : valResult.hasWarnings() ? "WARNING" : "VALID";
+                for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
+                    errorMsgs.add(err.getErrorMessage());
+                }
+            }
+            
+            // 4. Save updated staging row to database
+            row.setRawJson(objectMapper.writeValueAsString(rawData));
+            row.setValidationStatus(validationStatus);
+            row.setValidationErrors(objectMapper.writeValueAsString(errorMsgs));
+            stagingRepository.save(row);
+            
+            // Log update action
+            auditLogService.log("STAGING_ROW_EDITED", String.format("Staged row ID %d (Type: %s, Acc: %s) updated and re-validated to status: %s", stagingId, rowType, accountNo, validationStatus));
+            
+            // Return updated row formatted for frontend
+            Map<String, Object> response = new HashMap<>();
+            response.put("stagingId", row.getStagingId());
+            response.put("validationStatus", row.getValidationStatus());
+            response.put("errors", errorMsgs.stream().map(msg -> Map.of("errorMessage", msg, "field", "Edit", "warning", false)).toList());
+            response.put("rowType", row.getRowType());
+            response.put("rowNum", rowNum);
+            response.putAll(rawData);
+            
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to update staging row: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/staging/mock/seed")
+    public ResponseEntity<?> seedMockStaging() {
+        try {
+            // Create a mock UploadHistory row
+            UploadHistory history = new UploadHistory(
+                    "mock_test_batch.xlsx",
+                    "admin",
+                    "PENDING_APPROVAL",
+                    0, 0, 0, 0
+            );
+            history = uploadHistoryRepository.save(history);
+            long batchId = history.getId();
+
+            // Create a mock BillingUploadStaging row
+            Map<String, Object> mockRawData = new HashMap<>();
+            mockRawData.put("accountNo", "1122334455");
+            mockRawData.put("customerName", "Mock Invalid Customer");
+            mockRawData.put("fromDate", "2026-01-01");
+            mockRawData.put("toDate", "2026-01-31");
+            mockRawData.put("importUnits", 100.0);
+            mockRawData.put("exportUnits", 200.0);
+            mockRawData.put("unitCost", 15.0);
+            mockRawData.put("rowNum", 2);
+            mockRawData.put("sheetName", "BillingData");
+
+            String rawJson = objectMapper.writeValueAsString(mockRawData);
+            List<String> mockErrors = List.of("Account No length must be 10 characters.");
+            String errJson = objectMapper.writeValueAsString(mockErrors);
+
+            BillingUploadStaging stagingRow = new BillingUploadStaging(
+                    batchId,
+                    rawJson,
+                    "INVALID",
+                    errJson,
+                    "BILLING"
+            );
+            stagingRepository.save(stagingRow);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("stagingBatchId", batchId);
+            response.put("stagingId", stagingRow.getStagingId());
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Seeding failed: " + e.getMessage()));
+        }
     }
 }
 

@@ -10,7 +10,8 @@ import {
   Loader, 
   ArrowLeft, 
   FileText,
-  BadgeAlert
+  BadgeAlert,
+  Edit2
 } from 'lucide-react';
 
 const StagingReview = ({ authFetch, onConfirmAction }) => {
@@ -29,6 +30,49 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const [actionProcessing, setActionProcessing] = useState(false);
   const [actionSuccess, setActionSuccess] = useState(null);
   const [actionError, setActionError] = useState(null);
+
+  // Edit Staging Row State
+  const [editingStagingRow, setEditingStagingRow] = useState(null);
+  const [editStagingLoading, setEditStagingLoading] = useState(false);
+
+  const handleOpenEditModal = (row) => {
+    setEditingStagingRow(row);
+  };
+
+  const handleCloseEditModal = () => {
+    setEditingStagingRow(null);
+  };
+
+  const handleSaveStagingRow = async (stagingId, fields) => {
+    try {
+      setEditStagingLoading(true);
+      const res = await authFetch(`/api/admin/staging/row/${stagingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields)
+      });
+      
+      const updatedRow = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(updatedRow.message || 'Failed to update staging row details.');
+      }
+      
+      showToast('Staging row updated and re-validated successfully!', 'success');
+      
+      // Update local state stagingRows
+      setStagingRows(prev => prev.map(r => r.stagingId === stagingId ? {
+        ...r,
+        ...updatedRow
+      } : r));
+      
+      setEditingStagingRow(null);
+    } catch (err) {
+      showToast(err.message || 'Failed to update staging row.', 'error');
+    } finally {
+      setEditStagingLoading(false);
+    }
+  };
 
   const fetchPendingBatches = async () => {
     try {
@@ -272,6 +316,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                       <th>Unit Cost</th>
                       <th>Severity</th>
                       <th>Validation Errors / Warnings</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -285,6 +330,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                         <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
                         <td><div className="skeleton" style={{ height: '22px', width: '60px', borderRadius: '4px' }}></div></td>
                         <td><div className="skeleton" style={{ height: '16px', width: '200px' }}></div></td>
+                        <td><div className="skeleton" style={{ height: '28px', width: '50px', borderRadius: '4px', margin: '0 auto' }}></div></td>
                       </tr>
                     ))}
                   </tbody>
@@ -334,6 +380,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                       <th>Unit Cost</th>
                       <th>Severity</th>
                       <th>Validation Errors / Warnings</th>
+                      <th style={{ textAlign: 'center' }}>Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -408,6 +455,17 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                               </span>
                             )}
                           </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                              onClick={() => handleOpenEditModal(row)}
+                            >
+                              <Edit2 size={12} />
+                              Correct
+                            </button>
+                          </td>
                         </tr>
                       );
                     })}
@@ -416,6 +474,13 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
               </div>
             </>
           )}
+          <EditStagingRowModal
+            isOpen={!!editingStagingRow}
+            onClose={handleCloseEditModal}
+            row={editingStagingRow}
+            onSave={handleSaveStagingRow}
+            loading={editStagingLoading}
+          />
         </div>
       ) : (
         /* Pending list View */
@@ -512,6 +577,286 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
           </div>
         </div>
       )}
+    </div>
+  );
+};
+
+const EditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) => {
+  const [fields, setFields] = useState({});
+
+  useEffect(() => {
+    if (row) {
+      // Create a clean shallow copy of the fields, excluding staging internal metadata keys
+      const cleanFields = { ...row };
+      delete cleanFields.stagingId;
+      delete cleanFields.validationStatus;
+      delete cleanFields.errors;
+      delete cleanFields.index;
+      setFields(cleanFields);
+    }
+  }, [row]);
+
+  if (!isOpen || !row) return null;
+
+  const handleChange = (key, value) => {
+    setFields(prev => ({
+      ...prev,
+      [key]: value
+    }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(row.stagingId, fields);
+  };
+
+  const isBilling = row.rowType !== 'CUSTOMER_PROFILE';
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-container" style={{ maxWidth: '650px', width: '90%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            Correct Data (Row #{row.rowNum || row.index})
+          </h3>
+          <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
+          
+          {row.errors && row.errors.length > 0 && (
+            <div style={{ padding: '0.75rem 1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)' }} />
+                Validation Errors:
+              </div>
+              {row.errors.map((err, idx) => {
+                const message = typeof err === 'string' ? err : (err.errorMessage || err.message || '');
+                const field = typeof err === 'string' ? '' : (err.field ? `[${err.field}] ` : '');
+                return (
+                  <div key={idx} style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '0.75rem' }}>
+                    • {field}{message}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+            {isBilling ? (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.accountNo || ''}
+                    onChange={(e) => handleChange('accountNo', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Customer Name</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.customerName || ''}
+                    onChange={(e) => handleChange('customerName', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">From Date (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={fields.fromDate || ''}
+                    onChange={(e) => handleChange('fromDate', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">To Date (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={fields.toDate || ''}
+                    onChange={(e) => handleChange('toDate', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Import Units (kWh)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={fields.importUnits !== undefined && fields.importUnits !== null ? fields.importUnits : ''}
+                    onChange={(e) => handleChange('importUnits', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Export Units (kWh)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={fields.exportUnits !== undefined && fields.exportUnits !== null ? fields.exportUnits : ''}
+                    onChange={(e) => handleChange('exportUnits', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Cost (LKR)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    className="login-form-input"
+                    value={fields.unitCost !== undefined && fields.unitCost !== null ? fields.unitCost : ''}
+                    onChange={(e) => handleChange('unitCost', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.bankCode || ''}
+                    onChange={(e) => handleChange('bankCode', e.target.value)}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.accountNo || ''}
+                    onChange={(e) => handleChange('accountNo', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Customer Name</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.customerName || ''}
+                    onChange={(e) => handleChange('customerName', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Customer Address</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.customerAddress || ''}
+                    onChange={(e) => handleChange('customerAddress', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.mobileNo || ''}
+                    onChange={(e) => handleChange('mobileNo', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Panel Capacity (kW)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={fields.panelCapacity !== undefined && fields.panelCapacity !== null ? fields.panelCapacity : ''}
+                    onChange={(e) => handleChange('panelCapacity', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Agreement Date (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={fields.agreementDate || ''}
+                    onChange={(e) => handleChange('agreementDate', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Solar Type (Net Plus/Net Metering/Net Accounting)</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.solarType || ''}
+                    onChange={(e) => handleChange('solarType', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.bankCode || ''}
+                    onChange={(e) => handleChange('bankCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branch Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.branchCode || ''}
+                    onChange={(e) => handleChange('branchCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.bankAccountNo || ''}
+                    onChange={(e) => handleChange('bankAccountNo', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Rate (LKR)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    className="login-form-input"
+                    value={fields.unitRate !== undefined && fields.unitRate !== null ? fields.unitRate : ''}
+                    onChange={(e) => handleChange('unitRate', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+              style={{ minWidth: '100px' }}
+            >
+              {loading ? 'Saving...' : 'Save & Re-validate'}
+            </button>
+          </div>
+
+        </form>
+      </div>
     </div>
   );
 };

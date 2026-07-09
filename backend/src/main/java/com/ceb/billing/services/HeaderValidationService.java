@@ -89,14 +89,22 @@ public class HeaderValidationService {
     }
 
     private boolean isAliasMatch(String cleanTarget, String cleanActual) {
-        // e.g. "accountno" matches "accountnumber"
+        // Look up both inside FIELD_ALIASES to check if they map to the same logical field
+        for (Map.Entry<String, List<String>> entry : com.ceb.billing.services.PreviewService.FIELD_ALIASES.entrySet()) {
+            boolean targetMatched = false;
+            boolean actualMatched = false;
+            for (String alias : entry.getValue()) {
+                String cleanAlias = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (cleanTarget.equals(cleanAlias)) targetMatched = true;
+                if (cleanActual.equals(cleanAlias)) actualMatched = true;
+            }
+            if (targetMatched && actualMatched) return true;
+        }
+
+        // Fallback substring compatibility checks
         if (cleanTarget.contains(cleanActual) || cleanActual.contains(cleanTarget)) {
             return true;
         }
-        if (cleanTarget.equals("accountno") && cleanActual.equals("accountnumber")) return true;
-        if (cleanTarget.equals("customername") && cleanActual.equals("name")) return true;
-        if (cleanTarget.equals("fromdate") && cleanActual.equals("startdate")) return true;
-        if (cleanTarget.equals("todate") && cleanActual.equals("enddate")) return true;
         return false;
     }
 }

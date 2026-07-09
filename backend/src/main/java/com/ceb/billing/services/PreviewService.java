@@ -25,7 +25,7 @@ public class PreviewService {
     private com.ceb.billing.repositories.BillingRecordRepository billingRecordRepository;
 
     // Comprehensive alias map for all logical billing/customer fields
-    private static final Map<String, List<String>> FIELD_ALIASES = new LinkedHashMap<>();
+    public static final Map<String, List<String>> FIELD_ALIASES = new LinkedHashMap<>();
 
     static {
         FIELD_ALIASES.put("accountno",      Arrays.asList("accountno", "accountnumber", "account_no", "acc_no", "accno", "account", "acctno"));
@@ -35,11 +35,12 @@ public class PreviewService {
         FIELD_ALIASES.put("refno",          Arrays.asList("refno", "ref_no", "referenceno", "referencenumber", "reference", "billno", "invoiceno", "refnum"));
         FIELD_ALIASES.put("fromdate",       Arrays.asList("fromdate", "from_date", "startdate", "start_date", "billingfrom", "datefrom", "period_from", "from", "billperiod", "period"));
         FIELD_ALIASES.put("todate",         Arrays.asList("todate", "to_date", "enddate", "end_date", "billingto", "dateto", "period_to", "to"));
-        FIELD_ALIASES.put("imports",        Arrays.asList("imports", "import", "importunits", "import_units", "consumption", "kwhin", "units_import", "importkwh", "importunit"));
-        FIELD_ALIASES.put("exports",        Arrays.asList("exports", "export", "exportunits", "export_units", "kwhout", "units_export", "solar_export", "exportkwh", "exportunit"));
-        FIELD_ALIASES.put("unitcost",       Arrays.asList("unitcost", "unit_cost", "rate", "cost", "tariff", "price_per_unit", "unitrate", "perunit"));
-        FIELD_ALIASES.put("totalamount",    Arrays.asList("totalamount", "total_amount", "total", "amount", "bill_amount", "billamount", "netamount"));
-        FIELD_ALIASES.put("billingmode",    Arrays.asList("billingmode", "billing_mode", "expcode", "exportcode", "mode", "type_billing", "fixedvariable", "fixed_variable", "fixed/variable"));
+        FIELD_ALIASES.put("imports",        Arrays.asList("imports", "import", "importunits", "import_units", "consumption", "kwhin", "units_import", "importkwh", "importunit", "kwhimport"));
+        FIELD_ALIASES.put("exports",        Arrays.asList("exports", "export", "exportunits", "export_units", "kwhout", "units_export", "solar_export", "exportkwh", "exportunit", "kwhexport"));
+        FIELD_ALIASES.put("unitcost",       Arrays.asList("unitcost", "unit_cost", "rate", "cost", "tariff", "price_per_unit", "unitrate", "perunit", "unit_rate"));
+        FIELD_ALIASES.put("totalamount",    Arrays.asList("totalamount", "total_amount", "total", "amount", "bill_amount", "billamount", "netamount", "kwhsalesamount", "salesamount"));
+        FIELD_ALIASES.put("billingmode",    Arrays.asList("billingmode", "billing_mode", "expcode", "exportcode", "mode", "type_billing", "exp"));
+        FIELD_ALIASES.put("tarifftype",     Arrays.asList("tarifftype", "tariff_type", "tariff", "fixedvariable", "fixed_variable", "fixed/variable", "fixvariable", "fix_variable", "fix/variable"));
         FIELD_ALIASES.put("costcode",       Arrays.asList("costcode", "cost_code", "costcode_id"));
         FIELD_ALIASES.put("bankcode",       Arrays.asList("bankcode", "bank_code", "bank", "bankname"));
         FIELD_ALIASES.put("branchcode",     Arrays.asList("branchcode", "branch_code", "branch", "branchname"));
@@ -47,6 +48,13 @@ public class PreviewService {
         FIELD_ALIASES.put("agreementdate",  Arrays.asList("agreementdate", "agreement_date", "agreement", "contractdate", "installdate"));
         FIELD_ALIASES.put("panelcapacity",  Arrays.asList("panelcapacity", "panel_capacity", "capacity", "kw", "solarcapacity", "panel_kw"));
         FIELD_ALIASES.put("solartype",      Arrays.asList("solartype", "solar_type", "systemtype", "system_type", "nettype", "type"));
+        
+        // Add Step 2/3 specific fields
+        FIELD_ALIASES.put("prevreadingdate", Arrays.asList("prevreadingdate", "prev_reading_date", "prvrdgdate", "previousreadingdate", "previous_reading_date", "prv_rdg_date"));
+        FIELD_ALIASES.put("currreadingdate", Arrays.asList("currreadingdate", "curr_reading_date", "crntrdgdate", "currentreadingdate", "current_reading_date", "crnt_rdg_date"));
+        FIELD_ALIASES.put("billsetoff",      Arrays.asList("billsetoff", "bill_set_off", "setoff", "billoutstanding", "billoutstdsetoff", "billoutstd", "outstanding", "outstandingsetoff"));
+        FIELD_ALIASES.put("paymentsettled",  Arrays.asList("paymentsettled", "payment_settled", "settled", "payment"));
+        FIELD_ALIASES.put("kwhsales",        Arrays.asList("kwhsales", "sales", "salesunits", "kwhunits_sales"));
     }
 
     // Minimum columns required to classify a sheet
@@ -55,11 +63,14 @@ public class PreviewService {
 
     // Keywords for detecting the header row index
     private static final Set<String> HEADER_KEYWORDS = new HashSet<>(Arrays.asList(
-        "accountno", "accountnumber", "customername", "name", "customeraddress", "address",
+        "accountno", "accountnumber", "account", "customername", "name", "customeraddress", "address",
         "mobileno", "mobile", "phone", "contact", "refno", "referenceno", "fromdate", "startdate", "todate", "enddate",
         "imports", "import", "importunits", "exports", "export", "exportunits", "unitcost", "rate", "totalamount",
         "total", "amount", "billingmode", "expcode", "exportcode", "mode", "bankcode", "branchcode", "bankaccountno",
-        "bankaccount", "agreementdate", "panelcapacity", "capacity", "solartype", "nettype", "costcode", "cost_code"
+        "bankaccount", "agreementdate", "panelcapacity", "capacity", "solartype", "nettype", "costcode", "cost_code",
+        "tarifftype", "exp", "fixvariable", "unitrate", "ref", "kwh", "payment", "outstanding", "setoff", "settled",
+        "sales", "tarif", "tariff", "billing", "index", "bi", "kwhsales", "billoutstd", "billoutstanding", 
+        "paymentsettled", "fixed", "tax", "totalbill", "retn"
     ));
 
     /**
@@ -351,6 +362,7 @@ public class PreviewService {
                         String refNo           = getVal(row, colIndices.get("refno"));
                         String rawUnitRate     = getVal(row, colIndices.get("unitcost"));
                         Double unitRate        = parseDoubleStr(rawUnitRate);
+                        String tariffType      = getVal(row, colIndices.get("tarifftype"));
 
                         ExcelValidationService.RowValidationResult rowResult =
                                 excelValidationService.validateCustomerRow(
@@ -392,6 +404,7 @@ public class PreviewService {
                         rowData.put("billingMode",     billingMode     != null ? billingMode     : "");
                         rowData.put("refNo",           refNo           != null ? refNo           : "");
                         rowData.put("unitRate",        unitRate        != null ? unitRate        : "");
+                        rowData.put("tariffType",      tariffType      != null ? tariffType      : "");
                         rowData.put("validationStatus", status);
                         rowData.put("errors", errMsgs);
 
@@ -455,7 +468,8 @@ public class PreviewService {
         // Build clean list of actual headers (index -> clean header) to allow duplicate headers
         List<String> colCleanHeaders = new ArrayList<>();
         for (int col = 0; col < lastCellNum; col++) {
-            colCleanHeaders.add(getColCleanHeader(sheet, headerRowIdx, hasSubHeader, col));
+            String rawHdr = getColCleanHeader(sheet, headerRowIdx, hasSubHeader, col);
+            colCleanHeaders.add(rawHdr != null ? rawHdr.toLowerCase().replaceAll("[^a-z0-9]", "") : "");
         }
 
         // Handle duplicate accountno columns mapping (e.g. two columns with "Account No:")
@@ -530,7 +544,9 @@ public class PreviewService {
                 String clean = val.toLowerCase().replaceAll("[^a-z0-9]", "");
                 if (clean.equals("from") || clean.equals("to") || clean.equals("imports") || 
                     clean.equals("exports") || clean.equals("net") || clean.equals("e3131") ||
-                    clean.equals("l5229") || clean.equals("l9001")) {
+                    clean.equals("l5229") || clean.equals("l9001") ||
+                    clean.equals("import") || clean.equals("export") || clean.equals("sales") ||
+                    clean.equals("rate") || clean.equals("setoff") || clean.equals("settled")) {
                     return true;
                 }
             }

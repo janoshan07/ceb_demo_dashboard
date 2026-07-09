@@ -27,7 +27,7 @@ import SVGLineChart from '../components/charts/SVGLineChart';
 const CustomerDetails = () => {
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, showConfirm } = useToast();
   
   // Search & Pagination State
   const [customers, setCustomers] = useState([]);
@@ -108,6 +108,12 @@ const CustomerDetails = () => {
   const [editBankCode, setEditBankCode] = useState('');
   const [editBranchCode, setEditBranchCode] = useState('');
   const [editBankAccountNo, setEditBankAccountNo] = useState('');
+  const [editRefNo, setEditRefNo] = useState('');
+  const [editUnitRate, setEditUnitRate] = useState('');
+  const [editTariffType, setEditTariffType] = useState('');
+  const [editCostCodeId, setEditCostCodeId] = useState('');
+  const [editNetTypeId, setEditNetTypeId] = useState('');
+  const [editExpenseCodeId, setEditExpenseCodeId] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState(null);
   const [editMessage, setEditMessage] = useState(null);
@@ -154,8 +160,24 @@ const CustomerDetails = () => {
     }
   };
 
+  const fetchLookups = async () => {
+    try {
+      const [ccRes, ntRes, ecRes] = await Promise.all([
+        authFetch('/api/lookup/cost-codes'),
+        authFetch('/api/lookup/net-types'),
+        authFetch('/api/lookup/expense-codes')
+      ]);
+      if (ccRes.ok) setCostCodesList(await ccRes.json());
+      if (ntRes.ok) setNetTypesList(await ntRes.json());
+      if (ecRes.ok) setExpenseCodesList(await ecRes.json());
+    } catch (e) {
+      console.error('Failed to load lookup lists:', e);
+    }
+  };
+
   useEffect(() => {
     fetchCustomers(currentPage, appliedQuery);
+    fetchLookups();
   }, [currentPage, appliedQuery]);
 
   const handleSearchSubmit = (e) => {
@@ -240,6 +262,12 @@ const CustomerDetails = () => {
     setEditBankCode(customer.bankCode || '');
     setEditBranchCode(customer.branchCode || '');
     setEditBankAccountNo(customer.bankAccountNo || '');
+    setEditRefNo(customer.refNo || '');
+    setEditUnitRate(customer.unitRate || '');
+    setEditTariffType(customer.tariffType || '');
+    setEditCostCodeId(customer.costCodeId || '');
+    setEditNetTypeId(customer.netTypeId || '');
+    setEditExpenseCodeId(customer.expenseCodeId || '');
 
     fetchBillingHistory(customer.accountNo);
   };
@@ -268,7 +296,13 @@ const CustomerDetails = () => {
           solarType: editSolarType,
           bankCode: editBankCode.trim(),
           branchCode: editBranchCode.trim(),
-          bankAccountNo: editBankAccountNo.trim()
+          bankAccountNo: editBankAccountNo.trim(),
+          refNo: editRefNo.trim(),
+          unitRate: editUnitRate ? parseFloat(editUnitRate) : null,
+          tariffType: editTariffType.trim(),
+          costCodeId: editCostCodeId ? parseInt(editCostCodeId) : null,
+          netTypeId: editNetTypeId ? parseInt(editNetTypeId) : null,
+          expenseCodeId: editExpenseCodeId ? parseInt(editExpenseCodeId) : null
         })
       });
 
@@ -386,6 +420,18 @@ const CustomerDetails = () => {
   const [newCustBankCode, setNewCustBankCode] = useState('');
   const [newCustBranchCode, setNewCustBranchCode] = useState('');
   const [newCustBankAccountNo, setNewCustBankAccountNo] = useState('');
+  const [newCustRefNo, setNewCustRefNo] = useState('');
+  const [newCustUnitRate, setNewCustUnitRate] = useState('');
+  const [newCustTariffType, setNewCustTariffType] = useState('');
+  const [newCustCostCodeId, setNewCustCostCodeId] = useState('');
+  const [newCustNetTypeId, setNewCustNetTypeId] = useState('');
+  const [newCustExpenseCodeId, setNewCustExpenseCodeId] = useState('');
+
+  // Lookup options list state
+  const [costCodesList, setCostCodesList] = useState([]);
+  const [netTypesList, setNetTypesList] = useState([]);
+  const [expenseCodesList, setExpenseCodesList] = useState([]);
+
   const [addCustError, setAddCustError] = useState(null);
   const [addCustLoading, setAddCustLoading] = useState(false);
 
@@ -400,6 +446,12 @@ const CustomerDetails = () => {
     setNewCustBankCode('');
     setNewCustBranchCode('');
     setNewCustBankAccountNo('');
+    setNewCustRefNo('');
+    setNewCustUnitRate('');
+    setNewCustTariffType('');
+    setNewCustCostCodeId('');
+    setNewCustNetTypeId('');
+    setNewCustExpenseCodeId('');
     setAddCustError(null);
     setAddCustomerModalOpen(true);
   };
@@ -431,7 +483,13 @@ const CustomerDetails = () => {
           solarType: newCustSolarType,
           bankCode: newCustBankCode.trim(),
           branchCode: newCustBranchCode.trim(),
-          bankAccountNo: newCustBankAccountNo.trim()
+          bankAccountNo: newCustBankAccountNo.trim(),
+          refNo: newCustRefNo.trim(),
+          unitRate: newCustUnitRate ? parseFloat(newCustUnitRate) : null,
+          tariffType: newCustTariffType.trim(),
+          costCodeId: newCustCostCodeId ? parseInt(newCustCostCodeId) : null,
+          netTypeId: newCustNetTypeId ? parseInt(newCustNetTypeId) : null,
+          expenseCodeId: newCustExpenseCodeId ? parseInt(newCustExpenseCodeId) : null
         })
       });
       const data = await res.json();
@@ -454,9 +512,14 @@ const CustomerDetails = () => {
   };
 
   const handleDeleteCustomer = async () => {
-    if (!window.confirm(`Are you absolutely sure you want to delete customer ${selectedCustomer.accountNo} (${selectedCustomer.customerName})? This action cannot be undone.`)) {
-      return;
-    }
+    const confirmed = await showConfirm({
+      title: 'Delete Customer Profile?',
+      message: `Are you absolutely sure you want to delete customer ${selectedCustomer.accountNo} (${selectedCustomer.customerName})? This action cannot be undone and will remove their entire history.`,
+      confirmText: 'Delete Customer',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
 
     try {
       const deletePrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
@@ -468,15 +531,43 @@ const CustomerDetails = () => {
         throw new Error(data.message || 'Failed to delete customer.');
       }
       
-      if (data.status === 'PENDING') {
-        showToast('Customer deletion request submitted for Admin approval.', 'warning');
-      } else {
-        showToast('Customer deleted successfully.', 'success');
-      }
+      showToast('Customer deleted successfully.', 'success');
       setDrawerOpen(false);
       fetchCustomers(currentPage, searchQuery);
     } catch (err) {
       showToast(err.message || 'Failed to delete customer.', 'error');
+    }
+  };
+
+  // --- DELETE BILL HANDLER ---
+  const handleDeleteBill = async (billingId) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Billing Record?',
+      message: 'Are you sure you want to delete this billing record? This action cannot be undone.',
+      confirmText: 'Delete Record',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+      const deletePrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
+      const res = await authFetch(`/api/${deletePrefix}/billing/${billingId}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to delete billing record.');
+      }
+
+      if (data.status === 'PENDING') {
+        showToast('Billing record deletion queued for Admin approval.', 'warning');
+      } else {
+        showToast('Billing record deleted successfully.', 'success');
+        fetchBillingHistory(selectedCustomer.accountNo);
+      }
+    } catch (err) {
+      showToast(err.message || 'Failed to delete billing record.', 'error');
     }
   };
 
@@ -565,33 +656,6 @@ const CustomerDetails = () => {
     }
   };
 
-  // --- DELETE BILL HANDLER ---
-  const handleDeleteBill = async (billingId) => {
-    if (!window.confirm(`Are you sure you want to delete this billing record? This action cannot be undone.`)) {
-      return;
-    }
-
-    try {
-      const deletePrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
-      const res = await authFetch(`/api/${deletePrefix}/billing/${billingId}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to delete billing record.');
-      }
-
-      if (data.status === 'PENDING') {
-        showToast('Billing record deletion queued for Admin approval.', 'warning');
-      } else {
-        showToast('Billing record deleted successfully.', 'success');
-        fetchBillingHistory(selectedCustomer.accountNo);
-      }
-    } catch (err) {
-      showToast(err.message || 'Failed to delete billing record.', 'error');
-    }
-  };
-
   const formatLKR = (val) => {
     return new Intl.NumberFormat('en-LK', {
       style: 'currency',
@@ -669,6 +733,8 @@ const CustomerDetails = () => {
                   <th>Solar Type</th>
                   <th>Panel Cap</th>
                   <th>Agreement Date</th>
+                  <th>Ref No</th>
+                  <th>Cost Code</th>
                   <th>Location</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -682,6 +748,8 @@ const CustomerDetails = () => {
                     <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
                     <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
                     <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                    <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
                     <td><div className="skeleton" style={{ height: '16px', width: '180px' }}></div></td>
                     <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '90px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
                   </tr>
@@ -702,6 +770,8 @@ const CustomerDetails = () => {
                   <th>Solar Type</th>
                   <th>Panel Cap</th>
                   <th>Agreement Date</th>
+                  <th>Ref No</th>
+                  <th>Cost Code</th>
                   <th>Location</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -717,6 +787,8 @@ const CustomerDetails = () => {
                     <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
                     <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
                     <td>{cust.agreementDate || '—'}</td>
+                    <td>{cust.refNo || '—'}</td>
+                    <td>{cust.costCode || '—'}</td>
                     <td>{cust.customerAddress || '—'}</td>
                     <td style={{ textAlign: 'right' }}>
                       <button 
@@ -913,17 +985,21 @@ const CustomerDetails = () => {
                           />
                         </div>
                         <div className="form-group">
-                          <label className="form-label">Solar Type</label>
+                          <label className="form-label">Net Type (Solar Type)</label>
                           <select 
                             className="login-form-input" 
-                            value={editSolarType}
-                            onChange={(e) => setEditSolarType(e.target.value)}
+                            value={editNetTypeId}
+                            onChange={(e) => {
+                              setEditNetTypeId(e.target.value);
+                              const selected = netTypesList.find(n => n.id.toString() === e.target.value);
+                              if (selected) setEditSolarType(selected.name);
+                            }}
                             style={{ appearance: 'auto' }}
                           >
-                            <option value="Net Plus">Net Plus</option>
-                            <option value="Net Plus Plus">Net Plus Plus</option>
-                            <option value="Net Metering">Net Metering</option>
-                            <option value="Net Accounting">Net Accounting</option>
+                            <option value="">Select Net Type</option>
+                            {netTypesList.map(n => (
+                              <option key={n.id} value={n.id}>{n.name}</option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -948,6 +1024,69 @@ const CustomerDetails = () => {
                             onChange={(e) => setEditAgreementDate(e.target.value)}
                           />
                         </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">Reference No (Ref No)</label>
+                          <input 
+                            type="text" 
+                            className="login-form-input" 
+                            value={editRefNo}
+                            onChange={(e) => setEditRefNo(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Unit Rate</label>
+                          <input 
+                            type="number" 
+                            step="0.001"
+                            className="login-form-input" 
+                            value={editUnitRate}
+                            onChange={(e) => setEditUnitRate(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                        <div className="form-group">
+                          <label className="form-label">Tariff Type</label>
+                          <input 
+                            type="text" 
+                            className="login-form-input" 
+                            value={editTariffType}
+                            onChange={(e) => setEditTariffType(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Cost Code</label>
+                          <select 
+                            className="login-form-input" 
+                            value={editCostCodeId}
+                            onChange={(e) => setEditCostCodeId(e.target.value)}
+                            style={{ appearance: 'auto' }}
+                          >
+                            <option value="">Select Cost Code</option>
+                            {costCodesList.map(c => (
+                              <option key={c.id} value={c.id}>{c.costCode} - {c.areaName}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Expense Code</label>
+                        <select 
+                          className="login-form-input" 
+                          value={editExpenseCodeId}
+                          onChange={(e) => setEditExpenseCodeId(e.target.value)}
+                          style={{ appearance: 'auto' }}
+                        >
+                          <option value="">Select Expense Code</option>
+                          {expenseCodesList.map(e => (
+                            <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
+                          ))}
+                        </select>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem' }}>
@@ -1051,6 +1190,32 @@ const CustomerDetails = () => {
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Account No</span>
                           <div style={{ fontWeight: 500 }}>{selectedCustomer.bankAccountNo || '—'}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Ref No</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.refNo || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Unit Rate</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.unitRate != null ? `${selectedCustomer.unitRate} LKR` : '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Tariff Type</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.tariffType || '—'}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Cost Code</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.costCode || '—'}</div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Expense Code</span>
+                          <div style={{ fontWeight: 500 }}>{selectedCustomer.expenseCode || '—'}</div>
                         </div>
                       </div>
                     </div>
@@ -1621,18 +1786,86 @@ const CustomerDetails = () => {
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Solar Type</label>
+                  <label className="form-label">Net Type (Solar Type)</label>
                   <select
                     className="login-form-input"
-                    value={newCustSolarType}
-                    onChange={(e) => setNewCustSolarType(e.target.value)}
+                    value={newCustNetTypeId}
+                    onChange={(e) => {
+                      setNewCustNetTypeId(e.target.value);
+                      const selected = netTypesList.find(n => n.id.toString() === e.target.value);
+                      if (selected) setNewCustSolarType(selected.name);
+                    }}
                     style={{ appearance: 'auto' }}
                   >
-                    <option value="Net Plus">Net Plus</option>
-                    <option value="Net Metering">Net Metering</option>
-                    <option value="Net Accounting">Net Accounting</option>
+                    <option value="">Select Net Type</option>
+                    {netTypesList.map(n => (
+                      <option key={n.id} value={n.id}>{n.name}</option>
+                    ))}
                   </select>
                 </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Reference No (Ref No)</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustRefNo}
+                    onChange={(e) => setNewCustRefNo(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Rate</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    className="login-form-input"
+                    value={newCustUnitRate}
+                    onChange={(e) => setNewCustUnitRate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Tariff Type</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={newCustTariffType}
+                    onChange={(e) => setNewCustTariffType(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cost Code</label>
+                  <select
+                    className="login-form-input"
+                    value={newCustCostCodeId}
+                    onChange={(e) => setNewCustCostCodeId(e.target.value)}
+                    style={{ appearance: 'auto' }}
+                  >
+                    <option value="">Select Cost Code</option>
+                    {costCodesList.map(c => (
+                      <option key={c.id} value={c.id}>{c.costCode} - {c.areaName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">Expense Code</label>
+                <select
+                  className="login-form-input"
+                  value={newCustExpenseCodeId}
+                  onChange={(e) => setNewCustExpenseCodeId(e.target.value)}
+                  style={{ appearance: 'auto' }}
+                >
+                  <option value="">Select Expense Code</option>
+                  {expenseCodesList.map(e => (
+                    <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
+                  ))}
+                </select>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>

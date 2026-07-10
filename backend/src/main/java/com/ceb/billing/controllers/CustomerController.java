@@ -60,6 +60,9 @@ public class CustomerController {
     @Autowired
     private ExpenseCodeRepository expenseCodeRepository;
 
+    @Autowired
+    private com.ceb.billing.services.ExcelValidationService excelValidationService;
+
     /**
      * Converts a Customer JPA entity to a plain Map of scalar values.
      * This avoids Hibernate lazy-load proxy serialization issues that cause
@@ -86,6 +89,8 @@ public class CustomerController {
             try { dto.put("costCode",     c.getCostCode()     != null ? c.getCostCode().getCostCode()   : null); } catch (Exception e) { dto.put("costCode",     null); }
             try { dto.put("netTypeName",  c.getNetType()      != null ? c.getNetType().getName()         : null); } catch (Exception e) { dto.put("netTypeName",  null); }
             try { dto.put("expenseCode",  c.getExpenseCode()  != null ? c.getExpenseCode().getExpCode() : null); } catch (Exception e) { dto.put("expenseCode",  null); }
+            dto.put("validationStatus", c.getValidationStatus());
+            dto.put("validationErrors", c.getValidationErrors());
         } catch (Exception ex) {
             log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
         }
@@ -98,6 +103,7 @@ public class CustomerController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomers(
             @RequestParam(value = "query", required = false) String query,
+            @RequestParam(value = "validationStatus", required = false) String validationStatus,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
 
@@ -105,7 +111,14 @@ public class CustomerController {
             Pageable pageable = PageRequest.of(page, size, Sort.by("accountNo").ascending());
             Page<Customer> customerPage;
 
-            if (query != null && !query.trim().isEmpty()) {
+            boolean hasStatus = validationStatus != null && !validationStatus.trim().isEmpty();
+            boolean hasQuery = query != null && !query.trim().isEmpty();
+
+            if (hasStatus && hasQuery) {
+                customerPage = customerRepository.searchCustomersWithStatus(query.trim(), validationStatus.trim(), pageable);
+            } else if (hasStatus) {
+                customerPage = customerRepository.findByValidationStatus(validationStatus.trim(), pageable);
+            } else if (hasQuery) {
                 customerPage = customerRepository.searchCustomers(query.trim(), pageable);
             } else {
                 customerPage = customerRepository.findAll(pageable);
@@ -240,6 +253,7 @@ public class CustomerController {
             
             applyCustomerEdits(customer, payload);
 
+            excelValidationService.revalidateCustomer(customer);
             customerRepository.save(Objects.requireNonNull(customer));
 
             // Audit Log Entry
@@ -365,6 +379,7 @@ public class CustomerController {
             Customer customer = new Customer();
             customer.setAccountNo(accountNo.trim());
             applyCustomerEdits(customer, payload);
+            excelValidationService.revalidateCustomer(customer);
             customerRepository.save(customer);
 
             String actor = SecurityContextHolder.getContext().getAuthentication().getName();

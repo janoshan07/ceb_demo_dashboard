@@ -371,7 +371,7 @@ const SessionBanner = ({ session, onDiscard }) => (
 // ═══════════════════════════════════════════════════════════════════════════
 const UploadPage = () => {
   const { authFetch, user } = useAuth();
-  const { showToast } = useToast();
+  const { showToast, showConfirm } = useToast();
 
   // ── Wizard state ──────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState('wizard'); // 'wizard' | 'history'
@@ -407,6 +407,8 @@ const UploadPage = () => {
     if (stage === 'CEB_APPROVED') return 3;
     return 1;
   };
+
+  const latestRejected = uploadHistory.find(h => h.status === 'REJECTED');
 
   // ── On mount: check active session ───────────────────────────────────
   useEffect(() => {
@@ -446,6 +448,153 @@ const UploadPage = () => {
       console.error('Failed to fetch history:', e);
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  // ── Batch Editing & Deleting states ────────────────────────────────────
+  const [editingBatch, setEditingBatch] = useState(null); // UploadHistory record being renamed
+  const [editBatchName, setEditBatchName] = useState('');
+  const [batchDetails, setBatchDetails] = useState(null); // UploadHistory record for info modal
+
+  // ── Row Correction Modal State ─────────────────────────────────────────
+  const [correctingRow, setCorrectingRow] = useState(null); 
+  const [correctingFields, setCorrectingFields] = useState({}); 
+  const [rowCorrections, setRowCorrections] = useState({}); 
+
+  const handleCorrectRow = (row) => {
+    setCorrectingRow(row);
+    setCorrectingFields({ ...row });
+  };
+
+  const handleSaveCorrection = () => {
+    if (!correctingRow) return;
+    const key = correctingRow.rowNum || correctingRow.accountNo;
+    const updated = { ...correctingFields };
+
+    if (wizardStep === 3) {
+      const imp = parseFloat(updated.kwhImport) || 0;
+      const exp = parseFloat(updated.kwhExport) || 0;
+      const rate = parseFloat(updated.unitRate || updated.effectiveUnitRate) || 0;
+      const sales = exp - imp;
+      updated.kwhSales = sales;
+      updated.paymentSettled = sales * rate - (parseFloat(updated.billSetOff) || 0);
+    }
+
+    setPreview(prev => {
+      if (!prev || !prev.rows) return prev;
+      const newRows = prev.rows.map(r => {
+        const rKey = r.rowNum || r.accountNo;
+        if (rKey === key) {
+          let errors = [...(r.errors || [])];
+          let status = r.status;
+
+          if (wizardStep === 1) {
+            const acc = updated.accountNo || '';
+            const newErrs = [];
+            if (!acc.trim()) newErrs.push("Account No is missing");
+            else if (acc.trim().length !== 10 || !/^\d+$/.test(acc.trim())) {
+              newErrs.push("Account No must be a 10-digit numeric value");
+            }
+            if (!(updated.customerName || '').trim()) {
+              newErrs.push("Customer Name is missing");
+            }
+            errors = newErrs;
+            status = errors.length === 0 ? 'VALID' : 'ERROR';
+          } else if (wizardStep === 2) {
+            const newErrs = [];
+            if (!updated.prevReadingDate) newErrs.push("Previous Reading Date is missing");
+            if (!updated.currReadingDate) newErrs.push("Current Reading Date is missing");
+            errors = newErrs;
+            status = errors.length === 0 ? 'VALID' : 'ERROR';
+          } else if (wizardStep === 3) {
+            const newErrs = [];
+            if (updated.kwhImport === undefined || updated.kwhImport === '') newErrs.push("kwhImport is missing");
+            if (updated.kwhExport === undefined || updated.kwhExport === '') newErrs.push("kwhExport is missing");
+            errors = newErrs;
+            status = errors.length === 0 ? 'VALID' : 'ERROR';
+          }
+
+          return {
+            ...r,
+            ...updated,
+            errors,
+            status
+          };
+        }
+        return r;
+      });
+
+      const errorCount = newRows.filter(r => r.status === 'ERROR').length;
+      return {
+        ...prev,
+        rows: newRows,
+        errorCount
+      };
+    });
+
+    setRowCorrections(prev => ({
+      ...prev,
+      [key]: updated
+    }));
+
+    setCorrectingRow(null);
+    showToast('Row correction stored. Revalidation will run upon approval.', 'success');
+  };
+
+  const handleEditBatch = async (batch) => {
+    setEditingBatch(batch);
+    setEditBatchName(batch.filename || '');
+  };
+
+  const handleSaveBatchRename = async (e) => {
+    e.preventDefault();
+    if (!editBatchName.trim()) {
+      showToast('Filename cannot be empty.', 'warning');
+      return;
+    }
+    try {
+      const res = await authFetch(`/api/officer/billing/uploads/${editingBatch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename: editBatchName.trim() })
+      });
+      if (res.ok) {
+        showToast('Batch renamed successfully.', 'success');
+        setEditingBatch(null);
+        fetchHistory();
+      } else {
+        const data = await res.json();
+        showToast(data.message || 'Failed to rename batch.', 'error');
+      }
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
+    }
+  };
+
+  const handleDeleteBatch = async (batch) => {
+    const confirmed = await showConfirm({
+      title: 'Rollback Excel Batch?',
+      message: `Are you absolutely sure you want to delete batch #${batch.id} ("${batch.filename}")?\n\nThis will remove all billing records created by this batch. Newly added customers from this batch will be removed if they don't have other active records. This cannot be undone.`,
+      confirmText: 'Rollback Batch',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
+    try {
+      const res = await authFetch(`/api/officer/billing/uploads/${batch.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`Rollback complete: ${data.message || 'Batch removed.'}`, 'success');
+        fetchHistory();
+        // Force refresh Customer Directory if it's cached or active in background
+      } else {
+        showToast(data.message || 'Failed to delete batch.', 'error');
+      }
+    } catch (err) {
+      showToast('Error: ' + err.message, 'error');
     }
   };
 
@@ -504,8 +653,8 @@ const UploadPage = () => {
       setApproving(true);
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('correctionsJson', '{}');
-      const res = await authFetch('/api/admin/import/master-data/approve', { method: 'POST', body: fd });
+      fd.append('correctionsJson', JSON.stringify(rowCorrections));
+      const res = await authFetch('/api/officer/import/master-data/approve', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
       showToast(`✅ Master Data approved! ${data.newCustomers} new, ${data.updatedCustomers} updated.`, 'success');
@@ -513,6 +662,7 @@ const UploadPage = () => {
       setWizardStep(2);
       setFile(null);
       setPreview(null);
+      setRowCorrections({});
       fetchHistory();
     } catch (e) {
       showToast('Approval failed: ' + e.message, 'error');
@@ -550,8 +700,8 @@ const UploadPage = () => {
       setApproving(true);
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('correctionsJson', '{}');
-      const res = await authFetch(`/api/admin/import/ceb-assist/${session.sessionId}/approve`, { method: 'POST', body: fd });
+      fd.append('correctionsJson', JSON.stringify(rowCorrections));
+      const res = await authFetch(`/api/officer/import/ceb-assist/${session.sessionId}/approve`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
       showToast(`✅ CEB Assist merged! ${data.updatedCount} accounts updated.`, 'success');
@@ -559,6 +709,7 @@ const UploadPage = () => {
       setWizardStep(3);
       setFile(null);
       setPreview(null);
+      setRowCorrections({});
     } catch (e) {
       showToast('Approval failed: ' + e.message, 'error');
     } finally {
@@ -595,8 +746,8 @@ const UploadPage = () => {
       setApproving(true);
       const fd = new FormData();
       fd.append('file', file);
-      fd.append('correctionsJson', '{}');
-      const res = await authFetch(`/api/admin/import/ngen/${session.sessionId}/approve`, { method: 'POST', body: fd });
+      fd.append('correctionsJson', JSON.stringify(rowCorrections));
+      const res = await authFetch(`/api/officer/import/ngen/${session.sessionId}/approve`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
       showToast(`🎉 Import Complete! ${data.billingRecordsCreated} billing records created. Customers added to directory.`, 'success');
@@ -604,6 +755,7 @@ const UploadPage = () => {
       setWizardStep(1);
       setFile(null);
       setPreview(null);
+      setRowCorrections({});
       fetchHistory();
       setActiveView('history');
     } catch (e) {
@@ -645,10 +797,10 @@ const UploadPage = () => {
             {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview Data</>}
           </button>
         )}
-        {preview && isAdmin && (
+        {preview && (
           <button className="btn" onClick={handleMasterApprove} disabled={approving}
             style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> Approve &amp; Import</>}
+            {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> {isAdmin ? 'Approve & Import' : 'Stage & Proceed'}</>}
           </button>
         )}
       </div>
@@ -678,7 +830,7 @@ const UploadPage = () => {
               Show errors only
             </label>
           </div>
-          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} />
+          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} />
         </div>
       )}
     </div>
@@ -718,10 +870,10 @@ const UploadPage = () => {
             {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview Data</>}
           </button>
         )}
-        {preview && isAdmin && (
+        {preview && (
           <button className="btn" onClick={handleCebApprove} disabled={approving}
             style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Merging…</> : <><Check size={15} /> Approve &amp; Merge</>}
+            {approving ? <><Loader size={15} className="animate-spin" /> Merging…</> : <><Check size={15} /> {isAdmin ? 'Approve & Merge' : 'Stage & Proceed'}</>}
           </button>
         )}
       </div>
@@ -741,7 +893,7 @@ const UploadPage = () => {
               Show errors / unmatched only
             </label>
           </div>
-          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} />
+          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} />
         </div>
       )}
     </div>
@@ -785,10 +937,10 @@ const UploadPage = () => {
             {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview &amp; Calculate</>}
           </button>
         )}
-        {preview && isAdmin && (
+        {preview && (
           <button className="btn" onClick={handleNgenApprove} disabled={approving}
             style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Finalizing…</> : <><Zap size={15} /> Approve &amp; Finalize</>}
+            {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit for Admin Approval'}</>}
           </button>
         )}
       </div>
@@ -808,7 +960,7 @@ const UploadPage = () => {
               Show errors / warnings only
             </label>
           </div>
-          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} />
+          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} />
         </div>
       )}
     </div>
@@ -821,8 +973,8 @@ const UploadPage = () => {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Upload History</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>All previous Excel import records</div>
+          <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Excel Import Batches</h2>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Manage and rollback uploaded data at the batch level</div>
         </div>
         <button onClick={fetchHistory} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.45rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
           <RefreshCw size={14} /> Refresh
@@ -840,7 +992,7 @@ const UploadPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['ID', 'Filename', 'Uploaded By', 'Records', 'Billing', 'Customers', 'Status', 'Date'].map(h => (
+                {['ID', 'Filename', 'Uploaded By', 'Records', 'Billing', 'Customers', 'Status', 'Date', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
@@ -849,7 +1001,7 @@ const UploadPage = () => {
               {uploadHistory.map((h, i) => (
                 <tr key={h.id || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{h.id}</td>
-                  <td style={{ padding: '0.6rem 0.9rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.filename || '—'}</td>
+                  <td style={{ padding: '0.6rem 0.9rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{h.filename || '—'}</td>
                   <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-secondary)' }}>{h.uploadedBy || '—'}</td>
                   <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace' }}>{h.rowsProcessed ?? '—'}</td>
                   <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', color: '#6366f1' }}>{h.billingInserted ?? '—'}</td>
@@ -857,17 +1009,107 @@ const UploadPage = () => {
                   <td style={{ padding: '0.6rem 0.9rem' }}>
                     <span style={{
                       padding: '0.15rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700,
-                      background: h.status === 'SUCCESS' ? 'rgba(16,185,129,0.15)' : h.status === 'FAILED' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
-                      color: h.status === 'SUCCESS' ? '#10b981' : h.status === 'FAILED' ? '#ef4444' : '#f59e0b'
+                      background: h.status === 'SUCCESS' || h.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : h.status === 'FAILED' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                      color: h.status === 'SUCCESS' || h.status === 'COMPLETED' ? '#10b981' : h.status === 'FAILED' ? '#ef4444' : '#f59e0b'
                     }}>{h.status}</span>
                   </td>
                   <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                    {h.uploadedAt ? new Date(h.uploadedAt).toLocaleDateString() : '—'}
+                    {h.uploadTime ? new Date(h.uploadTime).toLocaleString() : '—'}
+                  </td>
+                  <td style={{ padding: '0.6rem 0.9rem' }}>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button onClick={() => setBatchDetails(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Details</button>
+                      <button onClick={() => handleEditBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Edit</button>
+                      {isAdmin && (
+                        <button onClick={() => handleDeleteBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Delete</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Batch Details Modal */}
+      {batchDetails && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Batch Details</h3>
+              <button onClick={() => setBatchDetails(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.88rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Batch ID</span>
+                <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>#{batchDetails.id}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Uploaded File</span>
+                <span style={{ fontWeight: 600, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batchDetails.filename}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Uploaded By</span>
+                <span>{batchDetails.uploadedBy}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Upload Date/Time</span>
+                <span>{batchDetails.uploadTime ? new Date(batchDetails.uploadTime).toLocaleString() : '—'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Total Rows Processed</span>
+                <span style={{ fontFamily: 'monospace' }}>{batchDetails.rowsProcessed}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Billing Records Inserted</span>
+                <span style={{ fontFamily: 'monospace', color: '#6366f1', fontWeight: 600 }}>{batchDetails.billingInserted}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>New Customers Created</span>
+                <span style={{ fontFamily: 'monospace', color: '#10b981', fontWeight: 600 }}>{batchDetails.newCustomers}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Errors Flagged</span>
+                <span style={{ fontFamily: 'monospace', color: batchDetails.errorsCount > 0 ? '#ef4444' : 'var(--text-secondary)' }}>{batchDetails.errorsCount}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.5rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>Import Status</span>
+                <span style={{
+                  padding: '0.15rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700,
+                  background: batchDetails.status === 'SUCCESS' || batchDetails.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : (batchDetails.status === 'FAILED' || batchDetails.status === 'REJECTED') ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                  color: batchDetails.status === 'SUCCESS' || batchDetails.status === 'COMPLETED' ? '#10b981' : (batchDetails.status === 'FAILED' || batchDetails.status === 'REJECTED') ? '#ef4444' : '#f59e0b'
+                }}>{batchDetails.status}</span>
+              </div>
+              {batchDetails.rejectionReason && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+                  <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.78rem' }}>Rejection Reason</span>
+                  <span style={{ color: 'var(--text-secondary)', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, padding: '0.6rem 0.8rem', fontSize: '0.82rem', lineHeight: 1.4 }}>{batchDetails.rejectionReason}</span>
+                </div>
+              )}
+            </div>
+            <button onClick={() => setBatchDetails(null)} style={{ width: '100%', marginTop: '1.5rem', padding: '0.65rem', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Close Details</button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit (Rename) Batch Modal */}
+      {editingBatch && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
+          <form onSubmit={handleSaveBatchRename} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '450px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Rename Import Batch</h3>
+              <button type="button" onClick={() => setEditingBatch(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <div style={{ marginBottom: '1.5rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 500 }}>Batch Name (Filename)</label>
+              <input type="text" value={editBatchName} onChange={e => setEditBatchName(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.88rem' }} required placeholder="Enter new filename..." />
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button type="button" onClick={() => setEditingBatch(null)} style={{ flex: 1, padding: '0.65rem', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button type="submit" style={{ flex: 1, padding: '0.65rem', background: 'var(--primary)', border: 'none', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Save Changes</button>
+            </div>
+          </form>
         </div>
       )}
     </div>
@@ -913,6 +1155,27 @@ const UploadPage = () => {
 
       {activeView === 'history' ? renderHistory() : (
         <div className="card" style={{ padding: '2rem', borderRadius: 16 }}>
+          {/* Rejection Alert Banner */}
+          {latestRejected && wizardStep === 1 && !session && (
+            <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AlertTriangle size={18} color="#ef4444" /></div>
+                <div>
+                  <div style={{ fontWeight: 700, color: 'white', fontSize: '0.92rem' }}>Import Batch Rejected by Admin</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Batch: <strong>{latestRejected.filename}</strong> was rejected.</div>
+                </div>
+              </div>
+              {latestRejected.rejectionReason && (
+                <div style={{ background: 'rgba(239, 68, 68, 0.04)', border: '1px solid rgba(239, 68, 68, 0.12)', borderRadius: 8, padding: '0.75rem 1rem', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                  <strong>Reason:</strong> {latestRejected.rejectionReason}
+                </div>
+              )}
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                Please correct the issues in your Excel sheets and start a new import session below.
+              </div>
+            </div>
+          )}
+
           {/* Session banner */}
           {session && session.hasActiveSession && (
             <SessionBanner session={session} onDiscard={handleDiscardSession} />
@@ -945,11 +1208,112 @@ const UploadPage = () => {
               Step {wizardStep} of 3 — {WIZARD_STEPS[wizardStep - 1].label}
             </div>
 
-            <div>
-              {/* Advance button (for officers who can preview but not approve) */}
-              {!isAdmin && preview && wizardStep < 3 && (
-                <div style={{ fontSize: '0.78rem', color: '#f59e0b' }}>Awaiting admin approval to proceed.</div>
+            <div />
+          </div>
+        </div>
+      )}
+
+      {/* Row Correction Modal */}
+      {correctingRow && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '550px', padding: '2rem', boxShadow: 'var(--shadow)', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Correct Row #{correctingRow.rowNum || correctingRow.accountNo}</h3>
+              <button onClick={() => setCorrectingRow(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.75rem' }}>
+              {wizardStep === 1 && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
+                      <input type="text" value={correctingFields.customerName || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Address</label>
+                    <input type="text" value={correctingFields.customerAddress || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerAddress: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
+                      <input type="text" value={correctingFields.mobileNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, mobileNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
+                      <input type="text" value={correctingFields.solarType || ''} onChange={e => setCorrectingFields(p => ({ ...p, solarType: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
+                      <input type="number" step="0.01" value={correctingFields.unitRate || ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Billing Mode (Exp Code)</label>
+                      <input type="text" value={correctingFields.billingMode || ''} onChange={e => setCorrectingFields(p => ({ ...p, billingMode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                </>
               )}
+              
+              {wizardStep === 2 && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                    <input type="text" value={correctingFields.accountNo || ''} readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'not-allowed' }} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Previous Reading Date</label>
+                      <input type="date" value={correctingFields.prevReadingDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, prevReadingDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Current Reading Date</label>
+                      <input type="date" value={correctingFields.currReadingDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, currReadingDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                </>
+              )}
+              
+              {wizardStep === 3 && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                      <input type="text" value={correctingFields.accountNo || ''} readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'not-allowed' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
+                      <input type="number" step="0.01" value={correctingFields.unitRate || correctingFields.effectiveUnitRate || ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value, effectiveUnitRate: parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>kWh Import</label>
+                      <input type="number" step="1" value={correctingFields.kwhImport ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, kwhImport: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>kWh Export</label>
+                      <input type="number" step="1" value={correctingFields.kwhExport ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, kwhExport: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Outstanding Set Off (Charges)</label>
+                    <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button onClick={() => setCorrectingRow(null)} style={{ flex: 1, padding: '0.65rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button onClick={handleSaveCorrection} style={{ flex: 1, padding: '0.65rem', background: 'var(--primary)', border: 'none', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Save Edits</button>
             </div>
           </div>
         </div>

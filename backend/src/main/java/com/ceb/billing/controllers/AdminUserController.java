@@ -186,10 +186,12 @@ public class AdminUserController {
     }
 
     @PostMapping("/staging/batch/{batchId}/reject")
-    public ResponseEntity<?> rejectStagingBatch(@PathVariable long batchId) {
+    public ResponseEntity<?> rejectStagingBatch(
+            @PathVariable long batchId,
+            @RequestParam(value = "reason", required = false, defaultValue = "") String reason) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
-            stagingMigrationService.rejectBatch(batchId, currentUsername);
+            stagingMigrationService.rejectBatch(batchId, reason, currentUsername);
             return ResponseEntity.ok(new MessageResponse("Staging batch successfully rejected and staging rows discarded."));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(new MessageResponse("Failed to reject staging batch: " + e.getMessage()));

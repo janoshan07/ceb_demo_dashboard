@@ -325,6 +325,63 @@ public class ExcelValidationService {
         return result;
     }
 
+    public void revalidateCustomer(com.ceb.billing.entities.Customer customer) {
+        List<String> errors = new java.util.ArrayList<>();
+        
+        if (customer.getCustomerName() == null || customer.getCustomerName().trim().isEmpty()) {
+            errors.add("Customer Name is missing");
+        }
+        if (customer.getCustomerAddress() == null || customer.getCustomerAddress().trim().isEmpty()) {
+            errors.add("Address is missing");
+        }
+        if (customer.getMobileNo() == null || customer.getMobileNo().trim().isEmpty()) {
+            errors.add("Mobile No is missing");
+        }
+        if (customer.getBankCode() == null || customer.getBankCode().trim().isEmpty()) {
+            errors.add("Bank Code is missing");
+        } else {
+            String cleanBank = customer.getBankCode().trim().toUpperCase();
+            if (!VALID_BANK_CODES.contains(cleanBank) && !cleanBank.matches("\\d{4}")) {
+                errors.add("Unrecognized bank code: '" + customer.getBankCode() + "'");
+            }
+        }
+        if (customer.getBranchCode() == null || customer.getBranchCode().trim().isEmpty()) {
+            errors.add("Branch Code is missing");
+        }
+        if (customer.getBankAccountNo() == null || customer.getBankAccountNo().trim().isEmpty()) {
+            errors.add("Bank Account No is missing");
+        }
+        if (customer.getSolarType() == null || customer.getSolarType().trim().isEmpty()) {
+            errors.add("Solar Type is missing");
+        } else {
+            boolean ntExists = netTypeRepository.findByName(customer.getSolarType().trim()).isPresent();
+            if (!ntExists) {
+                errors.add("Unrecognized net type/solar type: '" + customer.getSolarType() + "'");
+            }
+        }
+        
+        // Cost Code
+        if (customer.getCostCode() == null) {
+            errors.add("Cost Code is missing or unrecognized");
+        }
+        // Expense Code (Billing Mode)
+        if (customer.getExpenseCode() == null) {
+            errors.add("Billing Mode (Exp. Code) is missing or unrecognized");
+        }
+
+        if (errors.isEmpty()) {
+            customer.setValidationStatus("VALID");
+            customer.setValidationErrors(null);
+        } else {
+            customer.setValidationStatus("ERROR");
+            try {
+                customer.setValidationErrors(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(errors));
+            } catch (Exception e) {
+                customer.setValidationErrors(String.join(", ", errors));
+            }
+        }
+    }
+
     public static class RowValidationResult {
         private final List<ExcelValidationError> validationMessages = new ArrayList<>();
         private boolean hasErrors = false;

@@ -56,6 +56,12 @@ public class BillingController {
     @Autowired
     private com.ceb.billing.services.AuditLogService auditLogService;
 
+    @Autowired
+    private com.ceb.billing.repositories.ImportBatchRepository importBatchRepository;
+
+    @Autowired
+    private com.ceb.billing.repositories.BillingUploadStagingRepository billingUploadStagingRepository;
+
     // --- Officer Billing Endpoints ---
 
     @PostMapping("/api/officer/upload/excel")
@@ -87,59 +93,109 @@ public class BillingController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     @Transactional
     public ResponseEntity<?> deleteUploadHistory(@PathVariable long uploadId) {
+        try {
+            Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(uploadId);
+            if (optHistory.isEmpty()) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.NOT_FOUND)
+                        .body(new MessageResponse("Upload history entry not found."));
+            }
+
+            UploadHistory history = optHistory.get();
+            String filename = history.getFilename();
+
+            // Find all customers created by this upload
+            List<Customer> createdCustomers = customerRepository.findByCreatedByUploadId(uploadId);
+            int customersDeleted = 0;
+            int customersDetached = 0;
+
+            // Delete all billing records linked to this upload first
+            billingRecordRepository.deleteByUploadHistoryId(uploadId);
+
+            // Delete associated audit log if exists
+            try {
+                importAuditLogRepository.deleteByUploadHistoryId(uploadId);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            // Delete staging rows if exist
+            try {
+                billingUploadStagingRepository.deleteByUploadBatchId(uploadId);
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            // Delete import batch reference if exists
+            try {
+                if (importBatchRepository.existsById(uploadId)) {
+                    importBatchRepository.deleteById(uploadId);
+                }
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+
+            // Delete newly created customers if they have no other billing records
+            for (Customer customer : createdCustomers) {
+                long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(customer.getAccountNo());
+                if (activeRecordsCount == 0) {
+                    customerRepository.delete(customer);
+                    customersDeleted++;
+                } else {
+                    customer.setCreatedByUploadId(null);
+                    customerRepository.save(customer);
+                    customersDetached++;
+                }
+            }
+
+            // Delete the upload history record
+            uploadHistoryRepository.deleteById(uploadId);
+
+            String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+            auditLogService.log("UPLOAD_ROLLBACK",
+                    "User " + actor + " deleted upload history entry ID " + uploadId
+                            + " (\"" + filename + "\"), associated billing records, and rolled back "
+                            + customersDeleted + " newly added customer records (retained/detached " + customersDetached + ").");
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Upload \"" + filename + "\" and associated records deleted. Rolled back " 
+                         + customersDeleted + " newly added customers (retained " + customersDetached + " referenced customers).");
+            response.put("filename", filename);
+            response.put("customersDeleted", customersDeleted);
+            response.put("customersDetached", customersDetached);
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new MessageResponse("Failed to delete upload history: " + e.getMessage()));
+        }
+    }
+
+    @PutMapping("/api/officer/billing/uploads/{uploadId}")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @Transactional
+    public ResponseEntity<?> editUploadHistory(@PathVariable long uploadId, @RequestBody Map<String, Object> payload) {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(uploadId);
         if (optHistory.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
         UploadHistory history = optHistory.get();
-        String filename = history.getFilename();
-
-        // Find all customers created by this upload
-        List<Customer> createdCustomers = customerRepository.findByCreatedByUploadId(uploadId);
-        int customersDeleted = 0;
-        int customersDetached = 0;
-
-        // Delete all billing records linked to this upload first
-        billingRecordRepository.deleteByUploadHistoryId(uploadId);
-
-        // Delete associated audit log if exists
-        try {
-            importAuditLogRepository.deleteByUploadHistoryId(uploadId);
-        } catch (Exception ex) {
-            ex.printStackTrace();
+        String oldFilename = history.getFilename();
+        String newFilename = (String) payload.get("filename");
+        
+        if (newFilename != null && !newFilename.trim().isEmpty()) {
+            history.setFilename(newFilename.trim());
+            uploadHistoryRepository.save(history);
+            
+            String actor = SecurityContextHolder.getContext().getAuthentication().getName();
+            auditLogService.log("UPLOAD_EDIT", 
+                "User " + actor + " updated upload history entry ID " + uploadId 
+                + " (Filename changed from \"" + oldFilename + "\" to \"" + newFilename.trim() + "\").");
         }
 
-        // Delete newly created customers if they have no other billing records
-        for (Customer customer : createdCustomers) {
-            long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(customer.getAccountNo());
-            if (activeRecordsCount == 0) {
-                customerRepository.delete(customer);
-                customersDeleted++;
-            } else {
-                customer.setCreatedByUploadId(null);
-                customerRepository.save(customer);
-                customersDetached++;
-            }
-        }
-
-        // Delete the upload history record
-        uploadHistoryRepository.deleteById(uploadId);
-
-        String actor = SecurityContextHolder.getContext().getAuthentication().getName();
-        auditLogService.log("UPLOAD_ROLLBACK",
-                "User " + actor + " deleted upload history entry ID " + uploadId
-                        + " (\"" + filename + "\"), associated billing records, and rolled back "
-                        + customersDeleted + " newly added customer records (retained/detached " + customersDetached + ").");
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Upload \"" + filename + "\" and associated records deleted. Rolled back " 
-                     + customersDeleted + " newly added customers (retained " + customersDetached + " referenced customers).");
-        response.put("filename", filename);
-        response.put("customersDeleted", customersDeleted);
-        response.put("customersDetached", customersDetached);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(history);
     }
+
 
     @GetMapping("/api/officer/billing")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")

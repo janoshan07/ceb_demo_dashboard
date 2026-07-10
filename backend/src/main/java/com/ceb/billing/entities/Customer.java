@@ -69,6 +69,12 @@ public class Customer {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "validation_status", length = 50)
+    private String validationStatus = "VALID";
+
+    @Column(name = "validation_errors", columnDefinition = "TEXT")
+    private String validationErrors;
+
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -254,5 +260,21 @@ public class Customer {
 
     public void setExpenseCode(ExpenseCode expenseCode) {
         this.expenseCode = expenseCode;
+    }
+
+    public String getValidationStatus() {
+        return validationStatus;
+    }
+
+    public void setValidationStatus(String validationStatus) {
+        this.validationStatus = validationStatus;
+    }
+
+    public String getValidationErrors() {
+        return validationErrors;
+    }
+
+    public void setValidationErrors(String validationErrors) {
+        this.validationErrors = validationErrors;
     }
 }

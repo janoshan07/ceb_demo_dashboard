@@ -51,6 +51,9 @@ public class ApprovalController {
     @Autowired
     private ExpenseCodeRepository expenseCodeRepository;
 
+    @Autowired
+    private com.ceb.billing.services.ExcelValidationService excelValidationService;
+
     @GetMapping
     public ResponseEntity<List<ApprovalRequest>> getPendingApprovals() {
         List<ApprovalRequest> pending = approvalRequestRepository.findByStatusOrderByCreatedAtDesc("PENDING");
@@ -87,10 +90,11 @@ public class ApprovalController {
                     Customer customer = new Customer();
                     customer.setAccountNo(request.getAccountNo());
                     applyCustomerEdits(customer, newValues);
+                    excelValidationService.revalidateCustomer(customer);
                     customerRepository.save(Objects.requireNonNull(customer));
                     auditLogService.log("CUSTOMER_CREATE_APPROVED",
                             String.format("Admin %s approved manual customer creation for %s requested by %s", adminUsername,
-                                    request.getAccountNo(), request.getChangedBy()));
+                                     request.getAccountNo(), request.getChangedBy()));
                 } else if ("DELETE".equals(aType)) {
                     Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
                     if (optCustomer.isPresent()) {
@@ -107,6 +111,7 @@ public class ApprovalController {
                     }
                     Customer customer = optCustomer.get();
                     applyCustomerEdits(customer, newValues);
+                    excelValidationService.revalidateCustomer(customer);
                     customerRepository.save(Objects.requireNonNull(customer));
                     auditLogService.log("CUSTOMER_EDIT_APPROVED",
                             String.format("Admin %s approved customer %s changes from %s", adminUsername,

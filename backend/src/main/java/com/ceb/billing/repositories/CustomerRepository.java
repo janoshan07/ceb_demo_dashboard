@@ -22,6 +22,13 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
            "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%')))")
     Page<Customer> searchCustomers(@Param("query") String query, Pageable pageable);
 
+    Page<Customer> findByValidationStatus(String validationStatus, Pageable pageable);
+
+    @Query("SELECT c FROM Customer c WHERE c.validationStatus = :validationStatus AND " +
+           "(:query IS NULL OR LOWER(c.accountNo) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%')))")
+    Page<Customer> searchCustomersWithStatus(@Param("query") String query, @Param("validationStatus") String validationStatus, Pageable pageable);
+
     @Query("SELECT c.solarType, COUNT(c) FROM Customer c GROUP BY c.solarType")
     List<Object[]> getSolarTypeDistribution();
 

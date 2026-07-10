@@ -30,6 +30,8 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const [actionProcessing, setActionProcessing] = useState(false);
   const [actionSuccess, setActionSuccess] = useState(null);
   const [actionError, setActionError] = useState(null);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   // Edit Staging Row State
   const [editingStagingRow, setEditingStagingRow] = useState(null);
@@ -184,42 +186,38 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
 
   const handleRejectBatch = () => {
     if (!selectedBatch) return;
+    setRejectionReason('');
+    setRejectModalOpen(true);
+  };
 
-    onConfirmAction({
-      isOpen: true,
-      title: 'Reject Staging Batch',
-      message: `Are you sure you want to reject batch "${selectedBatch.filename}"? All staged rows for this file will be permanently deleted.`,
-      type: 'danger',
-      isAlertOnly: false,
-      onConfirm: async () => {
-        try {
-          setActionProcessing(true);
-          setActionError(null);
-          setActionSuccess(null);
-          
-          const res = await authFetch(`/api/admin/staging/batch/${selectedBatch.id}/reject`, {
-            method: 'POST'
-          });
-          const body = await res.json();
-          
-          if (!res.ok) {
-            throw new Error(body.message || 'Failed to reject batch.');
-          }
-          
-          const msg = body.message || 'Batch rejected successfully.';
-          setActionSuccess(msg);
-          showToast(msg, 'success');
-          setSelectedBatch(null);
-          fetchPendingBatches();
-        } catch (err) {
-          const errMsg = err.message || 'Rejection operation failed.';
-          setActionError(errMsg);
-          showToast(errMsg, 'error');
-        } finally {
-          setActionProcessing(false);
-        }
+  const handleConfirmReject = async () => {
+    try {
+      setActionProcessing(true);
+      setActionError(null);
+      setActionSuccess(null);
+      setRejectModalOpen(false);
+      
+      const res = await authFetch(`/api/admin/staging/batch/${selectedBatch.id}/reject?reason=${encodeURIComponent(rejectionReason)}`, {
+        method: 'POST'
+      });
+      const body = await res.json();
+      
+      if (!res.ok) {
+        throw new Error(body.message || 'Failed to reject batch.');
       }
-    });
+      
+      const msg = body.message || 'Batch rejected successfully.';
+      setActionSuccess(msg);
+      showToast(msg, 'success');
+      setSelectedBatch(null);
+      fetchPendingBatches();
+    } catch (err) {
+      const errMsg = err.message || 'Rejection operation failed.';
+      setActionError(errMsg);
+      showToast(errMsg, 'error');
+    } finally {
+      setActionProcessing(false);
+    }
   };
 
   // Summary Metrics calculations
@@ -481,6 +479,49 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
             onSave={handleSaveStagingRow}
             loading={editStagingLoading}
           />
+          
+          {rejectModalOpen && (
+            <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#ef4444' }}>Reject Staging Batch</h3>
+                  <button onClick={() => setRejectModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><XCircle size={18} /></button>
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginBottom: '1.5rem' }}>
+                  <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                    Are you sure you want to reject the batch <strong>"{selectedBatch?.filename}"</strong>? All staged rows for this batch will be permanently deleted.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                    <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Rejection Reason / Comments</label>
+                    <textarea
+                      style={{ width: '100%', minHeight: '100px', padding: '0.65rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', resize: 'vertical', lineHeight: 1.4 }}
+                      placeholder="Explain why this batch is rejected so the officer knows what corrections to make..."
+                      value={rejectionReason}
+                      onChange={(e) => setRejectionReason(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    className="btn btn-secondary"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', padding: '0.55rem 1.25rem', borderRadius: 8, color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                    onClick={() => setRejectModalOpen(false)}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="btn"
+                    style={{ background: 'linear-gradient(135deg,#ef4444,#dc2626)', border: 'none', padding: '0.55rem 1.25rem', borderRadius: 8, color: 'white', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
+                    onClick={handleConfirmReject}
+                  >
+                    Reject &amp; Discard
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* Pending list View */

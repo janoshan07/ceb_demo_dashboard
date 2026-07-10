@@ -81,8 +81,8 @@ public class MultiFileImportController {
      * Request body: { "corrections": { "accountNo": { field: value } }, "fileBytes": base64string }
      * We accept the file again to avoid storing bytes server-side between preview and approve.
      */
-    @PostMapping("/admin/import/master-data/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping({"/admin/import/master-data/approve", "/officer/import/master-data/approve"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveMasterData(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
@@ -130,8 +130,8 @@ public class MultiFileImportController {
         }
     }
 
-    @PostMapping("/admin/import/ceb-assist/{sessionId}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping({"/admin/import/ceb-assist/{sessionId}/approve", "/officer/import/ceb-assist/{sessionId}/approve"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveCebAssist(
             @PathVariable Long sessionId,
             @RequestParam("file") MultipartFile file,
@@ -178,8 +178,8 @@ public class MultiFileImportController {
         }
     }
 
-    @PostMapping("/admin/import/ngen/{sessionId}/approve")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping({"/admin/import/ngen/{sessionId}/approve", "/officer/import/ngen/{sessionId}/approve"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveNgen(
             @PathVariable Long sessionId,
             @RequestParam("file") MultipartFile file,
@@ -193,10 +193,13 @@ public class MultiFileImportController {
             @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
-                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
+                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
                     : null;
 
-            Map<String, Object> result = multiFileImportService.approveNgen(fileBytes, username, sessionId, corrections);
+            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+            Map<String, Object> result = multiFileImportService.approveNgen(fileBytes, username, sessionId, corrections, isAdmin);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             e.printStackTrace();

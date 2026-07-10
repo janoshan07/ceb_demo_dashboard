@@ -37,6 +37,7 @@ const CustomerDetails = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, VALID, ERROR
 
   // Selected Customer Details State
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -142,6 +143,9 @@ const CustomerDetails = () => {
       setError(null);
       
       let url = `/api/officer/customers?page=${page}&size=8`;
+      if (statusFilter !== 'ALL') {
+        url += `&validationStatus=${statusFilter}`;
+      }
       if (query.trim()) {
         url += `&query=${encodeURIComponent(query.trim())}`;
       }
@@ -178,7 +182,7 @@ const CustomerDetails = () => {
   useEffect(() => {
     fetchCustomers(currentPage, appliedQuery);
     fetchLookups();
-  }, [currentPage, appliedQuery]);
+  }, [currentPage, appliedQuery, statusFilter]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -531,7 +535,11 @@ const CustomerDetails = () => {
         throw new Error(data.message || 'Failed to delete customer.');
       }
       
-      showToast('Customer deleted successfully.', 'success');
+      if (data.status === 'PENDING') {
+        showToast('Customer deletion request submitted for Admin approval.', 'warning');
+      } else {
+        showToast('Customer deleted successfully.', 'success');
+      }
       setDrawerOpen(false);
       fetchCustomers(currentPage, searchQuery);
     } catch (err) {
@@ -664,6 +672,18 @@ const CustomerDetails = () => {
     }).format(val);
   };
 
+  const parseErrors = (errStr) => {
+    if (!errStr) return [];
+    try {
+      return JSON.parse(errStr);
+    } catch (e) {
+      if (errStr.includes('[') || errStr.includes(',')) {
+        return errStr.replace(/[\[\]"]/g, '').split(',').map(s => s.trim());
+      }
+      return [errStr];
+    }
+  };
+
   return (
     <div className="page-wrapper animate-fade-in">
       <button onClick={() => navigate('/')} className="back-btn">
@@ -675,6 +695,64 @@ const CustomerDetails = () => {
           <h1 className="page-title">Customer Directory</h1>
           <p className="page-subtitle">Search customer electricity accounts, edit profiles, and view ledger details.</p>
         </div>
+      </div>
+
+      {/* Directory tabs (All / Valid / Error Records) */}
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+        <button
+          onClick={() => { setStatusFilter('ALL'); setCurrentPage(0); }}
+          className={`tab-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+          style={{
+            padding: '0.5rem 1.25rem',
+            background: statusFilter === 'ALL' ? 'rgba(99,102,241,0.12)' : 'transparent',
+            border: 'none',
+            color: statusFilter === 'ALL' ? '#818cf8' : 'var(--text-secondary)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            borderBottom: statusFilter === 'ALL' ? '2.5px solid #6366f1' : 'none',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          All Customers
+        </button>
+        <button
+          onClick={() => { setStatusFilter('VALID'); setCurrentPage(0); }}
+          className={`tab-btn ${statusFilter === 'VALID' ? 'active' : ''}`}
+          style={{
+            padding: '0.5rem 1.25rem',
+            background: statusFilter === 'VALID' ? 'rgba(16,185,129,0.12)' : 'transparent',
+            border: 'none',
+            color: statusFilter === 'VALID' ? '#10b981' : 'var(--text-secondary)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            borderBottom: statusFilter === 'VALID' ? '2.5px solid #10b981' : 'none',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Valid Records
+        </button>
+        <button
+          onClick={() => { setStatusFilter('ERROR'); setCurrentPage(0); }}
+          className={`tab-btn ${statusFilter === 'ERROR' ? 'active' : ''}`}
+          style={{
+            padding: '0.5rem 1.25rem',
+            background: statusFilter === 'ERROR' ? 'rgba(239,68,68,0.12)' : 'transparent',
+            border: 'none',
+            color: statusFilter === 'ERROR' ? '#ef4444' : 'var(--text-secondary)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            borderBottom: statusFilter === 'ERROR' ? '2.5px solid #ef4444' : 'none',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          Error Records
+        </button>
       </div>
 
       {error && (
@@ -783,7 +861,27 @@ const CustomerDetails = () => {
                       {currentPage * 8 + idx + 1}
                     </td>
                     <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
-                    <td style={{ fontWeight: 500 }}>{cust.customerName}</td>
+                    <td style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem', height: '100%', minHeight: '38px' }}>
+                      {cust.customerName}
+                      {cust.validationStatus === 'ERROR' && (
+                        <span 
+                          className="badge danger" 
+                          style={{ 
+                            padding: '0.15rem 0.45rem', 
+                            borderRadius: '4px', 
+                            fontSize: '0.68rem', 
+                            fontWeight: 700, 
+                            background: 'rgba(239, 68, 68, 0.18)', 
+                            color: '#f87171', 
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            cursor: 'help'
+                          }}
+                          title={cust.validationErrors ? parseErrors(cust.validationErrors).join('; ') : 'Validation errors present'}
+                        >
+                          Error
+                        </span>
+                      )}
+                    </td>
                     <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
                     <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
                     <td>{cust.agreementDate || '—'}</td>
@@ -913,9 +1011,23 @@ const CustomerDetails = () => {
 
             {/* TAB CONTENT: OVERVIEW */}
             {activeTab === 'overview' && (
-              <div className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.25rem', alignItems: 'start' }}>
-                {/* Profile Card */}
-                <div className="card" style={{ backgroundColor: 'var(--bg-primary)' }}>
+              <div className="animate-fade-in">
+                {selectedCustomer.validationStatus === 'ERROR' && (
+                  <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
+                    <div style={{ color: '#ef4444', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <AlertCircle size={16} />
+                      Validation Issues
+                    </div>
+                    <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#f87171', fontSize: '0.82rem', lineHeight: 1.7 }}>
+                      {parseErrors(selectedCustomer.validationErrors).map((err, i) => (
+                        <li key={i}>{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.25rem', alignItems: 'start' }}>
+                  {/* Profile Card */}
+                  <div className="card" style={{ backgroundColor: 'var(--bg-primary)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
                     <div>
                       <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>Account Number</span>
@@ -1298,7 +1410,8 @@ const CustomerDetails = () => {
                   </div>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
             {/* TAB CONTENT: BILLING HISTORY */}
             {activeTab === 'billing' && (

@@ -306,7 +306,7 @@ public class StagingMigrationService {
 
 
     @Transactional
-    public void rejectBatch(Long batchId, String rejectedBy) {
+    public void rejectBatch(Long batchId, String reason, String rejectedBy) {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
         if (optHistory.isEmpty()) {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
@@ -318,8 +318,9 @@ public class StagingMigrationService {
 
         // Update status to REJECTED
         history.setStatus("REJECTED");
+        history.setRejectionReason(reason);
         uploadHistoryRepository.save(history);
 
-        auditLogService.log("STAGING_REJECTED", String.format("Batch ID %d rejected by %s.", batchId, rejectedBy));
+        auditLogService.log("STAGING_REJECTED", String.format("Batch ID %d rejected by %s. Reason: %s", batchId, rejectedBy, reason));
     }
 }

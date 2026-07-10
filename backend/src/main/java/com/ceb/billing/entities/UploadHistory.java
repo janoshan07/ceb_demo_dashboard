@@ -35,6 +35,9 @@ public class UploadHistory {
     @Column(name = "errors_count")
     private Integer errorsCount = 0;
 
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
+
     @PrePersist
     protected void onCreate() {
         this.uploadTime = LocalDateTime.now();
@@ -124,5 +127,13 @@ public class UploadHistory {
 
     public void setErrorsCount(Integer errorsCount) {
         this.errorsCount = errorsCount;
+    }
+
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
     }
 }

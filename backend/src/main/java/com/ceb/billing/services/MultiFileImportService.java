@@ -6,6 +6,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -32,6 +33,10 @@ public class MultiFileImportService {
     @Autowired private ExpenseCodeRepository expenseCodeRepository;
     @Autowired private AuditLogService auditLogService;
     @Autowired private PreviewService previewService;
+    @Autowired private ExcelValidationService excelValidationService;
+    @Autowired private UploadHistoryRepository uploadHistoryRepository;
+    @Autowired private BillingUploadStagingRepository billingUploadStagingRepository;
+    @Autowired private ImportBatchRepository importBatchRepository;
 
     // ════════════════════════════════════════════════════════════════════
     //  STEP 1 — MASTER DATA
@@ -555,15 +560,67 @@ public class MultiFileImportService {
 
     @Transactional
     public Map<String, Object> approveNgen(byte[] fileBytes, String username, Long sessionId,
-                                            Map<String, Map<String, Object>> corrections) throws Exception {
+                                            Map<String, Map<String, Object>> corrections, boolean isAdmin) throws Exception {
         ImportSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
         if (!"CEB_APPROVED".equals(session.getStage())) {
             throw new IllegalStateException("Session is not in the correct stage for NGEN upload. Current stage: " + session.getStage());
         }
 
-        // 1. Load staged master customers and save/update them in DB first
         List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
+
+        if (!isAdmin) {
+            // --- OFFICER STAGING FLOW ---
+            // Create an UploadHistory record with PENDING_APPROVAL status
+            UploadHistory uploadHistory = new UploadHistory(
+                    "Multi-File Import (Session " + sessionId + ")",
+                    username,
+                    "PENDING_APPROVAL",
+                    masterStaged.size(),
+                    0,
+                    0,
+                    0
+            );
+            uploadHistory = uploadHistoryRepository.save(uploadHistory);
+            final Long uploadId = uploadHistory.getId();
+
+            // Stage customer profiles and NGEN billing records in database staging table
+            stageOfficerData(masterStaged, fileBytes, sessionId, uploadId, corrections);
+
+            session.setStage("COMPLETED");
+            session.setNgenBatchId(uploadId);
+            sessionRepository.save(session);
+
+            cleanupCebStaging(sessionId);
+            cleanupMasterStaging(sessionId);
+
+            auditLogService.log("NGEN_SUBMITTED",
+                    String.format("NGEN submitted for Admin approval by %s for session %d.", username, sessionId));
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("sessionId", sessionId);
+            result.put("stage", "PENDING_APPROVAL");
+            result.put("message", "Import batch successfully submitted for Admin approval.");
+            return result;
+        }
+
+        // --- ADMIN IMMEDIATE LIVE WRITE FLOW ---
+        // Create an UploadHistory record for this multi-file import session
+        UploadHistory uploadHistory = new UploadHistory(
+                "Multi-File Import (Session " + sessionId + ")",
+                username,
+                "SUCCESS",
+                masterStaged.size(),
+                0,
+                0,
+                0
+        );
+        uploadHistory = uploadHistoryRepository.save(uploadHistory);
+        final Long uploadId = uploadHistory.getId();
+
+        int newCustCount = 0;
+
+        // 1. Load staged master customers and save/update them in DB first
         for (Map<String, Object> stagedCust : masterStaged) {
             String accountNo = (String) stagedCust.get("accountNo");
             if (accountNo == null || accountNo.trim().isEmpty()) continue;
@@ -596,6 +653,8 @@ public class MultiFileImportService {
                 c.setRefNo(refNo);
                 c.setUnitRate(unitRate);
                 c.setTariffType(tariffType);
+                c.setCreatedByUploadId(uploadId);
+                newCustCount++;
                 if (isNotBlank(costCode))    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
                 if (isNotBlank(solarType))   c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
                 if (isNotBlank(billingMode)) c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
@@ -620,6 +679,7 @@ public class MultiFileImportService {
                 if (isNotBlank(billingMode))
                     c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
             }
+            excelValidationService.revalidateCustomer(c);
             customerRepository.save(c);
         }
 
@@ -705,13 +765,13 @@ public class MultiFileImportService {
                 LocalDate fromDate = prevDate != null ? prevDate : LocalDate.now().withDayOfMonth(1);
                 LocalDate toDate   = currDate != null ? currDate : LocalDate.now();
 
-                String refNo = isNotBlank(cust.getRefNo()) ? cust.getRefNo()
+                String refNoStr = isNotBlank(cust.getRefNo()) ? cust.getRefNo()
                         : "REF-" + accountNo + "-" + toDate.toString().replace("-", "");
 
-                BillingRecord br = new BillingRecord(cust, refNo, fromDate, toDate,
+                BillingRecord br = new BillingRecord(cust, refNoStr, fromDate, toDate,
                         kwhImport, kwhExport, effectiveRate,
                         cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null,
-                        session.getId());
+                        uploadId);
                 br.setPrevReadingDate(prevDate);
                 br.setCurrReadingDate(currDate);
                 br.setKwhImport(kwhImport);
@@ -725,9 +785,13 @@ public class MultiFileImportService {
             }
         }
 
+        uploadHistory.setBillingInserted(createdBilling);
+        uploadHistory.setNewCustomers(newCustCount);
+        uploadHistoryRepository.save(uploadHistory);
+
         session.setStage("COMPLETED");
         session.setNgenCount(createdBilling);
-        session.setNgenBatchId(sessionId);
+        session.setNgenBatchId(uploadId);
         sessionRepository.save(session);
 
         cleanupCebStaging(sessionId);
@@ -744,6 +808,183 @@ public class MultiFileImportService {
         result.put("skippedCount", skippedCount);
         result.put("message", String.format("Import complete! %d billing records created.", createdBilling));
         return result;
+    }
+
+    private void stageOfficerData(
+            List<Map<String, Object>> masterStaged,
+            byte[] fileBytes,
+            Long sessionId,
+            Long uploadId,
+            Map<String, Map<String, Object>> corrections
+    ) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        // 1. Stage Customer Profiles
+        for (Map<String, Object> stagedCust : masterStaged) {
+            String accountNo = (String) stagedCust.get("accountNo");
+            if (accountNo == null || accountNo.trim().isEmpty()) continue;
+            accountNo = accountNo.trim();
+
+            String rowNumStr = String.valueOf(stagedCust.get("rowNum"));
+            Map<String, Object> corr = corrections != null ? corrections.get(rowNumStr) : null;
+            if (corr == null && corrections != null) {
+                corr = corrections.get(accountNo);
+            }
+            Map<String, Object> finalCustData = new LinkedHashMap<>(stagedCust);
+            if (corr != null) {
+                finalCustData.putAll(corr);
+            }
+
+            List<String> errors = validateMasterDataRow(finalCustData);
+            String valStatus = errors.isEmpty() ? "VALID" : "ERROR";
+
+            BillingUploadStaging staging = new BillingUploadStaging(
+                    uploadId,
+                    mapper.writeValueAsString(finalCustData),
+                    valStatus,
+                    mapper.writeValueAsString(errors),
+                    "CUSTOMER_PROFILE"
+            );
+            billingUploadStagingRepository.save(staging);
+        }
+
+        // 2. Stage Billing Records (NGEN merged with CEB)
+        Map<String, Map<String, String>> cebData = loadCebDataFromStaging(sessionId);
+
+        try (InputStream is = new ByteArrayInputStream(fileBytes);
+             Workbook workbook = WorkbookFactory.create(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+
+            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+            int lastRow = sheet.getLastRowNum();
+
+            for (int r = dataStart; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null || isRowEmpty(row)) continue;
+
+                String accountNo    = strVal(row, colMap.get("accountno"));
+                Double kwhImport    = numVal(row, colMap.get("imports"));
+                Double kwhExport    = numVal(row, colMap.get("exports"));
+                Double ngenUnitRate = numVal(row, colMap.get("unitcost"));
+                Double billSetOff   = numVal(row, colMap.get("billsetoff"));
+
+                String rowNumStr = String.valueOf(r + 1);
+                Map<String, Object> corr = null;
+                if (corrections != null) {
+                    if (corrections.containsKey(rowNumStr)) {
+                        corr = corrections.get(rowNumStr);
+                    } else if (corrections.containsKey(accountNo)) {
+                        corr = corrections.get(accountNo);
+                    }
+                }
+
+                if (corr != null) {
+                    if (corr.containsKey("accountNo"))    accountNo    = (String) corr.get("accountNo");
+                    if (corr.containsKey("kwhImport")) {
+                        Object val = corr.get("kwhImport");
+                        kwhImport = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("kwhExport")) {
+                        Object val = corr.get("kwhExport");
+                        kwhExport = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("ngenUnitRate")) {
+                        Object val = corr.get("ngenUnitRate");
+                        ngenUnitRate = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("billSetOff")) {
+                        Object val = corr.get("billSetOff");
+                        billSetOff = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                }
+
+                if (accountNo == null || accountNo.trim().isEmpty()) continue;
+                accountNo = accountNo.trim();
+
+                // Get master data profile info from cached master data list to build full json
+                Map<String, Object> matchedMaster = null;
+                for (Map<String, Object> m : masterStaged) {
+                    if (accountNo.equals(m.get("accountNo"))) {
+                        matchedMaster = m;
+                        break;
+                    }
+                }
+
+                String customerName = matchedMaster != null ? (String) matchedMaster.get("customerName") : "";
+                String customerAddress = matchedMaster != null ? (String) matchedMaster.get("customerAddress") : "";
+                String refNo = matchedMaster != null ? (String) matchedMaster.get("refNo") : "";
+                String mobileNo = matchedMaster != null ? (String) matchedMaster.get("mobileNo") : "";
+                Double panelCapacity = matchedMaster != null && matchedMaster.get("panelCapacity") != null ? ((Number) matchedMaster.get("panelCapacity")).doubleValue() : null;
+                String agreementDate = matchedMaster != null ? (String) matchedMaster.get("agreementDate") : null;
+                String bankCode = matchedMaster != null ? (String) matchedMaster.get("bankCode") : null;
+                String branchCode = matchedMaster != null ? (String) matchedMaster.get("branchCode") : null;
+                String bankAccountNo = matchedMaster != null ? (String) matchedMaster.get("bankAccountNo") : null;
+                String solarType = matchedMaster != null ? (String) matchedMaster.get("solarType") : null;
+                Double masterUnitRate = matchedMaster != null && matchedMaster.get("unitRate") != null ? ((Number) matchedMaster.get("unitRate")).doubleValue() : null;
+                String tariffType = matchedMaster != null ? (String) matchedMaster.get("tariffType") : null;
+                String billingMode = matchedMaster != null ? (String) matchedMaster.get("billingMode") : null;
+
+                double effectiveRate = masterUnitRate != null ? masterUnitRate : (ngenUnitRate != null ? ngenUnitRate : 0.0);
+                double kwhSales = (kwhExport != null ? kwhExport : 0.0) - (kwhImport != null ? kwhImport : 0.0);
+                double salesAmount = kwhSales * effectiveRate;
+                double outstandingCharges = billSetOff != null ? billSetOff : 0.0;
+                double paymentSettled = salesAmount - outstandingCharges;
+
+                Map<String, String> cebRow = cebData.get(accountNo);
+                String prevReadingDate = cebRow != null ? cebRow.get("prevReadingDate") : null;
+                String currReadingDate = cebRow != null ? cebRow.get("currReadingDate") : null;
+
+                String refNoStr = isNotBlank(refNo) ? refNo
+                        : "REF-" + accountNo + "-" + (currReadingDate != null ? currReadingDate.replace("-", "") : "");
+
+                Map<String, Object> rawJson = new LinkedHashMap<>();
+                rawJson.put("accountNo", accountNo);
+                rawJson.put("customerName", customerName);
+                rawJson.put("customerAddress", customerAddress);
+                rawJson.put("refNo", refNoStr);
+                rawJson.put("mobileNo", mobileNo);
+                rawJson.put("panelCapacity", panelCapacity);
+                rawJson.put("agreementDate", agreementDate);
+                rawJson.put("bankCode", bankCode);
+                rawJson.put("branchCode", branchCode);
+                rawJson.put("bankAccountNo", bankAccountNo);
+                rawJson.put("solarType", solarType);
+                rawJson.put("unitCost", effectiveRate);
+                rawJson.put("tariffType", tariffType);
+                rawJson.put("billingMode", billingMode);
+
+                rawJson.put("fromDate", prevReadingDate);
+                rawJson.put("toDate", currReadingDate);
+                rawJson.put("importUnits", kwhImport);
+                rawJson.put("exportUnits", kwhExport);
+                rawJson.put("netUnit", kwhSales);
+                rawJson.put("totalAmount", salesAmount);
+                rawJson.put("billSetOff", outstandingCharges);
+                rawJson.put("payment", paymentSettled);
+                rawJson.put("paymentSettled", paymentSettled);
+
+                List<String> errors = new ArrayList<>();
+                if (kwhImport == null) errors.add("kWh Import is missing or invalid");
+                if (kwhExport == null) errors.add("kWh Export is missing or invalid");
+                if (prevReadingDate == null) errors.add("Previous reading date is missing");
+                if (currReadingDate == null) errors.add("Current reading date is missing");
+
+                String valStatus = errors.isEmpty() ? "VALID" : "ERROR";
+
+                BillingUploadStaging staging = new BillingUploadStaging(
+                        uploadId,
+                        mapper.writeValueAsString(rawJson),
+                        valStatus,
+                        mapper.writeValueAsString(errors),
+                        "BILLING"
+                );
+                billingUploadStagingRepository.save(staging);
+            }
+        }
     }
 
     // ════════════════════════════════════════════════════════════════════

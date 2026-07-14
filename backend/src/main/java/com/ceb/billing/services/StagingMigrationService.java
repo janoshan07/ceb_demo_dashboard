@@ -27,6 +27,9 @@ public class StagingMigrationService {
     private BillingUploadStagingRepository stagingRepository;
 
     @Autowired
+    private com.ceb.billing.repositories.StagingChangeLogRepository changeLogRepository;
+
+    @Autowired
     private CustomerRepository customerRepository;
 
     @Autowired
@@ -60,6 +63,16 @@ public class StagingMigrationService {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
         }
         UploadHistory history = optHistory.get();
+
+        // Auto-reject any remaining pending proposals on this batch
+        List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");
+        for (com.ceb.billing.entities.StagingChangeLog p : pending) {
+            p.setStatus("REJECTED");
+            p.setReviewedBy(approvedBy);
+            p.setReviewedAt(java.time.LocalDateTime.now());
+            p.setRejectionReason("Batch approved & finalized.");
+            changeLogRepository.save(p);
+        }
 
         List<BillingUploadStaging> stagingRecords = stagingRepository.findByUploadBatchId(batchId);
         int newCustomers = 0;
@@ -312,6 +325,16 @@ public class StagingMigrationService {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
         }
         UploadHistory history = optHistory.get();
+
+        // Auto-reject any remaining pending proposals on this batch
+        List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");
+        for (com.ceb.billing.entities.StagingChangeLog p : pending) {
+            p.setStatus("REJECTED");
+            p.setReviewedBy(rejectedBy);
+            p.setReviewedAt(java.time.LocalDateTime.now());
+            p.setRejectionReason("Batch rejected: " + reason);
+            changeLogRepository.save(p);
+        }
 
         // Delete staging rows for this batch
         stagingRepository.deleteByUploadBatchId(batchId);

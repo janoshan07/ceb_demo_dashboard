@@ -300,15 +300,25 @@ public class AdminUserController {
                 String agreementDate = rawData.get("agreementDate") != null ? rawData.get("agreementDate").toString() : "";
                 Double panelCapacity = rawData.get("panelCapacity") != null && !rawData.get("panelCapacity").toString().isEmpty() 
                         ? Double.valueOf(rawData.get("panelCapacity").toString()) : null;
-                String solarType = rawData.get("solarType") != null ? rawData.get("solarType").toString() : "";
+                String rawSolarType = rawData.get("solarType") != null ? rawData.get("solarType").toString() : "";
+                String solarType = ExcelValidationService.normalizeSolarType(rawSolarType);
+                rawData.put("solarType", solarType);
                 String costCode = rawData.get("costCode") != null ? rawData.get("costCode").toString() : "";
-                String billingMode = rawData.get("billingMode") != null ? rawData.get("billingMode").toString() : "";
+                String refNo = rawData.get("refNo") != null ? rawData.get("refNo").toString() : "";
+                Double unitRate = rawData.get("unitRate") != null && !rawData.get("unitRate").toString().isEmpty()
+                        ? Double.valueOf(rawData.get("unitRate").toString()) : null;
+                String tariffType = rawData.get("tariffType") != null ? rawData.get("tariffType").toString() : "";
+                
+                // Recalculate billingMode (L-Code)
+                String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
+                rawData.put("billingMode", billingMode);
+                row.setRawJson(objectMapper.writeValueAsString(rawData));
                 
                 ExcelValidationService.RowValidationResult valResult =
                         excelValidationService.validateCustomerRow(
                                 sheetName, rowNum, accountNo, customerName, customerAddress, mobileNo, 
                                 bankCode, branchCode, bankAccountNo, agreementDate, panelCapacity, solarType, 
-                                costCode, billingMode);
+                                costCode, billingMode, refNo, unitRate, tariffType);
                 
                 validationStatus = valResult.hasErrors() ? "INVALID" : valResult.hasWarnings() ? "WARNING" : "VALID";
                 for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
@@ -333,6 +343,13 @@ public class AdminUserController {
                 try { if (!exportUnitsStr.isEmpty()) exportUnits = Double.parseDouble(exportUnitsStr); } catch(Exception e) {}
                 try { if (!unitCostStr.isEmpty()) unitCost = Double.parseDouble(unitCostStr); } catch(Exception e) {}
                 
+                String solarType = ExcelValidationService.normalizeSolarType(rawData.get("solarType") != null ? rawData.get("solarType").toString() : "");
+                rawData.put("solarType", solarType);
+                String tariffType = rawData.get("tariffType") != null ? rawData.get("tariffType").toString() : "";
+                String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
+                rawData.put("billingMode", billingMode);
+                row.setRawJson(objectMapper.writeValueAsString(rawData));
+                
                 ExcelValidationService.RowValidationResult valResult =
                         excelValidationService.validateRow(
                                 sheetName, rowNum, "BILLING", accountNo, customerName,
@@ -343,12 +360,13 @@ public class AdminUserController {
                                 rawData.get("mobileNo") != null ? rawData.get("mobileNo").toString() : "",
                                 rawData.get("bankAccountNo") != null ? rawData.get("bankAccountNo").toString() : "",
                                 rawData.get("branchCode") != null ? rawData.get("branchCode").toString() : "",
-                                rawData.get("billingMode") != null ? rawData.get("billingMode").toString() : "",
+                                billingMode,
                                 rawData.get("agreementDate") != null ? rawData.get("agreementDate").toString() : "",
                                 rawData.get("panelCapacity") != null && !rawData.get("panelCapacity").toString().isEmpty() 
                                         ? Double.valueOf(rawData.get("panelCapacity").toString()) : null,
-                                rawData.get("solarType") != null ? rawData.get("solarType").toString() : "",
-                                new java.util.HashSet<>()
+                                solarType,
+                                tariffType,
+                                new java.util.HashSet<String>()
                         );
                 
                 validationStatus = valResult.hasDuplicate() ? "DUPLICATE" : valResult.hasErrors() ? "INVALID" : valResult.hasWarnings() ? "WARNING" : "VALID";

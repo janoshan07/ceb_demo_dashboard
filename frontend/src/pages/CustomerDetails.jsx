@@ -24,6 +24,38 @@ import {
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 
+// Helper to automatically derive L-Code based on solarType and tariffType
+const deriveLCode = (solarType, tariffType) => {
+  if (!solarType || !tariffType) return '';
+  
+  const cleanSolar = solarType.trim().toLowerCase().replace(/[\s\-_]+/g, ' ');
+  let normSolar = '';
+  if (cleanSolar.includes('metering') || cleanSolar === 'metering') {
+    normSolar = 'Net Metering';
+  } else if (cleanSolar.includes('plus plus') || cleanSolar === 'plus plus' || cleanSolar.includes('plusplus') || cleanSolar === 'plusplus') {
+    normSolar = 'Net Plus Plus';
+  } else if (cleanSolar.includes('plus') || cleanSolar === 'plus') {
+    normSolar = 'Net Plus';
+  } else if (cleanSolar.includes('accounting') || cleanSolar === 'accounting') {
+    normSolar = 'Net Accounting';
+  }
+
+  const cleanTariff = tariffType.trim().toUpperCase();
+  const isFixed = cleanTariff.includes('FIX');
+  const isVariable = cleanTariff.includes('VAR');
+
+  if (isFixed) {
+    if (normSolar === 'Net Accounting') return 'L5001';
+    if (normSolar === 'Net Plus') return 'L5002';
+    if (normSolar === 'Net Plus Plus') return 'L5005';
+  } else if (isVariable) {
+    if (['Net Accounting', 'Net Plus', 'Net Plus Plus', 'Net Metering'].includes(normSolar)) {
+      return 'L5006';
+    }
+  }
+  return '';
+};
+
 const CustomerDetails = () => {
   const navigate = useNavigate();
   const { authFetch, user } = useAuth();
@@ -118,6 +150,21 @@ const CustomerDetails = () => {
   const [editLoading, setEditLoading] = useState(false);
   const [editError, setEditError] = useState(null);
   const [editMessage, setEditMessage] = useState(null);
+
+  // Auto-recalculate editExpenseCodeId based on editSolarType and editTariffType
+  useEffect(() => {
+    const lCode = deriveLCode(editSolarType, editTariffType);
+    if (lCode) {
+      const match = expenseCodesList.find(e => e.expCode === lCode);
+      if (match) {
+        setEditExpenseCodeId(match.id.toString());
+      } else {
+        setEditExpenseCodeId('');
+      }
+    } else {
+      setEditExpenseCodeId('');
+    }
+  }, [editSolarType, editTariffType, expenseCodesList]);
 
   // Billing Record Editing State
   const [editingBill, setEditingBill] = useState(null);
@@ -438,6 +485,21 @@ const CustomerDetails = () => {
 
   const [addCustError, setAddCustError] = useState(null);
   const [addCustLoading, setAddCustLoading] = useState(false);
+
+  // Auto-recalculate newCustExpenseCodeId based on newCustSolarType and newCustTariffType
+  useEffect(() => {
+    const lCode = deriveLCode(newCustSolarType, newCustTariffType);
+    if (lCode) {
+      const match = expenseCodesList.find(e => e.expCode === lCode);
+      if (match) {
+        setNewCustExpenseCodeId(match.id.toString());
+      } else {
+        setNewCustExpenseCodeId('');
+      }
+    } else {
+      setNewCustExpenseCodeId('');
+    }
+  }, [newCustSolarType, newCustTariffType, expenseCodesList]);
 
   const openAddCustomerModal = () => {
     setNewCustAccNo('');
@@ -1187,14 +1249,14 @@ const CustomerDetails = () => {
                       </div>
 
                       <div className="form-group">
-                        <label className="form-label">Expense Code</label>
+                        <label className="form-label">L-Code</label>
                         <select 
                           className="login-form-input" 
                           value={editExpenseCodeId}
-                          onChange={(e) => setEditExpenseCodeId(e.target.value)}
-                          style={{ appearance: 'auto' }}
+                          disabled
+                          style={{ appearance: 'auto', background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
                         >
-                          <option value="">Select Expense Code</option>
+                          <option value="">Select L-Code</option>
                           {expenseCodesList.map(e => (
                             <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
                           ))}
@@ -1326,7 +1388,7 @@ const CustomerDetails = () => {
                           <div style={{ fontWeight: 500 }}>{selectedCustomer.costCode || '—'}</div>
                         </div>
                         <div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Expense Code</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>L-Code</span>
                           <div style={{ fontWeight: 500 }}>{selectedCustomer.expenseCode || '—'}</div>
                         </div>
                       </div>
@@ -1966,15 +2028,15 @@ const CustomerDetails = () => {
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label">Expense Code</label>
+               <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label className="form-label">L-Code</label>
                 <select
                   className="login-form-input"
                   value={newCustExpenseCodeId}
-                  onChange={(e) => setNewCustExpenseCodeId(e.target.value)}
-                  style={{ appearance: 'auto' }}
+                  disabled
+                  style={{ appearance: 'auto', background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
                 >
-                  <option value="">Select Expense Code</option>
+                  <option value="">Select L-Code</option>
                   {expenseCodesList.map(e => (
                     <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
                   ))}

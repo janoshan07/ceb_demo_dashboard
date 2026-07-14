@@ -11,6 +11,7 @@ import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.CostCodeRepository;
 import com.ceb.billing.repositories.NetTypeRepository;
 import com.ceb.billing.repositories.ExpenseCodeRepository;
+import com.ceb.billing.services.ExcelValidationService;
 import com.ceb.billing.services.AuditLogService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -541,12 +542,12 @@ public class CustomerController {
             customer.setNetType(netTypeRepository.findByName(ntName).orElse(null));
         }
 
-        if (values.containsKey("expenseCodeId") && values.get("expenseCodeId") != null && !values.get("expenseCodeId").toString().isEmpty()) {
-            Long ecId = Long.valueOf(values.get("expenseCodeId").toString());
-            customer.setExpenseCode(expenseCodeRepository.findById(ecId).orElse(null));
-        } else if (values.containsKey("expenseCode") && values.get("expenseCode") != null && !values.get("expenseCode").toString().isEmpty()) {
-            String ecCode = values.get("expenseCode").toString();
-            customer.setExpenseCode(expenseCodeRepository.findByExpCode(ecCode).orElse(null));
+        // Recalculate Expense Code automatically based on Solar Type and Tariff Type
+        String derivedL = ExcelValidationService.deriveLCode(customer.getSolarType(), customer.getTariffType());
+        if (derivedL != null && !derivedL.isEmpty()) {
+            customer.setExpenseCode(expenseCodeRepository.findByExpCode(derivedL).orElse(null));
+        } else {
+            customer.setExpenseCode(null);
         }
     }
 }

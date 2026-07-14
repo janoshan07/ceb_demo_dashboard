@@ -5,8 +5,40 @@ import {
   Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle,
   FileText, Loader, Trash2, Eye,
   Check, RefreshCw, Layers, Zap, User, Info,
-  Database, Clock, CloudUpload, Pencil, X, Save
+  Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft
 } from 'lucide-react';
+
+// Helper to automatically derive L-Code based on solarType and tariffType
+export const deriveLCode = (solarType, tariffType) => {
+  if (!solarType || !tariffType) return '';
+  
+  const cleanSolar = solarType.trim().toLowerCase().replace(/[\s\-_]+/g, ' ');
+  let normSolar = '';
+  if (cleanSolar.includes('metering') || cleanSolar === 'metering') {
+    normSolar = 'Net Metering';
+  } else if (cleanSolar.includes('plus plus') || cleanSolar === 'plus plus' || cleanSolar.includes('plusplus') || cleanSolar === 'plusplus') {
+    normSolar = 'Net Plus Plus';
+  } else if (cleanSolar.includes('plus') || cleanSolar === 'plus') {
+    normSolar = 'Net Plus';
+  } else if (cleanSolar.includes('accounting') || cleanSolar === 'accounting') {
+    normSolar = 'Net Accounting';
+  }
+
+  const cleanTariff = tariffType.trim().toUpperCase();
+  const isFixed = cleanTariff.includes('FIX');
+  const isVariable = cleanTariff.includes('VAR');
+
+  if (isFixed) {
+    if (normSolar === 'Net Accounting') return 'L5001';
+    if (normSolar === 'Net Plus') return 'L5002';
+    if (normSolar === 'Net Plus Plus') return 'L5005';
+  } else if (isVariable) {
+    if (['Net Accounting', 'Net Plus', 'Net Plus Plus', 'Net Metering'].includes(normSolar)) {
+      return 'L5006';
+    }
+  }
+  return '';
+};
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  WIZARD STEP INDICATOR
@@ -133,6 +165,14 @@ const StatusBadge = ({ status }) => {
 const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+
+  const renderCell = (val, prefix = '') => {
+    if (val === undefined || val === null || String(val).trim() === '') {
+      return <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>;
+    }
+    return prefix ? `${prefix}${val}` : String(val);
+  };
+
   if (!displayed.length) return (
     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
       <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
@@ -140,11 +180,15 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
     </div>
   );
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
         <thead>
           <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-            {['Row','Account No','Customer Name','Mobile No','Solar Type','Unit Rate','Status','Actions'].map(h => (
+            {[
+              'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
+              'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code',
+              'Bank Account No', 'Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Status', 'Actions'
+            ].map(h => (
               <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
             ))}
           </tr>
@@ -157,11 +201,21 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
               >
                 <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600 }}>{row.accountNo}</td>
-                <td style={{ padding: '0.6rem 0.85rem' }}>{row.customerName}</td>
-                <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-secondary)' }}>{row.mobileNo}</td>
-                <td style={{ padding: '0.6rem 0.85rem' }}>{row.solarType}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.unitRate != null ? `LKR ${row.unitRate}` : '—'}</td>
+                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.refNo)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.costCode)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankCode)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.branchCode)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.tariffType)}</td>
+                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
                 <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
                 <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                   <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
@@ -171,7 +225,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
               </tr>
               {expandedRow === i && row.errors?.length > 0 && (
                 <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
-                  <td colSpan={8} style={{ padding: '0.75rem 1.5rem' }}>
+                  <td colSpan={18} style={{ padding: '0.75rem 1.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                       <AlertTriangle size={15} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
                       <ul style={{ margin: 0, paddingLeft: '1rem', color: '#ef4444', fontSize: '0.78rem', lineHeight: 1.7 }}>
@@ -394,6 +448,17 @@ const UploadPage = () => {
 
   const fileInputRef = useRef(null);
 
+  // ── Staged review (Officer proposing changes) state ───────────────────
+  const [selectedReviewBatch, setSelectedReviewBatch] = useState(null);
+  const [reviewStagingRows, setReviewStagingRows] = useState([]);
+  const [reviewProposals, setReviewProposals] = useState([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
+  
+  // Staging row edit proposal modal state
+  const [editingStagingRow, setEditingStagingRow] = useState(null);
+  const [proposeEditStagingLoading, setProposeEditStagingLoading] = useState(false);
+
   const WIZARD_STEPS = [
     { label: 'Master Data',  icon: <User size={16} /> },
     { label: 'CEB Assist',   icon: <Database size={16} /> },
@@ -498,6 +563,45 @@ const UploadPage = () => {
             if (!(updated.customerName || '').trim()) {
               newErrs.push("Customer Name is missing");
             }
+            if (!(updated.customerAddress || '').trim()) {
+              newErrs.push("Address is missing");
+            }
+            if (!(updated.refNo || '').trim()) {
+              newErrs.push("Ref. No. is missing");
+            }
+            if (!(updated.costCode || '').trim()) {
+              newErrs.push("Cost Code is missing");
+            }
+            if (!(updated.mobileNo || '').trim()) {
+              newErrs.push("Mobile Number is missing");
+            }
+            if (updated.panelCapacity === undefined || updated.panelCapacity === null || String(updated.panelCapacity).trim() === '') {
+              newErrs.push("PANEL CAPACITY is missing");
+            }
+            if (!(updated.agreementDate || '').trim()) {
+              newErrs.push("AGREEMENT DATE is missing");
+            }
+            if (!(updated.bankCode || '').trim()) {
+              newErrs.push("Bank Code is missing");
+            }
+            if (!(updated.branchCode || '').trim()) {
+              newErrs.push("Branch Code is missing");
+            }
+            if (!(updated.bankAccountNo || '').trim()) {
+              newErrs.push("Bank Account No is missing");
+            }
+            if (!(updated.solarType || '').trim()) {
+              newErrs.push("TYPE (Solar Type) is missing");
+            }
+            if (updated.unitRate === undefined || updated.unitRate === null || String(updated.unitRate).trim() === '') {
+              newErrs.push("UNIT RATE is missing");
+            }
+            if (!(updated.tariffType || '').trim()) {
+              newErrs.push("FIX/VARIABLE is missing");
+            }
+            if (!(updated.billingMode || '').trim()) {
+              newErrs.push("Exp (Billing Mode) is missing");
+            }
             errors = newErrs;
             status = errors.length === 0 ? 'VALID' : 'ERROR';
           } else if (wizardStep === 2) {
@@ -589,12 +693,129 @@ const UploadPage = () => {
       if (res.ok) {
         showToast(`Rollback complete: ${data.message || 'Batch removed.'}`, 'success');
         fetchHistory();
-        // Force refresh Customer Directory if it's cached or active in background
+        if (selectedReviewBatch?.id === batch.id) {
+          setSelectedReviewBatch(null);
+          setActiveView('history');
+        }
       } else {
         showToast(data.message || 'Failed to delete batch.', 'error');
       }
     } catch (err) {
       showToast('Error: ' + err.message, 'error');
+    }
+  };
+
+  const handleSelectReviewBatch = async (batch) => {
+    setSelectedReviewBatch(batch);
+    setReviewStagingRows([]);
+    setReviewProposals([]);
+    setReviewError(null);
+    setActiveView('staged-review');
+    
+    try {
+      setReviewLoading(true);
+      
+      // 1. Fetch staging rows
+      const rowsRes = await authFetch(`/api/officer/staging/batch/${batch.id}/rows`);
+      if (!rowsRes.ok) throw new Error('Failed to load staging rows.');
+      const rowsData = await rowsRes.json();
+      
+      // 2. Fetch proposals
+      const propRes = await authFetch(`/api/officer/staging/batch/${batch.id}/proposals`);
+      if (!propRes.ok) throw new Error('Failed to load proposals.');
+      const propData = await propRes.json();
+      
+      setReviewProposals(propData);
+      
+      const parsedRows = rowsData.map((row, index) => {
+        let rawData = {};
+        let errorsList = [];
+        try {
+          rawData = JSON.parse(row.rawJson || '{}');
+        } catch (e) {
+          console.error("Failed to parse row raw_json", e);
+        }
+        try {
+          const parsed = JSON.parse(row.validationErrors || '[]');
+          errorsList = parsed.map(item => {
+            if (typeof item === 'string') {
+              return { field: 'Validation', errorMessage: item, warning: false };
+            }
+            return item;
+          });
+        } catch (e) {
+          console.error("Failed to parse row validation_errors", e);
+        }
+        
+        // Find if there is any pending proposal for this row
+        const pendingProp = propData.find(p => p.stagingId === row.stagingId && p.status === 'PENDING');
+        
+        return {
+          stagingId: row.stagingId,
+          validationStatus: row.validationStatus,
+          errors: errorsList,
+          index: index + 1,
+          rowType: row.rowType,
+          pendingProposal: pendingProp,
+          ...rawData
+        };
+      });
+      
+      setReviewStagingRows(parsedRows);
+    } catch (err) {
+      setReviewError(err.message || 'Error occurred while loading staging data.');
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleProposeDelete = async (rowStagingId) => {
+    const confirmed = await showConfirm({
+      title: 'Propose Row Deletion?',
+      message: 'Are you sure you want to propose deleting this staging record? This proposal will be submitted to the Admin for review.',
+      confirmText: 'Propose Delete',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+    
+    try {
+      const res = await authFetch(`/api/officer/staging/batch/${selectedReviewBatch.id}/row/${rowStagingId}/propose-delete`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        showToast('Deletion proposal submitted to Admin successfully.', 'success');
+        handleSelectReviewBatch(selectedReviewBatch);
+      } else {
+        const body = await res.json();
+        showToast(body.message || 'Failed to submit deletion proposal.', 'error');
+      }
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+    }
+  };
+
+  const handleSaveProposeEdit = async (stagingId, fields) => {
+    try {
+      setProposeEditStagingLoading(true);
+      const res = await authFetch(`/api/officer/staging/batch/${selectedReviewBatch.id}/row/${stagingId}/propose-edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields)
+      });
+      
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || 'Failed to submit edit proposal.');
+      }
+      
+      showToast('Edit proposal submitted to Admin successfully!', 'success');
+      setEditingStagingRow(null);
+      handleSelectReviewBatch(selectedReviewBatch);
+    } catch (err) {
+      showToast(err.message || 'Failed to propose staging row update.', 'error');
+    } finally {
+      setProposeEditStagingLoading(false);
     }
   };
 
@@ -966,6 +1187,218 @@ const UploadPage = () => {
     </div>
   );
 
+  const renderStagedReview = () => {
+    if (!selectedReviewBatch) return null;
+
+    const isCustomerBatch = reviewStagingRows.some(r => r.rowType === 'CUSTOMER_PROFILE');
+
+    const renderCell = (val, prefix = '') => {
+      if (val === undefined || val === null || String(val).trim() === '') {
+        return <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>;
+      }
+      return prefix ? `${prefix}${val}` : String(val);
+    };
+
+    return (
+      <div>
+        <button
+          onClick={() => { setActiveView('history'); setSelectedReviewBatch(null); }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            marginBottom: '1rem',
+            fontSize: '0.88rem',
+            fontWeight: 600
+          }}
+        >
+          <ArrowLeft size={16} /> Back to History
+        </button>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
+              Review Staging Batch: {selectedReviewBatch.filename}
+            </h2>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+              Batch ID: #{selectedReviewBatch.id} · Uploaded By: {selectedReviewBatch.uploadedBy} · Status: <span style={{ color: '#ef4444', fontWeight: 600 }}>{selectedReviewBatch.status}</span>
+            </div>
+          </div>
+          <button
+            onClick={() => handleSelectReviewBatch(selectedReviewBatch)}
+            style={{
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 8,
+              padding: '0.45rem 1rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              color: 'var(--text-secondary)',
+              fontSize: '0.82rem'
+            }}
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
+
+        {reviewLoading ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+            <Loader size={24} className="animate-spin" />
+          </div>
+        ) : reviewError ? (
+          <div style={{ color: '#ef4444', padding: '1rem', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 10 }}>
+            {reviewError}
+          </div>
+        ) : reviewStagingRows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+            No staging rows found for this batch.
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                  {isCustomerBatch ? (
+                    [
+                      'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
+                      'Mobile', 'Capacity', 'Agreement Date', 'Bank', 'Branch',
+                      'Bank Account', 'Solar Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Status', 'Errors', 'Actions'
+                    ].map(h => (
+                      <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))
+                  ) : (
+                    [
+                      'Row', 'Account No', 'Customer Name', 'From Date', 'To Date', 'Import Units', 'Export Units', 'Unit Cost', 'Status', 'Errors', 'Actions'
+                    ].map(h => (
+                      <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {reviewStagingRows.map((row, i) => {
+                  const isPending = !!row.pendingProposal;
+                  const proposalType = isPending ? row.pendingProposal.actionType : '';
+                  const hasErrors = row.errors && row.errors.length > 0;
+
+                  return (
+                    <tr key={row.stagingId || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)' }}>{row.index}</td>
+                      <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
+                      <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
+                      
+                      {isCustomerBatch ? (
+                        <>
+                          <td style={{ padding: '0.6rem 0.9rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.refNo)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.costCode)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankCode)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.branchCode)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.tariffType)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
+                        </>
+                      ) : (
+                        <>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.fromDate)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.toDate)}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace' }}>{row.importUnits ?? '—'}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace' }}>{row.exportUnits ?? '—'}</td>
+                          <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitCost !== undefined ? `LKR ${row.unitCost}` : '—'}</td>
+                        </>
+                      )}
+
+                      <td style={{ padding: '0.6rem 0.9rem' }}>
+                        <span style={{
+                          padding: '0.15rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700,
+                          background: row.validationStatus === 'VALID' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
+                          color: row.validationStatus === 'VALID' ? '#10b981' : '#ef4444'
+                        }}>{row.validationStatus}</span>
+                      </td>
+
+                      <td style={{ padding: '0.6rem 0.9rem', maxWidth: '250px' }}>
+                        {hasErrors ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            {row.errors.map((err, errIdx) => (
+                              <div key={errIdx} style={{ color: '#ef4444', fontSize: '0.75rem', display: 'flex', gap: '0.25rem', alignItems: 'center' }}>
+                                <AlertTriangle size={12} style={{ flexShrink: 0 }} />
+                                <span>{err.errorMessage || err.message || err}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: '#10b981', fontSize: '0.75rem', display: 'flex', gap: '0.2rem', alignItems: 'center' }}>
+                            <Check size={12} /> Ready
+                          </span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '0.6rem 0.9rem' }}>
+                        {isPending ? (
+                          <span style={{
+                            padding: '0.15rem 0.55rem', borderRadius: 6, fontSize: '0.7rem', fontWeight: 700,
+                            background: proposalType === 'DELETE' ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
+                            color: proposalType === 'DELETE' ? '#ef4444' : '#f59e0b'
+                          }}>
+                            Pending {proposalType}
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', gap: '0.4rem' }}>
+                            <button
+                              onClick={() => setEditingStagingRow(row)}
+                              style={{
+                                padding: '0.25rem 0.5rem',
+                                background: 'rgba(99,102,241,0.15)',
+                                border: '1px solid rgba(99,102,241,0.3)',
+                                color: '#818cf8',
+                                borderRadius: 4,
+                                fontSize: '0.72rem',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                              }}
+                            >
+                              Propose Edit
+                            </button>
+                            <button
+                              onClick={() => handleProposeDelete(row.stagingId)}
+                              style={{
+                                padding: '0.25rem 0.5rem',
+                                background: 'rgba(239,68,68,0.15)',
+                                border: '1px solid rgba(239,68,68,0.3)',
+                                color: '#ef4444',
+                                borderRadius: 4,
+                                fontSize: '0.72rem',
+                                cursor: 'pointer',
+                                fontWeight: 600
+                              }}
+                            >
+                              Propose Delete
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   // ════════════════════════════════════════════════════════════════════════
   //  UPLOAD HISTORY VIEW
   // ════════════════════════════════════════════════════════════════════════
@@ -1019,8 +1452,11 @@ const UploadPage = () => {
                   <td style={{ padding: '0.6rem 0.9rem' }}>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
                       <button onClick={() => setBatchDetails(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Details</button>
-                      <button onClick={() => handleEditBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Edit</button>
-                      {isAdmin && (
+                      <button onClick={() => handleEditBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Rename</button>
+                      {h.status === 'PENDING_APPROVAL' && (
+                        <button onClick={() => handleSelectReviewBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Review</button>
+                      )}
+                      {(isAdmin || h.status === 'PENDING_APPROVAL') && (
                         <button onClick={() => handleDeleteBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Delete</button>
                       )}
                     </div>
@@ -1153,7 +1589,7 @@ const UploadPage = () => {
         </div>
       </div>
 
-      {activeView === 'history' ? renderHistory() : (
+      {activeView === 'history' ? renderHistory() : activeView === 'staged-review' ? renderStagedReview() : (
         <div className="card" style={{ padding: '2rem', borderRadius: 16 }}>
           {/* Rejection Alert Banner */}
           {latestRejected && wizardStep === 1 && !session && (
@@ -1216,7 +1652,7 @@ const UploadPage = () => {
       {/* Row Correction Modal */}
       {correctingRow && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '550px', padding: '2rem', boxShadow: 'var(--shadow)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '650px', padding: '2rem', boxShadow: 'var(--shadow)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Correct Row #{correctingRow.rowNum || correctingRow.accountNo}</h3>
               <button onClick={() => setCorrectingRow(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
@@ -1224,42 +1660,68 @@ const UploadPage = () => {
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.75rem' }}>
               {wizardStep === 1 && (
-                <>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
-                      <input type="text" value={correctingFields.customerName || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxHeight: '55vh', overflowY: 'auto', paddingRight: '0.25rem' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                    <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                   </div>
                   <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
+                    <input type="text" value={correctingFields.customerName || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Address</label>
                     <input type="text" value={correctingFields.customerAddress || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerAddress: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
-                      <input type="text" value={correctingFields.mobileNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, mobileNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
-                      <input type="text" value={correctingFields.solarType || ''} onChange={e => setCorrectingFields(p => ({ ...p, solarType: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Ref. No.</label>
+                    <input type="text" value={correctingFields.refNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, refNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
-                      <input type="number" step="0.01" value={correctingFields.unitRate || ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Billing Mode (Exp Code)</label>
-                      <input type="text" value={correctingFields.billingMode || ''} onChange={e => setCorrectingFields(p => ({ ...p, billingMode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Cost Code</label>
+                    <input type="text" value={correctingFields.costCode || ''} onChange={e => setCorrectingFields(p => ({ ...p, costCode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                   </div>
-                </>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
+                    <input type="text" value={correctingFields.mobileNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, mobileNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Panel Capacity (kW)</label>
+                    <input type="number" step="0.01" value={correctingFields.panelCapacity !== undefined && correctingFields.panelCapacity !== null ? correctingFields.panelCapacity : ''} onChange={e => setCorrectingFields(p => ({ ...p, panelCapacity: e.target.value === '' ? '' : parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Agreement Date (YYYY-MM-DD)</label>
+                    <input type="date" value={correctingFields.agreementDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, agreementDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Code</label>
+                    <input type="text" value={correctingFields.bankCode || ''} onChange={e => setCorrectingFields(p => ({ ...p, bankCode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Branch Code</label>
+                    <input type="text" value={correctingFields.branchCode || ''} onChange={e => setCorrectingFields(p => ({ ...p, branchCode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Account No</label>
+                    <input type="text" value={correctingFields.bankAccountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, bankAccountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
+                    <input type="text" value={correctingFields.solarType || ''} onChange={e => setCorrectingFields(p => { const next = { ...p, solarType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; })} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
+                    <input type="number" step="0.001" value={correctingFields.unitRate !== undefined && correctingFields.unitRate !== null ? correctingFields.unitRate : ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value === '' ? '' : parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Fix/Variable</label>
+                    <input type="text" value={correctingFields.tariffType || ''} onChange={e => setCorrectingFields(p => { const next = { ...p, tariffType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; })} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>L-Code</label>
+                    <input type="text" value={correctingFields.billingMode || ''} disabled readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'not-allowed' }} />
+                  </div>
+                </div>
               )}
               
               {wizardStep === 2 && (
@@ -1318,6 +1780,338 @@ const UploadPage = () => {
           </div>
         </div>
       )}
+
+      <ProposeEditStagingRowModal
+        isOpen={!!editingStagingRow}
+        onClose={() => setEditingStagingRow(null)}
+        row={editingStagingRow}
+        onSave={handleSaveProposeEdit}
+        loading={proposeEditStagingLoading}
+      />
+    </div>
+  );
+};
+
+const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) => {
+  const [fields, setFields] = useState({});
+
+  useEffect(() => {
+    if (row) {
+      const cleanFields = { ...row };
+      delete cleanFields.stagingId;
+      delete cleanFields.validationStatus;
+      delete cleanFields.errors;
+      delete cleanFields.index;
+      delete cleanFields.rowType;
+      delete cleanFields.pendingProposal;
+      setFields(cleanFields);
+    }
+  }, [row]);
+
+  if (!isOpen || !row) return null;
+
+  const handleChange = (key, value) => {
+    setFields(prev => {
+      const updated = {
+        ...prev,
+        [key]: value
+      };
+      if (key === 'solarType' || key === 'tariffType') {
+        updated.billingMode = deriveLCode(updated.solarType || '', updated.tariffType || '');
+      }
+      return updated;
+    });
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(row.stagingId, fields);
+  };
+
+  const isBilling = row.rowType !== 'CUSTOMER_PROFILE';
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-container" style={{ maxWidth: '650px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            Propose Row Correction (Row #{row.rowNum || row.index})
+          </h3>
+          <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
+          
+          {row.errors && row.errors.length > 0 && (
+            <div style={{ padding: '0.75rem 1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)' }} />
+                Validation Errors:
+              </div>
+              {row.errors.map((err, idx) => {
+                const message = typeof err === 'string' ? err : (err.errorMessage || err.message || '');
+                const field = typeof err === 'string' ? '' : (err.field ? `[${err.field}] ` : '');
+                return (
+                  <div key={idx} style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '0.75rem' }}>
+                    • {field}{message}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', maxHeight: '400px', overflowY: 'auto', paddingRight: '0.5rem' }}>
+            {isBilling ? (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.accountNo || ''}
+                    readOnly
+                    style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Customer Name</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.customerName || ''}
+                    onChange={(e) => handleChange('customerName', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">From Date (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={fields.fromDate || ''}
+                    onChange={(e) => handleChange('fromDate', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">To Date (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={fields.toDate || ''}
+                    onChange={(e) => handleChange('toDate', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Import Units (kWh)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={fields.importUnits !== undefined && fields.importUnits !== null ? fields.importUnits : ''}
+                    onChange={(e) => handleChange('importUnits', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Export Units (kWh)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={fields.exportUnits !== undefined && fields.exportUnits !== null ? fields.exportUnits : ''}
+                    onChange={(e) => handleChange('exportUnits', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Cost (LKR)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    className="login-form-input"
+                    value={fields.unitCost !== undefined && fields.unitCost !== null ? fields.unitCost : ''}
+                    onChange={(e) => handleChange('unitCost', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.bankCode || ''}
+                    onChange={(e) => handleChange('bankCode', e.target.value)}
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="form-group">
+                  <label className="form-label">Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.accountNo || ''}
+                    readOnly
+                    style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Customer Name</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.customerName || ''}
+                    onChange={(e) => handleChange('customerName', e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Customer Address</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.customerAddress || ''}
+                    onChange={(e) => handleChange('customerAddress', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.mobileNo || ''}
+                    onChange={(e) => handleChange('mobileNo', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Panel Capacity (kW)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={fields.panelCapacity !== undefined && fields.panelCapacity !== null ? fields.panelCapacity : ''}
+                    onChange={(e) => handleChange('panelCapacity', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Agreement Date (YYYY-MM-DD)</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={fields.agreementDate || ''}
+                    onChange={(e) => handleChange('agreementDate', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Solar Type (Net Plus/Net Metering/Net Accounting)</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.solarType || ''}
+                    onChange={(e) => handleChange('solarType', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.bankCode || ''}
+                    onChange={(e) => handleChange('bankCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branch Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.branchCode || ''}
+                    onChange={(e) => handleChange('branchCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Bank Account No</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.bankAccountNo || ''}
+                    onChange={(e) => handleChange('bankAccountNo', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Rate (LKR)</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    className="login-form-input"
+                    value={fields.unitRate !== undefined && fields.unitRate !== null ? fields.unitRate : ''}
+                    onChange={(e) => handleChange('unitRate', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ref. No.</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.refNo || ''}
+                    onChange={(e) => handleChange('refNo', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cost Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.costCode || ''}
+                    onChange={(e) => handleChange('costCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Fix/Variable</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.tariffType || ''}
+                    onChange={(e) => handleChange('tariffType', e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">L-Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.billingMode || ''}
+                    disabled
+                    readOnly
+                    style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', marginTop: '0.5rem' }}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={loading}
+              style={{ minWidth: '130px' }}
+            >
+              {loading ? <Loader size={14} className="animate-spin" /> : 'Propose Edits'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

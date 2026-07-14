@@ -253,11 +253,12 @@ public class PreviewService {
                         String mobileNo        = getVal(row, colIndices.get("mobileno"));
                         String bankAccountNo   = getVal(row, colIndices.get("bankaccountno"));
                         String branchCode      = getVal(row, colIndices.get("branchcode"));
-                        String billingMode     = getVal(row, colIndices.get("billingmode"));
                         String agreementDate   = getDateVal(row, colIndices.get("agreementdate"));
                         String rawPanelCapacity = getVal(row, colIndices.get("panelcapacity"));
                         Double panelCapacity   = parseDoubleStr(rawPanelCapacity);
                         String solarType       = getVal(row, colIndices.get("solartype"));
+                        String tariffType      = getVal(row, colIndices.get("tarifftype"));
+                        String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                         LocalDate fromDate = parseDate(row, colIndices.get("fromdate"));
                         LocalDate toDate   = parseDate(row, colIndices.get("todate"));
@@ -284,6 +285,7 @@ public class PreviewService {
                                         agreementDate,
                                         panelCapacity,
                                         solarType,
+                                        tariffType,
                                         processedRecordsInUpload);
 
                         // Track duplicates within this upload
@@ -358,11 +360,11 @@ public class PreviewService {
                         Double panelCapacity   = parseDoubleStr(rawPanelCapacity);
                         String solarType       = getVal(row, colIndices.get("solartype"));
                         String costCode        = getVal(row, colIndices.get("costcode"));
-                        String billingMode     = getVal(row, colIndices.get("billingmode"));
                         String refNo           = getVal(row, colIndices.get("refno"));
                         String rawUnitRate     = getVal(row, colIndices.get("unitcost"));
                         Double unitRate        = parseDoubleStr(rawUnitRate);
                         String tariffType      = getVal(row, colIndices.get("tarifftype"));
+                        String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                         ExcelValidationService.RowValidationResult rowResult =
                                 excelValidationService.validateCustomerRow(
@@ -378,7 +380,10 @@ public class PreviewService {
                                         panelCapacity,
                                         solarType,
                                         costCode,
-                                        billingMode);
+                                        billingMode,
+                                        refNo,
+                                        unitRate,
+                                        tariffType);
 
                         String status = rowResult.hasErrors()    ? "INVALID"
                                       : rowResult.hasDuplicate() ? "DUPLICATE"

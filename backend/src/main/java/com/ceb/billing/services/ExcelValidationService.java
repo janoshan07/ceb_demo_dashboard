@@ -32,6 +32,74 @@ public class ExcelValidationService {
         "CGL", "CARG", "SMIB", "RDB", "MCB", "UNI", "AIB", "UNION"
     ));
 
+    public static String normalizeSolarType(String solarType) {
+        if (solarType == null) {
+            return null;
+        }
+        String s = solarType.trim().toUpperCase();
+        
+        // Remove duplicate spaces, underscores, hyphens for comparison
+        s = s.replaceAll("[\\s_-]+", " ");
+        
+        if (s.equals("ACCOUNTING") || s.equals("NET ACCOUNTING") || s.equals("NETACCOUNTING")) {
+            return "Net Accounting";
+        }
+        if (s.equals("METERING") || s.equals("NET METERING") || s.equals("NETMETERING")) {
+            return "Net Metering";
+        }
+        if (s.equals("PLUS") || s.equals("NET PLUS") || s.equals("NETPLUS")) {
+            return "Net Plus";
+        }
+        if (s.equals("PLUS PLUS") || s.equals("NET PLUS PLUS") || s.equals("PLUSPLUS") || s.equals("NETPLUSPLUS") || s.equals("NET PLUSPLUS") || s.equals("NETPLUS PLUS")) {
+            return "Net Plus Plus";
+        }
+        
+        // Fallback case-insensitive matches against seeded values
+        if (s.equalsIgnoreCase("Net Accounting") || s.equalsIgnoreCase("ACCOUNTING")) {
+            return "Net Accounting";
+        }
+        if (s.equalsIgnoreCase("Net Metering") || s.equalsIgnoreCase("METERING")) {
+            return "Net Metering";
+        }
+        if (s.equalsIgnoreCase("Net Plus") || s.equalsIgnoreCase("PLUS")) {
+            return "Net Plus";
+        }
+        if (s.equalsIgnoreCase("Net Plus Plus") || s.equalsIgnoreCase("PLUS PLUS") || s.equalsIgnoreCase("PLUSPLUS")) {
+            return "Net Plus Plus";
+        }
+        
+        return solarType.trim();
+    }
+
+    public static String deriveLCode(String solarType, String tariffType) {
+        if (solarType == null || tariffType == null) {
+            return "";
+        }
+        String st = normalizeSolarType(solarType);
+        String tt = tariffType.trim().toUpperCase();
+
+        boolean isFixed = tt.contains("FIX");
+        boolean isVariable = tt.contains("VAR");
+
+        if (isFixed) {
+            if ("Net Accounting".equalsIgnoreCase(st)) {
+                return "L5001";
+            } else if ("Net Plus".equalsIgnoreCase(st)) {
+                return "L5002";
+            } else if ("Net Plus Plus".equalsIgnoreCase(st)) {
+                return "L5005";
+            }
+        } else if (isVariable) {
+            if ("Net Accounting".equalsIgnoreCase(st) || 
+                "Net Plus".equalsIgnoreCase(st) || 
+                "Net Plus Plus".equalsIgnoreCase(st) ||
+                "Net Metering".equalsIgnoreCase(st)) {
+                return "L5006";
+            }
+        }
+        return "";
+    }
+
     /**
      * Validates a single parsed row from the Excel sheet.
      */
@@ -60,6 +128,7 @@ public class ExcelValidationService {
             String agreementDate,
             Double panelCapacity,
             String solarType,
+            String tariffType,
             Set<String> processedRecordsInUpload
     ) {
         RowValidationResult result = new RowValidationResult();
@@ -143,9 +212,6 @@ public class ExcelValidationService {
         if (bankAccountNo == null || bankAccountNo.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Bank Account No", "Bank Account No is missing", false));
         }
-        if (billingMode == null || billingMode.trim().isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Exp. Code (Billing Mode) is missing", false));
-        }
         if (agreementDate == null || agreementDate.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Agreement Date", "Agreement Date is missing", false));
         }
@@ -155,23 +221,24 @@ public class ExcelValidationService {
         if (solarType == null || solarType.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Solar Type is missing", false));
         } else {
-            boolean ntExists = netTypeRepository.findByName(solarType.trim()).isPresent();
+            String normalized = normalizeSolarType(solarType);
+            boolean ntExists = netTypeRepository.findByName(normalized).isPresent();
             if (!ntExists) {
                 result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Unrecognized net type/solar type: '" + solarType + "'", false));
             }
         }
 
-        if (billingMode != null && !billingMode.trim().isEmpty()) {
-            String cleanEc = billingMode.trim();
-            boolean ecExists = expenseCodeRepository.findByExpCode(cleanEc).isPresent();
-            if (!ecExists) {
-                try {
-                    Long ecId = Long.valueOf(cleanEc);
-                    ecExists = expenseCodeRepository.existsById(ecId);
-                } catch (Exception ignored) {}
-            }
-            if (!ecExists) {
-                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Unrecognized expense code: '" + billingMode + "'", false));
+        String expectedLCode = deriveLCode(solarType, tariffType);
+        if (expectedLCode == null || expectedLCode.isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code cannot be generated for the given Type and Fix/Variable combination", false));
+        } else {
+            if (!expectedLCode.equalsIgnoreCase(billingMode != null ? billingMode.trim() : "")) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code does not match the Type and Fix/Variable combination. Expected: " + expectedLCode, false));
+            } else {
+                boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
+                if (!ecExists) {
+                    result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code '" + expectedLCode + "' does not exist in the database", false));
+                }
             }
         }
 
@@ -239,7 +306,10 @@ public class ExcelValidationService {
             Double panelCapacity,
             String solarType,
             String costCode,
-            String billingMode
+            String billingMode,
+            String refNo,
+            Double unitRate,
+            String tariffType
     ) {
         RowValidationResult result = new RowValidationResult();
         if (accountNo == null || accountNo.trim().isEmpty()) {
@@ -299,27 +369,39 @@ public class ExcelValidationService {
         if (solarType == null || solarType.trim().isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Solar Type is missing", false));
         } else {
-            boolean ntExists = netTypeRepository.findByName(solarType.trim()).isPresent();
+            String normalized = normalizeSolarType(solarType);
+            boolean ntExists = netTypeRepository.findByName(normalized).isPresent();
             if (!ntExists) {
                 result.addError(new ExcelValidationError(sheetName, rowNum, "Solar Type", "Unrecognized net type/solar type: '" + solarType + "'", false));
             }
         }
 
-        // Lookup validation for Expense Code
-        if (billingMode == null || billingMode.trim().isEmpty()) {
-            result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Exp. Code (Billing Mode) is missing", false));
+        // Lookup validation for L-Code / Expense Code matching solarType and tariffType combination
+        String expectedLCode = deriveLCode(solarType, tariffType);
+        if (expectedLCode == null || expectedLCode.isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code cannot be generated for the given Type and Fix/Variable combination", false));
         } else {
-            String cleanEc = billingMode.trim();
-            boolean ecExists = expenseCodeRepository.findByExpCode(cleanEc).isPresent();
-            if (!ecExists) {
-                try {
-                    Long ecId = Long.valueOf(cleanEc);
-                    ecExists = expenseCodeRepository.existsById(ecId);
-                } catch (Exception ignored) {}
+            if (!expectedLCode.equalsIgnoreCase(billingMode != null ? billingMode.trim() : "")) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code does not match the Type and Fix/Variable combination. Expected: " + expectedLCode, false));
+            } else {
+                boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
+                if (!ecExists) {
+                    result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code '" + expectedLCode + "' does not exist in the database", false));
+                }
             }
-            if (!ecExists) {
-                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "Unrecognized expense code: '" + billingMode + "'", false));
-            }
+        }
+
+        // New Master Data column validations
+        if (refNo == null || refNo.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Ref. No.", "Ref. No. is missing", false));
+        }
+        if (unitRate == null) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Rate", "Unit Rate is missing", false));
+        } else if (unitRate < 0) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Unit Rate", "Unit Rate cannot be negative", false));
+        }
+        if (tariffType == null || tariffType.trim().isEmpty()) {
+            result.addError(new ExcelValidationError(sheetName, rowNum, "Fix/Variable", "Fix/Variable (Tariff Type) is missing", false));
         }
 
         return result;
@@ -354,7 +436,8 @@ public class ExcelValidationService {
         if (customer.getSolarType() == null || customer.getSolarType().trim().isEmpty()) {
             errors.add("Solar Type is missing");
         } else {
-            boolean ntExists = netTypeRepository.findByName(customer.getSolarType().trim()).isPresent();
+            String normalized = normalizeSolarType(customer.getSolarType());
+            boolean ntExists = netTypeRepository.findByName(normalized).isPresent();
             if (!ntExists) {
                 errors.add("Unrecognized net type/solar type: '" + customer.getSolarType() + "'");
             }
@@ -364,9 +447,12 @@ public class ExcelValidationService {
         if (customer.getCostCode() == null) {
             errors.add("Cost Code is missing or unrecognized");
         }
-        // Expense Code (Billing Mode)
-        if (customer.getExpenseCode() == null) {
-            errors.add("Billing Mode (Exp. Code) is missing or unrecognized");
+        // Expense Code (L-Code)
+        String expectedLCode = deriveLCode(customer.getSolarType(), customer.getTariffType());
+        if (expectedLCode == null || expectedLCode.isEmpty()) {
+            errors.add("L-Code cannot be generated for the given Type and Fix/Variable combination");
+        } else if (customer.getExpenseCode() == null || !expectedLCode.equalsIgnoreCase(customer.getExpenseCode().getExpCode())) {
+            errors.add("L-Code does not match the Type and Fix/Variable combination. Expected: " + expectedLCode);
         }
 
         if (errors.isEmpty()) {

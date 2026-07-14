@@ -14,6 +14,38 @@ import {
   Edit2
 } from 'lucide-react';
 
+// Helper to automatically derive L-Code based on solarType and tariffType
+const deriveLCode = (solarType, tariffType) => {
+  if (!solarType || !tariffType) return '';
+  
+  const cleanSolar = solarType.trim().toLowerCase().replace(/[\s\-_]+/g, ' ');
+  let normSolar = '';
+  if (cleanSolar.includes('metering') || cleanSolar === 'metering') {
+    normSolar = 'Net Metering';
+  } else if (cleanSolar.includes('plus plus') || cleanSolar === 'plus plus' || cleanSolar.includes('plusplus') || cleanSolar === 'plusplus') {
+    normSolar = 'Net Plus Plus';
+  } else if (cleanSolar.includes('plus') || cleanSolar === 'plus') {
+    normSolar = 'Net Plus';
+  } else if (cleanSolar.includes('accounting') || cleanSolar === 'accounting') {
+    normSolar = 'Net Accounting';
+  }
+
+  const cleanTariff = tariffType.trim().toUpperCase();
+  const isFixed = cleanTariff.includes('FIX');
+  const isVariable = cleanTariff.includes('VAR');
+
+  if (isFixed) {
+    if (normSolar === 'Net Accounting') return 'L5001';
+    if (normSolar === 'Net Plus') return 'L5002';
+    if (normSolar === 'Net Plus Plus') return 'L5005';
+  } else if (isVariable) {
+    if (['Net Accounting', 'Net Plus', 'Net Plus Plus', 'Net Metering'].includes(normSolar)) {
+      return 'L5006';
+    }
+  }
+  return '';
+};
+
 const StagingReview = ({ authFetch, onConfirmAction }) => {
   const { showToast } = useToast();
   const [pendingBatches, setPendingBatches] = useState([]);
@@ -25,6 +57,8 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const [stagingRows, setStagingRows] = useState([]);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
+  const [proposals, setProposals] = useState([]);
+  const [activeTab, setActiveTab] = useState('records'); // 'records' | 'proposals'
 
   // Operation action states
   const [actionProcessing, setActionProcessing] = useState(false);
@@ -76,6 +110,79 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
     }
   };
 
+  const handleApproveProposal = async (proposalId) => {
+    try {
+      setActionProcessing(true);
+      const res = await authFetch(`/api/admin/staging/proposal/${proposalId}/approve`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        showToast('Proposed change approved and applied to staging successfully.', 'success');
+        handleSelectBatch(selectedBatch);
+      } else {
+        const body = await res.json();
+        showToast(body.message || 'Failed to approve proposal.', 'error');
+      }
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+    } finally {
+      setActionProcessing(false);
+    }
+  };
+
+  const handleRejectProposal = async (proposalId) => {
+    const reason = window.prompt("Enter rejection reason for this proposed change:");
+    if (reason === null) return;
+    
+    try {
+      setActionProcessing(true);
+      const res = await authFetch(`/api/admin/staging/proposal/${proposalId}/reject?reason=${encodeURIComponent(reason)}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        showToast('Proposed change rejected successfully.', 'success');
+        handleSelectBatch(selectedBatch);
+      } else {
+        const body = await res.json();
+        showToast(body.message || 'Failed to reject proposal.', 'error');
+      }
+    } catch (e) {
+      showToast('Error: ' + e.message, 'error');
+    } finally {
+      setActionProcessing(false);
+    }
+  };
+
+  const handleAdminDeleteRow = async (stagingId) => {
+    onConfirmAction({
+      isOpen: true,
+      title: 'Delete Staged Record',
+      message: 'Are you sure you want to delete this specific staging record directly? This cannot be undone.',
+      confirmText: 'Delete Row',
+      cancelText: 'Cancel',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          setActionProcessing(true);
+          const res = await authFetch(`/api/admin/staging/row/${stagingId}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            showToast('Staging record deleted successfully.', 'success');
+            handleSelectBatch(selectedBatch);
+          } else {
+            const body = await res.json();
+            showToast(body.message || 'Failed to delete record.', 'error');
+          }
+        } catch (e) {
+          showToast('Error: ' + e.message, 'error');
+        } finally {
+          setActionProcessing(false);
+        }
+      }
+    });
+  };
+
   const fetchPendingBatches = async () => {
     try {
       setLoading(true);
@@ -100,6 +207,8 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const handleSelectBatch = async (batch) => {
     setSelectedBatch(batch);
     setStagingRows([]);
+    setProposals([]);
+    setActiveTab('records');
     setDetailsError(null);
     setActionSuccess(null);
     setActionError(null);
@@ -137,6 +246,17 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
       });
       
       setStagingRows(parsedRows);
+      
+      // Fetch proposals
+      try {
+        const propRes = await authFetch(`/api/officer/staging/batch/${batch.id}/proposals`);
+        if (propRes.ok) {
+          const propData = await propRes.json();
+          setProposals(propData);
+        }
+      } catch (err) {
+        console.error("Failed to fetch proposals", err);
+      }
     } catch (err) {
       setDetailsError(err.message || 'Error occurred while retrieving staging data.');
     } finally {
@@ -341,6 +461,43 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
             </div>
           ) : (
             <>
+              {/* Tab Switcher */}
+              <div style={{ display: 'flex', gap: '1rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.5rem', paddingBottom: '0.1rem' }}>
+                <button
+                  onClick={() => setActiveTab('records')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'records' ? '2px solid var(--primary)' : '2px solid transparent',
+                    color: activeTab === 'records' ? 'white' : 'var(--text-secondary)',
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Staged Records ({totalRows})
+                </button>
+                <button
+                  onClick={() => setActiveTab('proposals')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'proposals' ? '2px solid var(--primary)' : '2px solid transparent',
+                    color: activeTab === 'proposals' ? 'white' : 'var(--text-secondary)',
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Officer Changes ({proposals.length})
+                </button>
+              </div>
+
+              {activeTab === 'proposals' ? renderProposalsTab() : (
+                <>
+                  {/* Summary Cards */}
               {/* Summary Cards */}
               <div className="upload-summary-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '2rem' }}>
                 <div className="summary-tile">
@@ -366,19 +523,25 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
               </div>
 
               {/* Data Table */}
-              <div className="table-container">
-                <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+              <div className="table-container" style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                <table className="custom-table" style={{ fontSize: '0.85rem', width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      <th>Row</th>
-                      <th>Account No</th>
-                      <th>Customer Name</th>
-                      <th>Billing Period</th>
-                      <th>Net (Imp / Exp)</th>
-                      <th>Unit Cost</th>
-                      <th>Severity</th>
-                      <th>Validation Errors / Warnings</th>
-                      <th style={{ textAlign: 'center' }}>Action</th>
+                      {isCustomerBatch ? (
+                        [
+                          'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
+                          'Mobile', 'Capacity', 'Agreement Date', 'Bank', 'Branch',
+                          'Bank Account', 'Solar Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Severity', 'Validation Errors / Warnings', 'Action'
+                        ].map(h => (
+                          <th key={h} style={{ whiteSpace: 'nowrap' }}>{h}</th>
+                        ))
+                      ) : (
+                        [
+                          'Row', 'Account No', 'Customer Name', 'Billing Period', 'Net (Imp / Exp)', 'Unit Cost', 'Severity', 'Validation Errors / Warnings', 'Action'
+                        ].map(h => (
+                          <th key={h} style={{ whiteSpace: 'nowrap' }}>{h}</th>
+                        ))
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -416,19 +579,48 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                         );
                         rowBg = 'rgba(234,179,8,0.02)';
                       }
+
+                      const renderCell = (val, prefix = '') => {
+                        if (val === undefined || val === null || String(val).trim() === '') {
+                          return <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>;
+                        }
+                        return prefix ? `${prefix}${val}` : String(val);
+                      };
                       
                       return (
                         <tr key={row.stagingId} style={{ backgroundColor: rowBg }}>
                           <td style={{ fontWeight: 600 }}>{row.index}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{row.accountNo || '—'}</td>
-                          <td>{row.customerName || '—'}</td>
-                          <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
-                            {row.fromDate ? `${row.fromDate} to ${row.toDate}` : '—'}
-                          </td>
-                          <td>
-                            {row.importUnits !== undefined ? `${row.importUnits} / ${row.exportUnits}` : '—'}
-                          </td>
-                          <td>{row.unitCost !== undefined ? `LKR ${row.unitCost}` : '—'}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
+                          
+                          {isCustomerBatch ? (
+                            <>
+                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.refNo)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.costCode)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.bankCode)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.branchCode)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
+                              <td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.tariffType)}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                {row.fromDate ? `${row.fromDate} to ${row.toDate}` : '—'}
+                              </td>
+                              <td>
+                                {row.importUnits !== undefined ? `${row.importUnits} / ${row.exportUnits}` : '—'}
+                              </td>
+                              <td>{row.unitCost !== undefined ? `LKR ${row.unitCost}` : '—'}</td>
+                            </>
+                          )}
+                          
                           <td>{badge}</td>
                           <td>
                             {row.errors && row.errors.length > 0 ? (
@@ -442,7 +634,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                                     fontSize: '0.8rem'
                                   }}>
                                     {err.warning ? <AlertTriangle size={12} /> : <XCircle size={12} />}
-                                    <span><strong>{err.field}</strong>: {err.errorMessage}</span>
+                                    <span>{err.errorMessage}</span>
                                   </div>
                                 ))}
                               </div>
@@ -454,15 +646,25 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                             )}
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            <button
-                              type="button"
-                              className="btn btn-secondary"
-                              style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                              onClick={() => handleOpenEditModal(row)}
-                            >
-                              <Edit2 size={12} />
-                              Correct
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                                onClick={() => handleOpenEditModal(row)}
+                              >
+                                <Edit2 size={12} />
+                                Correct
+                              </button>
+                              <button
+                                type="button"
+                                className="btn btn-logout"
+                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}
+                                onClick={() => handleAdminDeleteRow(row.stagingId)}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -472,6 +674,8 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
               </div>
             </>
           )}
+        </>
+      )}
           <EditStagingRowModal
             isOpen={!!editingStagingRow}
             onClose={handleCloseEditModal}
@@ -640,10 +844,16 @@ const EditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) => {
   if (!isOpen || !row) return null;
 
   const handleChange = (key, value) => {
-    setFields(prev => ({
-      ...prev,
-      [key]: value
-    }));
+    setFields(prev => {
+      const updated = {
+        ...prev,
+        [key]: value
+      };
+      if (key === 'solarType' || key === 'tariffType') {
+        updated.billingMode = deriveLCode(updated.solarType || '', updated.tariffType || '');
+      }
+      return updated;
+    });
   };
 
   const handleSubmit = (e) => {
@@ -871,6 +1081,44 @@ const EditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) => {
                     className="login-form-input"
                     value={fields.unitRate !== undefined && fields.unitRate !== null ? fields.unitRate : ''}
                     onChange={(e) => handleChange('unitRate', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Ref. No.</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.refNo || ''}
+                    onChange={(e) => handleChange('refNo', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cost Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.costCode || ''}
+                    onChange={(e) => handleChange('costCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Fix/Variable</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.tariffType || ''}
+                    onChange={(e) => handleChange('tariffType', e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">L-Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={fields.billingMode || ''}
+                    disabled
+                    readOnly
+                    style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
                   />
                 </div>
               </>

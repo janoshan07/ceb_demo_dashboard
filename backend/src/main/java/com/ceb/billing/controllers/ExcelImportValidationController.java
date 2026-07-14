@@ -332,7 +332,11 @@ public class ExcelImportValidationController {
                             Double panelCapacity   = parseDoubleVal(row, colIndices.get("panelcapacity"));
                             String solarType       = normalize(getVal(row, colIndices.get("solartype")));
                             String costCode        = normalize(getVal(row, colIndices.get("costcode")));
-                            String billingMode     = normalize(getVal(row, colIndices.get("billingmode")));
+                            String refNo           = colIndices.containsKey("refno") ? normalize(getVal(row, colIndices.get("refno"))) : "";
+                            Double unitRate        = colIndices.containsKey("unitcost") ? parseDoubleVal(row, colIndices.get("unitcost")) : null;
+                            String tariffType      = colIndices.containsKey("tarifftype") ? normalize(getVal(row, colIndices.get("tarifftype"))) : "";
+                            // Automatically derive L-Code (billingMode)
+                            String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                             // Validate original row (before any corrections)
                             ExcelValidationService.RowValidationResult origValResult =
@@ -340,7 +344,8 @@ public class ExcelImportValidationController {
                                             currentSheetName, r + 1,
                                             accountNo, customerName,
                                             customerAddress, mobileNo, bankCode, branchCode, bankAccountNo,
-                                            agreementDate, panelCapacity, solarType, costCode, billingMode);
+                                            agreementDate, panelCapacity, solarType, costCode, billingMode,
+                                            refNo, unitRate, tariffType);
 
                             if (origValResult.hasErrors() || origValResult.hasWarnings()) {
                                 Map<String, Object> errItem = new HashMap<>();
@@ -369,6 +374,11 @@ public class ExcelImportValidationController {
                             String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
                             profile.put("branchCode",      detBranch != null ? detBranch : branchCode);
                             profile.put("bankAccountNo",   bankAccountNo);
+                            profile.put("costCode",        costCode);
+                            profile.put("billingMode",     billingMode);
+                            profile.put("refNo",           refNo);
+                            profile.put("unitRate",        unitRate);
+                            profile.put("tariffType",      tariffType);
 
                             // Overlay client-side edits/corrections if present
                             if (corrections != null && corrections.containsKey(key)) {
@@ -404,10 +414,11 @@ public class ExcelImportValidationController {
                             String origMobile = normalize(getVal(row, colIndices.get("mobileno")));
                             String origBankAccountNo = normalize(getVal(row, colIndices.get("bankaccountno")));
                             String origBranchCode = normalize(getVal(row, colIndices.get("branchcode")));
-                            String origBillingMode = normalize(getVal(row, colIndices.get("billingmode")));
+                            String origSolarType = normalize(getVal(row, colIndices.get("solartype")));
+                            String origTariffType = colIndices.containsKey("tarifftype") ? normalize(getVal(row, colIndices.get("tarifftype"))) : "";
+                            String origBillingMode = ExcelValidationService.deriveLCode(origSolarType, origTariffType);
                             String origAgreementDate = getDateStr(row, colIndices.get("agreementdate"));
                             Double origPanelCapacity = parseDoubleVal(row, colIndices.get("panelcapacity"));
-                            String origSolarType = normalize(getVal(row, colIndices.get("solartype")));
                             
                             LocalDate origFromDate = null, origToDate = null;
                             try { if (origRawFromDate != null && !origRawFromDate.isEmpty()) origFromDate = LocalDate.parse(origRawFromDate); } catch (Exception ignored) {}
@@ -429,7 +440,8 @@ public class ExcelImportValidationController {
                                     origAgreementDate,
                                     origPanelCapacity,
                                     origSolarType,
-                                    new HashSet<>()
+                                    origTariffType,
+                                    new HashSet<String>()
                             );
                             if (origVal.hasErrors() || origVal.hasWarnings()) {
                                 Map<String, Object> errItem = new HashMap<>();
@@ -506,7 +518,10 @@ public class ExcelImportValidationController {
                                 profile.get("panelCapacity") != null ? Double.valueOf(profile.get("panelCapacity").toString()) : null,
                                 (String) profile.get("solarType"),
                                 (String) profile.get("costCode"),
-                                (String) profile.get("billingMode"));
+                                (String) profile.get("billingMode"),
+                                (String) profile.get("refNo"),
+                                profile.get("unitRate") != null ? Double.valueOf(profile.get("unitRate").toString()) : null,
+                                (String) profile.get("tariffType"));
 
                 String rowStatus = valResult.hasErrors() ? "INVALID"
                         : valResult.hasWarnings() ? "WARNING" : "VALID";
@@ -567,6 +582,11 @@ public class ExcelImportValidationController {
                         : (ucVal instanceof Number ? Double.valueOf(((Number) ucVal).doubleValue()) : Double.valueOf(ucVal.toString()));
                 String bankCode     = (String) bill.getOrDefault("bankCode", "");
 
+                String solarType    = (String) bill.getOrDefault("solarType", "");
+                String tariffType   = (String) bill.getOrDefault("tariffType", "");
+                String billingMode  = ExcelValidationService.deriveLCode(solarType, tariffType);
+                bill.put("billingMode", billingMode);
+
                 LocalDate fromDate = null, toDate = null;
                 try { if (rawFromDate != null && !rawFromDate.isEmpty()) fromDate = LocalDate.parse(rawFromDate); } catch (Exception ignored) {}
                 try { if (rawToDate  != null && !rawToDate.isEmpty())   toDate   = LocalDate.parse(rawToDate);   } catch (Exception ignored) {}
@@ -592,10 +612,11 @@ public class ExcelImportValidationController {
                         (String) bill.getOrDefault("mobileNo", ""),
                         (String) bill.getOrDefault("bankAccountNo", ""),
                         (String) bill.getOrDefault("branchCode", ""),
-                        (String) bill.getOrDefault("billingMode", ""),
+                        billingMode,
                         (String) bill.getOrDefault("agreementDate", ""),
                         bill.get("panelCapacity") != null ? Double.valueOf(bill.get("panelCapacity").toString()) : null,
-                        (String) bill.getOrDefault("solarType", ""),
+                        solarType,
+                        tariffType,
                         processedRecordsInUpload
                 );
 

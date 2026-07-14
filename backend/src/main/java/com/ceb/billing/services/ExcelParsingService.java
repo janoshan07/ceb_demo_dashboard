@@ -208,14 +208,6 @@ public class ExcelParsingService {
                     Double exportUnits = getCellValueAsDouble(row.getCell(exportsCol));
                     Double unitCost = getCellValueAsDouble(row.getCell(unitCostCol));
 
-                    String bankCode = bankCodeCol != null ? getCellValueAsString(row.getCell(bankCodeCol)) : "";
-                    String branchCode = branchCodeCol != null ? getCellValueAsString(row.getCell(branchCodeCol)) : "";
-                    String bankAccountNo = bankAccountNoCol != null
-                            ? getCellValueAsString(row.getCell(bankAccountNoCol))
-                            : "";
-                    String billingMode = billingModeCol != null ? getCellValueAsString(row.getCell(billingModeCol))
-                            : "Fixed";
-
                     String customerAddress = customerAddressCol != null
                             ? getCellValueAsString(row.getCell(customerAddressCol))
                             : "";
@@ -231,6 +223,14 @@ public class ExcelParsingService {
                     String costCode = costCodeCol != null ? getCellValueAsString(row.getCell(costCodeCol)) : "";
                     String tariffType = tariffTypeCol != null ? getCellValueAsString(row.getCell(tariffTypeCol)) : "";
                     Double unitRate = unitCost;
+
+                    String bankCode = bankCodeCol != null ? getCellValueAsString(row.getCell(bankCodeCol)) : "";
+                    String branchCode = branchCodeCol != null ? getCellValueAsString(row.getCell(branchCodeCol)) : "";
+                    String bankAccountNo = bankAccountNoCol != null
+                            ? getCellValueAsString(row.getCell(bankAccountNoCol))
+                            : "";
+                    // Automatically derive L-Code (billingMode) based on Type (solarType) and Fix/Variable (tariffType)
+                    String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                     // Call the ExcelValidationService to validate row data
                     ExcelValidationService.RowValidationResult validationResult;
@@ -249,7 +249,10 @@ public class ExcelParsingService {
                                 panelCapacity,
                                 solarType,
                                 costCode,
-                                billingMode
+                                billingMode,
+                                refNo,
+                                unitRate,
+                                tariffType
                         );
                     } else {
                         validationResult = excelValidationService.validateRow(
@@ -277,6 +280,7 @@ public class ExcelParsingService {
                                 agreementDate != null ? agreementDate.toString() : null,
                                 panelCapacity,
                                 solarType,
+                                tariffType,
                                 processedRecordsInUpload
                         );
                     }

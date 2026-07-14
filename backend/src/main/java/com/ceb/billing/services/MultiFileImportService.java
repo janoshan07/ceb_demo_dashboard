@@ -57,7 +57,7 @@ public class MultiFileImportService {
             List<String> missingCols = new ArrayList<>();
             for (String required : Arrays.asList("accountno", "customername", "customeraddress",
                     "mobileno", "panelcapacity", "agreementdate", "bankcode", "bankaccountno",
-                    "solartype", "unitcost", "tarifftype", "billingmode")) {
+                    "solartype", "unitcost", "tarifftype")) {
                 if (!colMap.containsKey(required)) missingCols.add(required);
             }
             if (!missingCols.isEmpty()) {
@@ -85,10 +85,13 @@ public class MultiFileImportService {
                 rowData.put("bankCode",        strVal(row, colMap.get("bankcode")));
                 rowData.put("branchCode",      strVal(row, colMap.get("branchcode")));
                 rowData.put("bankAccountNo",   strVal(row, colMap.get("bankaccountno")));
-                rowData.put("solarType",       strVal(row, colMap.get("solartype")));
+                String solarType = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
+                String tariffType = strVal(row, colMap.get("tarifftype"));
+                String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
+                rowData.put("solarType",       solarType);
                 rowData.put("unitRate",        numVal(row, colMap.get("unitcost"))); // maps unitrate/unitcost
-                rowData.put("tariffType",      strVal(row, colMap.get("tarifftype")));
-                rowData.put("billingMode",     strVal(row, colMap.get("billingmode")));
+                rowData.put("tariffType",      tariffType);
+                rowData.put("billingMode",     billingMode);
 
                 List<String> rowErrors = validateMasterDataRow(rowData);
                 rowData.put("errors", rowErrors);
@@ -144,10 +147,10 @@ public class MultiFileImportService {
                 String bankCode        = strVal(row, colMap.get("bankcode"));
                 String branchCode      = strVal(row, colMap.get("branchcode"));
                 String bankAccountNo   = strVal(row, colMap.get("bankaccountno"));
-                String solarType       = strVal(row, colMap.get("solartype"));
+                String solarType       = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
                 Double unitRate        = numVal(row, colMap.get("unitcost"));
                 String tariffType      = strVal(row, colMap.get("tarifftype"));
-                String billingMode     = strVal(row, colMap.get("billingmode"));
+                String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                 // Corrections overlay by row number OR accountNo
                 String rowNumStr = String.valueOf(r + 1);
@@ -174,15 +177,16 @@ public class MultiFileImportService {
                     if (corr.containsKey("bankCode"))        bankCode        = (String) corr.get("bankCode");
                     if (corr.containsKey("branchCode"))      branchCode      = (String) corr.get("branchCode");
                     if (corr.containsKey("bankAccountNo"))   bankAccountNo   = (String) corr.get("bankAccountNo");
-                    if (corr.containsKey("solarType"))       solarType       = (String) corr.get("solarType");
+                    if (corr.containsKey("solarType"))       solarType       = ExcelValidationService.normalizeSolarType((String) corr.get("solarType"));
                     if (corr.containsKey("unitRate")) {
                         Object val = corr.get("unitRate");
                         unitRate = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
                     }
                     if (corr.containsKey("tariffType"))      tariffType      = (String) corr.get("tariffType");
-                    if (corr.containsKey("billingMode"))     billingMode     = (String) corr.get("billingMode");
                     if (corr.containsKey("costCode"))        costCode        = (String) corr.get("costCode");
                 }
+
+                billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                 Map<String, Object> cachedRow = new LinkedHashMap<>();
                 cachedRow.put("accountNo", accountNo);
@@ -585,7 +589,11 @@ public class MultiFileImportService {
             final Long uploadId = uploadHistory.getId();
 
             // Stage customer profiles and NGEN billing records in database staging table
-            stageOfficerData(masterStaged, fileBytes, sessionId, uploadId, corrections);
+            int errorRows = stageOfficerData(masterStaged, fileBytes, sessionId, uploadId, corrections);
+
+            // Update errors count on the UploadHistory for Admin review
+            uploadHistory.setErrorsCount(errorRows);
+            uploadHistoryRepository.save(uploadHistory);
 
             session.setStage("COMPLETED");
             session.setNgenBatchId(uploadId);
@@ -636,7 +644,7 @@ public class MultiFileImportService {
             String bankCode        = (String) stagedCust.get("bankCode");
             String branchCode      = (String) stagedCust.get("branchCode");
             String bankAccountNo   = (String) stagedCust.get("bankAccountNo");
-            String solarType       = (String) stagedCust.get("solarType");
+            String solarType       = ExcelValidationService.normalizeSolarType((String) stagedCust.get("solarType"));
             Double unitRate        = stagedCust.get("unitRate") != null ? ((Number) stagedCust.get("unitRate")).doubleValue() : null;
             String tariffType      = (String) stagedCust.get("tariffType");
             String billingMode     = (String) stagedCust.get("billingMode");
@@ -810,7 +818,7 @@ public class MultiFileImportService {
         return result;
     }
 
-    private void stageOfficerData(
+    private int stageOfficerData(
             List<Map<String, Object>> masterStaged,
             byte[] fileBytes,
             Long sessionId,
@@ -818,6 +826,7 @@ public class MultiFileImportService {
             Map<String, Map<String, Object>> corrections
     ) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
+        int totalErrorRows = 0;
 
         // 1. Stage Customer Profiles
         for (Map<String, Object> stagedCust : masterStaged) {
@@ -836,16 +845,54 @@ public class MultiFileImportService {
             }
 
             List<String> errors = validateMasterDataRow(finalCustData);
-            String valStatus = errors.isEmpty() ? "VALID" : "ERROR";
+            String custAccountNo = finalCustData.get("accountNo") != null ? finalCustData.get("accountNo").toString() : "";
+            String custName = finalCustData.get("customerName") != null ? finalCustData.get("customerName").toString() : "";
+            String custAddress = finalCustData.get("customerAddress") != null ? finalCustData.get("customerAddress").toString() : "";
+            String custMobile = finalCustData.get("mobileNo") != null ? finalCustData.get("mobileNo").toString() : "";
+            String custBankCode = finalCustData.get("bankCode") != null ? finalCustData.get("bankCode").toString() : "";
+            String custBranchCode = finalCustData.get("branchCode") != null ? finalCustData.get("branchCode").toString() : "";
+            String custBankAcctNo = finalCustData.get("bankAccountNo") != null ? finalCustData.get("bankAccountNo").toString() : "";
+            String custAgreementDate = finalCustData.get("agreementDate") != null ? finalCustData.get("agreementDate").toString() : "";
+            Double custPanelCapacity = finalCustData.get("panelCapacity") != null && !finalCustData.get("panelCapacity").toString().isEmpty()
+                    ? ((Number) finalCustData.get("panelCapacity")).doubleValue() : null;
+            String custSolarType = ExcelValidationService.normalizeSolarType(finalCustData.get("solarType") != null ? finalCustData.get("solarType").toString() : "");
+            String custCostCode = finalCustData.get("costCode") != null ? finalCustData.get("costCode").toString() : "";
+            String custBillingMode = finalCustData.get("billingMode") != null ? finalCustData.get("billingMode").toString() : "";
+            String custRefNo = finalCustData.get("refNo") != null ? finalCustData.get("refNo").toString() : "";
+            Double custUnitRate = finalCustData.get("unitRate") != null && !finalCustData.get("unitRate").toString().isEmpty()
+                    ? ((Number) finalCustData.get("unitRate")).doubleValue() : null;
+            String custTariffType = finalCustData.get("tariffType") != null ? finalCustData.get("tariffType").toString() : "";
+
+            int custRowNum = finalCustData.get("rowNum") != null ? Integer.parseInt(finalCustData.get("rowNum").toString()) : 0;
+
+            ExcelValidationService.RowValidationResult valResult =
+                    excelValidationService.validateCustomerRow(
+                            "MasterData", custRowNum, custAccountNo, custName, custAddress, custMobile,
+                            custBankCode, custBranchCode, custBankAcctNo, custAgreementDate,
+                            custPanelCapacity, custSolarType, custCostCode, custBillingMode,
+                            custRefNo, custUnitRate, custTariffType);
+
+            String valStatus = valResult.hasErrors() ? "ERROR" : valResult.hasWarnings() ? "WARNING" : "VALID";
+
+            // Serialize structured error objects for frontend
+            List<Map<String, Object>> structuredErrors = new ArrayList<>();
+            for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
+                Map<String, Object> errMap = new LinkedHashMap<>();
+                errMap.put("field", err.getField());
+                errMap.put("errorMessage", err.getErrorMessage());
+                errMap.put("warning", err.isWarning());
+                structuredErrors.add(errMap);
+            }
 
             BillingUploadStaging staging = new BillingUploadStaging(
                     uploadId,
                     mapper.writeValueAsString(finalCustData),
                     valStatus,
-                    mapper.writeValueAsString(errors),
+                    mapper.writeValueAsString(structuredErrors),
                     "CUSTOMER_PROFILE"
             );
             billingUploadStagingRepository.save(staging);
+            if (valResult.hasErrors()) totalErrorRows++;
         }
 
         // 2. Stage Billing Records (NGEN merged with CEB)
@@ -926,7 +973,7 @@ public class MultiFileImportService {
                 String solarType = matchedMaster != null ? (String) matchedMaster.get("solarType") : null;
                 Double masterUnitRate = matchedMaster != null && matchedMaster.get("unitRate") != null ? ((Number) matchedMaster.get("unitRate")).doubleValue() : null;
                 String tariffType = matchedMaster != null ? (String) matchedMaster.get("tariffType") : null;
-                String billingMode = matchedMaster != null ? (String) matchedMaster.get("billingMode") : null;
+                String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                 double effectiveRate = masterUnitRate != null ? masterUnitRate : (ngenUnitRate != null ? ngenUnitRate : 0.0);
                 double kwhSales = (kwhExport != null ? kwhExport : 0.0) - (kwhImport != null ? kwhImport : 0.0);
@@ -967,24 +1014,61 @@ public class MultiFileImportService {
                 rawJson.put("payment", paymentSettled);
                 rawJson.put("paymentSettled", paymentSettled);
 
-                List<String> errors = new ArrayList<>();
-                if (kwhImport == null) errors.add("kWh Import is missing or invalid");
-                if (kwhExport == null) errors.add("kWh Export is missing or invalid");
-                if (prevReadingDate == null) errors.add("Previous reading date is missing");
-                if (currReadingDate == null) errors.add("Current reading date is missing");
+                // Comprehensive validation using ExcelValidationService
+                String rawFromDate = prevReadingDate != null ? prevReadingDate : "";
+                String rawToDate = currReadingDate != null ? currReadingDate : "";
+                LocalDate parsedFromDate = prevReadingDate != null ? safeParseDate(prevReadingDate) : null;
+                LocalDate parsedToDate = currReadingDate != null ? safeParseDate(currReadingDate) : null;
+                String rawImports = kwhImport != null ? kwhImport.toString() : "";
+                String rawExports = kwhExport != null ? kwhExport.toString() : "";
+                String rawUnitCost = effectiveRate > 0 ? String.valueOf(effectiveRate) : "";
+                Double unitCostVal = effectiveRate > 0 ? effectiveRate : null;
 
-                String valStatus = errors.isEmpty() ? "VALID" : "ERROR";
+                ExcelValidationService.RowValidationResult valResult =
+                        excelValidationService.validateRow(
+                                "NGEN", r + 1, "BILLING", accountNo, customerName,
+                                rawFromDate, parsedFromDate, rawToDate, parsedToDate,
+                                rawImports, kwhImport, rawExports, kwhExport,
+                                rawUnitCost, unitCostVal,
+                                bankCode != null ? bankCode : "",
+                                customerAddress != null ? customerAddress : "",
+                                mobileNo != null ? mobileNo : "",
+                                bankAccountNo != null ? bankAccountNo : "",
+                                branchCode != null ? branchCode : "",
+                                billingMode != null ? billingMode : "",
+                                agreementDate != null ? agreementDate : "",
+                                panelCapacity,
+                                solarType != null ? solarType : "",
+                                tariffType != null ? tariffType : "",
+                                new HashSet<String>()
+                        );
+
+                String valStatus = valResult.hasDuplicate() ? "DUPLICATE"
+                        : valResult.hasErrors() ? "ERROR"
+                        : valResult.hasWarnings() ? "WARNING" : "VALID";
+
+                // Serialize structured error objects for frontend
+                List<Map<String, Object>> structuredErrors = new ArrayList<>();
+                for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
+                    Map<String, Object> errMap = new LinkedHashMap<>();
+                    errMap.put("field", err.getField());
+                    errMap.put("errorMessage", err.getErrorMessage());
+                    errMap.put("warning", err.isWarning());
+                    structuredErrors.add(errMap);
+                }
 
                 BillingUploadStaging staging = new BillingUploadStaging(
                         uploadId,
                         mapper.writeValueAsString(rawJson),
                         valStatus,
-                        mapper.writeValueAsString(errors),
+                        mapper.writeValueAsString(structuredErrors),
                         "BILLING"
                 );
                 billingUploadStagingRepository.save(staging);
+                if (valResult.hasErrors() || valResult.hasDuplicate()) totalErrorRows++;
             }
         }
+        return totalErrorRows;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -1066,13 +1150,94 @@ public class MultiFileImportService {
 
     private List<String> validateMasterDataRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
-        String accountNo = (String) row.get("accountNo");
+        
+        String accountNo = row.get("accountNo") != null ? row.get("accountNo").toString() : null;
         if (isBlank(accountNo)) {
             errors.add("Account No is missing");
         } else if (accountNo.trim().length() != 10 || !accountNo.trim().matches("\\d+")) {
             errors.add("Account No must be a 10-digit numeric value");
         }
-        if (isBlank((String) row.get("customerName"))) errors.add("Customer Name is missing");
+        
+        if (isBlank((String) row.get("customerName"))) {
+            errors.add("Customer Name is missing");
+        }
+        
+        if (isBlank((String) row.get("customerAddress"))) {
+            errors.add("Address is missing");
+        }
+        
+        if (isBlank((String) row.get("refNo"))) {
+            errors.add("Ref. No. is missing");
+        }
+        
+        String costCode = row.get("costCode") != null ? row.get("costCode").toString() : null;
+        if (isBlank(costCode)) {
+            errors.add("Cost Code is missing");
+        } else {
+            boolean ccExists = costCodeRepository.findByCostCode(costCode.trim()).isPresent();
+            if (!ccExists) {
+                errors.add("Unrecognized cost code: '" + costCode + "'");
+            }
+        }
+        
+        if (isBlank((String) row.get("mobileNo"))) {
+            errors.add("Mobile Number is missing");
+        }
+        
+        Object panelCapacity = row.get("panelCapacity");
+        if (panelCapacity == null || panelCapacity.toString().trim().isEmpty()) {
+            errors.add("PANEL CAPACITY is missing");
+        }
+        
+        if (isBlank((String) row.get("agreementDate"))) {
+            errors.add("AGREEMENT DATE is missing");
+        }
+        
+        if (isBlank((String) row.get("bankCode"))) {
+            errors.add("Bank Code is missing");
+        }
+        
+        if (isBlank((String) row.get("branchCode"))) {
+            errors.add("Branch Code is missing");
+        }
+        
+        if (isBlank((String) row.get("bankAccountNo"))) {
+            errors.add("Bank Account No is missing");
+        }
+        
+        String solarType = (String) row.get("solarType");
+        if (isBlank(solarType)) {
+            errors.add("TYPE (Solar Type) is missing");
+        } else {
+            String normalized = ExcelValidationService.normalizeSolarType(solarType);
+            boolean ntExists = netTypeRepository.findByName(normalized).isPresent();
+            if (!ntExists) {
+                errors.add("Unrecognized net type/solar type: '" + solarType + "'");
+            }
+        }
+        
+        Object unitRate = row.get("unitRate");
+        if (unitRate == null || unitRate.toString().trim().isEmpty()) {
+            errors.add("UNIT RATE is missing");
+        }
+        
+        if (isBlank((String) row.get("tariffType"))) {
+            errors.add("FIX/VARIABLE is missing");
+        }
+        
+        String tariffType = (String) row.get("tariffType");
+        String expectedLCode = ExcelValidationService.deriveLCode(solarType, tariffType);
+        row.put("billingMode", expectedLCode);
+
+        if (isBlank(expectedLCode)) {
+            errors.add("L-Code cannot be generated for the given Type and Fix/Variable combination");
+        } else {
+            boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
+            if (!ecExists) {
+                errors.add("L-Code '" + expectedLCode + "' does not exist in the database");
+            }
+        }
+        
         return errors;
     }
 

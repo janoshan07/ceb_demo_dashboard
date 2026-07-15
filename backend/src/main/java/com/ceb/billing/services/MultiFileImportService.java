@@ -37,6 +37,7 @@ public class MultiFileImportService {
     @Autowired private UploadHistoryRepository uploadHistoryRepository;
     @Autowired private BillingUploadStagingRepository billingUploadStagingRepository;
     @Autowired private ImportBatchRepository importBatchRepository;
+    @Autowired private StagingChangeLogRepository stagingChangeLogRepository;
 
     // ════════════════════════════════════════════════════════════════════
     //  STEP 1 — MASTER DATA
@@ -589,7 +590,7 @@ public class MultiFileImportService {
             final Long uploadId = uploadHistory.getId();
 
             // Stage customer profiles and NGEN billing records in database staging table
-            int errorRows = stageOfficerData(masterStaged, fileBytes, sessionId, uploadId, corrections);
+            int errorRows = stageOfficerData(masterStaged, fileBytes, sessionId, uploadId, corrections, username);
 
             // Update errors count on the UploadHistory for Admin review
             uploadHistory.setErrorsCount(errorRows);
@@ -823,7 +824,8 @@ public class MultiFileImportService {
             byte[] fileBytes,
             Long sessionId,
             Long uploadId,
-            Map<String, Map<String, Object>> corrections
+            Map<String, Map<String, Object>> corrections,
+            String username
     ) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         int totalErrorRows = 0;
@@ -892,6 +894,23 @@ public class MultiFileImportService {
                     "CUSTOMER_PROFILE"
             );
             billingUploadStagingRepository.save(staging);
+            if (corr != null) {
+                try {
+                    StagingChangeLog changeLog = new StagingChangeLog(
+                            uploadId,
+                            staging.getStagingId(),
+                            "CUSTOMER_PROFILE",
+                            "EDIT",
+                            mapper.writeValueAsString(stagedCust),
+                            mapper.writeValueAsString(finalCustData),
+                            username
+                    );
+                    changeLog.setStatus("APPROVED");
+                    stagingChangeLogRepository.save(changeLog);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
             if (valResult.hasErrors()) totalErrorRows++;
         }
 

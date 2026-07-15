@@ -63,6 +63,9 @@ const CustomerDetails = () => {
   
   // Search & Pagination State
   const [customers, setCustomers] = useState([]);
+  const [costCodesList, setCostCodesList] = useState([]);
+  const [netTypesList, setNetTypesList] = useState([]);
+  const [expenseCodesList, setExpenseCodesList] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [appliedQuery, setAppliedQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
@@ -478,10 +481,7 @@ const CustomerDetails = () => {
   const [newCustNetTypeId, setNewCustNetTypeId] = useState('');
   const [newCustExpenseCodeId, setNewCustExpenseCodeId] = useState('');
 
-  // Lookup options list state
-  const [costCodesList, setCostCodesList] = useState([]);
-  const [netTypesList, setNetTypesList] = useState([]);
-  const [expenseCodesList, setExpenseCodesList] = useState([]);
+
 
   const [addCustError, setAddCustError] = useState(null);
   const [addCustLoading, setAddCustLoading] = useState(false);

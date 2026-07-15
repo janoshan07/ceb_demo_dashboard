@@ -23,6 +23,9 @@ public class MultiFileImportController {
     @Autowired
     private MultiFileImportService multiFileImportService;
 
+    // Cache to hold uploaded file bytes temporarily during the session import flow
+    private final Map<String, byte[]> fileCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     // ─────────────────────────────────────────────────────────────────────
     //  SESSION
     // ─────────────────────────────────────────────────────────────────────
@@ -46,6 +49,9 @@ public class MultiFileImportController {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
             multiFileImportService.discardSession(sessionId, username);
+            // Clean up cache for this session
+            fileCache.remove(sessionId + "-CEB");
+            fileCache.remove(sessionId + "-NGEN");
             return ResponseEntity.ok(Map.of("message", "Session discarded. You can start a new import."));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));
@@ -66,8 +72,10 @@ public class MultiFileImportController {
         if (file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "File cannot be empty."));
         }
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
             byte[] fileBytes = file.getBytes();
+            fileCache.put(username + "-MASTER", fileBytes);
             Map<String, Object> preview = multiFileImportService.previewMasterData(fileBytes, file.getOriginalFilename());
             return ResponseEntity.ok(preview);
         } catch (Exception e) {
@@ -78,20 +86,24 @@ public class MultiFileImportController {
 
     /**
      * Approve Master Data — persists customers and starts the import session.
-     * Request body: { "corrections": { "accountNo": { field: value } }, "fileBytes": base64string }
-     * We accept the file again to avoid storing bytes server-side between preview and approve.
      */
     @PostMapping({"/admin/import/master-data/approve", "/officer/import/master-data/approve"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveMasterData(
-            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "File cannot be empty."));
-        }
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
-            byte[] fileBytes = file.getBytes();
+            byte[] fileBytes;
+            if (file != null && !file.isEmpty()) {
+                fileBytes = file.getBytes();
+                fileCache.put(username + "-MASTER", fileBytes);
+            } else {
+                fileBytes = fileCache.get(username + "-MASTER");
+                if (fileBytes == null) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
+                }
+            }
 
             // Parse corrections map from JSON string
             @SuppressWarnings("unchecked")
@@ -100,7 +112,7 @@ public class MultiFileImportController {
                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
                     : null;
 
-            Map<String, Object> result = multiFileImportService.approveMasterData(fileBytes, file.getOriginalFilename(), username, corrections);
+            Map<String, Object> result = multiFileImportService.approveMasterData(fileBytes, "Master_Data.xlsx", username, corrections);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             e.printStackTrace();
@@ -122,6 +134,7 @@ public class MultiFileImportController {
         }
         try {
             byte[] fileBytes = file.getBytes();
+            fileCache.put(sessionId + "-CEB", fileBytes);
             Map<String, Object> preview = multiFileImportService.previewCebAssist(fileBytes, file.getOriginalFilename(), sessionId);
             return ResponseEntity.ok(preview);
         } catch (Exception e) {
@@ -134,14 +147,20 @@ public class MultiFileImportController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveCebAssist(
             @PathVariable Long sessionId,
-            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "File cannot be empty."));
-        }
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
-            byte[] fileBytes = file.getBytes();
+            byte[] fileBytes;
+            if (file != null && !file.isEmpty()) {
+                fileBytes = file.getBytes();
+                fileCache.put(sessionId + "-CEB", fileBytes);
+            } else {
+                fileBytes = fileCache.get(sessionId + "-CEB");
+                if (fileBytes == null) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
+                }
+            }
             @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
@@ -170,6 +189,7 @@ public class MultiFileImportController {
         }
         try {
             byte[] fileBytes = file.getBytes();
+            fileCache.put(sessionId + "-NGEN", fileBytes);
             Map<String, Object> preview = multiFileImportService.previewNgen(fileBytes, file.getOriginalFilename(), sessionId);
             return ResponseEntity.ok(preview);
         } catch (Exception e) {
@@ -182,14 +202,20 @@ public class MultiFileImportController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveNgen(
             @PathVariable Long sessionId,
-            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
-        if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("message", "File cannot be empty."));
-        }
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
-            byte[] fileBytes = file.getBytes();
+            byte[] fileBytes;
+            if (file != null && !file.isEmpty()) {
+                fileBytes = file.getBytes();
+                fileCache.put(sessionId + "-NGEN", fileBytes);
+            } else {
+                fileBytes = fileCache.get(sessionId + "-NGEN");
+                if (fileBytes == null) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
+                }
+            }
             @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,

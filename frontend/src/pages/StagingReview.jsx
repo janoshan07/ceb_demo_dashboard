@@ -58,7 +58,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState(null);
   const [proposals, setProposals] = useState([]);
-  const [activeTab, setActiveTab] = useState('records'); // 'records' | 'proposals'
+  const [activeTab, setActiveTab] = useState('records'); // 'records' | 'proposals' | 'corrections'
 
   // Operation action states
   const [actionProcessing, setActionProcessing] = useState(false);
@@ -239,6 +239,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
         return {
           stagingId: row.stagingId,
           validationStatus: row.validationStatus,
+          rowType: row.rowType,
           errors: errorsList,
           index: index + 1,
           ...rawData
@@ -346,6 +347,160 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const invalidRows = stagingRows.filter(r => r.validationStatus === 'INVALID').length;
   const duplicateRows = stagingRows.filter(r => r.validationStatus === 'DUPLICATE').length;
   const warningRows = stagingRows.filter(r => r.validationStatus === 'WARNING').length;
+  const isCustomerBatch = stagingRows.some(r => r.rowType === 'CUSTOMER_PROFILE');
+  const [rowFilter, setRowFilter] = useState('ALL');
+
+  const filteredRows = stagingRows.filter(row => {
+    if (rowFilter === 'ALL') return true;
+    if (rowFilter === 'VALID') return row.validationStatus === 'VALID';
+    if (rowFilter === 'INVALID') return row.validationStatus === 'INVALID';
+    if (rowFilter === 'WARNING') return row.validationStatus === 'WARNING';
+    if (rowFilter === 'CORRECTED') {
+      return proposals.some(p => p.stagingId === row.stagingId && p.status === 'APPROVED');
+    }
+    return true;
+  });
+
+  const renderProposalsTab = () => {
+    const pendingProposals = proposals.filter(p => p.status === 'PENDING');
+    if (pendingProposals.length === 0) {
+      return (
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <Activity style={{ marginBottom: '1rem', opacity: 0.5 }} />
+          <div>No pending officer changes to review.</div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {pendingProposals.map(prop => {
+          let orig = {};
+          let mod = {};
+          try {
+            orig = JSON.parse(prop.originalData || '{}');
+            mod = JSON.parse(prop.modifiedData || '{}');
+          } catch(e){}
+
+          const changedKeys = Object.keys(mod).filter(k => String(orig[k]) !== String(mod[k]));
+
+          return (
+            <div key={prop.id} className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'rgba(255,255,255,0.01)', padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>
+                  {prop.actionType} Proposal (Row #{orig.rowNum || orig.index || '—'}, Account: {orig.accountNo || '—'})
+                </span>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <button 
+                    onClick={() => handleApproveProposal(prop.id)} 
+                    className="btn btn-primary" 
+                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', backgroundColor: 'var(--success)' }}
+                    disabled={actionProcessing}
+                  >
+                    Approve
+                  </button>
+                  <button 
+                    onClick={() => handleRejectProposal(prop.id)} 
+                    className="btn btn-logout" 
+                    style={{ padding: '0.25rem 0.6rem', fontSize: '0.75rem', width: 'auto' }}
+                    disabled={actionProcessing}
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', fontSize: '0.85rem' }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Original Values</div>
+                  {changedKeys.map(k => (
+                    <div key={k} style={{ marginBottom: '0.25rem' }}>
+                      <strong>{k}</strong>: <span style={{ textDecoration: 'line-through', opacity: 0.8 }}>{String(orig[k] ?? '—')}</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: '0.5rem' }}>Proposed Changes</div>
+                  {changedKeys.map(k => (
+                    <div key={k} style={{ marginBottom: '0.25rem' }}>
+                      <strong>{k}</strong>: <span style={{ color: 'var(--primary)', fontWeight: 500 }}>{String(mod[k] ?? '—')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.75rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                <span>Proposed by <strong>{prop.performedBy}</strong></span>
+                <span>{new Date(prop.performedAt).toLocaleString('en-LK')}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderCorrectionsTab = () => {
+    const approvedLogs = proposals.filter(p => p.status === 'APPROVED');
+    if (approvedLogs.length === 0) {
+      return (
+        <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <Activity style={{ marginBottom: '1rem', opacity: 0.5 }} />
+          <div>No corrections have been recorded for this batch yet.</div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {approvedLogs.map(log => {
+          let orig = {};
+          let mod = {};
+          try {
+            orig = JSON.parse(log.originalData || '{}');
+            mod = JSON.parse(log.modifiedData || '{}');
+          } catch(e){}
+
+          const matchingRow = stagingRows.find(r => r.stagingId === log.stagingId);
+          const currentStatus = matchingRow ? matchingRow.validationStatus : 'UNKNOWN';
+          const changedKeys = Object.keys(mod).filter(k => String(orig[k]) !== String(mod[k]));
+
+          return (
+            <div key={log.id} className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'rgba(255,255,255,0.01)', padding: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--primary)' }}>
+                  Row #{orig.rowNum || orig.index || '—'} (Account: {orig.accountNo || '—'})
+                </span>
+                <span className={`badge ${currentStatus === 'VALID' ? 'success' : currentStatus === 'WARNING' ? 'warning' : 'danger'}`} style={{ fontSize: '0.7rem' }}>
+                  Status: {currentStatus}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', fontSize: '0.85rem' }}>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.5rem' }}>Original Values</div>
+                  {changedKeys.map(k => (
+                    <div key={k} style={{ marginBottom: '0.25rem' }}>
+                      <strong>{k}</strong>: <span style={{ textDecoration: 'line-through', opacity: 0.8 }}>{String(orig[k] ?? '—')}</span>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, color: 'var(--success)', marginBottom: '0.5rem' }}>Corrected Values</div>
+                  {changedKeys.map(k => (
+                    <div key={k} style={{ marginBottom: '0.25rem' }}>
+                      <strong>{k}</strong>: <span style={{ color: 'var(--success)', fontWeight: 500 }}>{String(mod[k] ?? '—')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.75rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                <span>Corrected by <strong>{log.performedBy}</strong></span>
+                <span>{new Date(log.performedAt).toLocaleString('en-LK')}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="animate-fade-in">
@@ -491,11 +646,26 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                     fontSize: '0.9rem'
                   }}
                 >
-                  Officer Changes ({proposals.length})
+                  Officer Changes ({proposals.filter(p => p.status === 'PENDING').length})
+                </button>
+                <button
+                  onClick={() => setActiveTab('corrections')}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'corrections' ? '2px solid var(--primary)' : '2px solid transparent',
+                    color: activeTab === 'corrections' ? 'white' : 'var(--text-secondary)',
+                    padding: '0.5rem 1rem',
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Correction History ({proposals.filter(p => p.status === 'APPROVED').length})
                 </button>
               </div>
 
-              {activeTab === 'proposals' ? renderProposalsTab() : (
+              {activeTab === 'proposals' ? renderProposalsTab() : activeTab === 'corrections' ? renderCorrectionsTab() : (
                 <>
                   {/* Summary Cards */}
               {/* Summary Cards */}
@@ -522,6 +692,46 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                 </div>
               </div>
 
+              {/* Row Filters */}
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+                {[
+                  { key: 'ALL', label: 'All Records', count: totalRows },
+                  { key: 'VALID', label: 'Valid Only', count: validRows },
+                  { key: 'INVALID', label: 'Errors Only', count: invalidRows },
+                  { key: 'WARNING', label: 'Warnings Only', count: warningRows },
+                  { key: 'CORRECTED', label: 'Corrected Only', count: stagingRows.filter(r => proposals.some(p => p.stagingId === r.stagingId && p.status === 'APPROVED')).length }
+                ].map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setRowFilter(f.key)}
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '20px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: rowFilter === f.key ? 'var(--primary)' : 'transparent',
+                      color: rowFilter === f.key ? 'white' : 'var(--text-secondary)',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {f.label}
+                    <span style={{ 
+                      backgroundColor: rowFilter === f.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)', 
+                      padding: '0.05rem 0.35rem', 
+                      borderRadius: '10px',
+                      fontSize: '0.7rem'
+                    }}>
+                      {f.count}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
               {/* Data Table */}
               <div className="table-container" style={{ overflowX: 'auto', maxWidth: '100%' }}>
                 <table className="custom-table" style={{ fontSize: '0.85rem', width: '100%', borderCollapse: 'collapse' }}>
@@ -545,10 +755,35 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {stagingRows.map((row, i) => {
+                    {filteredRows.map((row, i) => {
                       const isWarning = row.validationStatus === 'WARNING';
                       const isDuplicate = row.validationStatus === 'DUPLICATE';
                       const isInvalid = row.validationStatus === 'INVALID';
+                      
+                      const rowCorrections = proposals.filter(p => p.stagingId === row.stagingId && p.status === 'APPROVED');
+                      const isCorrected = rowCorrections.length > 0;
+
+                      let correctedFields = [];
+                      if (isCorrected) {
+                        try {
+                          const orig = JSON.parse(rowCorrections[0].originalData || '{}');
+                          const mod = JSON.parse(rowCorrections[0].modifiedData || '{}');
+                          Object.keys(mod).forEach(k => {
+                            if (String(orig[k]) !== String(mod[k])) {
+                              correctedFields.push(k);
+                            }
+                          });
+                        } catch (e) {}
+                      }
+
+                      let correctedBadge = null;
+                      if (isCorrected) {
+                        correctedBadge = (
+                          <span className="badge" style={{ backgroundColor: 'rgba(16,185,129,0.12)', color: '#10b981', padding: '0.15rem 0.45rem', fontSize: '0.7rem', border: '1px solid rgba(16,185,129,0.2)', marginTop: '0.25rem' }}>
+                            Corrected
+                          </span>
+                        );
+                      }
                       
                       let badge = (
                         <span className="badge success" style={{ padding: '0.15rem 0.45rem', fontSize: '0.7rem' }}>
@@ -580,34 +815,53 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                         rowBg = 'rgba(234,179,8,0.02)';
                       }
 
-                      const renderCell = (val, prefix = '') => {
+                      const renderCell = (val, fieldKey, prefix = '') => {
+                        const isFieldCorrected = correctedFields.includes(fieldKey);
+                        const style = isFieldCorrected ? {
+                          backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                          color: '#10b981',
+                          padding: '0.15rem 0.35rem',
+                          borderRadius: '4px',
+                          border: '1px solid rgba(16, 185, 129, 0.25)',
+                          fontWeight: 500
+                        } : {};
+
                         if (val === undefined || val === null || String(val).trim() === '') {
                           return <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>;
                         }
-                        return prefix ? `${prefix}${val}` : String(val);
+                        const displayVal = prefix ? `${prefix}${val}` : String(val);
+                        return isFieldCorrected ? <span style={style} title="Value corrected">{displayVal}</span> : displayVal;
                       };
                       
                       return (
                         <tr key={row.stagingId} style={{ backgroundColor: rowBg }}>
                           <td style={{ fontWeight: 600 }}>{row.index}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
-                          <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{renderCell(row.accountNo, 'accountNo')}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.customerName, 'customerName')}</td>
                           
                           {isCustomerBatch ? (
                             <>
-                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.refNo)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.costCode)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.bankCode)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.branchCode)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
-                              <td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.tariffType)}</td>
-                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
+                              <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress, 'customerAddress')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.refNo, 'refNo')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.costCode, 'costCode')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo, 'mobileNo')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity, 'panelCapacity')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate, 'agreementDate')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.bankCode, 'bankCode')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.branchCode, 'branchCode')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo, 'bankAccountNo')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.solarType, 'solarType')}</td>
+                              <td style={{ fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                                {correctedFields.includes('unitRate') ? (
+                                  <span style={{ backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#10b981', padding: '0.15rem 0.35rem', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.25)', fontWeight: 500 }} title="Value corrected">
+                                    LKR {row.unitRate}
+                                  </span>
+                                ) : (
+                                  row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>
+                                )}
+                              </td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.tariffType, 'tariffType')}</td>
+                              <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.billingMode, 'billingMode')}</td>
                             </>
                           ) : (
                             <>
@@ -621,7 +875,12 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                             </>
                           )}
                           
-                          <td>{badge}</td>
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              {badge}
+                              {correctedBadge}
+                            </div>
+                          </td>
                           <td>
                             {row.errors && row.errors.length > 0 ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>

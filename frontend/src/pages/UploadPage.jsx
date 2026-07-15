@@ -43,7 +43,7 @@ export const deriveLCode = (solarType, tariffType) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  WIZARD STEP INDICATOR
 // ═══════════════════════════════════════════════════════════════════════════
-const WizardStepBar = ({ currentStep, steps, sessionStage }) => {
+const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAccessible }) => {
   const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'COMPLETED'];
   const completedUpTo = stageOrder.indexOf(sessionStage);
 
@@ -53,10 +53,22 @@ const WizardStepBar = ({ currentStep, steps, sessionStage }) => {
         const stepNum = i + 1;
         const isActive = currentStep === stepNum;
         const isDone = completedUpTo >= stepNum;
-        const isLocked = !isDone && currentStep < stepNum;
+        const isAccessible = isStepAccessible ? isStepAccessible(stepNum) : stepNum === 1;
+
         return (
           <React.Fragment key={i}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
+            <div 
+              onClick={() => isAccessible && onStepClick && onStepClick(stepNum)}
+              style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                flex: 1, 
+                cursor: isAccessible ? 'pointer' : 'not-allowed',
+                opacity: isAccessible ? 1 : 0.45,
+                transition: 'all 0.3s ease'
+              }}
+            >
               <div style={{
                 width: 44, height: 44, borderRadius: '50%',
                 background: isDone ? 'linear-gradient(135deg,#10b981,#059669)'
@@ -162,7 +174,7 @@ const StatusBadge = ({ status }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — Master Data
 // ═══════════════════════════════════════════════════════════════════════════
-const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
+const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
 
@@ -218,9 +230,16 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
                 <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
                 <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
                 <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                  <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
-                    Correct
-                  </button>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
+                      Correct
+                    </button>
+                    {row.status === 'ERROR' && onDeleteRow && (
+                      <button onClick={() => onDeleteRow(row)} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
               {expandedRow === i && row.errors?.length > 0 && (
@@ -246,7 +265,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — CEB Assist
 // ═══════════════════════════════════════════════════════════════════════════
-const CebAssistTable = ({ rows, filterErrors, onCorrectRow }) => {
+const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
   if (!displayed.length) return (
     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
@@ -279,9 +298,16 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow }) => {
               </td>
               <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
               <td style={{ padding: '0.6rem 0.85rem' }}>
-                <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
-                  Correct
-                </button>
+                <div style={{ display: 'flex', gap: '0.35rem' }}>
+                  <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
+                    Correct
+                  </button>
+                  {row.status === 'ERROR' && onDeleteRow && (
+                    <button onClick={() => onDeleteRow(row)} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      <Trash2 size={12} /> Delete
+                    </button>
+                  )}
+                </div>
               </td>
             </tr>
           ))}
@@ -294,7 +320,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — NGEN
 // ═══════════════════════════════════════════════════════════════════════════
-const NgenTable = ({ rows, filterErrors, onCorrectRow }) => {
+const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
   if (!displayed.length) return (
@@ -341,8 +367,15 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow }) => {
                   {row.paymentSettled != null ? `LKR ${row.paymentSettled.toLocaleString()}` : '—'}
                 </td>
                 <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
-                <td style={{ padding: '0.6rem 0.85rem' }}>
-                  {onCorrectRow && <button onClick={(e) => { e.stopPropagation(); onCorrectRow(row); }} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
+                <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    {onCorrectRow && <button onClick={() => onCorrectRow(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
+                    {row.status === 'ERROR' && onDeleteRow && (
+                      <button onClick={() => onDeleteRow(row)} title="Delete this error record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        <Trash2 size={12} /> Delete
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
               {expandedRow === i && (
@@ -436,10 +469,51 @@ const UploadPage = () => {
   const [sessionLoading, setSessionLoading] = useState(true);
 
   // ── Step state (per step) ─────────────────────────────────────────────
-  const [file, setFile] = useState(null);          // currently selected file for active step
+  const [stepData, setStepData] = useState({
+    1: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
+    2: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
+    3: { file: null, preview: null, rowCorrections: {}, deletedRows: [] }
+  });
+
+  const file = stepData[wizardStep]?.file || null;
+  const preview = stepData[wizardStep]?.preview || null;
+  const rowCorrections = stepData[wizardStep]?.rowCorrections || {};
+  const deletedRows = stepData[wizardStep]?.deletedRows || [];
+
+  const setFile = (val) => {
+    setStepData(prev => {
+      const current = prev[wizardStep]?.file || null;
+      const nextVal = typeof val === 'function' ? val(current) : val;
+      return { ...prev, [wizardStep]: { ...prev[wizardStep], file: nextVal } };
+    });
+  };
+
+  const setPreview = (val) => {
+    setStepData(prev => {
+      const current = prev[wizardStep]?.preview || null;
+      const nextVal = typeof val === 'function' ? val(current) : val;
+      return { ...prev, [wizardStep]: { ...prev[wizardStep], preview: nextVal } };
+    });
+  };
+
+  const setRowCorrections = (val) => {
+    setStepData(prev => {
+      const current = prev[wizardStep]?.rowCorrections || {};
+      const nextVal = typeof val === 'function' ? val(current) : val;
+      return { ...prev, [wizardStep]: { ...prev[wizardStep], rowCorrections: nextVal } };
+    });
+  };
+
+  const setDeletedRows = (val) => {
+    setStepData(prev => {
+      const current = prev[wizardStep]?.deletedRows || [];
+      const nextVal = typeof val === 'function' ? val(current) : val;
+      return { ...prev, [wizardStep]: { ...prev[wizardStep], deletedRows: nextVal } };
+    });
+  };
+
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState(false);
-  const [preview, setPreview] = useState(null);    // preview data from backend
   const [filterErrors, setFilterErrors] = useState(false);
 
   // ── Upload history ────────────────────────────────────────────────────
@@ -471,6 +545,22 @@ const UploadPage = () => {
     if (stage === 'MASTER_APPROVED') return 2;
     if (stage === 'CEB_APPROVED') return 3;
     return 1;
+  };
+
+  const resetAllStepData = () => {
+    setStepData({
+      1: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
+      2: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
+      3: { file: null, preview: null, rowCorrections: {}, deletedRows: [] }
+    });
+  };
+
+  const isStepAccessible = (stepNum) => {
+    if (stepNum === 1) return true; // Step 1 is always accessible
+    if (!session || !session.hasActiveSession) return false;
+    const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'COMPLETED'];
+    const completedUpTo = stageOrder.indexOf(session.stage);
+    return completedUpTo >= stepNum - 1;
   };
 
   const latestRejected = uploadHistory.find(h => h.status === 'REJECTED');
@@ -524,7 +614,9 @@ const UploadPage = () => {
   // ── Row Correction Modal State ─────────────────────────────────────────
   const [correctingRow, setCorrectingRow] = useState(null); 
   const [correctingFields, setCorrectingFields] = useState({}); 
-  const [rowCorrections, setRowCorrections] = useState({}); 
+
+  // ── Deleted Rows Audit Log ─────────────────────────────────────────────
+  const [showDeletedLog, setShowDeletedLog] = useState(false);
 
   const handleCorrectRow = (row) => {
     setCorrectingRow(row);
@@ -643,6 +735,67 @@ const UploadPage = () => {
 
     setCorrectingRow(null);
     showToast('Row correction stored. Revalidation will run upon approval.', 'success');
+  };
+
+  const handleDeleteRow = async (row) => {
+    const rowLabel = row.accountNo ? `Account No: ${row.accountNo}` : `Row #${row.rowNum}`;
+    const confirmed = await showConfirm({
+      title: 'Delete Error Record?',
+      message: `Are you sure you want to remove this error record from the current batch?\n\n${rowLabel}\nErrors: ${(row.errors || []).join(', ')}\n\nThis record will be excluded from the import. This action cannot be undone.`,
+      confirmText: 'Delete Record',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+
+    // Record the deletion for audit
+    const auditEntry = {
+      rowNum: row.rowNum,
+      accountNo: row.accountNo || '—',
+      customerName: row.customerName || '—',
+      errors: row.errors || [],
+      status: row.status,
+      deletedAt: new Date().toISOString(),
+      deletedBy: user?.username || user?.sub || 'Unknown',
+      wizardStep,
+      stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
+      rowData: { ...row }
+    };
+    setDeletedRows(prev => [...prev, auditEntry]);
+
+    // Remove from preview
+    setPreview(prev => {
+      if (!prev || !prev.rows) return prev;
+      const newRows = prev.rows.filter(r => {
+        const rKey = r.rowNum || r.accountNo;
+        const delKey = row.rowNum || row.accountNo;
+        return rKey !== delKey;
+      });
+      const errorCount = newRows.filter(r => r.status === 'ERROR').length;
+      const warningCount = newRows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+      const validCount = newRows.filter(r => r.status === 'VALID').length;
+      const matchedCount = newRows.filter(r => r.customerExists).length;
+      const unmatchedCount = newRows.filter(r => !r.customerExists).length;
+      return {
+        ...prev,
+        rows: newRows,
+        totalRows: newRows.length,
+        errorCount,
+        warningCount: warningCount || prev.warningCount,
+        matchedCount: matchedCount || prev.matchedCount,
+        unmatchedCount: unmatchedCount || prev.unmatchedCount,
+      };
+    });
+
+    // Also remove any pending correction for this row
+    const key = row.rowNum || row.accountNo;
+    setRowCorrections(prev => {
+      const copy = { ...prev };
+      delete copy[key];
+      return copy;
+    });
+
+    showToast(`Record removed (${rowLabel}). Summary updated.`, 'success');
   };
 
   const handleEditBatch = async (batch) => {
@@ -833,8 +986,7 @@ const UploadPage = () => {
       await authFetch(`/api/officer/import/session/${session.sessionId}`, { method: 'DELETE' });
       setSession(null);
       setWizardStep(1);
-      setPreview(null);
-      setFile(null);
+      resetAllStepData();
       showToast('Import session discarded.', 'info');
     } catch (e) {
       showToast('Failed to discard session.', 'error');
@@ -845,6 +997,7 @@ const UploadPage = () => {
   const handleFileSelect = (f) => {
     setFile(f);
     setPreview(null);
+    setDeletedRows([]);
   };
 
   // ── Step 1: Master Data ───────────────────────────────────────────────
@@ -873,7 +1026,7 @@ const UploadPage = () => {
     try {
       setApproving(true);
       const fd = new FormData();
-      fd.append('file', file);
+      // File is cached server-side during upload/preview step
       fd.append('correctionsJson', JSON.stringify(rowCorrections));
       const res = await authFetch('/api/officer/import/master-data/approve', { method: 'POST', body: fd });
       const data = await res.json();
@@ -881,9 +1034,6 @@ const UploadPage = () => {
       showToast(`✅ Master Data approved! ${data.newCustomers} new, ${data.updatedCustomers} updated.`, 'success');
       setSession({ hasActiveSession: true, sessionId: data.sessionId, stage: 'MASTER_APPROVED', masterCustomerCount: data.totalImported });
       setWizardStep(2);
-      setFile(null);
-      setPreview(null);
-      setRowCorrections({});
       fetchHistory();
     } catch (e) {
       showToast('Approval failed: ' + e.message, 'error');
@@ -920,7 +1070,7 @@ const UploadPage = () => {
     try {
       setApproving(true);
       const fd = new FormData();
-      fd.append('file', file);
+      // File is cached server-side during upload/preview step
       fd.append('correctionsJson', JSON.stringify(rowCorrections));
       const res = await authFetch(`/api/officer/import/ceb-assist/${session.sessionId}/approve`, { method: 'POST', body: fd });
       const data = await res.json();
@@ -928,9 +1078,6 @@ const UploadPage = () => {
       showToast(`✅ CEB Assist merged! ${data.updatedCount} accounts updated.`, 'success');
       setSession(prev => ({ ...prev, stage: 'CEB_APPROVED', cebAssistCount: data.updatedCount }));
       setWizardStep(3);
-      setFile(null);
-      setPreview(null);
-      setRowCorrections({});
     } catch (e) {
       showToast('Approval failed: ' + e.message, 'error');
     } finally {
@@ -966,7 +1113,7 @@ const UploadPage = () => {
     try {
       setApproving(true);
       const fd = new FormData();
-      fd.append('file', file);
+      // File is cached server-side during upload/preview step
       fd.append('correctionsJson', JSON.stringify(rowCorrections));
       const res = await authFetch(`/api/officer/import/ngen/${session.sessionId}/approve`, { method: 'POST', body: fd });
       const data = await res.json();
@@ -974,9 +1121,7 @@ const UploadPage = () => {
       showToast(`🎉 Import Complete! ${data.billingRecordsCreated} billing records created. Customers added to directory.`, 'success');
       setSession(null);
       setWizardStep(1);
-      setFile(null);
-      setPreview(null);
-      setRowCorrections({});
+      resetAllStepData();
       fetchHistory();
       setActiveView('history');
     } catch (e) {
@@ -1051,7 +1196,48 @@ const UploadPage = () => {
               Show errors only
             </label>
           </div>
-          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} />
+          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRow={handleDeleteRow} />
+
+          {/* Deleted Records Audit Log */}
+          {deletedRows.filter(d => d.wizardStep === 1).length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                onClick={() => setShowDeletedLog(!showDeletedLog)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', width: '100%', justifyContent: 'space-between' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Trash2 size={14} />
+                  Deleted Records ({deletedRows.filter(d => d.wizardStep === 1).length})
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
+              </button>
+              {showDeletedLog && (
+                <div style={{ border: '1px solid rgba(239,68,68,0.15)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(239,68,68,0.06)' }}>
+                        {['Row', 'Account No', 'Customer', 'Errors', 'Deleted By', 'Deleted At'].map(h => (
+                          <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#ef4444', fontSize: '0.7rem', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deletedRows.filter(d => d.wizardStep === 1).map((d, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', fontWeight: 600 }}>{d.accountNo}</td>
+                          <td style={{ padding: '0.45rem 0.75rem' }}>{d.customerName}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', color: '#ef4444', fontSize: '0.72rem' }}>{d.errors.join(', ')}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)' }}>{d.deletedBy}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{new Date(d.deletedAt).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1114,7 +1300,48 @@ const UploadPage = () => {
               Show errors / unmatched only
             </label>
           </div>
-          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} />
+          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRow={handleDeleteRow} />
+
+          {/* Deleted Records Audit Log */}
+          {deletedRows.filter(d => d.wizardStep === 2).length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                onClick={() => setShowDeletedLog(!showDeletedLog)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', width: '100%', justifyContent: 'space-between' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Trash2 size={14} />
+                  Deleted Records ({deletedRows.filter(d => d.wizardStep === 2).length})
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
+              </button>
+              {showDeletedLog && (
+                <div style={{ border: '1px solid rgba(239,68,68,0.15)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(239,68,68,0.06)' }}>
+                        {['Row', 'Account No', 'Customer', 'Errors', 'Deleted By', 'Deleted At'].map(h => (
+                          <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#ef4444', fontSize: '0.7rem', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deletedRows.filter(d => d.wizardStep === 2).map((d, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', fontWeight: 600 }}>{d.accountNo}</td>
+                          <td style={{ padding: '0.45rem 0.75rem' }}>{d.customerName}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', color: '#ef4444', fontSize: '0.72rem' }}>{d.errors.join(', ')}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)' }}>{d.deletedBy}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{new Date(d.deletedAt).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1181,7 +1408,48 @@ const UploadPage = () => {
               Show errors / warnings only
             </label>
           </div>
-          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} />
+          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRow={handleDeleteRow} />
+
+          {/* Deleted Records Audit Log */}
+          {deletedRows.filter(d => d.wizardStep === 3).length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <button
+                onClick={() => setShowDeletedLog(!showDeletedLog)}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', width: '100%', justifyContent: 'space-between' }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <Trash2 size={14} />
+                  Deleted Records ({deletedRows.filter(d => d.wizardStep === 3).length})
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
+              </button>
+              {showDeletedLog && (
+                <div style={{ border: '1px solid rgba(239,68,68,0.15)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                    <thead>
+                      <tr style={{ background: 'rgba(239,68,68,0.06)' }}>
+                        {['Row', 'Account No', 'Customer', 'Errors', 'Deleted By', 'Deleted At'].map(h => (
+                          <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#ef4444', fontSize: '0.7rem', textTransform: 'uppercase' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deletedRows.filter(d => d.wizardStep === 3).map((d, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', fontWeight: 600 }}>{d.accountNo}</td>
+                          <td style={{ padding: '0.45rem 0.75rem' }}>{d.customerName}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', color: '#ef4444', fontSize: '0.72rem' }}>{d.errors.join(', ')}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)' }}>{d.deletedBy}</td>
+                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{new Date(d.deletedAt).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1622,6 +1890,8 @@ const UploadPage = () => {
             currentStep={wizardStep}
             steps={WIZARD_STEPS}
             sessionStage={session?.stage || 'PENDING_MASTER'}
+            onStepClick={(stepNum) => setWizardStep(stepNum)}
+            isStepAccessible={isStepAccessible}
           />
 
           {/* Step content */}
@@ -1631,11 +1901,17 @@ const UploadPage = () => {
 
           {/* Navigation */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {wizardStep > 1 && session && (
-                <button onClick={() => { setWizardStep(w => w - 1); setPreview(null); setFile(null); setFilterErrors(false); }}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              {wizardStep > 1 && isStepAccessible(wizardStep - 1) && (
+                <button onClick={() => setWizardStep(wizardStep - 1)}
                   style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.5rem 1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
                   ← Back
+                </button>
+              )}
+              {wizardStep < 3 && isStepAccessible(wizardStep + 1) && (
+                <button onClick={() => setWizardStep(wizardStep + 1)}
+                  style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.5rem 1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600 }}>
+                  Next →
                 </button>
               )}
             </div>

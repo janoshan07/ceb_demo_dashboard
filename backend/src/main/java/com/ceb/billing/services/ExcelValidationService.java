@@ -36,35 +36,18 @@ public class ExcelValidationService {
         if (solarType == null) {
             return null;
         }
-        String s = solarType.trim().toUpperCase();
+        String s = solarType.trim().replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
         
-        // Remove duplicate spaces, underscores, hyphens for comparison
-        s = s.replaceAll("[\\s_-]+", " ");
-        
-        if (s.equals("ACCOUNTING") || s.equals("NET ACCOUNTING") || s.equals("NETACCOUNTING")) {
+        if (s.equals("ACCOUNTING") || s.equals("NETACCOUNTING")) {
             return "Net Accounting";
         }
-        if (s.equals("METERING") || s.equals("NET METERING") || s.equals("NETMETERING")) {
+        if (s.equals("METERING") || s.equals("NETMETERING")) {
             return "Net Metering";
         }
-        if (s.equals("PLUS") || s.equals("NET PLUS") || s.equals("NETPLUS")) {
+        if (s.equals("PLUS") || s.equals("NETPLUS")) {
             return "Net Plus";
         }
-        if (s.equals("PLUS PLUS") || s.equals("NET PLUS PLUS") || s.equals("PLUSPLUS") || s.equals("NETPLUSPLUS") || s.equals("NET PLUSPLUS") || s.equals("NETPLUS PLUS")) {
-            return "Net Plus Plus";
-        }
-        
-        // Fallback case-insensitive matches against seeded values
-        if (s.equalsIgnoreCase("Net Accounting") || s.equalsIgnoreCase("ACCOUNTING")) {
-            return "Net Accounting";
-        }
-        if (s.equalsIgnoreCase("Net Metering") || s.equalsIgnoreCase("METERING")) {
-            return "Net Metering";
-        }
-        if (s.equalsIgnoreCase("Net Plus") || s.equalsIgnoreCase("PLUS")) {
-            return "Net Plus";
-        }
-        if (s.equalsIgnoreCase("Net Plus Plus") || s.equalsIgnoreCase("PLUS PLUS") || s.equalsIgnoreCase("PLUSPLUS")) {
+        if (s.equals("PLUSPLUS") || s.equals("NETPLUSPLUS")) {
             return "Net Plus Plus";
         }
         
@@ -140,7 +123,10 @@ public class ExcelValidationService {
             hasKeyFieldsErrors = true;
         } else {
             String cleanAcc = accountNo.trim();
-            if (cleanAcc.length() != 10 || !cleanAcc.matches("\\d+")) {
+            if (!cleanAcc.matches("\\d+")) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Account No", "Invalid Account Number: Only numeric values are allowed.", false));
+                hasKeyFieldsErrors = true;
+            } else if (cleanAcc.length() != 10) {
                 result.addError(new ExcelValidationError(sheetName, rowNum, "Account No", "Account number must be a valid 10-digit numeric string: '" + accountNo + "'", false));
                 hasKeyFieldsErrors = true;
             }
@@ -317,7 +303,10 @@ public class ExcelValidationService {
                     "Account number is missing or empty", false));
         } else {
             String cleanAcc = accountNo.trim();
-            if (cleanAcc.length() != 10 || !cleanAcc.matches("\\d+")) {
+            if (!cleanAcc.matches("\\d+")) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Account No",
+                        "Invalid Account Number: Only numeric values are allowed.", false));
+            } else if (cleanAcc.length() != 10) {
                 result.addError(new ExcelValidationError(sheetName, rowNum, "Account No",
                         "Account number must be a valid 10-digit numeric string: '" + accountNo + "'", false));
             }

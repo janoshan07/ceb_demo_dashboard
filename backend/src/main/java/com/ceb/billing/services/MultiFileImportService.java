@@ -135,6 +135,32 @@ public class MultiFileImportService {
                 if (row == null || isRowEmpty(row)) continue;
 
                 String accountNo = strVal(row, colMap.get("accountno"));
+                String rowNumStr = String.valueOf(r + 1);
+
+                // Corrections overlay by row number (primary) or accountNo (fallback for non-empty accounts)
+                Map<String, Object> corr = null;
+                if (corrections != null) {
+                    if (corrections.containsKey(rowNumStr)) {
+                        corr = corrections.get(rowNumStr);
+                    } else if (accountNo != null && !accountNo.trim().isEmpty() && corrections.containsKey(accountNo.trim())) {
+                        corr = corrections.get(accountNo.trim());
+                    }
+                }
+
+                // Apply corrections overlay before any skip/delete decisions
+                if (corr != null) {
+                    if (corr.containsKey("accountNo")) accountNo = (String) corr.get("accountNo");
+                }
+
+                // Skip rows that are permanently deleted by the user
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    String displayAcct = (accountNo != null && !accountNo.trim().isEmpty()) ? accountNo.trim() : "[empty]";
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("Master Data Row %d (Account %s) excluded from batch during import.", r + 1, displayAcct));
+                    skippedRows++;
+                    continue;
+                }
+
+                // Skip rows where Account No is still empty/blank after corrections
                 if (accountNo == null || accountNo.trim().isEmpty()) { skippedRows++; continue; }
                 accountNo = accountNo.trim();
 
@@ -153,19 +179,8 @@ public class MultiFileImportService {
                 String tariffType      = strVal(row, colMap.get("tarifftype"));
                 String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
 
-                // Corrections overlay by row number OR accountNo
-                String rowNumStr = String.valueOf(r + 1);
-                Map<String, Object> corr = null;
-                if (corrections != null) {
-                    if (corrections.containsKey(rowNumStr)) {
-                        corr = corrections.get(rowNumStr);
-                    } else if (corrections.containsKey(accountNo)) {
-                        corr = corrections.get(accountNo);
-                    }
-                }
-
+                // Apply remaining corrections (non-accountNo fields)
                 if (corr != null) {
-                    if (corr.containsKey("accountNo"))       accountNo       = (String) corr.get("accountNo");
                     if (corr.containsKey("customerName"))    customerName    = (String) corr.get("customerName");
                     if (corr.containsKey("customerAddress")) customerAddress = (String) corr.get("customerAddress");
                     if (corr.containsKey("refNo"))           refNo           = (String) corr.get("refNo");
@@ -187,6 +202,7 @@ public class MultiFileImportService {
                     if (corr.containsKey("costCode"))        costCode        = (String) corr.get("costCode");
                 }
 
+
                 billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                 Map<String, Object> cachedRow = new LinkedHashMap<>();
@@ -205,6 +221,7 @@ public class MultiFileImportService {
                 cachedRow.put("unitRate", unitRate);
                 cachedRow.put("tariffType", tariffType);
                 cachedRow.put("billingMode", billingMode);
+                cachedRow.put("rowNum", r + 1);
 
                 cachedRows.add(cachedRow);
             }
@@ -272,33 +289,45 @@ public class MultiFileImportService {
                 String prevDate       = dateStr(row, colMap.get("prevreadingdate"));
                 String currDate       = dateStr(row, colMap.get("currreadingdate"));
 
-                if (accountNo == null || accountNo.trim().isEmpty()) continue;
-                accountNo = accountNo.trim();
+                String cleanAcc = accountNo != null ? accountNo.trim() : "";
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
                 rowData.put("rowNum", r + 1);
-                rowData.put("accountNo", accountNo);
+                rowData.put("accountNo", cleanAcc);
                 rowData.put("prevReadingDate", prevDate);
                 rowData.put("currReadingDate", currDate);
 
                 List<String> errors = new ArrayList<>();
+                if (cleanAcc.isEmpty()) {
+                    errors.add("Account No is missing");
+                } else if (!cleanAcc.matches("\\d+")) {
+                    errors.add("Invalid Account Number: Only numeric values are allowed.");
+                } else if (cleanAcc.length() != 10) {
+                    errors.add("Account number must be a valid 10-digit numeric string");
+                }
+
                 if (prevDate == null || prevDate.isEmpty()) errors.add("Previous Reading Date is missing");
                 if (currDate == null || currDate.isEmpty()) errors.add("Current Reading Date is missing");
 
-                boolean customerExists = stagedAccounts.contains(accountNo) || customerRepository.findById(accountNo).isPresent();
-                rowData.put("customerExists", customerExists);
-                if (!customerExists) {
-                    errors.add("Account No not found in customer database or Master Data");
-                    unmatchedCount++;
-                } else {
-                    matchCount++;
-                    if (stagedAccounts.contains(accountNo)) {
-                        rowData.put("customerName", stagedNames.get(accountNo));
+                boolean customerExists = false;
+                if (errors.isEmpty() && !cleanAcc.isEmpty()) {
+                    customerExists = stagedAccounts.contains(cleanAcc) || customerRepository.findById(cleanAcc).isPresent();
+                    if (!customerExists) {
+                        errors.add("Account No not found in customer database or Master Data");
+                        unmatchedCount++;
                     } else {
-                        customerRepository.findById(accountNo).ifPresent(c -> rowData.put("customerName", c.getCustomerName()));
+                        matchCount++;
+                        if (stagedAccounts.contains(cleanAcc)) {
+                            rowData.put("customerName", stagedNames.get(cleanAcc));
+                        } else {
+                            customerRepository.findById(cleanAcc).ifPresent(c -> rowData.put("customerName", c.getCustomerName()));
+                        }
                     }
+                } else {
+                    if (!cleanAcc.isEmpty()) unmatchedCount++;
                 }
 
+                rowData.put("customerExists", customerExists);
                 rowData.put("errors", errors);
                 rowData.put("status", errors.isEmpty() ? "VALID" : "ERROR");
                 if (!errors.isEmpty()) errorCount++;
@@ -354,8 +383,7 @@ public class MultiFileImportService {
                 if (row == null || isRowEmpty(row)) continue;
 
                 String accountNo = strVal(row, colMap.get("accountno"));
-                if (accountNo == null || accountNo.trim().isEmpty()) continue;
-                accountNo = accountNo.trim();
+                if (accountNo != null) accountNo = accountNo.trim();
 
                 String prevDate = dateStr(row, colMap.get("prevreadingdate"));
                 String currDate = dateStr(row, colMap.get("currreadingdate"));
@@ -366,7 +394,7 @@ public class MultiFileImportService {
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
                         corr = corrections.get(rowNumStr);
-                    } else if (corrections.containsKey(accountNo)) {
+                    } else if (accountNo != null && corrections.containsKey(accountNo)) {
                         corr = corrections.get(accountNo);
                     }
                 }
@@ -375,6 +403,18 @@ public class MultiFileImportService {
                     if (corr.containsKey("accountNo"))        accountNo = (String) corr.get("accountNo");
                     if (corr.containsKey("prevReadingDate"))  prevDate  = (String) corr.get("prevReadingDate");
                     if (corr.containsKey("currReadingDate"))  currDate  = (String) corr.get("currReadingDate");
+                }
+
+                if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                    skippedCount++;
+                    continue;
+                }
+                accountNo = accountNo.trim();
+
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("CEB Assist Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    skippedCount++;
+                    continue;
                 }
 
                 boolean customerExists = stagedAccounts.contains(accountNo) || customerRepository.findById(accountNo).isPresent();
@@ -449,92 +489,160 @@ public class MultiFileImportService {
                 String accountNo     = strVal(row, colMap.get("accountno"));
                 Double kwhImport     = numVal(row, colMap.get("imports"));
                 Double kwhExport     = numVal(row, colMap.get("exports"));
-                Double ngenUnitRate  = numVal(row, colMap.get("unitcost"));
+                Double ngenUnitRate  = colMap.containsKey("unitcost") && colMap.get("unitcost") != null ? numVal(row, colMap.get("unitcost")) : null;
                 Double billSetOff    = numVal(row, colMap.get("billsetoff"));
+                String ngenNetType   = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
 
-                if (accountNo == null || accountNo.trim().isEmpty()) continue;
-                accountNo = accountNo.trim();
+                String cleanAcc = accountNo != null ? accountNo.trim() : "";
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
                 rowData.put("rowNum", r + 1);
-                rowData.put("accountNo", accountNo);
+                rowData.put("accountNo", cleanAcc);
                 rowData.put("kwhImport", kwhImport);
                 rowData.put("kwhExport", kwhExport);
                 rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                rowData.put("ngenNetType", ngenNetType);
 
                 List<String> errors = new ArrayList<>();
                 List<String> warnings = new ArrayList<>();
 
-                Optional<Customer> custOpt = customerRepository.findById(accountNo);
-                boolean isStaged = stagedCustomers.containsKey(accountNo);
-                boolean existsInDb = custOpt.isPresent();
+                if (cleanAcc.isEmpty()) {
+                    errors.add("Account No is missing");
+                } else if (!cleanAcc.matches("\\d+")) {
+                    errors.add("Invalid Account Number: Only numeric values are allowed.");
+                } else if (cleanAcc.length() != 10) {
+                    errors.add("Account number must be a valid 10-digit numeric string");
+                }
 
-                if (!isStaged && !existsInDb) {
-                    errors.add("Account No not found in customer database or Master Data");
-                } else {
-                    matchCount++;
+                boolean isStaged = false;
+                boolean existsInDb = false;
+                Optional<Customer> custOpt = Optional.empty();
 
-                    // kWh Sales = Export - Import
-                    double sales = (kwhExport != null ? kwhExport : 0.0) - (kwhImport != null ? kwhImport : 0.0);
-                    rowData.put("kwhSales", sales);
+                Double masterUnitRate = null;
+                String masterNetType = null;
+                String customerName = "—";
+                String customerAddress = "—";
+                String refNo = "—";
+                String costCode = "—";
+                String mobileNo = "—";
+                Double panelCapacity = null;
+                String agreementDate = null;
+                String bankCode = "—";
+                String branchCode = "—";
+                String bankAccountNo = "—";
+                String solarType = null;
+                String tariffType = null;
+                String billingMode = null;
 
-                    Double masterUnitRate;
-                    if (isStaged) {
-                        Map<String, Object> stagedCust = stagedCustomers.get(accountNo);
-                        rowData.put("customerName",    stagedCust.get("customerName"));
-                        rowData.put("customerAddress", stagedCust.get("customerAddress"));
-                        rowData.put("refNo",           stagedCust.get("refNo"));
-                        rowData.put("costCode",        stagedCust.get("costCode"));
-                        rowData.put("mobileNo",        stagedCust.get("mobileNo"));
-                        rowData.put("panelCapacity",   stagedCust.get("panelCapacity"));
-                        rowData.put("agreementDate",   stagedCust.get("agreementDate"));
-                        rowData.put("bankCode",        stagedCust.get("bankCode"));
-                        rowData.put("branchCode",      stagedCust.get("branchCode"));
-                        rowData.put("bankAccountNo",   stagedCust.get("bankAccountNo"));
-                        rowData.put("solarType",       stagedCust.get("solarType"));
-                        rowData.put("tariffType",      stagedCust.get("tariffType"));
-                        rowData.put("billingMode",     stagedCust.get("billingMode"));
+                if (errors.isEmpty() && !cleanAcc.isEmpty()) {
+                    custOpt = customerRepository.findById(cleanAcc);
+                    isStaged = stagedCustomers.containsKey(cleanAcc);
+                    existsInDb = custOpt.isPresent();
 
-                        masterUnitRate = stagedCust.get("unitRate") != null ? ((Number) stagedCust.get("unitRate")).doubleValue() : null;
+                    if (!isStaged && !existsInDb) {
+                        errors.add("Account No not found in customer database or Master Data");
                     } else {
-                        Customer cust = custOpt.get();
-                        rowData.put("customerName",    cust.getCustomerName());
-                        rowData.put("customerAddress", cust.getCustomerAddress());
-                        rowData.put("refNo",           cust.getRefNo());
-                        rowData.put("costCode",        cust.getCostCode() != null ? cust.getCostCode().getCostCode() : null);
-                        rowData.put("mobileNo",        cust.getMobileNo());
-                        rowData.put("panelCapacity",   cust.getPanelCapacity());
-                        rowData.put("agreementDate",   cust.getAgreementDate() != null ? cust.getAgreementDate().toString() : null);
-                        rowData.put("bankCode",        cust.getBankCode());
-                        rowData.put("branchCode",      cust.getBranchCode());
-                        rowData.put("bankAccountNo",   cust.getBankAccountNo());
-                        rowData.put("solarType",       cust.getSolarType());
-                        rowData.put("tariffType",      cust.getTariffType());
-                        rowData.put("billingMode",     cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null);
+                        matchCount++;
+                        if (isStaged) {
+                            Map<String, Object> stagedCust = stagedCustomers.get(cleanAcc);
+                            customerName = stagedCust.get("customerName") != null ? stagedCust.get("customerName").toString() : "—";
+                            customerAddress = stagedCust.get("customerAddress") != null ? stagedCust.get("customerAddress").toString() : "—";
+                            refNo = stagedCust.get("refNo") != null ? stagedCust.get("refNo").toString() : "—";
+                            costCode = stagedCust.get("costCode") != null ? stagedCust.get("costCode").toString() : "—";
+                            mobileNo = stagedCust.get("mobileNo") != null ? stagedCust.get("mobileNo").toString() : "—";
+                            panelCapacity = stagedCust.get("panelCapacity") != null && !stagedCust.get("panelCapacity").toString().isEmpty()
+                                    ? ((Number) stagedCust.get("panelCapacity")).doubleValue() : null;
+                            agreementDate = stagedCust.get("agreementDate") != null ? stagedCust.get("agreementDate").toString() : null;
+                            bankCode = stagedCust.get("bankCode") != null ? stagedCust.get("bankCode").toString() : "—";
+                            branchCode = stagedCust.get("branchCode") != null ? stagedCust.get("branchCode").toString() : "—";
+                            bankAccountNo = stagedCust.get("bankAccountNo") != null ? stagedCust.get("bankAccountNo").toString() : "—";
+                            solarType = stagedCust.get("solarType") != null ? stagedCust.get("solarType").toString() : null;
+                            tariffType = stagedCust.get("tariffType") != null ? stagedCust.get("tariffType").toString() : null;
+                            billingMode = stagedCust.get("billingMode") != null ? stagedCust.get("billingMode").toString() : null;
 
-                        masterUnitRate = cust.getUnitRate();
+                            masterUnitRate = stagedCust.get("unitRate") != null && !stagedCust.get("unitRate").toString().isEmpty()
+                                    ? ((Number) stagedCust.get("unitRate")).doubleValue() : null;
+                            masterNetType = solarType;
+                        } else {
+                            Customer cust = custOpt.get();
+                            customerName = cust.getCustomerName() != null ? cust.getCustomerName() : "—";
+                            customerAddress = cust.getCustomerAddress() != null ? cust.getCustomerAddress() : "—";
+                            refNo = cust.getRefNo() != null ? cust.getRefNo() : "—";
+                            costCode = cust.getCostCode() != null ? cust.getCostCode().getCostCode() : "—";
+                            mobileNo = cust.getMobileNo() != null ? cust.getMobileNo() : "—";
+                            panelCapacity = cust.getPanelCapacity();
+                            agreementDate = cust.getAgreementDate() != null ? cust.getAgreementDate().toString() : null;
+                            bankCode = cust.getBankCode() != null ? cust.getBankCode() : "—";
+                            branchCode = cust.getBranchCode() != null ? cust.getBranchCode() : "—";
+                            bankAccountNo = cust.getBankAccountNo() != null ? cust.getBankAccountNo() : "—";
+                            solarType = cust.getSolarType();
+                            tariffType = cust.getTariffType();
+                            billingMode = cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null;
+
+                            masterUnitRate = cust.getUnitRate();
+                            masterNetType = solarType;
+                        }
                     }
+                }
 
-                    rowData.put("masterUnitRate", masterUnitRate);
-                    rowData.put("ngenUnitRate", ngenUnitRate);
-
-                    if (ngenUnitRate != null && masterUnitRate != null && Math.abs(ngenUnitRate - masterUnitRate) > 0.001) {
-                        warnings.add(String.format("Unit Rate mismatch: NGEN=%.2f, Master Data=%.2f. Using Master Data rate.", ngenUnitRate, masterUnitRate));
-                        warningCount++;
+                // Validation 2: Net Type Match check
+                if (masterNetType != null && ngenNetType != null && !ngenNetType.trim().isEmpty()) {
+                    String normMasterType = ExcelValidationService.normalizeSolarType(masterNetType);
+                    String normNgenType = ExcelValidationService.normalizeSolarType(ngenNetType);
+                    if (normMasterType != null && normNgenType != null && !normMasterType.equals(normNgenType)) {
+                        errors.add(String.format("Net Type Mismatch: NGEN='%s', Master Data='%s'", ngenNetType, masterNetType));
                     }
+                }
 
-                    double effectiveRate = masterUnitRate != null ? masterUnitRate : (ngenUnitRate != null ? ngenUnitRate : 0.0);
-                    double salesAmount = sales * effectiveRate;
-                    double outstandingCharges = billSetOff != null ? billSetOff : 0.0;
-                    double finalPayment = salesAmount - outstandingCharges;
-
-                    rowData.put("effectiveUnitRate", effectiveRate);
-                    rowData.put("salesAmount", Math.round(salesAmount * 100.0) / 100.0);
-                    rowData.put("paymentSettled", Math.round(finalPayment * 100.0) / 100.0);
+                // Validation 3: Unit Rate Match check
+                if (ngenUnitRate != null && masterUnitRate != null && Math.abs(ngenUnitRate - masterUnitRate) > 0.001) {
+                    warnings.add(String.format("Unit Rate mismatch: NGEN=%.2f, Master Data=%.2f. Using Master Data rate.", ngenUnitRate, masterUnitRate));
+                    warningCount++;
                 }
 
                 if (kwhImport == null) errors.add("kWh Import is missing or invalid");
                 if (kwhExport == null) errors.add("kWh Export is missing or invalid");
+
+                // Proceed to Calculation Phase only if no errors
+                Double kwhSales = null;
+                Double salesAmount = null;
+                Double paymentSettled = null;
+                Double effectiveUnitRate = null;
+
+                if (errors.isEmpty()) {
+                    // Calculation Phase
+                    kwhSales = (kwhExport != null ? kwhExport : 0.0) - (kwhImport != null ? kwhImport : 0.0);
+                    effectiveUnitRate = masterUnitRate != null ? masterUnitRate : (ngenUnitRate != null ? ngenUnitRate : 0.0);
+                    salesAmount = kwhSales * effectiveUnitRate;
+                    double outstandingCharges = billSetOff != null ? billSetOff : 0.0;
+                    paymentSettled = salesAmount - outstandingCharges;
+
+                    // Rounding
+                    salesAmount = Math.round(salesAmount * 100.0) / 100.0;
+                    paymentSettled = Math.round(paymentSettled * 100.0) / 100.0;
+                }
+
+                // Enhanced preview fields mapping
+                rowData.put("customerName", customerName);
+                rowData.put("customerAddress", customerAddress);
+                rowData.put("refNo", refNo);
+                rowData.put("costCode", costCode);
+                rowData.put("mobileNo", mobileNo);
+                rowData.put("panelCapacity", panelCapacity);
+                rowData.put("agreementDate", agreementDate);
+                rowData.put("bankCode", bankCode);
+                rowData.put("branchCode", branchCode);
+                rowData.put("bankAccountNo", bankAccountNo);
+                rowData.put("solarType", solarType); // Master Net Type
+                rowData.put("tariffType", tariffType);
+                rowData.put("billingMode", billingMode);
+
+                rowData.put("masterUnitRate", masterUnitRate);
+                rowData.put("ngenUnitRate", ngenUnitRate);
+                rowData.put("effectiveUnitRate", effectiveUnitRate);
+                rowData.put("kwhSales", kwhSales);
+                rowData.put("salesAmount", salesAmount);
+                rowData.put("paymentSettled", paymentSettled);
 
                 Map<String, String> cebRow = cebData.get(accountNo);
                 if (cebRow != null) {
@@ -725,7 +833,7 @@ public class MultiFileImportService {
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
                         corr = corrections.get(rowNumStr);
-                    } else if (corrections.containsKey(accountNo)) {
+                    } else if (accountNo != null && corrections.containsKey(accountNo)) {
                         corr = corrections.get(accountNo);
                     }
                 }
@@ -750,8 +858,17 @@ public class MultiFileImportService {
                     }
                 }
 
-                if (accountNo == null || accountNo.trim().isEmpty()) continue;
+                if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                    skippedCount++;
+                    continue;
+                }
                 accountNo = accountNo.trim();
+
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    skippedCount++;
+                    continue;
+                }
 
                 Optional<Customer> custOpt = customerRepository.findById(accountNo);
                 if (custOpt.isEmpty() || kwhImport == null || kwhExport == null) {
@@ -760,6 +877,18 @@ public class MultiFileImportService {
                 }
 
                 Customer cust = custOpt.get();
+
+                // Net Type Match check
+                String ngenNetType = colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
+                if (cust.getSolarType() != null && ngenNetType != null && !ngenNetType.trim().isEmpty()) {
+                    String normMasterType = ExcelValidationService.normalizeSolarType(cust.getSolarType());
+                    String normNgenType = ExcelValidationService.normalizeSolarType(ngenNetType);
+                    if (normMasterType != null && normNgenType != null && !normMasterType.equals(normNgenType)) {
+                        skippedCount++;
+                        continue;
+                    }
+                }
+
                 double effectiveRate = cust.getUnitRate() != null ? cust.getUnitRate()
                         : (ngenUnitRate != null ? ngenUnitRate : 0.0);
                 double kwhSales = kwhExport - kwhImport;
@@ -843,6 +972,11 @@ public class MultiFileImportService {
             }
             Map<String, Object> finalCustData = new LinkedHashMap<>(stagedCust);
             if (corr != null) {
+                if (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted")))) {
+                    int custRowNum = finalCustData.get("rowNum") != null ? Integer.parseInt(finalCustData.get("rowNum").toString()) : 0;
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("Master Data Row %d (Account %s) excluded from batch during staging.", custRowNum, accountNo));
+                    continue;
+                }
                 finalCustData.putAll(corr);
             }
 
@@ -968,6 +1102,11 @@ public class MultiFileImportService {
                     }
                 }
 
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %d (Account %s) excluded from batch during staging.", r + 1, accountNo));
+                    continue;
+                }
+
                 if (accountNo == null || accountNo.trim().isEmpty()) continue;
                 accountNo = accountNo.trim();
 
@@ -995,10 +1134,7 @@ public class MultiFileImportService {
                 String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                 double effectiveRate = masterUnitRate != null ? masterUnitRate : (ngenUnitRate != null ? ngenUnitRate : 0.0);
-                double kwhSales = (kwhExport != null ? kwhExport : 0.0) - (kwhImport != null ? kwhImport : 0.0);
-                double salesAmount = kwhSales * effectiveRate;
                 double outstandingCharges = billSetOff != null ? billSetOff : 0.0;
-                double paymentSettled = salesAmount - outstandingCharges;
 
                 Map<String, String> cebRow = cebData.get(accountNo);
                 String prevReadingDate = cebRow != null ? cebRow.get("prevReadingDate") : null;
@@ -1006,32 +1142,6 @@ public class MultiFileImportService {
 
                 String refNoStr = isNotBlank(refNo) ? refNo
                         : "REF-" + accountNo + "-" + (currReadingDate != null ? currReadingDate.replace("-", "") : "");
-
-                Map<String, Object> rawJson = new LinkedHashMap<>();
-                rawJson.put("accountNo", accountNo);
-                rawJson.put("customerName", customerName);
-                rawJson.put("customerAddress", customerAddress);
-                rawJson.put("refNo", refNoStr);
-                rawJson.put("mobileNo", mobileNo);
-                rawJson.put("panelCapacity", panelCapacity);
-                rawJson.put("agreementDate", agreementDate);
-                rawJson.put("bankCode", bankCode);
-                rawJson.put("branchCode", branchCode);
-                rawJson.put("bankAccountNo", bankAccountNo);
-                rawJson.put("solarType", solarType);
-                rawJson.put("unitCost", effectiveRate);
-                rawJson.put("tariffType", tariffType);
-                rawJson.put("billingMode", billingMode);
-
-                rawJson.put("fromDate", prevReadingDate);
-                rawJson.put("toDate", currReadingDate);
-                rawJson.put("importUnits", kwhImport);
-                rawJson.put("exportUnits", kwhExport);
-                rawJson.put("netUnit", kwhSales);
-                rawJson.put("totalAmount", salesAmount);
-                rawJson.put("billSetOff", outstandingCharges);
-                rawJson.put("payment", paymentSettled);
-                rawJson.put("paymentSettled", paymentSettled);
 
                 // Comprehensive validation using ExcelValidationService
                 String rawFromDate = prevReadingDate != null ? prevReadingDate : "";
@@ -1061,6 +1171,72 @@ public class MultiFileImportService {
                                 tariffType != null ? tariffType : "",
                                 new HashSet<String>()
                         );
+
+                // Validation 1: Account No Match
+                if (matchedMaster == null) {
+                    valResult.addError(new com.ceb.billing.models.ExcelValidationError(
+                            "NGEN", r + 1, "Account No",
+                            "Account No not found in Master Data", false));
+                } else {
+                    // Validation 2: Net Type Match
+                    String ngenNetType = colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
+                    if (solarType != null && ngenNetType != null && !ngenNetType.trim().isEmpty()) {
+                        String normMasterType = ExcelValidationService.normalizeSolarType(solarType);
+                        String normNgenType = ExcelValidationService.normalizeSolarType(ngenNetType);
+                        if (normMasterType != null && normNgenType != null && !normMasterType.equals(normNgenType)) {
+                            valResult.addError(new com.ceb.billing.models.ExcelValidationError(
+                                    "NGEN", r + 1, "Net Type",
+                                    String.format("Net Type Mismatch: NGEN='%s', Master Data='%s'", ngenNetType, solarType), false));
+                        }
+                    }
+
+                    // Validation 3: Unit Rate Match
+                    if (ngenUnitRate != null && masterUnitRate != null && Math.abs(ngenUnitRate - masterUnitRate) > 0.001) {
+                        valResult.addWarning(new com.ceb.billing.models.ExcelValidationError(
+                                "NGEN", r + 1, "Unit Rate",
+                                String.format("Unit Rate mismatch: NGEN=%.2f, Master Data=%.2f. Using Master Data rate.", ngenUnitRate, masterUnitRate), true));
+                    }
+                }
+
+                // Proceed to Calculation Phase only if no errors
+                Double kwhSales = null;
+                Double salesAmount = null;
+                Double paymentSettled = null;
+
+                if (!valResult.hasErrors()) {
+                    kwhSales = (kwhExport != null ? kwhExport : 0.0) - (kwhImport != null ? kwhImport : 0.0);
+                    salesAmount = kwhSales * effectiveRate;
+                    paymentSettled = salesAmount - outstandingCharges;
+
+                    salesAmount = Math.round(salesAmount * 100.0) / 100.0;
+                    paymentSettled = Math.round(paymentSettled * 100.0) / 100.0;
+                }
+
+                Map<String, Object> rawJson = new LinkedHashMap<>();
+                rawJson.put("accountNo", accountNo);
+                rawJson.put("customerName", customerName);
+                rawJson.put("customerAddress", customerAddress);
+                rawJson.put("refNo", refNoStr);
+                rawJson.put("mobileNo", mobileNo);
+                rawJson.put("panelCapacity", panelCapacity);
+                rawJson.put("agreementDate", agreementDate);
+                rawJson.put("bankCode", bankCode);
+                rawJson.put("branchCode", branchCode);
+                rawJson.put("bankAccountNo", bankAccountNo);
+                rawJson.put("solarType", solarType);
+                rawJson.put("unitCost", effectiveRate);
+                rawJson.put("tariffType", tariffType);
+                rawJson.put("billingMode", billingMode);
+
+                rawJson.put("fromDate", prevReadingDate);
+                rawJson.put("toDate", currReadingDate);
+                rawJson.put("importUnits", kwhImport);
+                rawJson.put("exportUnits", kwhExport);
+                rawJson.put("netUnit", kwhSales);
+                rawJson.put("totalAmount", salesAmount);
+                rawJson.put("billSetOff", outstandingCharges);
+                rawJson.put("payment", paymentSettled);
+                rawJson.put("paymentSettled", paymentSettled);
 
                 String valStatus = valResult.hasDuplicate() ? "DUPLICATE"
                         : valResult.hasErrors() ? "ERROR"
@@ -1173,7 +1349,9 @@ public class MultiFileImportService {
         String accountNo = row.get("accountNo") != null ? row.get("accountNo").toString() : null;
         if (isBlank(accountNo)) {
             errors.add("Account No is missing");
-        } else if (accountNo.trim().length() != 10 || !accountNo.trim().matches("\\d+")) {
+        } else if (!accountNo.trim().matches("\\d+")) {
+            errors.add("Invalid Account Number: Only numeric values are allowed.");
+        } else if (accountNo.trim().length() != 10) {
             errors.add("Account No must be a 10-digit numeric value");
         }
         

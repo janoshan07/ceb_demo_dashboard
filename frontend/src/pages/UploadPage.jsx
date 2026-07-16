@@ -40,6 +40,18 @@ export const deriveLCode = (solarType, tariffType) => {
   return '';
 };
 
+// Returns true if the Account No is empty/blank
+export const isAccountEmpty = (acc) => {
+  return acc === undefined || acc === null || String(acc).trim() === '';
+};
+
+// Returns true if the Account No is non-empty but contains non-numeric or wrong-length characters
+export const isAccountInvalid = (acc) => {
+  if (isAccountEmpty(acc)) return false; // empty is handled separately
+  const clean = String(acc).trim();
+  return !/^\d+$/.test(clean) || clean.length !== 10;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  WIZARD STEP INDICATOR
 // ═══════════════════════════════════════════════════════════════════════════
@@ -174,9 +186,14 @@ const StatusBadge = ({ status }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — Master Data
 // ═══════════════════════════════════════════════════════════════════════════
-const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
+const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
   const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+
+  const errorRows = displayed.filter(r => r.status === 'ERROR');
+  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
 
   const renderCell = (val, prefix = '') => {
     if (val === undefined || val === null || String(val).trim() === '') {
@@ -185,79 +202,182 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
     return prefix ? `${prefix}${val}` : String(val);
   };
 
+  React.useEffect(() => {
+    setSelectedKeys(prev => {
+      const next = new Set();
+      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      prev.forEach(k => {
+        if (currentValidKeys.has(k)) next.add(k);
+      });
+      return next;
+    });
+  }, [rows, filterErrors]);
+
   if (!displayed.length) return (
     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
       <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
       <div style={{ fontWeight: 600 }}>All records are valid!</div>
     </div>
   );
+
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-        <thead>
-          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-            {[
-              'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
-              'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code',
-              'Bank Account No', 'Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Status', 'Actions'
-            ].map(h => (
-              <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {displayed.map((row, i) => (
-            <React.Fragment key={i}>
-              <tr
-                onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
-              >
-                <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.refNo)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.costCode)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankCode)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.branchCode)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.tariffType)}</td>
-                <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
-                <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
-                <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
-                      Correct
-                    </button>
-                    {row.status === 'ERROR' && onDeleteRow && (
-                      <button onClick={() => onDeleteRow(row)} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                        <Trash2 size={12} /> Delete
+    <div>
+      {selectedKeys.size > 0 && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: 10,
+          padding: '0.75rem 1.25rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
+            <Trash2 size={16} />
+            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+          </div>
+          <button
+            onClick={() => {
+              const rowsToDelete = displayed.filter(r => selectedKeys.has(r.rowNum || r.accountNo));
+              onDeleteRows(rowsToDelete);
+            }}
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              color: 'white',
+              borderRadius: 8,
+              padding: '0.45rem 1.1rem',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)'
+            }}
+          >
+            Delete Selected ({selectedKeys.size})
+          </button>
+        </div>
+      )}
+
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+              <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                <input 
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={el => {
+                    if (el) el.indeterminate = isSomeSelected;
+                  }}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                    } else {
+                      setSelectedKeys(new Set());
+                    }
+                  }}
+                  style={{ cursor: 'pointer', width: 14, height: 14 }}
+                />
+              </th>
+              {[
+                'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
+                'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code',
+                'Bank Account No', 'Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Status', 'Actions'
+              ].map(h => (
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map((row, i) => (
+              <React.Fragment key={i}>
+                <tr
+                  onClick={() => setExpandedRow(expandedRow === i ? null : i)}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                >
+                  <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                    {row.status === 'ERROR' ? (
+                      <input 
+                        type="checkbox"
+                        checked={selectedKeys.has(row.rowNum || row.accountNo)}
+                        onChange={(e) => {
+                          const key = row.rowNum || row.accountNo;
+                          setSelectedKeys(prev => {
+                            const copy = new Set(prev);
+                            if (e.target.checked) {
+                              copy.add(key);
+                            } else {
+                              copy.delete(key);
+                            }
+                            return copy;
+                          });
+                        }}
+                        style={{ cursor: 'pointer', width: 14, height: 14 }}
+                      />
+                    ) : null}
+                  </td>
+                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                  <td style={{ 
+                    padding: '0.6rem 0.85rem', 
+                    fontFamily: 'monospace', 
+                    fontWeight: 600, 
+                    whiteSpace: 'nowrap',
+                    background: isAccountInvalid(row.accountNo) ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                    color: isAccountInvalid(row.accountNo) ? '#f87171' : 'inherit'
+                  }}>
+                    {renderCell(row.accountNo)}
+                    {isAccountInvalid(row.accountNo) && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
+                  </td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.refNo)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.costCode)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.mobileNo)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.panelCapacity)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.agreementDate)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankCode)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.branchCode)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.bankAccountNo)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.unitRate !== undefined && row.unitRate !== null && String(row.unitRate).trim() !== '' ? `LKR ${row.unitRate}` : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.tariffType)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.billingMode)}</td>
+                  <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
+                  <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
+                        Correct
                       </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              {expandedRow === i && row.errors?.length > 0 && (
-                <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
-                  <td colSpan={18} style={{ padding: '0.75rem 1.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                      <AlertTriangle size={15} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                      <ul style={{ margin: 0, paddingLeft: '1rem', color: '#ef4444', fontSize: '0.78rem', lineHeight: 1.7 }}>
-                        {row.errors.map((e, ei) => <li key={ei}>{e}</li>)}
-                      </ul>
+                      {row.status === 'ERROR' && onDeleteRows && (
+                        <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+                {expandedRow === i && row.errors?.length > 0 && (
+                  <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
+                    <td colSpan={19} style={{ padding: '0.75rem 1.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <AlertTriangle size={15} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                        <ul style={{ margin: 0, paddingLeft: '1rem', color: '#ef4444', fontSize: '0.78rem', lineHeight: 1.7 }}>
+                          {row.errors.map((e, ei) => <li key={ei}>{e}</li>)}
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
@@ -265,54 +385,181 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — CEB Assist
 // ═══════════════════════════════════════════════════════════════════════════
-const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
+const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+
+  const errorRows = displayed.filter(r => r.status === 'ERROR');
+  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+
+  React.useEffect(() => {
+    setSelectedKeys(prev => {
+      const next = new Set();
+      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      prev.forEach(k => {
+        if (currentValidKeys.has(k)) next.add(k);
+      });
+      return next;
+    });
+  }, [rows, filterErrors]);
+
   if (!displayed.length) return (
     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
       <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
       <div style={{ fontWeight: 600 }}>All records matched!</div>
     </div>
   );
+
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-        <thead>
-          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-            {['Row','Account No','Customer Name','Prv. Rdg. Date','Crnt. Rdg. Date','Matched','Status','Actions'].map(h => (
-              <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {displayed.map((row, i) => (
-            <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-              <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-              <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600 }}>{row.accountNo}</td>
-              <td style={{ padding: '0.6rem 0.85rem' }}>{row.customerName || <span style={{ color: 'var(--text-muted)' }}>Not found</span>}</td>
-              <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.prevReadingDate || '—'}</td>
-              <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.currReadingDate || '—'}</td>
-              <td style={{ padding: '0.6rem 0.85rem' }}>
-                <span style={{ color: row.customerExists ? '#10b981' : '#ef4444', fontWeight: 600, fontSize: '0.75rem' }}>
-                  {row.customerExists ? '✓ Yes' : '✗ No'}
-                </span>
-              </td>
-              <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
-              <td style={{ padding: '0.6rem 0.85rem' }}>
-                <div style={{ display: 'flex', gap: '0.35rem' }}>
-                  <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
-                    Correct
-                  </button>
-                  {row.status === 'ERROR' && onDeleteRow && (
-                    <button onClick={() => onDeleteRow(row)} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                      <Trash2 size={12} /> Delete
-                    </button>
-                  )}
-                </div>
-              </td>
+    <div>
+      {selectedKeys.size > 0 && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: 10,
+          padding: '0.75rem 1.25rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
+            <Trash2 size={16} />
+            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+          </div>
+          <button
+            onClick={() => {
+              const rowsToDelete = displayed.filter(r => selectedKeys.has(r.rowNum || r.accountNo));
+              onDeleteRows(rowsToDelete);
+            }}
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              color: 'white',
+              borderRadius: 8,
+              padding: '0.45rem 1.1rem',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)'
+            }}
+          >
+            Delete Selected ({selectedKeys.size})
+          </button>
+        </div>
+      )}
+
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+              <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                <input 
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={el => {
+                    if (el) el.indeterminate = isSomeSelected;
+                  }}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                    } else {
+                      setSelectedKeys(new Set());
+                    }
+                  }}
+                  style={{ cursor: 'pointer', width: 14, height: 14 }}
+                />
+              </th>
+              {['Row','Account No','Customer Name','Prv. Rdg. Date','Crnt. Rdg. Date','Matched','Status','Actions'].map(h => (
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {displayed.map((row, i) => (
+              <React.Fragment key={i}>
+                <tr 
+                  onClick={() => setExpandedRow(expandedRow === i ? null : i)}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                >
+                  <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                    {row.status === 'ERROR' ? (
+                      <input 
+                        type="checkbox"
+                        checked={selectedKeys.has(row.rowNum || row.accountNo)}
+                        onChange={(e) => {
+                          const key = row.rowNum || row.accountNo;
+                          setSelectedKeys(prev => {
+                            const copy = new Set(prev);
+                            if (e.target.checked) {
+                              copy.add(key);
+                            } else {
+                              copy.delete(key);
+                            }
+                            return copy;
+                          });
+                        }}
+                        style={{ cursor: 'pointer', width: 14, height: 14 }}
+                      />
+                    ) : null}
+                  </td>
+                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                  <td style={{ 
+                    padding: '0.6rem 0.85rem', 
+                    fontFamily: 'monospace', 
+                    fontWeight: 600,
+                    whiteSpace: 'nowrap',
+                    background: isAccountInvalid(row.accountNo) ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                    color: isAccountInvalid(row.accountNo) ? '#f87171' : 'inherit'
+                  }}>
+                    {row.accountNo || <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}
+                    {isAccountInvalid(row.accountNo) && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
+                  </td>
+                  <td style={{ padding: '0.6rem 0.85rem' }}>{row.customerName || <span style={{ color: 'var(--text-muted)' }}>Not found</span>}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.prevReadingDate || '—'}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.currReadingDate || '—'}</td>
+                  <td style={{ padding: '0.6rem 0.85rem' }}>
+                    <span style={{ color: row.customerExists ? '#10b981' : '#ef4444', fontWeight: 600, fontSize: '0.75rem' }}>
+                      {row.customerExists ? '✓ Yes' : '✗ No'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
+                  <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
+                        Correct
+                      </button>
+                      {row.status === 'ERROR' && onDeleteRows && (
+                        <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                          <Trash2 size={12} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {expandedRow === i && row.errors?.length > 0 && (
+                  <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
+                    <td colSpan={9} style={{ padding: '0.75rem 1.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
+                        <AlertTriangle size={15} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                        <ul style={{ margin: 0, paddingLeft: '1rem', color: '#ef4444', fontSize: '0.78rem', lineHeight: 1.7 }}>
+                          {row.errors.map((e, ei) => <li key={ei}>{e}</li>)}
+                        </ul>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
@@ -320,94 +567,282 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — NGEN
 // ═══════════════════════════════════════════════════════════════════════════
-const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRow }) => {
+const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
   const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
   const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+
+  const errorRows = displayed.filter(r => r.status === 'ERROR');
+  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+
+  const renderCell = (val, prefix = '') => {
+    if (val === undefined || val === null || String(val).trim() === '') {
+      return <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>;
+    }
+    return prefix ? `${prefix}${val}` : String(val);
+  };
+
+  const normalizeSolarType = (solarType) => {
+    if (!solarType) return "";
+    const s = String(solarType).trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    if (s === "ACCOUNTING" || s === "NETACCOUNTING") {
+      return "Net Accounting";
+    }
+    if (s === "METERING" || s === "NETMETERING") {
+      return "Net Metering";
+    }
+    if (s === "PLUS" || s === "NETPLUS") {
+      return "Net Plus";
+    }
+    if (s === "PLUSPLUS" || s === "NETPLUSPLUS") {
+      return "Net Plus Plus";
+    }
+    return String(solarType).trim();
+  };
+
+  const isTypeMismatch = (row) => {
+    if (!row.solarType || !row.ngenNetType) return false;
+    const t1 = normalizeSolarType(row.solarType);
+    const t2 = normalizeSolarType(row.ngenNetType);
+    return t1 !== t2;
+  };
+
+  const isRateMismatch = (row) => {
+    if (row.masterUnitRate === undefined || row.masterUnitRate === null) return false;
+    if (row.ngenUnitRate === undefined || row.ngenUnitRate === null) return false;
+    return Math.abs(Number(row.masterUnitRate) - Number(row.ngenUnitRate)) > 0.001;
+  };
+
+  React.useEffect(() => {
+    setSelectedKeys(prev => {
+      const next = new Set();
+      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      prev.forEach(k => {
+        if (currentValidKeys.has(k)) next.add(k);
+      });
+      return next;
+    });
+  }, [rows, filterErrors]);
+
   if (!displayed.length) return (
     <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
       <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
       <div style={{ fontWeight: 600 }}>All records are valid!</div>
     </div>
   );
+
   return (
-    <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-        <thead>
-          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-            {['Row','Account No','Customer','kWh Import','kWh Export','kWh Sales','Rate (LKR)','Bill Set Off','Payment Settled','Status','Actions'].map(h => (
-              <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {displayed.map((row, i) => (
-            <React.Fragment key={i}>
-              <tr 
-                onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
-              >
-                <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600 }}>{row.accountNo}</td>
-                <td style={{ padding: '0.6rem 0.85rem' }}>{row.customerName || '—'}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, color: (row.kwhSales ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
-                  {row.kwhSales != null ? row.kwhSales.toFixed(2) : '—'}
-                </td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>
-                  {row.effectiveUnitRate != null ? row.effectiveUnitRate.toFixed(2) : '—'}
-                  {row.warnings?.some(w => w.includes('mismatch')) && (
-                    <span title={row.warnings.find(w => w.includes('mismatch'))} style={{ marginLeft: 4, color: '#f59e0b', cursor: 'help' }}>⚠</span>
+    <div>
+      {selectedKeys.size > 0 && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: 10,
+          padding: '0.75rem 1.25rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
+            <Trash2 size={16} />
+            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+          </div>
+          <button
+            onClick={() => {
+              const rowsToDelete = displayed.filter(r => selectedKeys.has(r.rowNum || r.accountNo));
+              onDeleteRows(rowsToDelete);
+            }}
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              color: 'white',
+              borderRadius: 8,
+              padding: '0.45rem 1.1rem',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)'
+            }}
+          >
+            Delete Selected ({selectedKeys.size})
+          </button>
+        </div>
+      )}
+
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+              <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                <input 
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={el => {
+                    if (el) el.indeterminate = isSomeSelected;
+                  }}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                    } else {
+                      setSelectedKeys(new Set());
+                    }
+                  }}
+                  style={{ cursor: 'pointer', width: 14, height: 14 }}
+                />
+              </th>
+              {[
+                'Row', 'Account No', 'Customer', 'Net Type (Master)', 'Net Type (NGEN)', 
+                'Prev Date (CEB)', 'Curr Date (CEB)', 'kWh Import', 'kWh Export', 'kWh Sales', 
+                'Rate (Master)', 'Rate (NGEN)', 'Bill Set Off', 'Payment Settled', 'Status', 'Actions'
+              ].map(h => (
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map((row, i) => {
+              const hasTypeMismatch = isTypeMismatch(row);
+              const hasRateMismatch = isRateMismatch(row);
+              return (
+                <React.Fragment key={i}>
+                  <tr 
+                    onClick={() => setExpandedRow(expandedRow === i ? null : i)}
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                  >
+                    <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                      {row.status === 'ERROR' ? (
+                        <input 
+                          type="checkbox"
+                          checked={selectedKeys.has(row.rowNum || row.accountNo)}
+                          onChange={(e) => {
+                            const key = row.rowNum || row.accountNo;
+                            setSelectedKeys(prev => {
+                              const copy = new Set(prev);
+                              if (e.target.checked) {
+                                copy.add(key);
+                              } else {
+                                copy.delete(key);
+                              }
+                              return copy;
+                            });
+                          }}
+                          style={{ cursor: 'pointer', width: 14, height: 14 }}
+                        />
+                      ) : null}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                    <td style={{ 
+                      padding: '0.6rem 0.85rem', 
+                      fontFamily: 'monospace', 
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      background: isAccountInvalid(row.accountNo) ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                      color: isAccountInvalid(row.accountNo) ? '#f87171' : 'inherit'
+                    }}>
+                      {renderCell(row.accountNo)}
+                      {isAccountInvalid(row.accountNo) && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
+                    
+                    {/* Master Type */}
+                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
+                    
+                    {/* NGEN Type */}
+                    <td style={{ 
+                      padding: '0.6rem 0.85rem', 
+                      whiteSpace: 'nowrap', 
+                      background: hasTypeMismatch ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                      color: hasTypeMismatch ? '#f87171' : 'inherit',
+                      fontWeight: hasTypeMismatch ? 700 : 'normal'
+                    }}>
+                      {renderCell(row.ngenNetType)}
+                      {hasTypeMismatch && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white' }}>Mismatch</span>}
+                    </td>
+
+                    {/* CEB Dates */}
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
+
+                    {/* kWh values */}
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, color: (row.kwhSales ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
+                      {row.kwhSales != null ? row.kwhSales.toFixed(2) : '—'}
+                    </td>
+
+                    {/* Rates */}
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                      {row.masterUnitRate != null ? `LKR ${row.masterUnitRate.toFixed(2)}` : '—'}
+                    </td>
+                    <td style={{ 
+                      padding: '0.6rem 0.85rem', 
+                      fontFamily: 'monospace', 
+                      whiteSpace: 'nowrap',
+                      background: hasRateMismatch ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
+                      color: hasRateMismatch ? '#fbbf24' : 'inherit'
+                    }}>
+                      {row.ngenUnitRate != null ? `LKR ${row.ngenUnitRate.toFixed(2)}` : '—'}
+                      {hasRateMismatch && <span style={{ marginLeft: 4, cursor: 'help' }} title="Unit Rate differs from Master Data. Master Data rate will be used.">⚠</span>}
+                    </td>
+
+                    {/* Set Off & Payment */}
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: '#ef4444', whiteSpace: 'nowrap' }}>
+                      {row.billSetOff != null ? `LKR ${row.billSetOff.toLocaleString()}` : '—'}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#6366f1', whiteSpace: 'nowrap' }}>
+                      {row.paymentSettled != null ? `LKR ${row.paymentSettled.toLocaleString()}` : '—'}
+                    </td>
+
+                    <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
+                    <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        {onCorrectRow && <button onClick={() => onCorrectRow(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
+                        {row.status === 'ERROR' && onDeleteRows && (
+                          <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedRow === i && (
+                    <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
+                      <td colSpan={17} style={{ padding: '1rem 1.5rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          <div><strong>Address:</strong> {row.customerAddress || '—'}</div>
+                          <div><strong>Ref No:</strong> {row.refNo || '—'}</div>
+                          <div><strong>Mobile:</strong> {row.mobileNo || '—'}</div>
+                          <div><strong>Prev Reading Date:</strong> {row.prevReadingDate || '—'}</div>
+                          <div><strong>Curr Reading Date:</strong> {row.currReadingDate || '—'}</div>
+                          <div><strong>Sales Amount:</strong> {row.salesAmount != null ? `LKR ${Number(row.salesAmount).toLocaleString()}` : '—'}</div>
+                        </div>
+                        {row.errors?.length > 0 && (
+                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                            <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                            <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
+                          </div>
+                        )}
+                        {row.warnings?.length > 0 && (
+                          <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                            <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                            <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
                   )}
-                </td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: '#ef4444' }}>
-                  {row.billSetOff != null ? `LKR ${row.billSetOff.toLocaleString()}` : '—'}
-                </td>
-                <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#6366f1' }}>
-                  {row.paymentSettled != null ? `LKR ${row.paymentSettled.toLocaleString()}` : '—'}
-                </td>
-                <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
-                <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    {onCorrectRow && <button onClick={() => onCorrectRow(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
-                    {row.status === 'ERROR' && onDeleteRow && (
-                      <button onClick={() => onDeleteRow(row)} title="Delete this error record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                        <Trash2 size={12} /> Delete
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
-              {expandedRow === i && (
-                <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
-                  <td colSpan={11} style={{ padding: '1rem 1.5rem' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                      <div><strong>Address:</strong> {row.customerAddress || '—'}</div>
-                      <div><strong>Ref No:</strong> {row.refNo || '—'}</div>
-                      <div><strong>Mobile:</strong> {row.mobileNo || '—'}</div>
-                      <div><strong>Prev Reading Date:</strong> {row.prevReadingDate || '—'}</div>
-                      <div><strong>Curr Reading Date:</strong> {row.currReadingDate || '—'}</div>
-                      <div><strong>Sales Amount:</strong> {row.salesAmount != null ? `LKR ${Number(row.salesAmount).toLocaleString()}` : '—'}</div>
-                    </div>
-                    {row.errors?.length > 0 && (
-                      <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                        <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                        <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
-                      </div>
-                    )}
-                    {row.warnings?.length > 0 && (
-                      <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                        <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                        <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 };
@@ -510,6 +945,85 @@ const UploadPage = () => {
       const nextVal = typeof val === 'function' ? val(current) : val;
       return { ...prev, [wizardStep]: { ...prev[wizardStep], deletedRows: nextVal } };
     });
+  };
+
+  const isolateInvalidAccountRows = (data) => {
+    if (!data || !data.rows) return data;
+    
+    const rawRows = data.rows;
+    const validRows = [];
+    const autoRejected = [];
+    
+    rawRows.forEach(row => {
+      if (isAccountEmpty(row.accountNo)) {
+        // Empty / blank Account No
+        autoRejected.push({
+          rowNum: row.rowNum,
+          accountNo: '',
+          customerName: row.customerName || '—',
+          errors: ["Account Number is required – Account Number cannot be empty."],
+          status: "ERROR",
+          deletedAt: new Date().toISOString(),
+          deletedBy: "System (Auto-Rejected)",
+          wizardStep,
+          stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
+          isAutoRejected: true,
+          rowData: { ...row }
+        });
+      } else if (isAccountInvalid(row.accountNo)) {
+        // Non-empty but non-numeric / wrong-length Account No
+        autoRejected.push({
+          rowNum: row.rowNum,
+          accountNo: row.accountNo || '—',
+          customerName: row.customerName || '—',
+          errors: ["Invalid Account Number – Only numeric values are allowed."],
+          status: "ERROR",
+          deletedAt: new Date().toISOString(),
+          deletedBy: "System (Auto-Rejected)",
+          wizardStep,
+          stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
+          isAutoRejected: true,
+          rowData: { ...row }
+        });
+      } else {
+        validRows.push(row);
+      }
+    });
+
+    if (autoRejected.length > 0) {
+      setDeletedRows(prev => {
+        const existingRowNums = new Set(prev.map(p => p.rowNum));
+        const filteredAutoRejected = autoRejected.filter(r => !existingRowNums.has(r.rowNum));
+        return [...prev, ...filteredAutoRejected];
+      });
+      
+      setRowCorrections(prev => {
+        const copy = { ...prev };
+        autoRejected.forEach(row => {
+          const key = row.rowNum || row.accountNo;
+          copy[key] = { deleted: true };
+        });
+        return copy;
+      });
+      
+      const totalRows = validRows.length;
+      const errorCount = validRows.filter(r => r.status === 'ERROR').length;
+      const warningCount = validRows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+      const matchedCount = validRows.filter(r => r.customerExists).length;
+      const unmatchedCount = validRows.filter(r => !r.customerExists).length;
+      
+      return {
+        ...data,
+        rows: validRows,
+        totalRows,
+        errorCount,
+        warningCount: warningCount || 0,
+        matchedCount: matchedCount || 0,
+        unmatchedCount: unmatchedCount || 0
+      };
+    }
+    
+    return data;
   };
 
   const [uploading, setUploading] = useState(false);
@@ -618,8 +1132,8 @@ const UploadPage = () => {
   // ── Deleted Rows Audit Log ─────────────────────────────────────────────
   const [showDeletedLog, setShowDeletedLog] = useState(false);
 
-  const handleCorrectRow = (row) => {
-    setCorrectingRow(row);
+  const handleCorrectRow = (row, isFromDeletedLog = false) => {
+    setCorrectingRow({ ...row, isFromDeletedLog });
     setCorrectingFields({ ...row });
   };
 
@@ -637,6 +1151,134 @@ const UploadPage = () => {
       updated.paymentSettled = sales * rate - (parseFloat(updated.billSetOff) || 0);
     }
 
+    if (correctingRow.isFromDeletedLog) {
+      const acc = updated.accountNo || '';
+      const newErrs = [];
+      if (wizardStep === 1) {
+        if (!acc.trim()) {
+          newErrs.push("Account Number is required \u2013 Account Number cannot be empty.");
+        } else if (!/^\d+$/.test(acc.trim())) {
+          newErrs.push("Invalid Account Number \u2013 Only numeric values are allowed.");
+        } else if (acc.trim().length !== 10) {
+          newErrs.push("Account No must be a 10-digit numeric value");
+        }
+        if (!(updated.customerName || '').trim()) newErrs.push("Customer Name is missing");
+        if (!(updated.customerAddress || '').trim()) newErrs.push("Address is missing");
+        if (!(updated.refNo || '').trim()) newErrs.push("Ref. No. is missing");
+        if (!(updated.costCode || '').trim()) newErrs.push("Cost Code is missing");
+        if (!(updated.mobileNo || '').trim()) newErrs.push("Mobile Number is missing");
+        if (updated.panelCapacity === undefined || updated.panelCapacity === null || String(updated.panelCapacity).trim() === '') {
+          newErrs.push("PANEL CAPACITY is missing");
+        }
+        if (!(updated.agreementDate || '').trim()) newErrs.push("AGREEMENT DATE is missing");
+        if (!(updated.bankCode || '').trim()) newErrs.push("Bank Code is missing");
+        if (!(updated.branchCode || '').trim()) newErrs.push("Branch Code is missing");
+        if (!(updated.bankAccountNo || '').trim()) newErrs.push("Bank Account No is missing");
+        if (!(updated.solarType || '').trim()) newErrs.push("TYPE (Solar Type) is missing");
+        if (updated.unitRate === undefined || updated.unitRate === null || String(updated.unitRate).trim() === '') {
+          newErrs.push("UNIT RATE is missing");
+        }
+        if (!(updated.tariffType || '').trim()) newErrs.push("FIX/VARIABLE is missing");
+        if (!(updated.billingMode || '').trim()) newErrs.push("Exp (Billing Mode) is missing");
+      } else if (wizardStep === 2) {
+        if (!acc.trim()) {
+          newErrs.push("Account Number is required \u2013 Account Number cannot be empty.");
+        } else if (!/^\d+$/.test(acc.trim())) {
+          newErrs.push("Invalid Account Number \u2013 Only numeric values are allowed.");
+        } else if (acc.trim().length !== 10) {
+          newErrs.push("Account No must be a 10-digit numeric value");
+        }
+        if (!updated.prevReadingDate) newErrs.push("Previous Reading Date is missing");
+        if (!updated.currReadingDate) newErrs.push("Current Reading Date is missing");
+      } else if (wizardStep === 3) {
+        if (!acc.trim()) {
+          newErrs.push("Account Number is required \u2013 Account Number cannot be empty.");
+        } else if (!/^\d+$/.test(acc.trim())) {
+          newErrs.push("Invalid Account Number \u2013 Only numeric values are allowed.");
+        } else if (acc.trim().length !== 10) {
+          newErrs.push("Account No must be a 10-digit numeric value");
+        }
+        if (updated.kwhImport === undefined || updated.kwhImport === '') newErrs.push("kwhImport is missing");
+        if (updated.kwhExport === undefined || updated.kwhExport === '') newErrs.push("kwhExport is missing");
+      }
+
+      const errors = newErrs;
+      const status = errors.length === 0 ? 'VALID' : 'ERROR';
+
+      if (status === 'VALID') {
+        setDeletedRows(prev => prev.filter(d => d.rowNum !== correctingRow.rowNum || d.accountNo !== correctingRow.accountNo));
+        setRowCorrections(prev => {
+          const copy = { ...prev };
+          const oldKey = correctingRow.rowNum || correctingRow.accountNo;
+          delete copy[oldKey];
+          
+          const restoredKey = updated.rowNum || updated.accountNo;
+          copy[restoredKey] = updated;
+          return copy;
+        });
+
+        setPreview(prev => {
+          if (!prev) return prev;
+          const rows = [...(prev.rows || [])];
+          const restored = {
+            ...(correctingRow.rowData || {}),
+            ...updated,
+            errors: [],
+            status: 'VALID'
+          };
+          rows.push(restored);
+          rows.sort((a, b) => (a.rowNum || 0) - (b.rowNum || 0));
+
+          const totalRows = rows.length;
+          const errorCount = rows.filter(r => r.status === 'ERROR').length;
+          const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+          const matchedCount = rows.filter(r => r.customerExists).length;
+          const unmatchedCount = rows.filter(r => !r.customerExists).length;
+
+          return {
+            ...prev,
+            rows,
+            totalRows,
+            errorCount,
+            warningCount: warningCount || 0,
+            matchedCount: matchedCount || 0,
+            unmatchedCount: unmatchedCount || 0
+          };
+        });
+        showToast(`Record #${correctingRow.rowNum} corrected and restored to preview.`, 'success');
+      } else {
+        setDeletedRows(prev => prev.map(d => {
+          const dKey = d.rowNum || d.accountNo;
+          if (dKey === key) {
+            return {
+              ...d,
+              accountNo: updated.accountNo || '—',
+              customerName: updated.customerName || '—',
+              errors,
+              status: 'ERROR',
+              deletedAt: new Date().toISOString(),
+              rowData: {
+                ...(d.rowData || {}),
+                ...updated
+              }
+            };
+          }
+          return d;
+        }));
+        setRowCorrections(prev => {
+          const copy = { ...prev };
+          const oldKey = correctingRow.rowNum || correctingRow.accountNo;
+          const newKey = updated.rowNum || updated.accountNo;
+          delete copy[oldKey];
+          copy[newKey] = { ...updated, deleted: true };
+          return copy;
+        });
+        showToast(`Record #${correctingRow.rowNum} updated but is still invalid.`, 'warning');
+      }
+      setCorrectingRow(null);
+      return;
+    }
+
     setPreview(prev => {
       if (!prev || !prev.rows) return prev;
       const newRows = prev.rows.map(r => {
@@ -648,8 +1290,11 @@ const UploadPage = () => {
           if (wizardStep === 1) {
             const acc = updated.accountNo || '';
             const newErrs = [];
-            if (!acc.trim()) newErrs.push("Account No is missing");
-            else if (acc.trim().length !== 10 || !/^\d+$/.test(acc.trim())) {
+            if (!acc.trim()) {
+              newErrs.push("Account No is missing");
+            } else if (!/^\d+$/.test(acc.trim())) {
+              newErrs.push("Invalid Account Number: Only numeric values are allowed.");
+            } else if (acc.trim().length !== 10) {
               newErrs.push("Account No must be a 10-digit numeric value");
             }
             if (!(updated.customerName || '').trim()) {
@@ -697,13 +1342,29 @@ const UploadPage = () => {
             errors = newErrs;
             status = errors.length === 0 ? 'VALID' : 'ERROR';
           } else if (wizardStep === 2) {
+            const acc = updated.accountNo || '';
             const newErrs = [];
+            if (!acc.trim()) {
+              newErrs.push("Account No is missing");
+            } else if (!/^\d+$/.test(acc.trim())) {
+              newErrs.push("Invalid Account Number: Only numeric values are allowed.");
+            } else if (acc.trim().length !== 10) {
+              newErrs.push("Account No must be a 10-digit numeric value");
+            }
             if (!updated.prevReadingDate) newErrs.push("Previous Reading Date is missing");
             if (!updated.currReadingDate) newErrs.push("Current Reading Date is missing");
             errors = newErrs;
             status = errors.length === 0 ? 'VALID' : 'ERROR';
           } else if (wizardStep === 3) {
+            const acc = updated.accountNo || '';
             const newErrs = [];
+            if (!acc.trim()) {
+              newErrs.push("Account No is missing");
+            } else if (!/^\d+$/.test(acc.trim())) {
+              newErrs.push("Invalid Account Number: Only numeric values are allowed.");
+            } else if (acc.trim().length !== 10) {
+              newErrs.push("Account No must be a 10-digit numeric value");
+            }
             if (updated.kwhImport === undefined || updated.kwhImport === '') newErrs.push("kwhImport is missing");
             if (updated.kwhExport === undefined || updated.kwhExport === '') newErrs.push("kwhExport is missing");
             errors = newErrs;
@@ -737,19 +1398,95 @@ const UploadPage = () => {
     showToast('Row correction stored. Revalidation will run upon approval.', 'success');
   };
 
-  const handleDeleteRow = async (row) => {
-    const rowLabel = row.accountNo ? `Account No: ${row.accountNo}` : `Row #${row.rowNum}`;
+  const handleRestoreRow = (deletedRow) => {
+    setDeletedRows(prev => prev.filter(d => d.rowNum !== deletedRow.rowNum || d.accountNo !== deletedRow.accountNo));
+    
+    setRowCorrections(prev => {
+      const copy = { ...prev };
+      const key = deletedRow.rowNum || deletedRow.accountNo;
+      delete copy[key];
+      return copy;
+    });
+    
+    setPreview(prev => {
+      if (!prev) return prev;
+      const rows = [...(prev.rows || [])];
+      
+      const restored = { 
+        ...(deletedRow.rowData || {}),
+        status: deletedRow.status || 'ERROR',
+        errors: deletedRow.errors || []
+      };
+      
+      rows.push(restored);
+      rows.sort((a, b) => (a.rowNum || 0) - (b.rowNum || 0));
+      
+      const totalRows = rows.length;
+      const errorCount = rows.filter(r => r.status === 'ERROR').length;
+      const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+      const matchedCount = rows.filter(r => r.customerExists).length;
+      const unmatchedCount = rows.filter(r => !r.customerExists).length;
+      
+      return {
+        ...prev,
+        rows,
+        totalRows,
+        errorCount,
+        warningCount: warningCount || 0,
+        matchedCount: matchedCount || 0,
+        unmatchedCount: unmatchedCount || 0
+      };
+    });
+    
+    showToast(`Record #${deletedRow.rowNum} restored to preview.`, 'info');
+  };
+
+  const handlePermanentDeleteRow = async (row) => {
     const confirmed = await showConfirm({
-      title: 'Delete Error Record?',
-      message: `Are you sure you want to remove this error record from the current batch?\n\n${rowLabel}\nErrors: ${(row.errors || []).join(', ')}\n\nThis record will be excluded from the import. This action cannot be undone.`,
-      confirmText: 'Delete Record',
+      title: 'Permanently Delete Record',
+      message: `Are you sure you want to permanently delete record Row #${row.rowNum}? This action cannot be undone.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+    
+    setDeletedRows(prev => prev.filter(d => d.rowNum !== row.rowNum || d.accountNo !== row.accountNo));
+    
+    setRowCorrections(prev => {
+      const copy = { ...prev };
+      const key = row.rowNum || row.accountNo;
+      copy[key] = { deleted: true };
+      return copy;
+    });
+    
+    showToast(`Record #${row.rowNum} permanently deleted.`, 'success');
+  };
+
+  const handleDeleteRows = async (rowsToDelete) => {
+    if (!rowsToDelete || !rowsToDelete.length) return;
+
+    const count = rowsToDelete.length;
+    const isSingle = count === 1;
+    const rowLabel = isSingle
+      ? (rowsToDelete[0].accountNo ? `Account No: ${rowsToDelete[0].accountNo}` : `Row #${rowsToDelete[0].rowNum}`)
+      : `${count} records`;
+
+    const messageText = isSingle
+      ? `Are you sure you want to remove this error record from the current batch?\n\n${rowLabel}\nErrors: ${(rowsToDelete[0].errors || []).join(', ')}\n\nThis record will be excluded from the import. This action cannot be undone.`
+      : `Are you sure you want to remove the ${count} selected error records from the current batch?\n\nThese records will be excluded from the import. This action cannot be undone.`;
+
+    const confirmed = await showConfirm({
+      title: isSingle ? 'Delete Error Record?' : 'Delete Multiple Error Records?',
+      message: messageText,
+      confirmText: isSingle ? 'Delete Record' : `Delete ${count} Records`,
       cancelText: 'Cancel',
       type: 'danger'
     });
     if (!confirmed) return;
 
-    // Record the deletion for audit
-    const auditEntry = {
+    // Record the deletions for audit log
+    const auditEntries = rowsToDelete.map(row => ({
       rowNum: row.rowNum,
       accountNo: row.accountNo || '—',
       customerName: row.customerName || '—',
@@ -760,16 +1497,16 @@ const UploadPage = () => {
       wizardStep,
       stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
       rowData: { ...row }
-    };
-    setDeletedRows(prev => [...prev, auditEntry]);
+    }));
+    setDeletedRows(prev => [...prev, ...auditEntries]);
 
     // Remove from preview
     setPreview(prev => {
       if (!prev || !prev.rows) return prev;
+      const delKeys = new Set(rowsToDelete.map(row => row.rowNum || row.accountNo));
       const newRows = prev.rows.filter(r => {
         const rKey = r.rowNum || r.accountNo;
-        const delKey = row.rowNum || row.accountNo;
-        return rKey !== delKey;
+        return !delKeys.has(rKey);
       });
       const errorCount = newRows.filter(r => r.status === 'ERROR').length;
       const warningCount = newRows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
@@ -781,17 +1518,19 @@ const UploadPage = () => {
         rows: newRows,
         totalRows: newRows.length,
         errorCount,
-        warningCount: warningCount || prev.warningCount,
-        matchedCount: matchedCount || prev.matchedCount,
-        unmatchedCount: unmatchedCount || prev.unmatchedCount,
+        warningCount: warningCount || 0,
+        matchedCount: matchedCount || 0,
+        unmatchedCount: unmatchedCount || 0,
       };
     });
 
-    // Also remove any pending correction for this row
-    const key = row.rowNum || row.accountNo;
+    // Mark as deleted in corrections so backend skips during stage/merging
     setRowCorrections(prev => {
       const copy = { ...prev };
-      delete copy[key];
+      rowsToDelete.forEach(row => {
+        const key = row.rowNum || row.accountNo;
+        copy[key] = { deleted: true };
+      });
       return copy;
     });
 
@@ -1010,7 +1749,8 @@ const UploadPage = () => {
       const res = await authFetch('/api/officer/import/master-data/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Preview failed.', 'error'); return; }
-      setPreview(data);
+      const isolated = isolateInvalidAccountRows(data);
+      setPreview(isolated);
       showToast(`Preview loaded: ${data.totalRows} rows, ${data.errorCount} errors.`, data.errorCount > 0 ? 'warning' : 'success');
     } catch (e) {
       showToast('Preview failed: ' + e.message, 'error');
@@ -1054,7 +1794,8 @@ const UploadPage = () => {
       const res = await authFetch('/api/officer/import/ceb-assist/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Preview failed.', 'error'); return; }
-      setPreview(data);
+      const isolated = isolateInvalidAccountRows(data);
+      setPreview(isolated);
       showToast(`Preview loaded: ${data.totalRows} rows, ${data.matchedCount} matched, ${data.unmatchedCount} unmatched.`,
         data.unmatchedCount > 0 ? 'warning' : 'success');
     } catch (e) {
@@ -1097,7 +1838,8 @@ const UploadPage = () => {
       const res = await authFetch('/api/officer/import/ngen/upload', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Preview failed.', 'error'); return; }
-      setPreview(data);
+      const isolated = isolateInvalidAccountRows(data);
+      setPreview(isolated);
       showToast(`Preview loaded: ${data.totalRows} rows, ${data.warningCount} unit rate warnings.`,
         data.warningCount > 0 ? 'warning' : 'success');
     } catch (e) {
@@ -1136,6 +1878,100 @@ const UploadPage = () => {
   // ════════════════════════════════════════════════════════════════════════
   //  RENDER HELPERS
   // ════════════════════════════════════════════════════════════════════════
+
+  const renderRejectedRecordsSection = (step) => {
+    const list = deletedRows.filter(d => d.wizardStep === step);
+    if (list.length === 0) return null;
+
+    return (
+      <div style={{ marginTop: '1.25rem' }}>
+        <button
+          onClick={() => setShowDeletedLog(!showDeletedLog)}
+          style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.5rem', 
+            background: 'rgba(239,68,68,0.06)', 
+            border: '1px solid rgba(239,68,68,0.18)', 
+            borderRadius: 10, 
+            padding: '0.7rem 1.2rem', 
+            cursor: 'pointer', 
+            color: '#f87171', 
+            fontWeight: 600, 
+            fontSize: '0.84rem', 
+            width: '100%', 
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Trash2 size={15} />
+            Deleted / Rejected Records ({list.length})
+          </span>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
+        </button>
+        {showDeletedLog && (
+          <div style={{ border: '1px solid rgba(239,68,68,0.12)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', background: 'rgba(20,20,25,0.4)', backdropFilter: 'blur(10px)' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(239,68,68,0.05)', borderBottom: '1px solid rgba(239,68,68,0.1)' }}>
+                  {['Row', 'Account No', 'Customer Name', 'Rejection Reason', 'Date / Time', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#f87171', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((d, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)', transition: 'background 0.15s ease' }}>
+                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, color: 'white' }}>
+                      {d.accountNo && String(d.accountNo).trim() !== '' && d.accountNo !== '—'
+                        ? d.accountNo
+                        : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 700, fontSize: '0.73rem', background: 'rgba(239,68,68,0.1)', padding: '0.15rem 0.45rem', borderRadius: 4 }}>Empty</span>
+                      }
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-secondary)' }}>{d.customerName || '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: '#f87171', fontSize: '0.74rem', fontWeight: 500 }}>
+                      {d.errors && d.errors.length > 0 ? d.errors.join(', ') : 'Deleted by user'}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                      {new Date(d.deletedAt).toLocaleString()}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem' }}>
+                      <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                        <button 
+                          onClick={() => handleRestoreRow(d)} 
+                          title="Restore this record to the main list"
+                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                        >
+                          Restore
+                        </button>
+                        <button 
+                          onClick={() => handleCorrectRow(d, true)} 
+                          title="Edit and correct this record"
+                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handlePermanentDeleteRow(d)} 
+                          title="Permanently remove this record"
+                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderStep1 = () => (
     <div>
@@ -1196,48 +2032,10 @@ const UploadPage = () => {
               Show errors only
             </label>
           </div>
-          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRow={handleDeleteRow} />
+          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
 
           {/* Deleted Records Audit Log */}
-          {deletedRows.filter(d => d.wizardStep === 1).length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <button
-                onClick={() => setShowDeletedLog(!showDeletedLog)}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', width: '100%', justifyContent: 'space-between' }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Trash2 size={14} />
-                  Deleted Records ({deletedRows.filter(d => d.wizardStep === 1).length})
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
-              </button>
-              {showDeletedLog && (
-                <div style={{ border: '1px solid rgba(239,68,68,0.15)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(239,68,68,0.06)' }}>
-                        {['Row', 'Account No', 'Customer', 'Errors', 'Deleted By', 'Deleted At'].map(h => (
-                          <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#ef4444', fontSize: '0.7rem', textTransform: 'uppercase' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deletedRows.filter(d => d.wizardStep === 1).map((d, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
-                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', fontWeight: 600 }}>{d.accountNo}</td>
-                          <td style={{ padding: '0.45rem 0.75rem' }}>{d.customerName}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', color: '#ef4444', fontSize: '0.72rem' }}>{d.errors.join(', ')}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)' }}>{d.deletedBy}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{new Date(d.deletedAt).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+          {renderRejectedRecordsSection(1)}
         </div>
       )}
     </div>
@@ -1300,48 +2098,10 @@ const UploadPage = () => {
               Show errors / unmatched only
             </label>
           </div>
-          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRow={handleDeleteRow} />
+          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
 
           {/* Deleted Records Audit Log */}
-          {deletedRows.filter(d => d.wizardStep === 2).length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <button
-                onClick={() => setShowDeletedLog(!showDeletedLog)}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', width: '100%', justifyContent: 'space-between' }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Trash2 size={14} />
-                  Deleted Records ({deletedRows.filter(d => d.wizardStep === 2).length})
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
-              </button>
-              {showDeletedLog && (
-                <div style={{ border: '1px solid rgba(239,68,68,0.15)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(239,68,68,0.06)' }}>
-                        {['Row', 'Account No', 'Customer', 'Errors', 'Deleted By', 'Deleted At'].map(h => (
-                          <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#ef4444', fontSize: '0.7rem', textTransform: 'uppercase' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deletedRows.filter(d => d.wizardStep === 2).map((d, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
-                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', fontWeight: 600 }}>{d.accountNo}</td>
-                          <td style={{ padding: '0.45rem 0.75rem' }}>{d.customerName}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', color: '#ef4444', fontSize: '0.72rem' }}>{d.errors.join(', ')}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)' }}>{d.deletedBy}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{new Date(d.deletedAt).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+          {renderRejectedRecordsSection(2)}
         </div>
       )}
     </div>
@@ -1408,48 +2168,10 @@ const UploadPage = () => {
               Show errors / warnings only
             </label>
           </div>
-          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRow={handleDeleteRow} />
+          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
 
           {/* Deleted Records Audit Log */}
-          {deletedRows.filter(d => d.wizardStep === 3).length > 0 && (
-            <div style={{ marginTop: '1rem' }}>
-              <button
-                onClick={() => setShowDeletedLog(!showDeletedLog)}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 8, padding: '0.6rem 1rem', cursor: 'pointer', color: '#ef4444', fontWeight: 600, fontSize: '0.82rem', width: '100%', justifyContent: 'space-between' }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Trash2 size={14} />
-                  Deleted Records ({deletedRows.filter(d => d.wizardStep === 3).length})
-                </span>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
-              </button>
-              {showDeletedLog && (
-                <div style={{ border: '1px solid rgba(239,68,68,0.15)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
-                    <thead>
-                      <tr style={{ background: 'rgba(239,68,68,0.06)' }}>
-                        {['Row', 'Account No', 'Customer', 'Errors', 'Deleted By', 'Deleted At'].map(h => (
-                          <th key={h} style={{ padding: '0.5rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#ef4444', fontSize: '0.7rem', textTransform: 'uppercase' }}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {deletedRows.filter(d => d.wizardStep === 3).map((d, i) => (
-                        <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
-                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', fontWeight: 600 }}>{d.accountNo}</td>
-                          <td style={{ padding: '0.45rem 0.75rem' }}>{d.customerName}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', color: '#ef4444', fontSize: '0.72rem' }}>{d.errors.join(', ')}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', color: 'var(--text-secondary)' }}>{d.deletedBy}</td>
-                          <td style={{ padding: '0.45rem 0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>{new Date(d.deletedAt).toLocaleString()}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
+          {renderRejectedRecordsSection(3)}
         </div>
       )}
     </div>
@@ -2004,7 +2726,7 @@ const UploadPage = () => {
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                    <input type="text" value={correctingFields.accountNo || ''} readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'not-allowed' }} />
+                    <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
@@ -2024,7 +2746,7 @@ const UploadPage = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                      <input type="text" value={correctingFields.accountNo || ''} readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'not-allowed' }} />
+                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>

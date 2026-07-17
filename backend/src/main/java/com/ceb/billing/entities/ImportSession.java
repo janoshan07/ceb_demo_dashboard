@@ -37,6 +37,10 @@ public class ImportSession {
     @Column(name = "ngen_batch_id")
     private Long ngenBatchId;
 
+    /** FK to the ImportBatch for NPAY (Step 4) */
+    @Column(name = "npay_batch_id")
+    private Long npayBatchId;
+
     /** Number of customers imported from Master Data */
     @Column(name = "master_customer_count")
     private Integer masterCustomerCount = 0;
@@ -48,6 +52,10 @@ public class ImportSession {
     /** Number of billing records created/updated from NGEN */
     @Column(name = "ngen_count")
     private Integer ngenCount = 0;
+
+    /** Number of records imported from NPAY */
+    @Column(name = "npay_count")
+    private Integer npayCount = 0;
 
     @Column(name = "created_by", length = 100)
     private String createdBy;
@@ -98,6 +106,9 @@ public class ImportSession {
     public Long getNgenBatchId() { return ngenBatchId; }
     public void setNgenBatchId(Long ngenBatchId) { this.ngenBatchId = ngenBatchId; }
 
+    public Long getNpayBatchId() { return npayBatchId; }
+    public void setNpayBatchId(Long npayBatchId) { this.npayBatchId = npayBatchId; }
+
     public Integer getMasterCustomerCount() { return masterCustomerCount; }
     public void setMasterCustomerCount(Integer masterCustomerCount) { this.masterCustomerCount = masterCustomerCount; }
 
@@ -106,6 +117,9 @@ public class ImportSession {
 
     public Integer getNgenCount() { return ngenCount; }
     public void setNgenCount(Integer ngenCount) { this.ngenCount = ngenCount; }
+
+    public Integer getNpayCount() { return npayCount; }
+    public void setNpayCount(Integer npayCount) { this.npayCount = npayCount; }
 
     public String getCreatedBy() { return createdBy; }
     public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }

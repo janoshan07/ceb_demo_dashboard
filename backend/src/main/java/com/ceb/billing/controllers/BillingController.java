@@ -291,6 +291,10 @@ public class BillingController {
         map.put("exportUnits", record.getExportUnits());
         map.put("unitCost", record.getUnitCost());
         map.put("billingMode", record.getBillingMode());
+        map.put("energyPurchase", record.getEnergyPurchase());
+        map.put("billSetOff", record.getBillSetOff());
+        map.put("retentionMoney", record.getRetentionMoney());
+        map.put("payment", record.getPayment());
         return map;
     }
 
@@ -436,6 +440,9 @@ public class BillingController {
         }
         if (values.containsKey("payment") && values.get("payment") != null && !values.get("payment").toString().isEmpty()) {
             record.setPayment(Double.valueOf(values.get("payment").toString()));
+        }
+        if (values.containsKey("energyPurchase") && values.get("energyPurchase") != null && !values.get("energyPurchase").toString().isEmpty()) {
+            record.setEnergyPurchase(Double.valueOf(values.get("energyPurchase").toString()));
         }
         record.calculateFields();
     }

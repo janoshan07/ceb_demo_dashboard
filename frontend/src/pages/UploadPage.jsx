@@ -850,6 +850,274 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  STAT CARD
 // ═══════════════════════════════════════════════════════════════════════════
+
+const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [selectedKeys, setSelectedKeys] = useState(new Set());
+  const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+
+  const errorRows = displayed.filter(r => r.status === 'ERROR');
+  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+
+  const renderCell = (val, prefix = '') => {
+    if (val === undefined || val === null || String(val).trim() === '') {
+      return <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>;
+    }
+    return prefix ? `${prefix}${val}` : String(val);
+  };
+
+  const normalizeSolarType = (solarType) => {
+    if (!solarType) return "";
+    const s = String(solarType).trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+    if (s === "ACCOUNTING" || s === "NETACCOUNTING") return "Net Accounting";
+    if (s === "METERING" || s === "NETMETERING") return "Net Metering";
+    if (s === "PLUS" || s === "NETPLUS") return "Net Plus";
+    if (s === "PLUSPLUS" || s === "NETPLUSPLUS") return "Net Plus Plus";
+    return String(solarType).trim();
+  };
+
+  const isNetTypeMismatch = (row) => {
+    if (!row.solarType || !row.npayNetType) return false;
+    const t1 = normalizeSolarType(row.solarType);
+    const t2 = normalizeSolarType(row.npayNetType);
+    return t1 !== t2;
+  };
+
+  const isNameMismatch = (row) => {
+    if (!row.customerName || !row.npayName || row.customerName === "—" || row.npayName === "—") return false;
+    return row.customerName.trim().toLowerCase() !== row.npayName.trim().toLowerCase();
+  };
+
+  React.useEffect(() => {
+    setSelectedKeys(prev => {
+      const next = new Set();
+      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      prev.forEach(k => {
+        if (currentValidKeys.has(k)) next.add(k);
+      });
+      return next;
+    });
+  }, [rows, filterErrors]);
+
+  if (!displayed.length) return (
+    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+      <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+      <div style={{ fontWeight: 600 }}>All records are valid!</div>
+    </div>
+  );
+
+  return (
+    <div>
+      {selectedKeys.size > 0 && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.2)',
+          borderRadius: 10,
+          padding: '0.75rem 1.25rem',
+          marginBottom: '1rem',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          animation: 'fadeIn 0.2s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
+            <Trash2 size={16} />
+            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+          </div>
+          <button
+            onClick={() => {
+              const rowsToDelete = displayed.filter(r => selectedKeys.has(r.rowNum || r.accountNo));
+              onDeleteRows(rowsToDelete);
+            }}
+            style={{
+              background: '#ef4444',
+              border: 'none',
+              color: 'white',
+              borderRadius: 8,
+              padding: '0.45rem 1.1rem',
+              cursor: 'pointer',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)'
+            }}
+          >
+            Delete Selected ({selectedKeys.size})
+          </button>
+        </div>
+      )}
+
+      <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+          <thead>
+            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+              <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
+                <input 
+                  type="checkbox"
+                  checked={isAllSelected}
+                  ref={el => { if (el) el.indeterminate = isSomeSelected; }}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                    } else {
+                      setSelectedKeys(new Set());
+                    }
+                  }}
+                  style={{ cursor: 'pointer', width: 14, height: 14 }}
+                />
+              </th>
+              {[
+                'Row', 'Account No', 'Customer (NPAY)', 'Customer (Master)',
+                'Net Type (NPAY)', 'Net Type (Master)', 'Energy Purchase', 'Bill Set Off',
+                'Retention Money', 'Payment', 'Status', 'Actions'
+              ].map(h => (
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {displayed.map((row, i) => {
+              const hasNetTypeMismatch = isNetTypeMismatch(row);
+              const hasNameMismatch = isNameMismatch(row);
+              const accInvalid = isAccountInvalid(row.accountNo);
+              const accEmpty = isAccountEmpty(row.accountNo);
+
+              return (
+                <React.Fragment key={i}>
+                  <tr 
+                    onClick={() => setExpandedRow(expandedRow === i ? null : i)}
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                  >
+                    <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                      {row.status === 'ERROR' ? (
+                        <input 
+                          type="checkbox"
+                          checked={selectedKeys.has(row.rowNum || row.accountNo)}
+                          onChange={(e) => {
+                            const key = row.rowNum || row.accountNo;
+                            setSelectedKeys(prev => {
+                              const copy = new Set(prev);
+                              if (e.target.checked) copy.add(key);
+                              else copy.delete(key);
+                              return copy;
+                            });
+                          }}
+                          style={{ cursor: 'pointer', width: 14, height: 14 }}
+                        />
+                      ) : null}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                    
+                    <td style={{ 
+                      padding: '0.6rem 0.85rem', 
+                      fontFamily: 'monospace', 
+                      fontWeight: 600,
+                      whiteSpace: 'nowrap',
+                      background: accEmpty || accInvalid ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                      color: accEmpty || accInvalid ? '#f87171' : 'inherit'
+                    }}>
+                      {accEmpty ? (
+                        <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>
+                      ) : (
+                        row.accountNo
+                      )}
+                      {accEmpty && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Empty</span>}
+                      {!accEmpty && accInvalid && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
+                    </td>
+
+                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.npayName)}</td>
+                    <td style={{ 
+                      padding: '0.6rem 0.85rem', 
+                      whiteSpace: 'nowrap',
+                      background: hasNameMismatch ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
+                      color: hasNameMismatch ? '#fbbf24' : 'inherit'
+                    }}>
+                      {renderCell(row.customerName)}
+                      {hasNameMismatch && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#fbbf24', color: '#1e1b4b', fontWeight: 600 }}>Mismatch</span>}
+                    </td>
+
+                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.npayNetType)}</td>
+                    <td style={{ 
+                      padding: '0.6rem 0.85rem', 
+                      whiteSpace: 'nowrap',
+                      background: hasNetTypeMismatch ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
+                      color: hasNetTypeMismatch ? '#f87171' : 'inherit',
+                      fontWeight: hasNetTypeMismatch ? 700 : 'normal'
+                    }}>
+                      {renderCell(row.solarType)}
+                      {hasNetTypeMismatch && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white' }}>Mismatch</span>}
+                    </td>
+
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>
+                      {row.energyPurchase != null ? `LKR ${Number(row.energyPurchase).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>
+                      {row.billSetOff != null ? `LKR ${Number(row.billSetOff).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>
+                      {row.retentionMoney != null ? `LKR ${Number(row.retentionMoney).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#6366f1' }}>
+                      {row.payment != null ? `LKR ${Number(row.payment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
+                    </td>
+
+                    <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
+                    <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
+                      <div style={{ display: 'flex', gap: '0.35rem' }}>
+                        {onCorrectRow && <button onClick={() => onCorrectRow(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
+                        {row.status === 'ERROR' && onDeleteRows && (
+                          <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <Trash2 size={12} /> Delete
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedRow === i && (
+                    <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
+                      <td colSpan={13} style={{ padding: '1rem 1.5rem' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          <div><strong>Address:</strong> {row.customerAddress || '—'}</div>
+                          <div><strong>Ref No:</strong> {row.refNo || '—'}</div>
+                          <div><strong>Mobile:</strong> {row.mobileNo || '—'}</div>
+                          <div><strong>Prev Reading Date (CEB):</strong> {row.prevReadingDate || '—'}</div>
+                          <div><strong>Curr Reading Date (CEB):</strong> {row.currReadingDate || '—'}</div>
+                          <div><strong>kWh Import (NGEN):</strong> {row.kwhImport ?? '—'}</div>
+                          <div><strong>kWh Export (NGEN):</strong> {row.kwhExport ?? '—'}</div>
+                          <div><strong>kWh Sales (NGEN):</strong> {row.kwhSales != null ? row.kwhSales.toFixed(2) : '—'}</div>
+                          <div><strong>Bank Code:</strong> {row.bankCode || '—'}</div>
+                          <div><strong>Branch Code:</strong> {row.branchCode || '—'}</div>
+                          <div><strong>Bank Account No:</strong> {row.bankAccountNo || '—'}</div>
+                          <div><strong>Unit Rate:</strong> {row.unitRate != null ? `LKR ${Number(row.unitRate).toFixed(2)}` : '—'}</div>
+                        </div>
+                        {row.errors?.length > 0 && (
+                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                            <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                            <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
+                          </div>
+                        )}
+                        {row.warnings?.length > 0 && (
+                          <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                            <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                            <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
 const StatCard = ({ label, value, color = 'var(--text-secondary)', icon }) => (
   <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
     {icon && <div style={{ color }}>{icon}</div>}
@@ -897,17 +1165,18 @@ const UploadPage = () => {
 
   // ── Wizard state ──────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState('wizard'); // 'wizard' | 'history'
-  const [wizardStep, setWizardStep] = useState(1); // 1, 2, 3
+  const [wizardStep, setWizardStep] = useState(1); // 1, 2, 3, 4
 
   // ── Session state ─────────────────────────────────────────────────────
-  const [session, setSession] = useState(null); // { sessionId, stage, masterCustomerCount, cebAssistCount, ngenCount }
+  const [session, setSession] = useState(null); // { sessionId, stage, masterCustomerCount, cebAssistCount, ngenCount, npayCount }
   const [sessionLoading, setSessionLoading] = useState(true);
 
   // ── Step state (per step) ─────────────────────────────────────────────
   const [stepData, setStepData] = useState({
     1: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
     2: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
-    3: { file: null, preview: null, rowCorrections: {}, deletedRows: [] }
+    3: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
+    4: { file: null, preview: null, rowCorrections: {}, deletedRows: [] }
   });
 
   const file = stepData[wizardStep]?.file || null;
@@ -1051,6 +1320,7 @@ const UploadPage = () => {
     { label: 'Master Data',  icon: <User size={16} /> },
     { label: 'CEB Assist',   icon: <Database size={16} /> },
     { label: 'NGEN Sheet',   icon: <Zap size={16} /> },
+    { label: 'NPAY Sheet',   icon: <FileText size={16} /> },
   ];
 
   // Stage → step mapping
@@ -1058,6 +1328,7 @@ const UploadPage = () => {
     if (!stage || stage === 'PENDING_MASTER') return 1;
     if (stage === 'MASTER_APPROVED') return 2;
     if (stage === 'CEB_APPROVED') return 3;
+    if (stage === 'NGEN_APPROVED') return 4;
     return 1;
   };
 
@@ -1065,14 +1336,15 @@ const UploadPage = () => {
     setStepData({
       1: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
       2: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
-      3: { file: null, preview: null, rowCorrections: {}, deletedRows: [] }
+      3: { file: null, preview: null, rowCorrections: {}, deletedRows: [] },
+      4: { file: null, preview: null, rowCorrections: {}, deletedRows: [] }
     });
   };
 
   const isStepAccessible = (stepNum) => {
     if (stepNum === 1) return true; // Step 1 is always accessible
     if (!session || !session.hasActiveSession) return false;
-    const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'COMPLETED'];
+    const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'NGEN_APPROVED', 'COMPLETED'];
     const completedUpTo = stageOrder.indexOf(session.stage);
     return completedUpTo >= stepNum - 1;
   };
@@ -1200,6 +1472,14 @@ const UploadPage = () => {
         }
         if (updated.kwhImport === undefined || updated.kwhImport === '') newErrs.push("kwhImport is missing");
         if (updated.kwhExport === undefined || updated.kwhExport === '') newErrs.push("kwhExport is missing");
+      } else if (wizardStep === 4) {
+        if (!acc.trim()) {
+          newErrs.push("Account Number is required \u2013 Account Number cannot be empty.");
+        } else if (!/^\d+$/.test(acc.trim())) {
+          newErrs.push("Invalid Account Number \u2013 Only numeric values are allowed.");
+        } else if (acc.trim().length !== 10) {
+          newErrs.push("Account No must be a 10-digit numeric value");
+        }
       }
 
       const errors = newErrs;
@@ -1367,6 +1647,18 @@ const UploadPage = () => {
             }
             if (updated.kwhImport === undefined || updated.kwhImport === '') newErrs.push("kwhImport is missing");
             if (updated.kwhExport === undefined || updated.kwhExport === '') newErrs.push("kwhExport is missing");
+            errors = newErrs;
+            status = errors.length === 0 ? 'VALID' : 'ERROR';
+          } else if (wizardStep === 4) {
+            const acc = updated.accountNo || '';
+            const newErrs = [];
+            if (!acc.trim()) {
+              newErrs.push("Account Number is required \u2013 Account Number cannot be empty.");
+            } else if (!/^\d+$/.test(acc.trim())) {
+              newErrs.push("Invalid Account Number \u2013 Only numeric values are allowed.");
+            } else if (acc.trim().length !== 10) {
+              newErrs.push("Account No must be a 10-digit numeric value");
+            }
             errors = newErrs;
             status = errors.length === 0 ? 'VALID' : 'ERROR';
           }
@@ -1860,6 +2152,49 @@ const UploadPage = () => {
       const res = await authFetch(`/api/officer/import/ngen/${session.sessionId}/approve`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
+      showToast(`✅ NGEN data merged! ${data.ngenCount} records cached.`, 'success');
+      setSession(prev => ({ ...prev, stage: 'NGEN_APPROVED', ngenCount: data.ngenCount }));
+      setWizardStep(4);
+    } catch (e) {
+      showToast('Approval failed: ' + e.message, 'error');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // ── Step 4: NPAY ──────────────────────────────────────────────────────
+  const handleNpayPreview = async () => {
+    if (!file) { showToast('Please select an NPAY file first.', 'warning'); return; }
+    if (!session?.sessionId) { showToast('No active import session.', 'error'); return; }
+    try {
+      setUploading(true);
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('sessionId', String(session.sessionId));
+      const res = await authFetch('/api/officer/import/npay/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Preview failed.', 'error'); return; }
+      const isolated = isolateInvalidAccountRows(data);
+      setPreview(isolated);
+      showToast(`Preview loaded: ${data.totalRows} rows, ${data.warningCount} name warnings.`,
+        data.warningCount > 0 ? 'warning' : 'success');
+    } catch (e) {
+      showToast('Preview failed: ' + e.message, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleNpayApprove = async () => {
+    if (!file || !preview) { showToast('Please preview the file first.', 'warning'); return; }
+    if (!session?.sessionId) { showToast('No active import session.', 'error'); return; }
+    try {
+      setApproving(true);
+      const fd = new FormData();
+      fd.append('correctionsJson', JSON.stringify(rowCorrections));
+      const res = await authFetch(`/api/officer/import/npay/${session.sessionId}/approve`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
       showToast(`🎉 Import Complete! ${data.billingRecordsCreated} billing records created. Customers added to directory.`, 'success');
       setSession(null);
       setWizardStep(1);
@@ -2172,6 +2507,76 @@ const UploadPage = () => {
 
           {/* Deleted Records Audit Log */}
           {renderRejectedRecordsSection(3)}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep4 = () => (
+    <div>
+      {session && (
+        <div style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+          <CheckCircle size={17} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+            <strong style={{ color: 'white' }}>Steps 1, 2 &amp; 3 Complete</strong> — {session.masterCustomerCount} customers profile, {session.cebAssistCount ?? '?'} reading dates merged, {session.ngenCount ?? '?'} NGEN billing details merged.
+            <br />
+            Now upload the final <strong style={{ color: '#f59e0b' }}>NPAY Sheet</strong> to complete the multi-file import.
+          </div>
+        </div>
+      )}
+
+      <div style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
+          <Info size={16} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+            <strong style={{ color: 'white' }}>NPAY Sheet Upload &amp; Merge</strong>
+            <br />
+            Required columns: <span style={{ color: '#f59e0b' }}>Account No, Net Type, Name, Energy Purchase, Bill Set Off, Retention Money, Payment</span>.
+            <br />
+            The system will automatically retrieve the bank details from the Master Data and perform mismatch checks on Net Type and Name.
+            <br />
+            <span style={{ color: '#f59e0b' }}>⚠ Any mismatched Net Types will be flagged as errors. Name differences will be flagged as warnings.</span>
+          </div>
+        </div>
+      </div>
+
+      <FileDropZone file={file} onFileSelected={handleFileSelect}
+        hint="Requires: Account No, Net Type, Name, Energy Purchase, Bill Set Off, Retention Money, Payment" />
+
+      <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
+        {file && !preview && (
+          <button className="btn" onClick={handleNpayPreview} disabled={uploading}
+            style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
+            {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview &amp; Merge</>}
+          </button>
+        )}
+        {preview && (
+          <button className="btn" onClick={handleNpayApprove} disabled={approving}
+            style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
+            {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit for Admin Approval'}</>}
+          </button>
+        )}
+      </div>
+
+      {preview && (
+        <div style={{ marginTop: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+            <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
+            <StatCard label="Matched" value={preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
+            <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+            <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Merged Preview</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={filterErrors} onChange={e => setFilterErrors(e.target.checked)} />
+              Show errors / warnings only
+            </label>
+          </div>
+          <NpayTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
+
+          {/* Deleted Records Audit Log */}
+          {renderRejectedRecordsSection(4)}
         </div>
       )}
     </div>
@@ -2620,6 +3025,7 @@ const UploadPage = () => {
           {wizardStep === 1 && renderStep1()}
           {wizardStep === 2 && renderStep2()}
           {wizardStep === 3 && renderStep3()}
+          {wizardStep === 4 && renderStep4()}
 
           {/* Navigation */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
@@ -2630,7 +3036,7 @@ const UploadPage = () => {
                   ← Back
                 </button>
               )}
-              {wizardStep < 3 && isStepAccessible(wizardStep + 1) && (
+              {wizardStep < 4 && isStepAccessible(wizardStep + 1) && (
                 <button onClick={() => setWizardStep(wizardStep + 1)}
                   style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.5rem 1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600 }}>
                   Next →
@@ -2639,7 +3045,7 @@ const UploadPage = () => {
             </div>
 
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Step {wizardStep} of 3 — {WIZARD_STEPS[wizardStep - 1].label}
+              Step {wizardStep} of 4 — {WIZARD_STEPS[wizardStep - 1].label}
             </div>
 
             <div />
@@ -2766,6 +3172,45 @@ const UploadPage = () => {
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Outstanding Set Off (Charges)</label>
                     <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                  </div>
+                </>
+              )}
+
+              {wizardStep === 4 && (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Name (NPAY Name)</label>
+                      <input type="text" value={correctingFields.npayName || ''} onChange={e => setCorrectingFields(p => ({ ...p, npayName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Net Type (NPAY Net Type)</label>
+                      <input type="text" value={correctingFields.npayNetType || ''} onChange={e => setCorrectingFields(p => ({ ...p, npayNetType: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Energy Purchase</label>
+                      <input type="number" step="0.01" value={correctingFields.energyPurchase ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, energyPurchase: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Set Off</label>
+                      <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Retention Money</label>
+                      <input type="number" step="0.01" value={correctingFields.retentionMoney ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, retentionMoney: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Payment</label>
+                    <input type="number" step="0.01" value={correctingFields.payment ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, payment: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
                   </div>
                 </>
               )}

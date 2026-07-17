@@ -330,6 +330,7 @@ public class CustomerController {
             dto.put("billSetOff",       br.getBillSetOff());
             dto.put("retentionMoney",   br.getRetentionMoney());
             dto.put("payment",          br.getPayment());
+            dto.put("energyPurchase",    br.getEnergyPurchase());
             dto.put("kwhImport",        br.getKwhImport());
             dto.put("kwhExport",        br.getKwhExport());
             dto.put("kwhSales",         br.getKwhSales());

@@ -2,6 +2,7 @@ package com.ceb.billing.services;
 
 import com.ceb.billing.entities.*;
 import com.ceb.billing.repositories.*;
+import com.ceb.billing.models.ExcelValidationError;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -681,130 +682,15 @@ public class MultiFileImportService {
         }
 
         List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
-
-        if (!isAdmin) {
-            // --- OFFICER STAGING FLOW ---
-            // Create an UploadHistory record with PENDING_APPROVAL status
-            UploadHistory uploadHistory = new UploadHistory(
-                    "Multi-File Import (Session " + sessionId + ")",
-                    username,
-                    "PENDING_APPROVAL",
-                    masterStaged.size(),
-                    0,
-                    0,
-                    0
-            );
-            uploadHistory = uploadHistoryRepository.save(uploadHistory);
-            final Long uploadId = uploadHistory.getId();
-
-            // Stage customer profiles and NGEN billing records in database staging table
-            int errorRows = stageOfficerData(masterStaged, fileBytes, sessionId, uploadId, corrections, username);
-
-            // Update errors count on the UploadHistory for Admin review
-            uploadHistory.setErrorsCount(errorRows);
-            uploadHistoryRepository.save(uploadHistory);
-
-            session.setStage("COMPLETED");
-            session.setNgenBatchId(uploadId);
-            sessionRepository.save(session);
-
-            cleanupCebStaging(sessionId);
-            cleanupMasterStaging(sessionId);
-
-            auditLogService.log("NGEN_SUBMITTED",
-                    String.format("NGEN submitted for Admin approval by %s for session %d.", username, sessionId));
-
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("sessionId", sessionId);
-            result.put("stage", "PENDING_APPROVAL");
-            result.put("message", "Import batch successfully submitted for Admin approval.");
-            return result;
+        Map<String, Map<String, Object>> stagedCustomers = new HashMap<>();
+        for (Map<String, Object> m : masterStaged) {
+            String acc = (String) m.get("accountNo");
+            if (acc != null) stagedCustomers.put(acc.trim(), m);
         }
 
-        // --- ADMIN IMMEDIATE LIVE WRITE FLOW ---
-        // Create an UploadHistory record for this multi-file import session
-        UploadHistory uploadHistory = new UploadHistory(
-                "Multi-File Import (Session " + sessionId + ")",
-                username,
-                "SUCCESS",
-                masterStaged.size(),
-                0,
-                0,
-                0
-        );
-        uploadHistory = uploadHistoryRepository.save(uploadHistory);
-        final Long uploadId = uploadHistory.getId();
-
-        int newCustCount = 0;
-
-        // 1. Load staged master customers and save/update them in DB first
-        for (Map<String, Object> stagedCust : masterStaged) {
-            String accountNo = (String) stagedCust.get("accountNo");
-            if (accountNo == null || accountNo.trim().isEmpty()) continue;
-            accountNo = accountNo.trim();
-
-            String customerName    = (String) stagedCust.get("customerName");
-            String customerAddress = (String) stagedCust.get("customerAddress");
-            String refNo           = (String) stagedCust.get("refNo");
-            String costCode        = (String) stagedCust.get("costCode");
-            String mobileNo        = (String) stagedCust.get("mobileNo");
-            Double panelCapacity   = stagedCust.get("panelCapacity") != null ? ((Number) stagedCust.get("panelCapacity")).doubleValue() : null;
-            String agreementDate   = (String) stagedCust.get("agreementDate");
-            String bankCode        = (String) stagedCust.get("bankCode");
-            String branchCode      = (String) stagedCust.get("branchCode");
-            String bankAccountNo   = (String) stagedCust.get("bankAccountNo");
-            String solarType       = ExcelValidationService.normalizeSolarType((String) stagedCust.get("solarType"));
-            Double unitRate        = stagedCust.get("unitRate") != null ? ((Number) stagedCust.get("unitRate")).doubleValue() : null;
-            String tariffType      = (String) stagedCust.get("tariffType");
-            String billingMode     = (String) stagedCust.get("billingMode");
-
-            LocalDate agrDate = agreementDate != null && !agreementDate.isEmpty() ? safeParseDate(agreementDate) : null;
-            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
-            String finalBranch = detBranch != null ? detBranch : (branchCode != null ? branchCode : "");
-
-            Optional<Customer> existing = customerRepository.findById(accountNo);
-            Customer c;
-            if (existing.isEmpty()) {
-                c = new Customer(accountNo, customerName, customerAddress, mobileNo,
-                        agrDate, panelCapacity, bankCode, finalBranch, bankAccountNo, solarType);
-                c.setRefNo(refNo);
-                c.setUnitRate(unitRate);
-                c.setTariffType(tariffType);
-                c.setCreatedByUploadId(uploadId);
-                newCustCount++;
-                if (isNotBlank(costCode))    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
-                if (isNotBlank(solarType))   c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
-                if (isNotBlank(billingMode)) c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
-            } else {
-                c = existing.get();
-                if (isNotBlank(customerName))    c.setCustomerName(customerName);
-                if (isNotBlank(customerAddress)) c.setCustomerAddress(customerAddress);
-                if (isNotBlank(mobileNo))        c.setMobileNo(mobileNo);
-                if (isNotBlank(bankCode))        c.setBankCode(bankCode);
-                if (isNotBlank(finalBranch))     c.setBranchCode(finalBranch);
-                if (isNotBlank(bankAccountNo))   c.setBankAccountNo(bankAccountNo);
-                if (agrDate != null)             c.setAgreementDate(agrDate);
-                if (panelCapacity != null)       c.setPanelCapacity(panelCapacity);
-                if (isNotBlank(solarType))       c.setSolarType(solarType);
-                if (isNotBlank(refNo))           c.setRefNo(refNo);
-                if (unitRate != null)            c.setUnitRate(unitRate);
-                if (isNotBlank(tariffType))      c.setTariffType(tariffType);
-                if (isNotBlank(costCode))
-                    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
-                if (isNotBlank(solarType))
-                    c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
-                if (isNotBlank(billingMode))
-                    c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
-            }
-            excelValidationService.revalidateCustomer(c);
-            customerRepository.save(c);
-        }
-
-        // 2. Load cached CEB reading dates
         Map<String, Map<String, String>> cebData = loadCebDataFromStaging(sessionId);
-
-        int createdBilling = 0;
-        int skippedCount = 0;
+        List<Map<String, Object>> processedRows = new ArrayList<>();
+        int skippedRowsCount = 0;
 
         try (InputStream is = new ByteArrayInputStream(fileBytes);
              Workbook workbook = WorkbookFactory.create(is)) {
@@ -821,20 +707,20 @@ public class MultiFileImportService {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
 
-                String accountNo    = strVal(row, colMap.get("accountno"));
-                Double kwhImport    = numVal(row, colMap.get("imports"));
-                Double kwhExport    = numVal(row, colMap.get("exports"));
-                Double ngenUnitRate = numVal(row, colMap.get("unitcost"));
-                Double billSetOff   = numVal(row, colMap.get("billsetoff"));
+                String accountNo     = strVal(row, colMap.get("accountno"));
+                Double kwhImport     = numVal(row, colMap.get("imports"));
+                Double kwhExport     = numVal(row, colMap.get("exports"));
+                Double ngenUnitRate  = colMap.containsKey("unitcost") && colMap.get("unitcost") != null ? numVal(row, colMap.get("unitcost")) : null;
+                Double billSetOff    = numVal(row, colMap.get("billsetoff"));
+                String ngenNetType   = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
 
-                // Corrections overlay by row number OR accountNo
                 String rowNumStr = String.valueOf(r + 1);
                 Map<String, Object> corr = null;
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
                         corr = corrections.get(rowNumStr);
-                    } else if (accountNo != null && corrections.containsKey(accountNo)) {
-                        corr = corrections.get(accountNo);
+                    } else if (accountNo != null && corrections.containsKey(accountNo.trim())) {
+                        corr = corrections.get(accountNo.trim());
                     }
                 }
 
@@ -856,95 +742,49 @@ public class MultiFileImportService {
                         Object val = corr.get("billSetOff");
                         billSetOff = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
                     }
+                    if (corr.containsKey("ngenNetType"))  ngenNetType  = (String) corr.get("ngenNetType");
+                }
+
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    skippedRowsCount++;
+                    continue;
                 }
 
                 if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
-                    skippedCount++;
+                    skippedRowsCount++;
                     continue;
                 }
                 accountNo = accountNo.trim();
 
-                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
-                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
-                    skippedCount++;
-                    continue;
-                }
+                Map<String, Object> rowData = new LinkedHashMap<>();
+                rowData.put("rowNum", r + 1);
+                rowData.put("accountNo", accountNo);
+                rowData.put("kwhImport", kwhImport);
+                rowData.put("kwhExport", kwhExport);
+                rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                rowData.put("ngenNetType", ngenNetType);
+                rowData.put("ngenUnitRate", ngenUnitRate);
 
-                Optional<Customer> custOpt = customerRepository.findById(accountNo);
-                if (custOpt.isEmpty() || kwhImport == null || kwhExport == null) {
-                    skippedCount++;
-                    continue;
-                }
-
-                Customer cust = custOpt.get();
-
-                // Net Type Match check
-                String ngenNetType = colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
-                if (cust.getSolarType() != null && ngenNetType != null && !ngenNetType.trim().isEmpty()) {
-                    String normMasterType = ExcelValidationService.normalizeSolarType(cust.getSolarType());
-                    String normNgenType = ExcelValidationService.normalizeSolarType(ngenNetType);
-                    if (normMasterType != null && normNgenType != null && !normMasterType.equals(normNgenType)) {
-                        skippedCount++;
-                        continue;
-                    }
-                }
-
-                double effectiveRate = cust.getUnitRate() != null ? cust.getUnitRate()
-                        : (ngenUnitRate != null ? ngenUnitRate : 0.0);
-                double kwhSales = kwhExport - kwhImport;
-                double salesAmount = kwhSales * effectiveRate;
-                double outstandingCharges = billSetOff != null ? billSetOff : 0.0;
-                double paymentSettled = salesAmount - outstandingCharges;
-
-                Map<String, String> cebRow = cebData.get(accountNo);
-                LocalDate prevDate = cebRow != null ? safeParseDate(cebRow.get("prevReadingDate")) : null;
-                LocalDate currDate = cebRow != null ? safeParseDate(cebRow.get("currReadingDate")) : null;
-
-                LocalDate fromDate = prevDate != null ? prevDate : LocalDate.now().withDayOfMonth(1);
-                LocalDate toDate   = currDate != null ? currDate : LocalDate.now();
-
-                String refNoStr = isNotBlank(cust.getRefNo()) ? cust.getRefNo()
-                        : "REF-" + accountNo + "-" + toDate.toString().replace("-", "");
-
-                BillingRecord br = new BillingRecord(cust, refNoStr, fromDate, toDate,
-                        kwhImport, kwhExport, effectiveRate,
-                        cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null,
-                        uploadId);
-                br.setPrevReadingDate(prevDate);
-                br.setCurrReadingDate(currDate);
-                br.setKwhImport(kwhImport);
-                br.setKwhExport(kwhExport);
-                br.setKwhSales(kwhSales);
-                br.setBillSetOff(outstandingCharges);
-                br.setPayment(Math.round(paymentSettled * 100.0) / 100.0);
-                br.setPaymentSettled(Math.round(paymentSettled * 100.0) / 100.0);
-                billingRecordRepository.save(br);
-                createdBilling++;
+                processedRows.add(rowData);
             }
         }
 
-        uploadHistory.setBillingInserted(createdBilling);
-        uploadHistory.setNewCustomers(newCustCount);
-        uploadHistoryRepository.save(uploadHistory);
+        saveNgenDataToStaging(sessionId, processedRows);
 
-        session.setStage("COMPLETED");
-        session.setNgenCount(createdBilling);
-        session.setNgenBatchId(uploadId);
+        session.setStage("NGEN_APPROVED");
+        session.setNgenCount(processedRows.size());
         sessionRepository.save(session);
 
-        cleanupCebStaging(sessionId);
-        cleanupMasterStaging(sessionId);
-
         auditLogService.log("NGEN_APPROVED",
-                String.format("NGEN approved by %s for session %d. Billing records created: %d, Skipped: %d",
-                        username, sessionId, createdBilling, skippedCount));
+                String.format("NGEN approved by %s for session %d. Records cached: %d, Skipped: %d",
+                        username, sessionId, processedRows.size(), skippedRowsCount));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
-        result.put("stage", "COMPLETED");
-        result.put("billingRecordsCreated", createdBilling);
-        result.put("skippedCount", skippedCount);
-        result.put("message", String.format("Import complete! %d billing records created.", createdBilling));
+        result.put("stage", "NGEN_APPROVED");
+        result.put("ngenCount", processedRows.size());
+        result.put("message", String.format("NGEN data cached successfully. %d records cached.", processedRows.size()));
         return result;
     }
 
@@ -1343,6 +1183,20 @@ public class MultiFileImportService {
         MASTER_DATA_CACHE.remove(sessionId);
     }
 
+    private static final Map<Long, List<Map<String, Object>>> NGEN_DATA_CACHE = new HashMap<>();
+
+    private void saveNgenDataToStaging(Long sessionId, List<Map<String, Object>> data) {
+        NGEN_DATA_CACHE.put(sessionId, data);
+    }
+
+    private List<Map<String, Object>> loadNgenDataFromStaging(Long sessionId) {
+        return NGEN_DATA_CACHE.getOrDefault(sessionId, new ArrayList<>());
+    }
+
+    private void cleanupNgenStaging(Long sessionId) {
+        NGEN_DATA_CACHE.remove(sessionId);
+    }
+
     private List<String> validateMasterDataRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
         
@@ -1513,4 +1367,737 @@ public class MultiFileImportService {
 
     private boolean isBlank(String s) { return s == null || s.trim().isEmpty(); }
     private boolean isNotBlank(String s) { return s != null && !s.trim().isEmpty(); }
+
+    // ════════════════════════════════════════════════════════════════════
+    //  STEP 4 — NPAY
+    // ════════════════════════════════════════════════════════════════════
+
+    public Map<String, Object> previewNpay(byte[] fileBytes, String filename, Long sessionId) throws Exception {
+        List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
+        Map<String, Map<String, Object>> stagedCustomers = new HashMap<>();
+        for (Map<String, Object> m : masterStaged) {
+            String acc = (String) m.get("accountNo");
+            if (acc != null) stagedCustomers.put(acc.trim(), m);
+        }
+
+        Map<String, Map<String, String>> cebData = loadCebDataFromStaging(sessionId);
+        List<Map<String, Object>> ngenStaged = loadNgenDataFromStaging(sessionId);
+        Map<String, Map<String, Object>> stagedNgen = new HashMap<>();
+        for (Map<String, Object> n : ngenStaged) {
+            String acc = (String) n.get("accountNo");
+            if (acc != null) stagedNgen.put(acc.trim(), n);
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>();
+        int errorCount = 0;
+        int warningCount = 0;
+        int matchCount = 0;
+        Set<String> processedInSheet = new HashSet<>();
+
+        try (InputStream is = new ByteArrayInputStream(fileBytes);
+             Workbook workbook = WorkbookFactory.create(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+
+            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+            int lastRow = sheet.getLastRowNum();
+
+            for (int r = dataStart; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null || isRowEmpty(row)) continue;
+
+                String accountNo        = strVal(row, colMap.get("accountno"));
+                String npayNetType      = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
+                String npayName         = colMap.containsKey("customername") && colMap.get("customername") != null ? strVal(row, colMap.get("customername")) : null;
+                Double energyPurchase   = numVal(row, colMap.get("energypurchase"));
+                Double billSetOff       = numVal(row, colMap.get("billsetoff"));
+                Double retentionMoney   = numVal(row, colMap.get("retentionmoney"));
+                Double payment          = numVal(row, colMap.get("payment"));
+
+                String cleanAcc = accountNo != null ? accountNo.trim() : "";
+
+                Map<String, Object> rowData = new LinkedHashMap<>();
+                rowData.put("rowNum", r + 1);
+                rowData.put("accountNo", cleanAcc);
+                rowData.put("npayNetType", npayNetType);
+                rowData.put("npayName", npayName);
+                rowData.put("energyPurchase", energyPurchase != null ? energyPurchase : 0.0);
+                rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                rowData.put("retentionMoney", retentionMoney != null ? retentionMoney : 0.0);
+                rowData.put("payment", payment != null ? payment : 0.0);
+
+                List<String> errors = new ArrayList<>();
+                List<String> warnings = new ArrayList<>();
+
+                if (cleanAcc.isEmpty()) {
+                    errors.add("Account No is missing");
+                } else if (!cleanAcc.matches("\\d+")) {
+                    errors.add("Invalid Account Number: Only numeric values are allowed.");
+                } else if (cleanAcc.length() != 10) {
+                    errors.add("Account number must be a valid 10-digit numeric string");
+                }
+
+                if (errors.isEmpty() && !cleanAcc.isEmpty()) {
+                    if (processedInSheet.contains(cleanAcc)) {
+                        errors.add("Duplicate Account No detected within this file");
+                    }
+                    processedInSheet.add(cleanAcc);
+                }
+
+                boolean isStaged = false;
+                boolean existsInDb = false;
+                Optional<Customer> custOpt = Optional.empty();
+
+                Double masterUnitRate = null;
+                String masterNetType = null;
+                String customerName = "—";
+                String customerAddress = "—";
+                String refNo = "—";
+                String costCode = "—";
+                String mobileNo = "—";
+                Double panelCapacity = null;
+                String agreementDate = null;
+                String bankCode = "—";
+                String branchCode = "—";
+                String bankAccountNo = "—";
+                String solarType = null;
+                String tariffType = null;
+                String billingMode = null;
+
+                if (errors.isEmpty() && !cleanAcc.isEmpty()) {
+                    custOpt = customerRepository.findById(cleanAcc);
+                    isStaged = stagedCustomers.containsKey(cleanAcc);
+                    existsInDb = custOpt.isPresent();
+
+                    if (!isStaged && !existsInDb) {
+                        errors.add("Account No not found in customer database or Master Data");
+                    } else {
+                        matchCount++;
+                        if (isStaged) {
+                            Map<String, Object> stagedCust = stagedCustomers.get(cleanAcc);
+                            customerName = stagedCust.get("customerName") != null ? stagedCust.get("customerName").toString() : "—";
+                            customerAddress = stagedCust.get("customerAddress") != null ? stagedCust.get("customerAddress").toString() : "—";
+                            refNo = stagedCust.get("refNo") != null ? stagedCust.get("refNo").toString() : "—";
+                            costCode = stagedCust.get("costCode") != null ? stagedCust.get("costCode").toString() : "—";
+                            mobileNo = stagedCust.get("mobileNo") != null ? stagedCust.get("mobileNo").toString() : "—";
+                            panelCapacity = stagedCust.get("panelCapacity") != null && !stagedCust.get("panelCapacity").toString().isEmpty()
+                                    ? ((Number) stagedCust.get("panelCapacity")).doubleValue() : null;
+                            agreementDate = stagedCust.get("agreementDate") != null ? stagedCust.get("agreementDate").toString() : null;
+                            bankCode = stagedCust.get("bankCode") != null ? stagedCust.get("bankCode").toString() : "—";
+                            branchCode = stagedCust.get("branchCode") != null ? stagedCust.get("branchCode").toString() : "—";
+                            bankAccountNo = stagedCust.get("bankAccountNo") != null ? stagedCust.get("bankAccountNo").toString() : "—";
+                            solarType = stagedCust.get("solarType") != null ? stagedCust.get("solarType").toString() : null;
+                            tariffType = stagedCust.get("tariffType") != null ? stagedCust.get("tariffType").toString() : null;
+                            billingMode = stagedCust.get("billingMode") != null ? stagedCust.get("billingMode").toString() : null;
+
+                            masterUnitRate = stagedCust.get("unitRate") != null && !stagedCust.get("unitRate").toString().isEmpty()
+                                    ? ((Number) stagedCust.get("unitRate")).doubleValue() : null;
+                            masterNetType = solarType;
+                        } else {
+                            Customer cust = custOpt.get();
+                            customerName = cust.getCustomerName() != null ? cust.getCustomerName() : "—";
+                            customerAddress = cust.getCustomerAddress() != null ? cust.getCustomerAddress() : "—";
+                            refNo = cust.getRefNo() != null ? cust.getRefNo() : "—";
+                            costCode = cust.getCostCode() != null ? cust.getCostCode().getCostCode() : "—";
+                            mobileNo = cust.getMobileNo() != null ? cust.getMobileNo() : "—";
+                            panelCapacity = cust.getPanelCapacity();
+                            agreementDate = cust.getAgreementDate() != null ? cust.getAgreementDate().toString() : null;
+                            bankCode = cust.getBankCode() != null ? cust.getBankCode() : "—";
+                            branchCode = cust.getBranchCode() != null ? cust.getBranchCode() : "—";
+                            bankAccountNo = cust.getBankAccountNo() != null ? cust.getBankAccountNo() : "—";
+                            solarType = cust.getSolarType();
+                            tariffType = cust.getTariffType();
+                            billingMode = cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null;
+
+                            masterUnitRate = cust.getUnitRate();
+                            masterNetType = solarType;
+                        }
+                    }
+                }
+
+                // Validation 2: Net Type Match check
+                if (masterNetType != null && npayNetType != null && !npayNetType.trim().isEmpty()) {
+                    String normMasterType = ExcelValidationService.normalizeSolarType(masterNetType);
+                    String normNpayType = ExcelValidationService.normalizeSolarType(npayNetType);
+                    if (normMasterType != null && normNpayType != null && !normMasterType.equals(normNpayType)) {
+                        errors.add(String.format("Net Type Mismatch: NPAY='%s', Master Data='%s'", npayNetType, masterNetType));
+                    }
+                }
+
+                // Validation 3: Name Match check
+                if (customerName != null && !"—".equals(customerName) && npayName != null && !npayName.trim().isEmpty()) {
+                    if (!customerName.trim().equalsIgnoreCase(npayName.trim())) {
+                        warnings.add(String.format("Name mismatch: NPAY='%s', Master Data='%s'", npayName, customerName));
+                        warningCount++;
+                    }
+                }
+
+                // Merge static fields
+                rowData.put("customerName", customerName);
+                rowData.put("customerAddress", customerAddress);
+                rowData.put("refNo", refNo);
+                rowData.put("costCode", costCode);
+                rowData.put("mobileNo", mobileNo);
+                rowData.put("panelCapacity", panelCapacity);
+                rowData.put("agreementDate", agreementDate);
+                rowData.put("bankCode", bankCode);
+                rowData.put("branchCode", branchCode);
+                rowData.put("bankAccountNo", bankAccountNo);
+                rowData.put("solarType", solarType);
+                rowData.put("tariffType", tariffType);
+                rowData.put("billingMode", billingMode);
+                rowData.put("unitRate", masterUnitRate);
+
+                // Merge CEB Assist dates
+                Map<String, String> cebRow = cebData.get(cleanAcc);
+                if (cebRow != null) {
+                    rowData.put("prevReadingDate", cebRow.get("prevReadingDate"));
+                    rowData.put("currReadingDate", cebRow.get("currReadingDate"));
+                } else {
+                    warnings.add("No CEB Assist reading dates found for this account");
+                }
+
+                // Merge NGEN import/export/sales
+                Map<String, Object> ngenRow = stagedNgen.get(cleanAcc);
+                if (ngenRow != null) {
+                    rowData.put("kwhImport", ngenRow.get("kwhImport"));
+                    rowData.put("kwhExport", ngenRow.get("kwhExport"));
+                    Double importVal = ngenRow.get("kwhImport") != null ? ((Number) ngenRow.get("kwhImport")).doubleValue() : 0.0;
+                    Double exportVal = ngenRow.get("kwhExport") != null ? ((Number) ngenRow.get("kwhExport")).doubleValue() : 0.0;
+                    rowData.put("kwhSales", exportVal - importVal);
+                } else {
+                    warnings.add("No NGEN billing data found for this account");
+                }
+
+                rowData.put("errors", errors);
+                rowData.put("warnings", warnings);
+                rowData.put("status", !errors.isEmpty() ? "ERROR" : !warnings.isEmpty() ? "WARNING" : "VALID");
+                if (!errors.isEmpty()) errorCount++;
+                rows.add(rowData);
+            }
+        }
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("filename", filename);
+        result.put("fileType", "NPAY");
+        result.put("totalRows", rows.size());
+        result.put("matchedCount", matchCount);
+        result.put("errorCount", errorCount);
+        result.put("warningCount", warningCount);
+        result.put("rows", rows);
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> approveNpay(byte[] fileBytes, String username, Long sessionId,
+                                            Map<String, Map<String, Object>> corrections, boolean isAdmin) throws Exception {
+        ImportSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+        if (!"NGEN_APPROVED".equals(session.getStage())) {
+            throw new IllegalStateException("Session is not in the correct stage for NPAY upload. Current stage: " + session.getStage());
+        }
+
+        List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
+        Map<String, Map<String, String>> cebData = loadCebDataFromStaging(sessionId);
+        List<Map<String, Object>> ngenStaged = loadNgenDataFromStaging(sessionId);
+        Map<String, Map<String, Object>> stagedNgen = new HashMap<>();
+        for (Map<String, Object> n : ngenStaged) {
+            String acc = (String) n.get("accountNo");
+            if (acc != null) stagedNgen.put(acc.trim(), n);
+        }
+
+        if (!isAdmin) {
+            // --- OFFICER STAGING FLOW ---
+            UploadHistory uploadHistory = new UploadHistory(
+                    "Multi-File Import (Session " + sessionId + ")",
+                    username,
+                    "PENDING_APPROVAL",
+                    masterStaged.size(),
+                    0,
+                    0,
+                    0
+            );
+            uploadHistory = uploadHistoryRepository.save(uploadHistory);
+            final Long uploadId = uploadHistory.getId();
+
+            int errorRows = stageOfficerNpayData(masterStaged, cebData, stagedNgen, fileBytes, sessionId, uploadId, corrections, username);
+
+            uploadHistory.setErrorsCount(errorRows);
+            uploadHistoryRepository.save(uploadHistory);
+
+            session.setStage("COMPLETED");
+            session.setNpayBatchId(uploadId);
+            sessionRepository.save(session);
+
+            cleanupCebStaging(sessionId);
+            cleanupMasterStaging(sessionId);
+            cleanupNgenStaging(sessionId);
+
+            auditLogService.log("NPAY_SUBMITTED",
+                    String.format("NPAY submitted for Admin approval by %s for session %d.", username, sessionId));
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("sessionId", sessionId);
+            result.put("stage", "PENDING_APPROVAL");
+            result.put("message", "Import batch successfully submitted for Admin approval.");
+            return result;
+        }
+
+        // --- ADMIN IMMEDIATE LIVE WRITE FLOW ---
+        UploadHistory uploadHistory = new UploadHistory(
+                "Multi-File Import (Session " + sessionId + ")",
+                username,
+                "SUCCESS",
+                masterStaged.size(),
+                0,
+                0,
+                0
+        );
+        uploadHistory = uploadHistoryRepository.save(uploadHistory);
+        final Long uploadId = uploadHistory.getId();
+
+        int newCustCount = 0;
+
+        // 1. Save / Update Customers
+        for (Map<String, Object> stagedCust : masterStaged) {
+            String accountNo = (String) stagedCust.get("accountNo");
+            if (accountNo == null || accountNo.trim().isEmpty()) continue;
+            accountNo = accountNo.trim();
+
+            String customerName    = (String) stagedCust.get("customerName");
+            String customerAddress = (String) stagedCust.get("customerAddress");
+            String refNo           = (String) stagedCust.get("refNo");
+            String costCode        = (String) stagedCust.get("costCode");
+            String mobileNo        = (String) stagedCust.get("mobileNo");
+            Double panelCapacity   = stagedCust.get("panelCapacity") != null ? ((Number) stagedCust.get("panelCapacity")).doubleValue() : null;
+            String agreementDate   = (String) stagedCust.get("agreementDate");
+            String bankCode        = (String) stagedCust.get("bankCode");
+            String branchCode      = (String) stagedCust.get("branchCode");
+            String bankAccountNo   = (String) stagedCust.get("bankAccountNo");
+            String solarType       = ExcelValidationService.normalizeSolarType((String) stagedCust.get("solarType"));
+            Double unitRate        = stagedCust.get("unitRate") != null ? ((Number) stagedCust.get("unitRate")).doubleValue() : null;
+            String tariffType      = (String) stagedCust.get("tariffType");
+            String billingMode     = (String) stagedCust.get("billingMode");
+
+            LocalDate agrDate = agreementDate != null && !agreementDate.isEmpty() ? safeParseDate(agreementDate) : null;
+            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+            String finalBranch = detBranch != null ? detBranch : (branchCode != null ? branchCode : "");
+
+            Optional<Customer> existing = customerRepository.findById(accountNo);
+            Customer c;
+            if (existing.isEmpty()) {
+                c = new Customer(accountNo, customerName, customerAddress, mobileNo,
+                        agrDate, panelCapacity, bankCode, finalBranch, bankAccountNo, solarType);
+                c.setRefNo(refNo);
+                c.setUnitRate(unitRate);
+                c.setTariffType(tariffType);
+                c.setCreatedByUploadId(uploadId);
+                newCustCount++;
+                if (isNotBlank(costCode))    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                if (isNotBlank(solarType))   c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                if (isNotBlank(billingMode)) c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
+            } else {
+                c = existing.get();
+                if (isNotBlank(customerName))    c.setCustomerName(customerName);
+                if (isNotBlank(customerAddress)) c.setCustomerAddress(customerAddress);
+                if (isNotBlank(mobileNo))        c.setMobileNo(mobileNo);
+                if (isNotBlank(bankCode))        c.setBankCode(bankCode);
+                if (isNotBlank(finalBranch))     c.setBranchCode(finalBranch);
+                if (isNotBlank(bankAccountNo))   c.setBankAccountNo(bankAccountNo);
+                if (agrDate != null)             c.setAgreementDate(agrDate);
+                if (panelCapacity != null)       c.setPanelCapacity(panelCapacity);
+                if (isNotBlank(solarType))       c.setSolarType(solarType);
+                if (isNotBlank(refNo))           c.setRefNo(refNo);
+                if (unitRate != null)            c.setUnitRate(unitRate);
+                if (isNotBlank(tariffType))      c.setTariffType(tariffType);
+                if (isNotBlank(costCode))
+                    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                if (isNotBlank(solarType))
+                    c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                if (isNotBlank(billingMode))
+                    c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
+            }
+            excelValidationService.revalidateCustomer(c);
+            customerRepository.save(c);
+        }
+
+        int createdBilling = 0;
+        int skippedCount = 0;
+
+        // 2. Save Billing Records
+        try (InputStream is = new ByteArrayInputStream(fileBytes);
+             Workbook workbook = WorkbookFactory.create(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+
+            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+            int lastRow = sheet.getLastRowNum();
+
+            for (int r = dataStart; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null || isRowEmpty(row)) continue;
+
+                String accountNo        = strVal(row, colMap.get("accountno"));
+                Double energyPurchase   = numVal(row, colMap.get("energypurchase"));
+                Double billSetOff       = numVal(row, colMap.get("billsetoff"));
+                Double retentionMoney   = numVal(row, colMap.get("retentionmoney"));
+                Double payment          = numVal(row, colMap.get("payment"));
+
+                String rowNumStr = String.valueOf(r + 1);
+                Map<String, Object> corr = null;
+                if (corrections != null) {
+                    if (corrections.containsKey(rowNumStr)) {
+                        corr = corrections.get(rowNumStr);
+                    } else if (accountNo != null && corrections.containsKey(accountNo)) {
+                        corr = corrections.get(accountNo);
+                    }
+                }
+
+                if (corr != null) {
+                    if (corr.containsKey("accountNo")) accountNo = (String) corr.get("accountNo");
+                    if (corr.containsKey("energyPurchase")) {
+                        Object val = corr.get("energyPurchase");
+                        energyPurchase = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("billSetOff")) {
+                        Object val = corr.get("billSetOff");
+                        billSetOff = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("retentionMoney")) {
+                        Object val = corr.get("retentionMoney");
+                        retentionMoney = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("payment")) {
+                        Object val = corr.get("payment");
+                        payment = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                }
+
+                if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                    skippedCount++;
+                    continue;
+                }
+                accountNo = accountNo.trim();
+
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NPAY Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    skippedCount++;
+                    continue;
+                }
+
+                Optional<Customer> custOpt = customerRepository.findById(accountNo);
+                if (custOpt.isEmpty()) {
+                    skippedCount++;
+                    continue;
+                }
+
+                Customer cust = custOpt.get();
+
+                Map<String, String> cebRow = cebData.get(accountNo);
+                LocalDate prevDate = cebRow != null ? safeParseDate(cebRow.get("prevReadingDate")) : null;
+                LocalDate currDate = cebRow != null ? safeParseDate(cebRow.get("currReadingDate")) : null;
+
+                LocalDate fromDate = prevDate != null ? prevDate : LocalDate.now().withDayOfMonth(1);
+                LocalDate toDate   = currDate != null ? currDate : LocalDate.now();
+
+                Map<String, Object> ngenRow = stagedNgen.get(accountNo);
+                Double kwhImport = ngenRow != null && ngenRow.get("kwhImport") != null ? ((Number) ngenRow.get("kwhImport")).doubleValue() : null;
+                Double kwhExport = ngenRow != null && ngenRow.get("kwhExport") != null ? ((Number) ngenRow.get("kwhExport")).doubleValue() : null;
+                Double kwhSales = (kwhImport != null && kwhExport != null) ? (kwhExport - kwhImport) : null;
+
+                String refNoStr = isNotBlank(cust.getRefNo()) ? cust.getRefNo()
+                        : "REF-" + accountNo + "-" + toDate.toString().replace("-", "");
+
+                BillingRecord br = new BillingRecord();
+                br.setCustomer(cust);
+                br.setRefNo(refNoStr);
+                br.setFromDate(fromDate);
+                br.setToDate(toDate);
+                br.setPrevReadingDate(prevDate);
+                br.setCurrReadingDate(currDate);
+                br.setKwhImport(kwhImport);
+                br.setKwhExport(kwhExport);
+                br.setKwhSales(kwhSales);
+                br.setImportUnits(kwhImport != null ? kwhImport : 0.0);
+                br.setExportUnits(kwhExport != null ? kwhExport : 0.0);
+                br.setNetUnit(kwhSales != null ? kwhSales : 0.0);
+                br.setUnitCost(cust.getUnitRate() != null ? cust.getUnitRate() : 0.0);
+                br.setTotalAmount(energyPurchase != null ? energyPurchase : 0.0);
+                br.setBillingMode(cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null);
+                br.setUploadHistoryId(uploadId);
+
+                // NPAY fields
+                br.setEnergyPurchase(energyPurchase != null ? energyPurchase : 0.0);
+                br.setBillSetOff(billSetOff != null ? billSetOff : 0.0);
+                br.setRetentionMoney(retentionMoney != null ? retentionMoney : 0.0);
+                br.setPayment(payment != null ? payment : 0.0);
+                br.setPaymentSettled(payment != null ? payment : 0.0);
+
+                billingRecordRepository.save(br);
+                createdBilling++;
+            }
+        }
+
+        uploadHistory.setBillingInserted(createdBilling);
+        uploadHistory.setNewCustomers(newCustCount);
+        uploadHistoryRepository.save(uploadHistory);
+
+        session.setStage("COMPLETED");
+        session.setNpayCount(createdBilling);
+        session.setNpayBatchId(uploadId);
+        sessionRepository.save(session);
+
+        cleanupCebStaging(sessionId);
+        cleanupMasterStaging(sessionId);
+        cleanupNgenStaging(sessionId);
+
+        auditLogService.log("NPAY_APPROVED",
+                String.format("NPAY approved by %s for session %d. Billing records created: %d, Skipped: %d",
+                        username, sessionId, createdBilling, skippedCount));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("stage", "COMPLETED");
+        result.put("billingRecordsCreated", createdBilling);
+        result.put("skippedCount", skippedCount);
+        result.put("message", String.format("Import complete! %d billing records created.", createdBilling));
+        return result;
+    }
+
+    private int stageOfficerNpayData(
+            List<Map<String, Object>> masterStaged,
+            Map<String, Map<String, String>> cebData,
+            Map<String, Map<String, Object>> stagedNgen,
+            byte[] fileBytes,
+            Long sessionId,
+            Long uploadId,
+            Map<String, Map<String, Object>> corrections,
+            String username
+    ) throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        int totalErrorRows = 0;
+
+        // 1. Stage CUSTOMER_PROFILE rows
+        for (Map<String, Object> stagedCust : masterStaged) {
+            String accountNo = (String) stagedCust.get("accountNo");
+            if (accountNo == null || accountNo.trim().isEmpty()) continue;
+            accountNo = accountNo.trim();
+
+            String rowNumStr = String.valueOf(stagedCust.get("rowNum"));
+            Map<String, Object> corr = corrections != null ? corrections.get(rowNumStr) : null;
+            if (corr == null && corrections != null) {
+                corr = corrections.get(accountNo);
+            }
+            Map<String, Object> finalCustData = new LinkedHashMap<>(stagedCust);
+            if (corr != null) {
+                if (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted")))) {
+                    continue;
+                }
+                finalCustData.putAll(corr);
+            }
+
+            String custAccountNo = finalCustData.get("accountNo") != null ? finalCustData.get("accountNo").toString() : "";
+            String custName = finalCustData.get("customerName") != null ? finalCustData.get("customerName").toString() : "";
+            String custAddress = finalCustData.get("customerAddress") != null ? finalCustData.get("customerAddress").toString() : "";
+            String custMobile = finalCustData.get("mobileNo") != null ? finalCustData.get("mobileNo").toString() : "";
+            String custBankCode = finalCustData.get("bankCode") != null ? finalCustData.get("bankCode").toString() : "";
+            String custBranchCode = finalCustData.get("branchCode") != null ? finalCustData.get("branchCode").toString() : "";
+            String custBankAcctNo = finalCustData.get("bankAccountNo") != null ? finalCustData.get("bankAccountNo").toString() : "";
+            String custAgreementDate = finalCustData.get("agreementDate") != null ? finalCustData.get("agreementDate").toString() : "";
+            Double custPanelCapacity = finalCustData.get("panelCapacity") != null && !finalCustData.get("panelCapacity").toString().isEmpty()
+                    ? ((Number) finalCustData.get("panelCapacity")).doubleValue() : null;
+            String custSolarType = ExcelValidationService.normalizeSolarType(finalCustData.get("solarType") != null ? finalCustData.get("solarType").toString() : "");
+            String custCostCode = finalCustData.get("costCode") != null ? finalCustData.get("costCode").toString() : "";
+            String custBillingMode = finalCustData.get("billingMode") != null ? finalCustData.get("billingMode").toString() : "";
+            String custRefNo = finalCustData.get("refNo") != null ? finalCustData.get("refNo").toString() : "";
+            Double custUnitRate = finalCustData.get("unitRate") != null && !finalCustData.get("unitRate").toString().isEmpty()
+                    ? ((Number) finalCustData.get("unitRate")).doubleValue() : null;
+            String custTariffType = finalCustData.get("tariffType") != null ? finalCustData.get("tariffType").toString() : "";
+
+            int custRowNum = finalCustData.get("rowNum") != null ? Integer.parseInt(finalCustData.get("rowNum").toString()) : 0;
+
+            ExcelValidationService.RowValidationResult valResult =
+                    excelValidationService.validateCustomerRow(
+                            "MasterData", custRowNum, custAccountNo, custName, custAddress, custMobile,
+                            custBankCode, custBranchCode, custBankAcctNo, custAgreementDate,
+                            custPanelCapacity, custSolarType, custCostCode, custBillingMode,
+                            custRefNo, custUnitRate, custTariffType);
+
+            String valStatus = valResult.hasErrors() ? "ERROR" : valResult.hasWarnings() ? "WARNING" : "VALID";
+
+            List<Map<String, Object>> structuredErrors = new ArrayList<>();
+            for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
+                Map<String, Object> errMap = new LinkedHashMap<>();
+                errMap.put("field", err.getField());
+                errMap.put("errorMessage", err.getErrorMessage());
+                errMap.put("warning", err.isWarning());
+                structuredErrors.add(errMap);
+            }
+
+            BillingUploadStaging staging = new BillingUploadStaging(
+                    uploadId,
+                    mapper.writeValueAsString(finalCustData),
+                    valStatus,
+                    mapper.writeValueAsString(structuredErrors),
+                    "CUSTOMER_PROFILE"
+            );
+            billingUploadStagingRepository.save(staging);
+            if (valResult.hasErrors()) totalErrorRows++;
+        }
+
+        // 2. Stage BILLING rows (NPAY merged with CEB/NGEN/Master)
+        try (InputStream is = new ByteArrayInputStream(fileBytes);
+             Workbook workbook = WorkbookFactory.create(is)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+
+            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+            int lastRow = sheet.getLastRowNum();
+
+            for (int r = dataStart; r <= lastRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null || isRowEmpty(row)) continue;
+
+                String accountNo        = strVal(row, colMap.get("accountno"));
+                Double energyPurchase   = numVal(row, colMap.get("energypurchase"));
+                Double billSetOff       = numVal(row, colMap.get("billsetoff"));
+                Double retentionMoney   = numVal(row, colMap.get("retentionmoney"));
+                Double payment          = numVal(row, colMap.get("payment"));
+
+                String rowNumStr = String.valueOf(r + 1);
+                Map<String, Object> corr = null;
+                if (corrections != null) {
+                    if (corrections.containsKey(rowNumStr)) {
+                        corr = corrections.get(rowNumStr);
+                    } else if (accountNo != null && corrections.containsKey(accountNo)) {
+                        corr = corrections.get(accountNo);
+                    }
+                }
+
+                if (corr != null) {
+                    if (corr.containsKey("accountNo")) accountNo = (String) corr.get("accountNo");
+                    if (corr.containsKey("energyPurchase")) {
+                        Object val = corr.get("energyPurchase");
+                        energyPurchase = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("billSetOff")) {
+                        Object val = corr.get("billSetOff");
+                        billSetOff = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("retentionMoney")) {
+                        Object val = corr.get("retentionMoney");
+                        retentionMoney = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                    if (corr.containsKey("payment")) {
+                        Object val = corr.get("payment");
+                        payment = val instanceof Number ? ((Number) val).doubleValue() : val != null ? Double.parseDouble(val.toString()) : null;
+                    }
+                }
+
+                if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                    continue;
+                }
+
+                if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                    continue;
+                }
+                accountNo = accountNo.trim();
+
+                Map<String, Object> masterCust = null;
+                for (Map<String, Object> mc : masterStaged) {
+                    if (accountNo.equals(mc.get("accountNo"))) {
+                        masterCust = mc;
+                        break;
+                    }
+                }
+
+                String customerName = "—";
+                String solarType = null;
+                Double unitRate = 0.0;
+                if (masterCust != null) {
+                    customerName = masterCust.get("customerName") != null ? masterCust.get("customerName").toString() : "—";
+                    solarType = masterCust.get("solarType") != null ? masterCust.get("solarType").toString() : null;
+                    unitRate = masterCust.get("unitRate") != null ? ((Number) masterCust.get("unitRate")).doubleValue() : 0.0;
+                } else {
+                    Optional<Customer> cOpt = customerRepository.findById(accountNo);
+                    if (cOpt.isPresent()) {
+                        Customer c = cOpt.get();
+                        customerName = c.getCustomerName() != null ? c.getCustomerName() : "—";
+                        solarType = c.getSolarType();
+                        unitRate = c.getUnitRate() != null ? c.getUnitRate() : 0.0;
+                    }
+                }
+
+                Map<String, String> cebRow = cebData.get(accountNo);
+                String prevDateStr = cebRow != null ? cebRow.get("prevReadingDate") : null;
+                String currDateStr = cebRow != null ? cebRow.get("currReadingDate") : null;
+
+                Map<String, Object> ngenRow = stagedNgen.get(accountNo);
+                Double kwhImport = ngenRow != null && ngenRow.get("kwhImport") != null ? ((Number) ngenRow.get("kwhImport")).doubleValue() : 0.0;
+                Double kwhExport = ngenRow != null && ngenRow.get("kwhExport") != null ? ((Number) ngenRow.get("kwhExport")).doubleValue() : 0.0;
+                Double kwhSales = kwhExport - kwhImport;
+
+                Map<String, Object> finalBillingData = new LinkedHashMap<>();
+                finalBillingData.put("rowNum", r + 1);
+                finalBillingData.put("accountNo", accountNo);
+                finalBillingData.put("customerName", customerName);
+                finalBillingData.put("prevReadingDate", prevDateStr);
+                finalBillingData.put("currReadingDate", currDateStr);
+                finalBillingData.put("kwhImport", kwhImport);
+                finalBillingData.put("kwhExport", kwhExport);
+                finalBillingData.put("kwhSales", kwhSales);
+                finalBillingData.put("unitRate", unitRate);
+                finalBillingData.put("energyPurchase", energyPurchase != null ? energyPurchase : 0.0);
+                finalBillingData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                finalBillingData.put("retentionMoney", retentionMoney != null ? retentionMoney : 0.0);
+                finalBillingData.put("payment", payment != null ? payment : 0.0);
+
+                List<ExcelValidationError> errorsList = new ArrayList<>();
+                if (masterCust == null && !customerRepository.existsById(accountNo)) {
+                    errorsList.add(new ExcelValidationError("NPAY", r + 1, "Account No",
+                            "Account No not found in customer database or Master Data", false));
+                }
+
+                String npayNetType = colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
+                if (solarType != null && npayNetType != null && !npayNetType.trim().isEmpty()) {
+                    String normMasterType = ExcelValidationService.normalizeSolarType(solarType);
+                    String normNpayType = ExcelValidationService.normalizeSolarType(npayNetType);
+                    if (normMasterType != null && normNpayType != null && !normMasterType.equals(normNpayType)) {
+                        errorsList.add(new ExcelValidationError("NPAY", r + 1, "Net Type",
+                                String.format("Net Type Mismatch: NPAY='%s', Master Data='%s'", npayNetType, solarType), false));
+                    }
+                }
+
+                String valStatus = errorsList.isEmpty() ? "VALID" : "ERROR";
+                List<Map<String, Object>> structuredErrors = new ArrayList<>();
+                for (ExcelValidationError err : errorsList) {
+                    Map<String, Object> errMap = new LinkedHashMap<>();
+                    errMap.put("field", err.getField());
+                    errMap.put("errorMessage", err.getErrorMessage());
+                    errMap.put("warning", err.isWarning());
+                    structuredErrors.add(errMap);
+                }
+
+                BillingUploadStaging staging = new BillingUploadStaging(
+                        uploadId,
+                        mapper.writeValueAsString(finalBillingData),
+                        valStatus,
+                        mapper.writeValueAsString(structuredErrors),
+                        "BILLING"
+                );
+                billingUploadStagingRepository.save(staging);
+                if (!errorsList.isEmpty()) totalErrorRows++;
+            }
+        }
+        return totalErrorRows;
+    }
 }

@@ -219,17 +219,27 @@ public class StagingMigrationService {
             }
 
             // ── BILLING rows: parse billing-specific fields ───────────────
-            refNo = (String) data.get("refNo");
             LocalDate fromDate = data.get("fromDate") != null
-                    ? safeParseDate((String) data.get("fromDate")) : null;
+                    ? safeParseDate((String) data.get("fromDate"))
+                    : (data.get("prevReadingDate") != null ? safeParseDate((String) data.get("prevReadingDate")) : null);
             LocalDate toDate = data.get("toDate") != null
-                    ? safeParseDate((String) data.get("toDate")) : null;
+                    ? safeParseDate((String) data.get("toDate"))
+                    : (data.get("currReadingDate") != null ? safeParseDate((String) data.get("currReadingDate")) : null);
+            refNo = (String) data.get("refNo");
+            if (refNo == null || refNo.trim().isEmpty() || "—".equals(refNo)) {
+                LocalDate refDate = toDate != null ? toDate : LocalDate.now();
+                refNo = isNotBlank(customer.getRefNo()) ? customer.getRefNo()
+                        : "REF-" + accountNo + "-" + refDate.toString().replace("-", "");
+            }
             Double importUnits = data.get("importUnits") != null
-                    ? Double.valueOf(data.get("importUnits").toString()) : 0.0;
+                    ? Double.valueOf(data.get("importUnits").toString())
+                    : (data.get("kwhImport") != null ? Double.valueOf(data.get("kwhImport").toString()) : 0.0);
             Double exportUnits = data.get("exportUnits") != null
-                    ? Double.valueOf(data.get("exportUnits").toString()) : 0.0;
+                    ? Double.valueOf(data.get("exportUnits").toString())
+                    : (data.get("kwhExport") != null ? Double.valueOf(data.get("kwhExport").toString()) : 0.0);
             Double unitCost = data.get("unitCost") != null
-                    ? Double.valueOf(data.get("unitCost").toString()) : 0.0;
+                    ? Double.valueOf(data.get("unitCost").toString())
+                    : (data.get("unitRate") != null ? Double.valueOf(data.get("unitRate").toString()) : 0.0);
             billingMode = (String) data.get("billingMode");
 
             // Guard: skip if dates are missing (DB constraint: fromDate NOT NULL)
@@ -256,6 +266,29 @@ public class StagingMigrationService {
             // Create billing record
             BillingRecord billingRecord = new BillingRecord(customer, refNo, fromDate, toDate,
                     importUnits, exportUnits, unitCost, billingMode, batchId);
+
+            // NPAY fields mapping
+            Double energyPurchase = data.get("energyPurchase") != null ? Double.valueOf(data.get("energyPurchase").toString()) : 0.0;
+            Double billSetOff = data.get("billSetOff") != null ? Double.valueOf(data.get("billSetOff").toString()) : 0.0;
+            Double retentionMoney = data.get("retentionMoney") != null ? Double.valueOf(data.get("retentionMoney").toString()) : 0.0;
+            Double payment = data.get("payment") != null ? Double.valueOf(data.get("payment").toString()) : 0.0;
+
+            billingRecord.setEnergyPurchase(energyPurchase);
+            billingRecord.setBillSetOff(billSetOff);
+            billingRecord.setRetentionMoney(retentionMoney);
+            billingRecord.setPayment(payment);
+            billingRecord.setPaymentSettled(payment);
+
+            Double kwhImport = data.get("kwhImport") != null ? Double.valueOf(data.get("kwhImport").toString()) : null;
+            Double kwhExport = data.get("kwhExport") != null ? Double.valueOf(data.get("kwhExport").toString()) : null;
+            billingRecord.setKwhImport(kwhImport);
+            billingRecord.setKwhExport(kwhExport);
+            if (kwhImport != null && kwhExport != null) {
+                billingRecord.setKwhSales(kwhExport - kwhImport);
+            }
+            billingRecord.setPrevReadingDate(fromDate);
+            billingRecord.setCurrReadingDate(toDate);
+
             billingRecordRepository.save(Objects.requireNonNull(billingRecord));
             billingInserted++;
             successfulRows++;

@@ -53,7 +53,10 @@ public class PreviewService {
         FIELD_ALIASES.put("prevreadingdate", Arrays.asList("prevreadingdate", "prev_reading_date", "prvrdgdate", "previousreadingdate", "previous_reading_date", "prv_rdg_date"));
         FIELD_ALIASES.put("currreadingdate", Arrays.asList("currreadingdate", "curr_reading_date", "crntrdgdate", "currentreadingdate", "current_reading_date", "crnt_rdg_date"));
         FIELD_ALIASES.put("billsetoff",      Arrays.asList("billsetoff", "bill_set_off", "setoff", "billoutstanding", "billoutstdsetoff", "billoutstd", "outstanding", "outstandingsetoff"));
-        FIELD_ALIASES.put("paymentsettled",  Arrays.asList("paymentsettled", "payment_settled", "settled", "payment"));
+        FIELD_ALIASES.put("paymentsettled",  Arrays.asList("paymentsettled", "payment_settled", "settled"));
+        FIELD_ALIASES.put("payment",         Arrays.asList("payment", "payment_amount"));
+        FIELD_ALIASES.put("energypurchase",  Arrays.asList("energypurchase", "energy_purchase", "purchase", "energy"));
+        FIELD_ALIASES.put("retentionmoney",  Arrays.asList("retentionmoney", "retention_money", "retention"));
         FIELD_ALIASES.put("kwhsales",        Arrays.asList("kwhsales", "sales", "salesunits", "kwhunits_sales"));
     }
 

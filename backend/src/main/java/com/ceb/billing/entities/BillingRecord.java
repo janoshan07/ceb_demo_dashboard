@@ -60,6 +60,9 @@ public class BillingRecord {
     @Column(name = "payment")
     private Double payment;
 
+    @Column(name = "energy_purchase")
+    private Double energyPurchase;
+
     // ── CEB Assist fields (Step 2) ────────────────────────────
     @Column(name = "prev_reading_date")
     private LocalDate prevReadingDate;
@@ -275,4 +278,7 @@ public class BillingRecord {
 
     public Double getPaymentSettled() { return paymentSettled; }
     public void setPaymentSettled(Double paymentSettled) { this.paymentSettled = paymentSettled; }
+
+    public Double getEnergyPurchase() { return energyPurchase; }
+    public void setEnergyPurchase(Double energyPurchase) { this.energyPurchase = energyPurchase; }
 }

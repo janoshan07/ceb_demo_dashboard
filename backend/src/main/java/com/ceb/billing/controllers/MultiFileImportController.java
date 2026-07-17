@@ -232,4 +232,62 @@ public class MultiFileImportController {
             return ResponseEntity.internalServerError().body(Map.of("message", "NGEN approval failed: " + e.getMessage()));
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  STEP 4 — NPAY
+    // ─────────────────────────────────────────────────────────────────────
+
+    @PostMapping("/officer/import/npay/upload")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> uploadNpay(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam("sessionId") Long sessionId) {
+        if (file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "File cannot be empty."));
+        }
+        try {
+            byte[] fileBytes = file.getBytes();
+            fileCache.put(sessionId + "-NPAY", fileBytes);
+            Map<String, Object> preview = multiFileImportService.previewNpay(fileBytes, file.getOriginalFilename(), sessionId);
+            return ResponseEntity.ok(preview);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "NPAY preview failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping({"/admin/import/npay/{sessionId}/approve", "/officer/import/npay/{sessionId}/approve"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> approveNpay(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "file", required = false) MultipartFile file,
+            @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            byte[] fileBytes;
+            if (file != null && !file.isEmpty()) {
+                fileBytes = file.getBytes();
+                fileCache.put(sessionId + "-NPAY", fileBytes);
+            } else {
+                fileBytes = fileCache.get(sessionId + "-NPAY");
+                if (fileBytes == null) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
+                }
+            }
+            @SuppressWarnings("unchecked")
+            Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
+                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
+                    : null;
+
+            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+            Map<String, Object> result = multiFileImportService.approveNpay(fileBytes, username, sessionId, corrections, isAdmin);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "NPAY approval failed: " + e.getMessage()));
+        }
+    }
 }

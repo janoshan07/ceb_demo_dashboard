@@ -1235,7 +1235,7 @@ const UploadPage = () => {
           deletedAt: new Date().toISOString(),
           deletedBy: "System (Auto-Rejected)",
           wizardStep,
-          stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
+          stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : wizardStep === 3 ? 'NGEN' : 'NPAY',
           isAutoRejected: true,
           rowData: { ...row }
         });
@@ -1250,7 +1250,7 @@ const UploadPage = () => {
           deletedAt: new Date().toISOString(),
           deletedBy: "System (Auto-Rejected)",
           wizardStep,
-          stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
+          stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : wizardStep === 3 ? 'NGEN' : 'NPAY',
           isAutoRejected: true,
           rowData: { ...row }
         });
@@ -1787,7 +1787,7 @@ const UploadPage = () => {
       deletedAt: new Date().toISOString(),
       deletedBy: user?.username || user?.sub || 'Unknown',
       wizardStep,
-      stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : 'NGEN',
+      stepLabel: wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : wizardStep === 3 ? 'NGEN' : 'NPAY',
       rowData: { ...row }
     }));
     setDeletedRows(prev => [...prev, ...auditEntries]);
@@ -2337,7 +2337,7 @@ const UploadPage = () => {
         {preview && (
           <button className="btn" onClick={handleMasterApprove} disabled={approving}
             style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> {isAdmin ? 'Approve & Import' : 'Stage & Proceed'}</>}
+            {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> {isAdmin ? 'Approve & Import' : 'Save Master Data & Proceed to Step 2'}</>}
           </button>
         )}
       </div>
@@ -2413,7 +2413,7 @@ const UploadPage = () => {
         {preview && (
           <button className="btn" onClick={handleCebApprove} disabled={approving}
             style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Merging…</> : <><Check size={15} /> {isAdmin ? 'Approve & Merge' : 'Stage & Proceed'}</>}
+            {approving ? <><Loader size={15} className="animate-spin" /> Merging…</> : <><Check size={15} /> {isAdmin ? 'Approve & Merge' : 'Save CEB Assist & Proceed to Step 3'}</>}
           </button>
         )}
       </div>
@@ -2482,8 +2482,15 @@ const UploadPage = () => {
         )}
         {preview && (
           <button className="btn" onClick={handleNgenApprove} disabled={approving}
-            style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit for Admin Approval'}</>}
+            style={{ background: isAdmin ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
+            {approving ? (
+              <><Loader size={15} className="animate-spin" /> {isAdmin ? 'Submitting…' : 'Saving…'}</>
+            ) : (
+              <>
+                {isAdmin ? <Zap size={15} /> : <Check size={15} />}
+                {isAdmin ? 'Approve & Finalize' : 'Save NGEN & Proceed to Step 4'}
+              </>
+            )}
           </button>
         )}
       </div>
@@ -2551,10 +2558,29 @@ const UploadPage = () => {
           </button>
         )}
         {preview && (
-          <button className="btn" onClick={handleNpayApprove} disabled={approving}
-            style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit for Admin Approval'}</>}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {preview.errorCount > 0 && (
+              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <XCircle size={14} /> Please resolve or delete all validation errors before submitting.
+              </span>
+            )}
+            <button className="btn" onClick={handleNpayApprove} disabled={approving || preview.errorCount > 0}
+              style={{
+                background: (preview.errorCount > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
+                color: (preview.errorCount > 0) ? 'var(--text-secondary)' : 'white',
+                fontWeight: 600,
+                padding: '0.6rem 1.75rem',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: (preview.errorCount > 0) ? 'not-allowed' : 'pointer',
+                border: 'none',
+                opacity: (preview.errorCount > 0) ? 0.6 : 1
+              }}>
+              {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit to Admin for Approval'}</>}
+            </button>
+          </div>
         )}
       </div>
 

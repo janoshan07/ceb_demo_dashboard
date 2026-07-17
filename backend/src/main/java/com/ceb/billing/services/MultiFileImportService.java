@@ -1628,6 +1628,10 @@ public class MultiFileImportService {
             uploadHistory.setErrorsCount(errorRows);
             uploadHistoryRepository.save(uploadHistory);
 
+            if (errorRows > 0) {
+                throw new IllegalStateException("Cannot submit batch for approval with " + errorRows + " remaining validation errors. Please correct or delete all errors first.");
+            }
+
             session.setStage("COMPLETED");
             session.setNpayBatchId(uploadId);
             sessionRepository.save(session);

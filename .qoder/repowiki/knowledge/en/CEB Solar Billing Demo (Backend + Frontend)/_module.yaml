@@ -1,0 +1,11 @@
+schema_version: 1
+module_path: ""
+title: CEB Solar Billing Demo (Backend + Frontend)
+scope:
+    - README.md
+    - schema.sql
+    - generate_test_excel.py
+    - .gitignore
+source_files: []
+depends_on: []
+related_to: []

@@ -1,0 +1,1 @@
+Client-side React dashboard for CEB's solar-grid billing system, providing role-based admin/officer/customer views with analytics charts, alert management, and CSV upload workflows.

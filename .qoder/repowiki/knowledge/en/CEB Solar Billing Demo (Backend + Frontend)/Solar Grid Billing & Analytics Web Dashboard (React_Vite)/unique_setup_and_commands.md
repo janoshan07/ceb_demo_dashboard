@@ -1,0 +1,1 @@
+Run `npm run dev` (Vite dev server), `npm run build` (production bundle to `dist/`), `npm run preview` (serve built output locally). The app expects a backend at `http://localhost:8080` and performs an initial `POST /api/auth/setup` call during login to bootstrap default users.

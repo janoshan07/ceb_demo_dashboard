@@ -1,0 +1,1 @@
+Top-level demo workspace wiring a Spring Boot REST API and a React/Vite dashboard around the shared CEB billing MySQL schema, with seed SQL and test-Excel generation scripts.

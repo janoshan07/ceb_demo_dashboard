@@ -75,31 +75,41 @@ public class MultiFileImportService {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
 
-                Map<String, Object> rowData = new LinkedHashMap<>();
-                rowData.put("rowNum", r + 1);
-                rowData.put("accountNo",       strVal(row, colMap.get("accountno")));
-                rowData.put("customerName",    strVal(row, colMap.get("customername")));
-                rowData.put("customerAddress", strVal(row, colMap.get("customeraddress")));
-                rowData.put("refNo",           strVal(row, colMap.get("refno")));
-                rowData.put("costCode",        strVal(row, colMap.get("costcode")));
-                rowData.put("mobileNo",        strVal(row, colMap.get("mobileno")));
-                rowData.put("panelCapacity",   numVal(row, colMap.get("panelcapacity")));
-                rowData.put("agreementDate",   dateStr(row, colMap.get("agreementdate")));
-                rowData.put("bankCode",        strVal(row, colMap.get("bankcode")));
-                rowData.put("branchCode",      strVal(row, colMap.get("branchcode")));
-                rowData.put("bankAccountNo",   strVal(row, colMap.get("bankaccountno")));
-                String solarType = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
-                String tariffType = strVal(row, colMap.get("tarifftype"));
-                String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
-                rowData.put("solarType",       solarType);
-                rowData.put("unitRate",        numVal(row, colMap.get("unitcost"))); // maps unitrate/unitcost
-                rowData.put("tariffType",      tariffType);
-                rowData.put("billingMode",     billingMode);
+                try {
+                    Map<String, Object> rowData = new LinkedHashMap<>();
+                    rowData.put("rowNum", r + 1);
+                    rowData.put("accountNo",       strVal(row, colMap.get("accountno")));
+                    rowData.put("customerName",    strVal(row, colMap.get("customername")));
+                    rowData.put("customerAddress", strVal(row, colMap.get("customeraddress")));
+                    rowData.put("refNo",           strVal(row, colMap.get("refno")));
+                    rowData.put("costCode",        strVal(row, colMap.get("costcode")));
+                    rowData.put("mobileNo",        strVal(row, colMap.get("mobileno")));
+                    rowData.put("panelCapacity",   numVal(row, colMap.get("panelcapacity")));
+                    rowData.put("agreementDate",   dateStr(row, colMap.get("agreementdate")));
+                    rowData.put("bankCode",        strVal(row, colMap.get("bankcode")));
+                    rowData.put("branchCode",      strVal(row, colMap.get("branchcode")));
+                    rowData.put("bankAccountNo",   strVal(row, colMap.get("bankaccountno")));
+                    String solarType = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
+                    String tariffType = strVal(row, colMap.get("tarifftype"));
+                    String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
+                    rowData.put("solarType",       solarType);
+                    rowData.put("unitRate",        numVal(row, colMap.get("unitcost"))); // maps unitrate/unitcost
+                    rowData.put("tariffType",      tariffType);
+                    rowData.put("billingMode",     billingMode);
 
-                List<String> rowErrors = validateMasterDataRow(rowData);
-                rowData.put("errors", rowErrors);
-                rowData.put("status", rowErrors.isEmpty() ? "VALID" : "ERROR");
-                rows.add(rowData);
+                    List<String> rowErrors = validateMasterDataRow(rowData);
+                    rowData.put("errors", rowErrors);
+                    rowData.put("status", rowErrors.isEmpty() ? "VALID" : "ERROR");
+                    rows.add(rowData);
+                } catch (Exception rowEx) {
+                    // Single row failure must not crash the entire preview
+                    Map<String, Object> errorRow = new LinkedHashMap<>();
+                    errorRow.put("rowNum", r + 1);
+                    errorRow.put("accountNo", strVal(row, colMap.get("accountno")));
+                    errorRow.put("errors", List.of("Row processing failed: " + rowEx.getMessage()));
+                    errorRow.put("status", "ERROR");
+                    rows.add(errorRow);
+                }
             }
         }
 
@@ -1102,6 +1112,8 @@ public class MultiFileImportService {
         result.put("cebAssistCount", session.getCebAssistCount());
         result.put("ngenCount", session.getNgenCount());
         result.put("npayCount", session.getNpayCount());
+        result.put("mainDatasetApproved", session.getMainDatasetApproved());
+        result.put("masterComparisonApproved", session.getMasterComparisonApproved());
         result.put("createdAt", session.getCreatedAt());
         return result;
     }
@@ -1853,13 +1865,6 @@ public class MultiFileImportService {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
                 .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
 
-        List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
-        Map<String, Map<String, Object>> masterMap = new HashMap<>();
-        for (Map<String, Object> m : masterStaged) {
-            String acc = (String) m.get("accountNo");
-            if (acc != null) masterMap.put(acc.trim(), m);
-        }
-
         List<Map<String, Object>> cebStaged = loadCebDataFromStaging(sessionId);
         Map<String, Map<String, Object>> cebMap = new HashMap<>();
         for (Map<String, Object> c : cebStaged) {
@@ -1881,7 +1886,7 @@ public class MultiFileImportService {
             if (acc != null) npayMap.put(acc.trim(), p);
         }
 
-        // Gather all unique account numbers from CEB, NGEN, and NPAY
+        // Gather all unique account numbers from CEB, NGEN, and NPAY only (no Master Data)
         Set<String> allAccounts = new HashSet<>();
         allAccounts.addAll(cebMap.keySet());
         allAccounts.addAll(ngenMap.keySet());
@@ -1895,8 +1900,7 @@ public class MultiFileImportService {
             row.put("rowNum", rowIdx++);
             row.put("accountNo", acc);
 
-            // 1. Get Master Profile (Step 1) or Database Customer
-            Map<String, Object> masterCust = masterMap.get(acc);
+            // No Master Data lookup in Step 5 — only CEB, NGEN, NPAY
             String customerName = "—";
             String customerAddress = "—";
             String refNo = "—";
@@ -1911,44 +1915,6 @@ public class MultiFileImportService {
             String tariffType = null;
             String billingMode = null;
             Double masterUnitRate = null;
-
-            if (masterCust != null) {
-                customerName = masterCust.get("customerName") != null ? masterCust.get("customerName").toString() : "—";
-                customerAddress = masterCust.get("customerAddress") != null ? masterCust.get("customerAddress").toString() : "—";
-                refNo = masterCust.get("refNo") != null ? masterCust.get("refNo").toString() : "—";
-                costCode = masterCust.get("costCode") != null ? masterCust.get("costCode").toString() : "—";
-                mobileNo = masterCust.get("mobileNo") != null ? masterCust.get("mobileNo").toString() : "—";
-                panelCapacity = masterCust.get("panelCapacity") != null && !masterCust.get("panelCapacity").toString().isEmpty()
-                        ? ((Number) masterCust.get("panelCapacity")).doubleValue() : null;
-                agreementDate = masterCust.get("agreementDate") != null ? masterCust.get("agreementDate").toString() : null;
-                bankCode = masterCust.get("bankCode") != null ? masterCust.get("bankCode").toString() : "—";
-                branchCode = masterCust.get("branchCode") != null ? masterCust.get("branchCode").toString() : "—";
-                bankAccountNo = masterCust.get("bankAccountNo") != null ? masterCust.get("bankAccountNo").toString() : "—";
-                solarType = masterCust.get("solarType") != null ? masterCust.get("solarType").toString() : null;
-                tariffType = masterCust.get("tariffType") != null ? masterCust.get("tariffType").toString() : null;
-                billingMode = masterCust.get("billingMode") != null ? masterCust.get("billingMode").toString() : null;
-                masterUnitRate = masterCust.get("unitRate") != null && !masterCust.get("unitRate").toString().isEmpty()
-                        ? ((Number) masterCust.get("unitRate")).doubleValue() : null;
-            } else {
-                Optional<Customer> cOpt = customerRepository.findById(acc);
-                if (cOpt.isPresent()) {
-                    Customer c = cOpt.get();
-                    customerName = c.getCustomerName() != null ? c.getCustomerName() : "—";
-                    customerAddress = c.getCustomerAddress() != null ? c.getCustomerAddress() : "—";
-                    refNo = c.getRefNo() != null ? c.getRefNo() : "—";
-                    costCode = c.getCostCode() != null ? c.getCostCode().getCostCode() : "—";
-                    mobileNo = c.getMobileNo() != null ? c.getMobileNo() : "—";
-                    panelCapacity = c.getPanelCapacity();
-                    agreementDate = c.getAgreementDate() != null ? c.getAgreementDate().toString() : null;
-                    bankCode = c.getBankCode() != null ? c.getBankCode() : "—";
-                    branchCode = c.getBranchCode() != null ? c.getBranchCode() : "—";
-                    bankAccountNo = c.getBankAccountNo() != null ? c.getBankAccountNo() : "—";
-                    solarType = c.getSolarType();
-                    tariffType = c.getTariffType();
-                    billingMode = c.getExpenseCode() != null ? c.getExpenseCode().getExpCode() : null;
-                    masterUnitRate = c.getUnitRate();
-                }
-            }
 
             row.put("customerName", customerName);
             row.put("customerAddress", customerAddress);
@@ -1965,14 +1931,14 @@ public class MultiFileImportService {
             row.put("billingMode", billingMode);
             row.put("unitRate", masterUnitRate);
 
-            // 2. CEB Data
+            // 1. CEB Data
             Map<String, Object> ceb = cebMap.get(acc);
             String prevReadingDate = ceb != null ? (String) ceb.get("prevReadingDate") : null;
             String currReadingDate = ceb != null ? (String) ceb.get("currReadingDate") : null;
             row.put("prevReadingDate", prevReadingDate);
             row.put("currReadingDate", currReadingDate);
 
-            // 3. NGEN Data
+            // 2. NGEN Data
             Map<String, Object> ngen = ngenMap.get(acc);
             Double kwhImport = ngen != null && ngen.get("kwhImport") != null ? ((Number) ngen.get("kwhImport")).doubleValue() : null;
             Double kwhExport = ngen != null && ngen.get("kwhExport") != null ? ((Number) ngen.get("kwhExport")).doubleValue() : null;
@@ -1994,7 +1960,7 @@ public class MultiFileImportService {
             row.put("salesAmount", ngenSalesAmount);
             row.put("paymentSettled", ngenPaymentSettled);
 
-            // 4. NPAY Data
+            // 3. NPAY Data
             Map<String, Object> npay = npayMap.get(acc);
             String npayNetType = npay != null ? (String) npay.get("npayNetType") : null;
             String npayName = npay != null ? (String) npay.get("npayName") : null;
@@ -2013,7 +1979,7 @@ public class MultiFileImportService {
             List<String> errors = new ArrayList<>();
             List<String> warnings = new ArrayList<>();
 
-            // 5. Cross-file checks and validations
+            // 4. Cross-file checks between CEB, NGEN, and NPAY (Step 5 only)
             if (ceb == null) {
                 warnings.add("No CEB Assist data found for this account");
             }
@@ -2055,36 +2021,7 @@ public class MultiFileImportService {
                 }
             }
 
-            // 6. Master Data Comparison (only if Master Data / DB is present)
-            boolean hasMaster = (masterCust != null || customerRepository.existsById(acc));
-            if (!hasMaster) {
-                errors.add("Account No not found in customer database or Master Data");
-            } else {
-                // Compare Net Type with Master Net Type
-                String activeNetType = solarType != null ? solarType : null;
-                if (activeNetType != null) {
-                    String normSolar = ExcelValidationService.normalizeSolarType(activeNetType);
-                    if (ngenNetType != null) {
-                        String normNgen = ExcelValidationService.normalizeSolarType(ngenNetType);
-                        if (normSolar != null && normNgen != null && !normSolar.equals(normNgen)) {
-                            errors.add(String.format("Net Type Mismatch: NGEN='%s', Master='%s'", ngenNetType, solarType));
-                        }
-                    }
-                    if (npayNetType != null) {
-                        String normNpay = ExcelValidationService.normalizeSolarType(npayNetType);
-                        if (normSolar != null && normNpay != null && !normSolar.equals(normNpay)) {
-                            errors.add(String.format("Net Type Mismatch: NPAY='%s', Master='%s'", npayNetType, solarType));
-                        }
-                    }
-                }
-
-                // Compare Name with Master Name
-                if (customerName != null && !"—".equals(customerName) && npayName != null && !npayName.trim().isEmpty()) {
-                    if (!customerName.trim().equalsIgnoreCase(npayName.trim())) {
-                        warnings.add(String.format("Name mismatch: NPAY='%s', Master='%s'", npayName, customerName));
-                    }
-                }
-            }
+            // No Master Data comparison here — deferred to Step 6
 
             row.put("errors", errors);
             row.put("warnings", warnings);
@@ -2157,6 +2094,216 @@ public class MultiFileImportService {
         return result;
     }
 
+    // ════════════════════════════════════════════════════════════════════
+    //  STEP 6 — MASTER DATA COMPARISON
+    // ════════════════════════════════════════════════════════════════════
+
+    @Transactional
+    public Map<String, Object> compareWithMasterData(Long sessionId) throws Exception {
+        ImportSession session = sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        if (!"MAIN_DATASET_APPROVED".equals(session.getStage())) {
+            throw new IllegalStateException("Main Dataset must be approved first. Current stage: " + session.getStage());
+        }
+
+        List<Map<String, Object>> mainDataset = getMainDataset(sessionId);
+        if (mainDataset.isEmpty()) {
+            throw new IllegalStateException("No Main Dataset found. Please complete Step 5 first.");
+        }
+
+        // Load Master Data
+        List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
+        Map<String, Map<String, Object>> masterMap = new HashMap<>();
+        for (Map<String, Object> m : masterStaged) {
+            String acc = (String) m.get("accountNo");
+            if (acc != null) masterMap.put(acc.trim(), m);
+        }
+
+        List<Map<String, Object>> enrichedList = new ArrayList<>();
+        int matchCount = 0;
+        int mismatchCount = 0;
+        int notFoundCount = 0;
+
+        for (Map<String, Object> row : mainDataset) {
+            Map<String, Object> enriched = new LinkedHashMap<>(row);
+            String acc = (String) row.get("accountNo");
+
+            Map<String, Object> masterCust = masterMap.get(acc);
+            List<String> errors = new ArrayList<>(row.get("errors") != null ? (List<String>) row.get("errors") : Collections.emptyList());
+            List<String> warnings = new ArrayList<>(row.get("warnings") != null ? (List<String>) row.get("warnings") : Collections.emptyList());
+
+            if (masterCust != null) {
+                // Enrich with Master Data profile
+                String masterName = masterCust.get("customerName") != null ? masterCust.get("customerName").toString() : "—";
+                String masterAddress = masterCust.get("customerAddress") != null ? masterCust.get("customerAddress").toString() : "—";
+                String masterRefNo = masterCust.get("refNo") != null ? masterCust.get("refNo").toString() : "—";
+                String masterCostCode = masterCust.get("costCode") != null ? masterCust.get("costCode").toString() : "—";
+                String masterMobile = masterCust.get("mobileNo") != null ? masterCust.get("mobileNo").toString() : "—";
+                Double masterPanelCap = masterCust.get("panelCapacity") != null && !masterCust.get("panelCapacity").toString().isEmpty()
+                        ? ((Number) masterCust.get("panelCapacity")).doubleValue() : null;
+                String masterAgrDate = masterCust.get("agreementDate") != null ? masterCust.get("agreementDate").toString() : null;
+                String masterBankCode = masterCust.get("bankCode") != null ? masterCust.get("bankCode").toString() : "—";
+                String masterBranchCode = masterCust.get("branchCode") != null ? masterCust.get("branchCode").toString() : "—";
+                String masterBankAcct = masterCust.get("bankAccountNo") != null ? masterCust.get("bankAccountNo").toString() : "—";
+                String masterSolarType = masterCust.get("solarType") != null ? masterCust.get("solarType").toString() : null;
+                String masterTariffType = masterCust.get("tariffType") != null ? masterCust.get("tariffType").toString() : null;
+                String masterBillingMode = masterCust.get("billingMode") != null ? masterCust.get("billingMode").toString() : null;
+                Double masterUnitRate = masterCust.get("unitRate") != null && !masterCust.get("unitRate").toString().isEmpty()
+                        ? ((Number) masterCust.get("unitRate")).doubleValue() : null;
+
+                enriched.put("customerName", masterName);
+                enriched.put("customerAddress", masterAddress);
+                enriched.put("refNo", masterRefNo);
+                enriched.put("costCode", masterCostCode);
+                enriched.put("mobileNo", masterMobile);
+                enriched.put("panelCapacity", masterPanelCap);
+                enriched.put("agreementDate", masterAgrDate);
+                enriched.put("bankCode", masterBankCode);
+                enriched.put("branchCode", masterBranchCode);
+                enriched.put("bankAccountNo", masterBankAcct);
+                enriched.put("solarType", masterSolarType);
+                enriched.put("tariffType", masterTariffType);
+                enriched.put("billingMode", masterBillingMode);
+                enriched.put("unitRate", masterUnitRate);
+                enriched.put("masterDataFound", true);
+
+                // Cross-file comparisons with Master Data
+                String ngenNetType = (String) row.get("ngenNetType");
+                String npayNetType = (String) row.get("npayNetType");
+
+                if (masterSolarType != null) {
+                    String normMaster = ExcelValidationService.normalizeSolarType(masterSolarType);
+                    if (ngenNetType != null) {
+                        String normNgen = ExcelValidationService.normalizeSolarType(ngenNetType);
+                        if (normMaster != null && normNgen != null && !normMaster.equals(normNgen)) {
+                            errors.add(String.format("Net Type Mismatch: NGEN='%s', Master='%s'", ngenNetType, masterSolarType));
+                        }
+                    }
+                    if (npayNetType != null) {
+                        String normNpay = ExcelValidationService.normalizeSolarType(npayNetType);
+                        if (normMaster != null && normNpay != null && !normMaster.equals(normNpay)) {
+                            errors.add(String.format("Net Type Mismatch: NPAY='%s', Master='%s'", npayNetType, masterSolarType));
+                        }
+                    }
+                }
+
+                // Name comparison: NPAY Name vs Master Name
+                String npayName = (String) row.get("npayName");
+                if (masterName != null && !"—".equals(masterName) && npayName != null && !npayName.trim().isEmpty()) {
+                    if (!masterName.trim().equalsIgnoreCase(npayName.trim())) {
+                        warnings.add(String.format("Name mismatch: NPAY='%s', Master='%s'", npayName, masterName));
+                    }
+                }
+
+                matchCount++;
+            } else {
+                // Check DB for existing customer
+                Optional<Customer> cOpt = customerRepository.findById(acc);
+                if (cOpt.isPresent()) {
+                    Customer c = cOpt.get();
+                    enriched.put("customerName", c.getCustomerName() != null ? c.getCustomerName() : "—");
+                    enriched.put("customerAddress", c.getCustomerAddress() != null ? c.getCustomerAddress() : "—");
+                    enriched.put("refNo", c.getRefNo() != null ? c.getRefNo() : "—");
+                    enriched.put("mobileNo", c.getMobileNo() != null ? c.getMobileNo() : "—");
+                    enriched.put("bankCode", c.getBankCode() != null ? c.getBankCode() : "—");
+                    enriched.put("branchCode", c.getBranchCode() != null ? c.getBranchCode() : "—");
+                    enriched.put("bankAccountNo", c.getBankAccountNo() != null ? c.getBankAccountNo() : "—");
+                    enriched.put("solarType", c.getSolarType());
+                    enriched.put("billingMode", c.getExpenseCode() != null ? c.getExpenseCode().getExpCode() : null);
+                    enriched.put("unitRate", c.getUnitRate());
+                    enriched.put("masterDataFound", true);
+                    matchCount++;
+                } else {
+                    enriched.put("masterDataFound", false);
+                    errors.add("Account No not found in Master Data or customer database");
+                    notFoundCount++;
+                }
+            }
+
+            enriched.put("errors", errors);
+            enriched.put("warnings", warnings);
+            enriched.put("status", !errors.isEmpty() ? "ERROR" : !warnings.isEmpty() ? "WARNING" : "VALID");
+            if (!errors.isEmpty()) mismatchCount++;
+            enrichedList.add(enriched);
+        }
+
+        // Store enriched dataset (replaces the Step 5 dataset in cache)
+        MAIN_DATA_CACHE.put(sessionId, enrichedList);
+        session.setStage("MASTER_COMPARISON_GENERATED");
+        sessionRepository.save(session);
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("stage", "MASTER_COMPARISON_GENERATED");
+        result.put("totalRecords", enrichedList.size());
+        result.put("matchedCount", matchCount);
+        result.put("mismatchCount", mismatchCount);
+        result.put("notFoundCount", notFoundCount);
+        result.put("rows", enrichedList);
+        result.put("message", String.format("Master Data comparison complete. %d matched, %d mismatches, %d not found.", matchCount, mismatchCount, notFoundCount));
+        return result;
+    }
+
+    @Transactional
+    public Map<String, Object> approveMasterComparison(Long sessionId, String username,
+                                                      Map<String, Map<String, Object>> corrections) throws Exception {
+        ImportSession session = sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        if (!"MASTER_COMPARISON_GENERATED".equals(session.getStage())) {
+            throw new IllegalStateException("Master Data comparison must be generated first. Current stage: " + session.getStage());
+        }
+
+        List<Map<String, Object>> mainDataset = getMainDataset(sessionId);
+        if (mainDataset.isEmpty()) {
+            throw new IllegalStateException("No comparison data found.");
+        }
+
+        // Apply corrections
+        List<Map<String, Object>> correctedDataset = new ArrayList<>();
+        for (Map<String, Object> row : mainDataset) {
+            String accountNo = (String) row.get("accountNo");
+            String rowNumStr = String.valueOf(row.get("rowNum"));
+
+            Map<String, Object> corr = null;
+            if (corrections != null) {
+                if (corrections.containsKey(rowNumStr)) {
+                    corr = corrections.get(rowNumStr);
+                } else if (accountNo != null && corrections.containsKey(accountNo)) {
+                    corr = corrections.get(accountNo);
+                }
+            }
+
+            if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                Map<String, Object> finalRow = new LinkedHashMap<>(row);
+                finalRow.put("deleted", true);
+                correctedDataset.add(finalRow);
+                continue;
+            }
+
+            Map<String, Object> finalRow = new LinkedHashMap<>(row);
+            if (corr != null) {
+                finalRow.putAll(corr);
+            }
+            correctedDataset.add(finalRow);
+        }
+
+        MAIN_DATA_CACHE.put(sessionId, correctedDataset);
+        session.setMasterComparisonApproved(true);
+        session.setStage("MASTER_COMPARISON_APPROVED");
+        sessionRepository.save(session);
+
+        auditLogService.log("MASTER_COMPARISON_APPROVED",
+                String.format("Master Data comparison approved by %s for session %d.", username, sessionId));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("stage", "MASTER_COMPARISON_APPROVED");
+        result.put("message", "Master Data comparison approved. Ready to finalize.");
+        return result;
+    }
+
     private void revalidateMergedRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
@@ -2211,34 +2358,7 @@ public class MultiFileImportService {
             }
         }
 
-        // 6. Master Data Comparison
-        boolean hasMaster = (solarType != null || (accountNo != null && customerRepository.existsById(accountNo)));
-        if (!hasMaster) {
-            errors.add("Account No not found in customer database or Master Data");
-        } else {
-            String activeNetType = solarType;
-            if (activeNetType != null) {
-                String normSolar = ExcelValidationService.normalizeSolarType(activeNetType);
-                if (ngenNetType != null) {
-                    String normNgen2 = ExcelValidationService.normalizeSolarType(ngenNetType);
-                    if (normSolar != null && normNgen2 != null && !normSolar.equals(normNgen2)) {
-                        errors.add(String.format("Net Type Mismatch: NGEN='%s', Master='%s'", ngenNetType, solarType));
-                    }
-                }
-                if (npayNetType != null) {
-                    String normNpay2 = ExcelValidationService.normalizeSolarType(npayNetType);
-                    if (normSolar != null && normNpay2 != null && !normSolar.equals(normNpay2)) {
-                        errors.add(String.format("Net Type Mismatch: NPAY='%s', Master='%s'", npayNetType, solarType));
-                    }
-                }
-            }
-
-            if (customerName != null && !"—".equals(customerName) && npayName != null && !npayName.trim().isEmpty()) {
-                if (!customerName.trim().equalsIgnoreCase(npayName.trim())) {
-                    warnings.add(String.format("Name mismatch: NPAY='%s', Master='%s'", npayName, customerName));
-                }
-            }
-        }
+        // No Master Data comparison in Step 5 revalidation — deferred to Step 6
 
         row.put("errors", errors);
         row.put("warnings", warnings);
@@ -2250,6 +2370,11 @@ public class MultiFileImportService {
                                               Map<String, Map<String, Object>> corrections, boolean isAdmin) throws Exception {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
                 .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        // Require Step 6 (Master Data Comparison) to be approved before finalization
+        if (!"MASTER_COMPARISON_APPROVED".equals(session.getStage())) {
+            throw new IllegalStateException("Master Data comparison must be approved before finalizing. Current stage: " + session.getStage());
+        }
 
         List<Map<String, Object>> mainDataset = getMainDataset(sessionId);
         if (mainDataset.isEmpty()) {

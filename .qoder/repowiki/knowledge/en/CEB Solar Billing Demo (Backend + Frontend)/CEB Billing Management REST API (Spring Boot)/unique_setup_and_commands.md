@@ -1,0 +1,1 @@
+Run with `./mvnw spring-boot:run` (or `mvn spring-boot:run`); requires a local MySQL instance at `localhost:3306/ceb_billing_db` with user `root`/`Mj@251677` (DB auto-created). On first start call `POST /api/auth/setup` to seed admin/officer/viewer/default-customer accounts. File uploads are capped at 10 MB per request.

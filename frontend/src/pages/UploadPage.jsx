@@ -56,8 +56,11 @@ export const isAccountInvalid = (acc) => {
 //  WIZARD STEP INDICATOR
 // ═══════════════════════════════════════════════════════════════════════════
 const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAccessible }) => {
-  const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'COMPLETED'];
-  const completedUpTo = stageOrder.indexOf(sessionStage);
+  const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'NGEN_APPROVED', 'NPAY_APPROVED', 'MAIN_DATASET_GENERATED', 'MAIN_DATASET_APPROVED', 'MASTER_COMPARISON_GENERATED', 'MASTER_COMPARISON_APPROVED', 'COMPLETED'];
+  const stageIdx = stageOrder.indexOf(sessionStage);
+  // Map stage index to "last fully completed step number"
+  // MASTER_APPROVED(1)→step1 done, CEB_APPROVED(2)→step2, NGEN_APPROVED(3)→step3, NPAY_APPROVED(4)→step4, MAIN_DATASET_GENERATED(5)→step4 (step5 in progress)
+  const completedUpTo = stageIdx <= 4 ? stageIdx : stageIdx === 5 ? 4 : stageIdx >= 6 ? 5 : 0;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '2rem', padding: '0 0.5rem' }}>
@@ -1350,7 +1353,14 @@ const UploadPage = () => {
 
   // ── Wizard state ──────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState('wizard'); // 'wizard' | 'history'
-  const [wizardStep, setWizardStep] = useState(1); // 1, 2, 3, 4
+  const [wizardStep, setWizardStep] = useState(1); // 1, 2, 3, 4, 5, 6
+
+  // ── Step 5 & 6 state ────────────────────────────────────────────
+  const [mainDataset, setMainDataset] = useState(null); // { rows, totalRecords, errorCount, warningCount, validCount }
+  const [mainDatasetLoading, setMainDatasetLoading] = useState(false);
+  const [masterComparison, setMasterComparison] = useState(null); // { rows, matchedCount, mismatchCount, notFoundCount }
+  const [masterComparisonLoading, setMasterComparisonLoading] = useState(false);
+  const [mainCorrections, setMainCorrections] = useState({});
 
   // ── Session state ─────────────────────────────────────────────────────
   const [session, setSession] = useState(null); // { sessionId, stage, masterCustomerCount, cebAssistCount, ngenCount, npayCount }
@@ -1581,6 +1591,8 @@ const UploadPage = () => {
     { label: 'CEB Assist',   icon: <Database size={16} /> },
     { label: 'NGEN Sheet',   icon: <Zap size={16} /> },
     { label: 'NPAY Sheet',   icon: <FileText size={16} /> },
+    { label: 'Main Dataset', icon: <Layers size={16} /> },
+    { label: 'Finalize',     icon: <CheckCircle size={16} /> },
   ];
 
   // Stage → step mapping
@@ -1589,6 +1601,10 @@ const UploadPage = () => {
     if (stage === 'MASTER_APPROVED') return 2;
     if (stage === 'CEB_APPROVED') return 3;
     if (stage === 'NGEN_APPROVED') return 4;
+    if (stage === 'MAIN_DATASET_GENERATED') return 5;
+    if (stage === 'MAIN_DATASET_APPROVED') return 6;
+    if (stage === 'MASTER_COMPARISON_GENERATED') return 6;
+    if (stage === 'MASTER_COMPARISON_APPROVED') return 6;
     return 1;
   };
 
@@ -1604,9 +1620,13 @@ const UploadPage = () => {
   const isStepAccessible = (stepNum) => {
     if (stepNum === 1) return true; // Step 1 is always accessible
     if (!session || !session.hasActiveSession) return false;
-    const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'NGEN_APPROVED', 'COMPLETED'];
+    const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'NGEN_APPROVED', 'MAIN_DATASET_GENERATED', 'MAIN_DATASET_APPROVED', 'MASTER_COMPARISON_GENERATED', 'MASTER_COMPARISON_APPROVED', 'COMPLETED'];
     const completedUpTo = stageOrder.indexOf(session.stage);
-    return completedUpTo >= stepNum - 1;
+    // Steps 2-4 accessible based on stage; Step 5 accessible after all files approved; Step 6 after main dataset approved
+    if (stepNum <= 4) return completedUpTo >= stepNum - 1;
+    if (stepNum === 5) return session.allFilesApproved || completedUpTo >= 4;
+    if (stepNum === 6) return completedUpTo >= 5;
+    return false;
   };
 
   const latestRejected = uploadHistory.find(h => h.status === 'REJECTED');
@@ -2293,7 +2313,14 @@ const UploadPage = () => {
       const fd = new FormData();
       fd.append('file', file);
       const res = await authFetch('/api/officer/import/master-data/upload', { method: 'POST', body: fd });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        const text = await res.text().catch(() => '');
+        showToast(text || `Preview failed (HTTP ${res.status}). Check that the file is a valid .xlsx Excel file.`, 'error');
+        return;
+      }
       if (!res.ok) { showToast(data.message || 'Preview failed.', 'error'); return; }
       const isolated = isolateInvalidAccountRows(data);
       setPreview(isolated);
@@ -2449,14 +2476,126 @@ const UploadPage = () => {
       const res = await authFetch(`/api/officer/import/npay/${session.sessionId}/approve`, { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
+      showToast(`✅ NPAY approved! ${data.npayCount} records cached. Generating Main Dataset...`, 'success');
+      setSession(prev => ({ ...prev, stage: 'MAIN_DATASET_GENERATED', npayCount: data.npayCount, allFilesApproved: true }));
+      setWizardStep(5);
+      // Auto-load main dataset
+      loadMainDataset(session.sessionId);
+    } catch (e) {
+      showToast('Approval failed: ' + e.message, 'error');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // ── Step 5: Main Dataset ──────────────────────────────────────────────
+  const loadMainDataset = async (sid) => {
+    const sessionId = sid || session?.sessionId;
+    if (!sessionId) return;
+    try {
+      setMainDatasetLoading(true);
+      const res = await authFetch(`/api/officer/import/${sessionId}/main-dataset`);
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Failed to load main dataset.', 'error'); return; }
+      const rows = Array.isArray(data) ? data : (data.rows || []);
+      const errorCount = rows.filter(r => r.status === 'ERROR').length;
+      const warningCount = rows.filter(r => r.status === 'WARNING').length;
+      const validCount = rows.filter(r => r.status === 'VALID').length;
+      const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount });
+    } catch (e) {
+      showToast('Failed to load main dataset: ' + e.message, 'error');
+    } finally {
+      setMainDatasetLoading(false);
+    }
+  };
+
+  const handleApproveMainDataset = async () => {
+    if (!session?.sessionId) return;
+    try {
+      setApproving(true);
+      const fd = new FormData();
+      fd.append('correctionsJson', JSON.stringify(mainCorrections));
+      const res = await authFetch(`/api/officer/import/${session.sessionId}/approve-main-dataset`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
+      showToast('✅ Main Dataset approved! Proceed to Step 6 — Master Data Comparison.', 'success');
+      setSession(prev => ({ ...prev, stage: 'MAIN_DATASET_APPROVED' }));
+      setWizardStep(6);
+      // Auto-load master comparison
+      loadMasterComparison(session.sessionId);
+    } catch (e) {
+      showToast('Approval failed: ' + e.message, 'error');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  // ── Step 6: Master Data Comparison ──────────────────────────────────────
+  const loadMasterComparison = async (sid) => {
+    const sessionId = sid || session?.sessionId;
+    if (!sessionId) return;
+    try {
+      setMasterComparisonLoading(true);
+      const res = await authFetch(`/api/officer/import/${sessionId}/compare-master`);
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Comparison failed.', 'error'); return; }
+      const rows = data.rows || [];
+      const errorCount = rows.filter(r => r.status === 'ERROR').length;
+      const warningCount = rows.filter(r => r.status === 'WARNING').length;
+      const validCount = rows.filter(r => r.status === 'VALID').length;
+      setMasterComparison({
+        rows, totalRecords: rows.length, errorCount, warningCount, validCount,
+        matchedCount: data.matchedCount, mismatchCount: data.mismatchCount, notFoundCount: data.notFoundCount
+      });
+    } catch (e) {
+      showToast('Comparison failed: ' + e.message, 'error');
+    } finally {
+      setMasterComparisonLoading(false);
+    }
+  };
+
+  const handleApproveMasterComparison = async () => {
+    if (!session?.sessionId) return;
+    try {
+      setApproving(true);
+      const fd = new FormData();
+      fd.append('correctionsJson', JSON.stringify(mainCorrections));
+      const res = await authFetch(`/api/officer/import/${session.sessionId}/approve-master-comparison`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
+      showToast('✅ Master Data comparison approved!', 'success');
+      setSession(prev => ({ ...prev, stage: 'MASTER_COMPARISON_APPROVED' }));
+      // Now finalize
+      handleFinalize(session.sessionId);
+    } catch (e) {
+      showToast('Approval failed: ' + e.message, 'error');
+    } finally {
+      setApproving(false);
+    }
+  };
+
+  const handleFinalize = async (sid) => {
+    const sessionId = sid || session?.sessionId;
+    if (!sessionId) return;
+    try {
+      setApproving(true);
+      const fd = new FormData();
+      fd.append('correctionsJson', JSON.stringify(mainCorrections));
+      const res = await authFetch(`/api/officer/import/${sessionId}/finalize`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Finalization failed.', 'error'); return; }
       showToast(`🎉 Import Complete! ${data.billingRecordsCreated} billing records created. Customers added to directory.`, 'success');
       setSession(null);
       setWizardStep(1);
       resetAllStepData();
+      setMainDataset(null);
+      setMasterComparison(null);
+      setMainCorrections({});
       fetchHistory();
       setActiveView('history');
     } catch (e) {
-      showToast('Approval failed: ' + e.message, 'error');
+      showToast('Finalization failed: ' + e.message, 'error');
     } finally {
       setApproving(false);
     }
@@ -2879,7 +3018,7 @@ const UploadPage = () => {
                 border: 'none',
                 opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
               }}>
-              {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit to Admin for Approval'}</>}
+              {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> Approve NPAY & Generate Main Dataset</>}
             </button>
           </div>
         )}
@@ -2905,6 +3044,238 @@ const UploadPage = () => {
       )}
     </div>
   );
+
+  // ── Step 5: Main Dataset ──────────────────────────────────────────────
+  const renderStep5 = () => {
+    if (mainDatasetLoading) {
+      return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><Loader size={28} className="animate-spin" /><div style={{ marginTop: '0.75rem' }}>Generating Main Dataset...</div></div>;
+    }
+    if (!mainDataset) {
+      return (
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <Layers size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#6366f1' }} />
+          <div style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Main Dataset has not been generated yet.</div>
+          <button onClick={() => loadMainDataset()} style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.5rem', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            <RefreshCw size={15} /> Generate Main Dataset
+          </button>
+        </div>
+      );
+    }
+    const { rows, totalRecords, errorCount, warningCount, validCount, duplicateCount } = mainDataset;
+    const hasErrors = (errorCount || 0) > 0 || (duplicateCount || 0) > 0;
+    return (
+      <div>
+        <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+          <Layers size={17} color="#6366f1" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+            <strong style={{ color: 'white' }}>Step 5 — Main Dataset (Merged CEB Assist + NGEN + NPAY)</strong>
+            <br />
+            All three files have been merged by Account Number. Cross-file validations have been applied.
+            Review the merged records below, then approve to proceed to Master Data comparison.
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <StatCard label="Total Records" value={totalRecords} color="white" icon={<FileText size={18} />} />
+          <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
+          <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Duplicates" value={duplicateCount || 0} color={(duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+        </div>
+
+        <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                {['#', 'Account No', 'Customer Name', 'Prev Reading', 'Curr Reading', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Bill Set Off', 'Payment', 'Net Type', 'Name Match', 'Status', 'Errors'].map(h => (
+                  <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(rows || []).map((row, i) => (
+                <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.effectiveUnitRate ?? row.unitRate ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.billSetOff ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.netType || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                    {row.nameMatchStatus === 'MATCH' ? <span style={{ color: '#10b981', fontWeight: 600 }}>Match</span>
+                      : row.nameMatchStatus === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>Mismatch</span>
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    <span style={{
+                      padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
+                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'DUPLICATE' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)',
+                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' || row.status === 'DUPLICATE' ? '#f59e0b' : 'var(--text-muted)'
+                    }}>{row.status}</span>
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>
+                    {row.errors && row.errors.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                        {row.errors.map((err, idx) => (
+                          <div key={idx} style={{ color: '#ef4444', fontSize: '0.72rem', display: 'flex', gap: '0.2rem', alignItems: 'center' }}>
+                            <AlertTriangle size={11} style={{ flexShrink: 0 }} /> {err}
+                          </div>
+                        ))}
+                      </div>
+                    ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button onClick={() => loadMainDataset()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleApproveMainDataset} disabled={approving || hasErrors}
+            style={{
+              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+              color: hasErrors ? 'var(--text-muted)' : 'white',
+              fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
+              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+              opacity: hasErrors ? 0.6 : 1
+            }}>
+            {approving ? <><Loader size={15} className="animate-spin" /> Approving...</> : <><CheckCircle size={15} /> Approve Main Dataset & Compare Master Data</>}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // ── Step 6: Master Data Comparison ──────────────────────────────────────
+  const renderStep6 = () => {
+    if (masterComparisonLoading) {
+      return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><Loader size={28} className="animate-spin" /><div style={{ marginTop: '0.75rem' }}>Comparing with Master Data...</div></div>;
+    }
+    if (!masterComparison) {
+      return (
+        <div style={{ textAlign: 'center', padding: '3rem' }}>
+          <User size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#6366f1' }} />
+          <div style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Master Data comparison has not been run yet.</div>
+          <button onClick={() => loadMasterComparison()} style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.5rem', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            <RefreshCw size={15} /> Run Master Data Comparison
+          </button>
+        </div>
+      );
+    }
+    const { rows, totalRecords, errorCount, warningCount, validCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
+    const hasErrors = (errorCount || 0) > 0;
+    return (
+      <div>
+        <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+          <CheckCircle size={17} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
+          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+            <strong style={{ color: 'white' }}>Step 6 — Master Data Comparison (Final Enrichment)</strong>
+            <br />
+            Main Dataset records have been compared with approved Master Data by Account Number.
+            Customer profiles (name, address, bank details, solar type) have been merged. Review and approve to finalize the import and update the Customer Directory.
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <StatCard label="Total Records" value={totalRecords} color="white" icon={<FileText size={18} />} />
+          <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
+          <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+          <StatCard label="Matched" value={matchedCount || 0} color="#10b981" icon={<CheckCircle size={18} />} />
+          <StatCard label="Mismatched" value={mismatchCount || 0} color={mismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Not Found" value={notFoundCount || 0} color={notFoundCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+        </div>
+
+        <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <thead>
+              <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                {['#', 'Account No', 'Customer Name', 'Address', 'Bank Code', 'Solar Type', 'Unit Rate', 'Tariff', 'L-Code', 'kWh Sales', 'Payment', 'Master Match', 'Net Type Check', 'Name Check', 'Status', 'Errors'].map(h => (
+                  <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(rows || []).map((row, i) => (
+                <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerAddress || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.bankCode || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.solarType || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.unitRate ?? row.effectiveUnitRate ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.tariffType || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.billingMode || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    {row.masterMatchStatus === 'MATCHED' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.72rem' }}>Matched</span>
+                      : row.masterMatchStatus === 'NOT_FOUND' ? <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.72rem' }}>Not Found</span>
+                      : row.masterMatchStatus === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.72rem' }}>Mismatch</span>
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    {row.netTypeMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
+                      : row.netTypeMatch === 'MISMATCH' ? <span style={{ color: '#ef4444', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    {row.nameMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
+                      : row.nameMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    <span style={{
+                      padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
+                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)',
+                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : 'var(--text-muted)'
+                    }}>{row.status}</span>
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem', maxWidth: 180 }}>
+                    {row.errors && row.errors.length > 0 ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                        {row.errors.map((err, idx) => (
+                          <div key={idx} style={{ color: '#ef4444', fontSize: '0.72rem', display: 'flex', gap: '0.2rem', alignItems: 'center' }}>
+                            <AlertTriangle size={11} style={{ flexShrink: 0 }} /> {err}
+                          </div>
+                        ))}
+                      </div>
+                    ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button onClick={() => loadMasterComparison()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleApproveMasterComparison} disabled={approving || hasErrors}
+            style={{
+              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+              color: hasErrors ? 'var(--text-muted)' : 'white',
+              fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
+              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+              opacity: hasErrors ? 0.6 : 1
+            }}>
+            {approving ? <><Loader size={15} className="animate-spin" /> Finalizing...</> : <><CheckCircle size={15} /> Approve & Finalize Import</>}
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const renderStagedReview = () => {
     if (!selectedReviewBatch) return null;
@@ -3285,7 +3656,7 @@ const UploadPage = () => {
             Excel Import Wizard
           </h1>
           <p style={{ margin: '0.35rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-            3-step sequential data import: Master Data → CEB Assist → NGEN
+            6-step sequential data import: Master Data → CEB Assist → NGEN → NPAY → Main Dataset → Finalize
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -3350,6 +3721,8 @@ const UploadPage = () => {
           {wizardStep === 2 && renderStep2()}
           {wizardStep === 3 && renderStep3()}
           {wizardStep === 4 && renderStep4()}
+          {wizardStep === 5 && renderStep5()}
+          {wizardStep === 6 && renderStep6()}
 
           {/* Navigation */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
@@ -3360,7 +3733,7 @@ const UploadPage = () => {
                   ← Back
                 </button>
               )}
-              {wizardStep < 4 && isStepAccessible(wizardStep + 1) && (
+              {wizardStep < 6 && isStepAccessible(wizardStep + 1) && (
                 <button onClick={() => setWizardStep(wizardStep + 1)}
                   style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.5rem 1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600 }}>
                   Next →
@@ -3369,7 +3742,7 @@ const UploadPage = () => {
             </div>
 
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Step {wizardStep} of 4 — {WIZARD_STEPS[wizardStep - 1].label}
+              Step {wizardStep} of 6 — {WIZARD_STEPS[wizardStep - 1].label}
             </div>
 
             <div />

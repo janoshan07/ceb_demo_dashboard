@@ -1,0 +1,5 @@
+- Route protection is layered: every protected route wraps its page element in `<ProtectedLayout>` (auth check) and optionally `<RoleGuard allowedRoles={...}>` (role check), rather than checking `user.role` inside each page.
+- All HTTP requests go through `useAuth().authFetch(url, options)` instead of raw `fetch`, so bearer tokens are injected centrally and 401 responses trigger automatic logout.
+- User-facing messages use the toast system (`useToast().showToast(message, type)`) with typed strings `'success' | 'error' | 'warning' | 'info'` instead of inline alerts or console logging.
+- API paths are grouped by role prefix (`/api/admin/*`, `/api/officer/*`, `/api/user/*`) and selected at runtime based on `user.role`, keeping endpoint selection logic close to the calling page.
+- Charts are implemented as small pure-SVG presentational components (`SVGLineChart`, `SVGDonutChart`, `SVGPredictionChart`) receiving data arrays and color/format props, rather than using a chart library.

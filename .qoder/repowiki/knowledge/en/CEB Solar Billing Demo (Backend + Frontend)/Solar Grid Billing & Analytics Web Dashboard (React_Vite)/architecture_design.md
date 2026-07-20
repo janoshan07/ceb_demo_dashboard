@@ -1,0 +1,8 @@
+Single-page app bootstrapped from `src/main.jsx`, which mounts `<AuthProvider>` then `<ToastProvider>` around the root `<App>`.
+
+- Routing: `src/App.jsx` declares all routes via `react-router-dom`'s `BrowserRouter`/`Routes`. A `ProtectedLayout` wrapper enforces authentication and renders a persistent `Sidebar`; a `RoleGuard` component restricts routes by `user.role` (`ADMIN`, `OFFICER`, `USER`).
+- State layer: two React Context providers — `AuthContext` (login/logout, session persistence in `sessionStorage` under key `ceb_user`, and an `authFetch` helper that injects `Authorization: Bearer <token>` and auto-logs out on 401) and `ToastContext` (toast notifications plus a promise-based `showConfirm` modal).
+- Pages: `src/pages/` holds one file per top-level route (`Dashboard`, `CustomerDetails`, `Reports`, `UploadPage`, `Admin`, `Login`, `StagingReview`). `Dashboard.jsx` is the largest feature, branching its UI between an Admin/Officer advanced-analytics view and a USER self-service view based on `user.role`.
+- Shared components: `components/Sidebar.jsx` plus `components/charts/` (pure SVG chart primitives `SVGLineChart`, `SVGDonutChart`, `SVGPredictionChart`) reused across pages; `components/login/` is reserved for login-specific UI.
+- Styling: Tailwind CSS v4 via `@tailwindcss/vite` plugin in `vite.config.js`, with global variables defined in `index.css` (e.g. `--primary`, `--success`, `--danger`, `--bg-secondary`).
+- External API boundary: all HTTP calls go through `authFetch` to `http://localhost:8080/api/...`, split by role into `/api/admin/*`, `/api/officer/*`, `/api/user/*` endpoints; the login flow also POSTs to `/api/auth/setup` once to seed users if empty.

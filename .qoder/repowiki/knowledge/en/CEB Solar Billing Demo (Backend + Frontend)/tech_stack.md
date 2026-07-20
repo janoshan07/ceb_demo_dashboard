@@ -1,0 +1,1 @@
+MySQL (production) / H2 (dev) as the single shared persistence layer; BCrypt-hashed seed users for role-based access across both tiers.

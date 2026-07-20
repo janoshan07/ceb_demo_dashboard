@@ -322,6 +322,48 @@ public class MultiFileImportController {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    //  STEP 6 — MASTER DATA COMPARISON
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Run Master Data comparison against the approved Main Dataset.
+     * Enriches records with Master Data profiles and performs cross-validation.
+     */
+    @GetMapping("/officer/import/{sessionId}/compare-master")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> compareWithMasterData(@PathVariable Long sessionId) {
+        try {
+            return ResponseEntity.ok(multiFileImportService.compareWithMasterData(sessionId));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("message", "Master Data comparison failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Approve the Master Data comparison result (Step 6).
+     * After this, finalize can be called to write to the Customer Directory.
+     */
+    @PostMapping({"/admin/import/{sessionId}/approve-master-comparison", "/officer/import/{sessionId}/approve-master-comparison"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> approveMasterComparison(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
+                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
+                    : null;
+
+            Map<String, Object> result = multiFileImportService.approveMasterComparison(sessionId, username, corrections);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Master comparison approval failed: " + e.getMessage()));
+        }
+    }
+
     @PostMapping({"/admin/import/{sessionId}/finalize", "/officer/import/{sessionId}/finalize"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> finalizeImport(

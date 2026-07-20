@@ -1,0 +1,6 @@
+- Controllers are thin `@RestController` classes annotated with `@RequestMapping("/api/<domain>")` delegating all logic to `@Service` beans; controllers never touch repositories directly.
+- Services orchestrate multi-step workflows using `@Transactional` methods and return `Map<String,Object>` payloads containing typed counts (validCount/errorCount/duplicateCount) plus a `rows` list for the frontend.
+- Excel rows are parsed through a shared column-mapping helper (`PreviewService.findHeaderRowIndex` + `autoDetectColumns`) so every service reads sheets by normalized header names rather than fixed indices.
+- Row-level corrections from the UI are applied via a `Map<String, Map<String,Object>> corrections` keyed by row number (with accountNo fallback), supporting field overrides and a `deleted` flag before persistence.
+- Validation results are collected as lists of `ExcelValidationError` objects carrying `field`, `errorMessage`, and `warning` flags, then serialized into JSON for structured error display.
+- Every significant action is recorded through `AuditLogService.log(eventCode, message)` (e.g. `USER_LOGIN`, `MASTER_DATA_APPROVED`, `EXCEL_ROW_DELETED`) rather than relying solely on database audit tables.

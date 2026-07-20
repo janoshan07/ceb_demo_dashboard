@@ -1,0 +1,1 @@
+React 19 + Vite 8 build, `react-router-dom` 7 for client routing, Tailwind CSS v4 via `@tailwindcss/vite`, `lucide-react` icons, `framer-motion` animations, and `@react-three/fiber` + `three` + `@react-three/drei` (3D assets present but not wired into current routes).

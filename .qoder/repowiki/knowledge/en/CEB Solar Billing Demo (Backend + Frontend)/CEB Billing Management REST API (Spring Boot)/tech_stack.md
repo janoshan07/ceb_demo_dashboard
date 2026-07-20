@@ -1,0 +1,1 @@
+Spring Boot 3.2.4 (starter-web, starter-data-jpa, starter-security, starter-validation) on Java 21; MySQL connector plus optional H2 for demos; Apache POI 5.2.5 for Excel parsing; jjwt 0.11.5 (API + impl + jackson) for JWT signing; BCrypt password encoding; Spring Security `@EnableMethodSecurity` with a custom `UsernamePasswordAuthenticationFilter`-style `AuthTokenFilter`.

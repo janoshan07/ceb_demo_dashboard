@@ -66,6 +66,12 @@ public class ImportSession {
     @Column(name = "npay_approved")
     private Boolean npayApproved = false;
 
+    @Column(name = "main_dataset_approved")
+    private Boolean mainDatasetApproved = false;
+
+    @Column(name = "master_comparison_approved")
+    private Boolean masterComparisonApproved = false;
+
     public Boolean getCebApproved() {
         return cebApproved != null ? cebApproved : false;
     }
@@ -88,6 +94,22 @@ public class ImportSession {
 
     public void setNpayApproved(Boolean npayApproved) {
         this.npayApproved = npayApproved;
+    }
+
+    public Boolean getMainDatasetApproved() {
+        return mainDatasetApproved != null ? mainDatasetApproved : false;
+    }
+
+    public void setMainDatasetApproved(Boolean mainDatasetApproved) {
+        this.mainDatasetApproved = mainDatasetApproved;
+    }
+
+    public Boolean getMasterComparisonApproved() {
+        return masterComparisonApproved != null ? masterComparisonApproved : false;
+    }
+
+    public void setMasterComparisonApproved(Boolean masterComparisonApproved) {
+        this.masterComparisonApproved = masterComparisonApproved;
     }
 
     public boolean allFilesApproved() {

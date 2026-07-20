@@ -1,0 +1,2 @@
+- Database schema is kept as a standalone `schema.sql` reference file alongside the code rather than being generated solely from JPA entities.
+- Test fixtures are produced by a Python/openpyxl script instead of embedded CSVs, mirroring the real-world Excel import format.

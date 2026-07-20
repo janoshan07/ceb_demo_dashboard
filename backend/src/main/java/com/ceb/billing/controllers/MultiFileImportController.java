@@ -106,7 +106,6 @@ public class MultiFileImportController {
             }
 
             // Parse corrections map from JSON string
-            @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
@@ -161,7 +160,6 @@ public class MultiFileImportController {
                     return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
                 }
             }
-            @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
@@ -216,7 +214,6 @@ public class MultiFileImportController {
                     return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
                 }
             }
-            @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
                          new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
@@ -274,7 +271,6 @@ public class MultiFileImportController {
                     return ResponseEntity.badRequest().body(Map.of("message", "No file uploaded or cached for this session. Please select the file again."));
                 }
             }
-            @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
                          new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
@@ -312,7 +308,6 @@ public class MultiFileImportController {
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
-            @SuppressWarnings("unchecked")
             Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
                     ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
                          new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})

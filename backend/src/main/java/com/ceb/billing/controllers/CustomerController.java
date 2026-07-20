@@ -112,15 +112,17 @@ public class CustomerController {
             Pageable pageable = PageRequest.of(page, size, Sort.by("accountNo").ascending());
             Page<Customer> customerPage;
 
-            boolean hasStatus = validationStatus != null && !validationStatus.trim().isEmpty();
-            boolean hasQuery = query != null && !query.trim().isEmpty();
+            String q = (query != null) ? query.trim() : "";
+            String status = (validationStatus != null) ? validationStatus.trim() : "";
+            boolean hasStatus = !status.isEmpty();
+            boolean hasQuery = !q.isEmpty();
 
             if (hasStatus && hasQuery) {
-                customerPage = customerRepository.searchCustomersWithStatus(query.trim(), validationStatus.trim(), pageable);
+                customerPage = customerRepository.searchCustomersWithStatus(q, status, pageable);
             } else if (hasStatus) {
-                customerPage = customerRepository.findByValidationStatus(validationStatus.trim(), pageable);
+                customerPage = customerRepository.findByValidationStatus(status, pageable);
             } else if (hasQuery) {
-                customerPage = customerRepository.searchCustomers(query.trim(), pageable);
+                customerPage = customerRepository.searchCustomers(q, pageable);
             } else {
                 customerPage = customerRepository.findAll(pageable);
             }
@@ -525,7 +527,7 @@ public class CustomerController {
             customer.setTariffType((String) values.get("tariffType"));
 
         if (values.containsKey("costCodeId") && values.get("costCodeId") != null && !values.get("costCodeId").toString().isEmpty()) {
-            Long ccId = Long.valueOf(values.get("costCodeId").toString());
+            long ccId = Long.parseLong(values.get("costCodeId").toString());
             customer.setCostCode(costCodeRepository.findById(ccId).orElse(null));
         } else if (values.containsKey("costCode") && values.get("costCode") != null && !values.get("costCode").toString().isEmpty()) {
             String ccCode = values.get("costCode").toString();
@@ -533,7 +535,7 @@ public class CustomerController {
         }
 
         if (values.containsKey("netTypeId") && values.get("netTypeId") != null && !values.get("netTypeId").toString().isEmpty()) {
-            Long ntId = Long.valueOf(values.get("netTypeId").toString());
+            long ntId = Long.parseLong(values.get("netTypeId").toString());
             customer.setNetType(netTypeRepository.findById(ntId).orElse(null));
         } else if (values.containsKey("netTypeName") && values.get("netTypeName") != null && !values.get("netTypeName").toString().isEmpty()) {
             String ntName = values.get("netTypeName").toString();

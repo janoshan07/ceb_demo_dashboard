@@ -5,8 +5,8 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "import_sessions", indexes = {
-    @Index(name = "idx_session_created_by", columnList = "created_by"),
-    @Index(name = "idx_session_stage", columnList = "stage")
+        @Index(name = "idx_session_created_by", columnList = "created_by"),
+        @Index(name = "idx_session_stage", columnList = "stage")
 })
 public class ImportSession {
 
@@ -57,6 +57,43 @@ public class ImportSession {
     @Column(name = "npay_count")
     private Integer npayCount = 0;
 
+    @Column(name = "ceb_approved")
+    private Boolean cebApproved = false;
+
+    @Column(name = "ngen_approved")
+    private Boolean ngenApproved = false;
+
+    @Column(name = "npay_approved")
+    private Boolean npayApproved = false;
+
+    public Boolean getCebApproved() {
+        return cebApproved != null ? cebApproved : false;
+    }
+
+    public void setCebApproved(Boolean cebApproved) {
+        this.cebApproved = cebApproved;
+    }
+
+    public Boolean getNgenApproved() {
+        return ngenApproved != null ? ngenApproved : false;
+    }
+
+    public void setNgenApproved(Boolean ngenApproved) {
+        this.ngenApproved = ngenApproved;
+    }
+
+    public Boolean getNpayApproved() {
+        return npayApproved != null ? npayApproved : false;
+    }
+
+    public void setNpayApproved(Boolean npayApproved) {
+        this.npayApproved = npayApproved;
+    }
+
+    public boolean allFilesApproved() {
+        return getCebApproved() && getNgenApproved() && getNpayApproved();
+    }
+
     @Column(name = "created_by", length = 100)
     private String createdBy;
 
@@ -77,7 +114,8 @@ public class ImportSession {
         this.updatedAt = LocalDateTime.now();
     }
 
-    public ImportSession() {}
+    public ImportSession() {
+    }
 
     public ImportSession(String sessionKey, String createdBy, Long masterBatchId) {
         this.sessionKey = sessionKey;
@@ -88,45 +126,115 @@ public class ImportSession {
 
     // ── Getters & Setters ───────────────────────────────────────────────
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public String getSessionKey() { return sessionKey; }
-    public void setSessionKey(String sessionKey) { this.sessionKey = sessionKey; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public String getStage() { return stage; }
-    public void setStage(String stage) { this.stage = stage; }
+    public String getSessionKey() {
+        return sessionKey;
+    }
 
-    public Long getMasterBatchId() { return masterBatchId; }
-    public void setMasterBatchId(Long masterBatchId) { this.masterBatchId = masterBatchId; }
+    public void setSessionKey(String sessionKey) {
+        this.sessionKey = sessionKey;
+    }
 
-    public Long getCebAssistBatchId() { return cebAssistBatchId; }
-    public void setCebAssistBatchId(Long cebAssistBatchId) { this.cebAssistBatchId = cebAssistBatchId; }
+    public String getStage() {
+        return stage;
+    }
 
-    public Long getNgenBatchId() { return ngenBatchId; }
-    public void setNgenBatchId(Long ngenBatchId) { this.ngenBatchId = ngenBatchId; }
+    public void setStage(String stage) {
+        this.stage = stage;
+    }
 
-    public Long getNpayBatchId() { return npayBatchId; }
-    public void setNpayBatchId(Long npayBatchId) { this.npayBatchId = npayBatchId; }
+    public Long getMasterBatchId() {
+        return masterBatchId;
+    }
 
-    public Integer getMasterCustomerCount() { return masterCustomerCount; }
-    public void setMasterCustomerCount(Integer masterCustomerCount) { this.masterCustomerCount = masterCustomerCount; }
+    public void setMasterBatchId(Long masterBatchId) {
+        this.masterBatchId = masterBatchId;
+    }
 
-    public Integer getCebAssistCount() { return cebAssistCount; }
-    public void setCebAssistCount(Integer cebAssistCount) { this.cebAssistCount = cebAssistCount; }
+    public Long getCebAssistBatchId() {
+        return cebAssistBatchId;
+    }
 
-    public Integer getNgenCount() { return ngenCount; }
-    public void setNgenCount(Integer ngenCount) { this.ngenCount = ngenCount; }
+    public void setCebAssistBatchId(Long cebAssistBatchId) {
+        this.cebAssistBatchId = cebAssistBatchId;
+    }
 
-    public Integer getNpayCount() { return npayCount; }
-    public void setNpayCount(Integer npayCount) { this.npayCount = npayCount; }
+    public Long getNgenBatchId() {
+        return ngenBatchId;
+    }
 
-    public String getCreatedBy() { return createdBy; }
-    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
+    public void setNgenBatchId(Long ngenBatchId) {
+        this.ngenBatchId = ngenBatchId;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public Long getNpayBatchId() {
+        return npayBatchId;
+    }
 
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public void setNpayBatchId(Long npayBatchId) {
+        this.npayBatchId = npayBatchId;
+    }
+
+    public Integer getMasterCustomerCount() {
+        return masterCustomerCount;
+    }
+
+    public void setMasterCustomerCount(Integer masterCustomerCount) {
+        this.masterCustomerCount = masterCustomerCount;
+    }
+
+    public Integer getCebAssistCount() {
+        return cebAssistCount;
+    }
+
+    public void setCebAssistCount(Integer cebAssistCount) {
+        this.cebAssistCount = cebAssistCount;
+    }
+
+    public Integer getNgenCount() {
+        return ngenCount;
+    }
+
+    public void setNgenCount(Integer ngenCount) {
+        this.ngenCount = ngenCount;
+    }
+
+    public Integer getNpayCount() {
+        return npayCount;
+    }
+
+    public void setNpayCount(Integer npayCount) {
+        this.npayCount = npayCount;
+    }
+
+    public String getCreatedBy() {
+        return createdBy;
+    }
+
+    public void setCreatedBy(String createdBy) {
+        this.createdBy = createdBy;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
 }

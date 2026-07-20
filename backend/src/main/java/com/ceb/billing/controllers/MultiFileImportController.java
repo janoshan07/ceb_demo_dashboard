@@ -290,4 +290,43 @@ public class MultiFileImportController {
             return ResponseEntity.internalServerError().body(Map.of("message", "NPAY approval failed: " + e.getMessage()));
         }
     }
+
+    // ─────────────────────────────────────────────────────────────────────
+    //  STEP 5 — MAIN DATASET & INTEGRATION
+    // ─────────────────────────────────────────────────────────────────────
+
+    @GetMapping("/officer/import/{sessionId}/main-dataset")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getMainDataset(@PathVariable Long sessionId) {
+        try {
+            return ResponseEntity.ok(multiFileImportService.getMainDataset(sessionId));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to retrieve main dataset: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping({"/admin/import/{sessionId}/finalize", "/officer/import/{sessionId}/finalize"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> finalizeImport(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
+                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
+                    : null;
+
+            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+
+            Map<String, Object> result = multiFileImportService.finalizeImport(sessionId, username, corrections, isAdmin);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Finalization failed: " + e.getMessage()));
+        }
+    }
 }
+

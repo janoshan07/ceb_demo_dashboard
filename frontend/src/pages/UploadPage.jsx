@@ -583,37 +583,6 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
     return prefix ? `${prefix}${val}` : String(val);
   };
 
-  const normalizeSolarType = (solarType) => {
-    if (!solarType) return "";
-    const s = String(solarType).trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    if (s === "ACCOUNTING" || s === "NETACCOUNTING") {
-      return "Net Accounting";
-    }
-    if (s === "METERING" || s === "NETMETERING") {
-      return "Net Metering";
-    }
-    if (s === "PLUS" || s === "NETPLUS") {
-      return "Net Plus";
-    }
-    if (s === "PLUSPLUS" || s === "NETPLUSPLUS") {
-      return "Net Plus Plus";
-    }
-    return String(solarType).trim();
-  };
-
-  const isTypeMismatch = (row) => {
-    if (!row.solarType || !row.ngenNetType) return false;
-    const t1 = normalizeSolarType(row.solarType);
-    const t2 = normalizeSolarType(row.ngenNetType);
-    return t1 !== t2;
-  };
-
-  const isRateMismatch = (row) => {
-    if (row.masterUnitRate === undefined || row.masterUnitRate === null) return false;
-    if (row.ngenUnitRate === undefined || row.ngenUnitRate === null) return false;
-    return Math.abs(Number(row.masterUnitRate) - Number(row.ngenUnitRate)) > 0.001;
-  };
-
   React.useEffect(() => {
     setSelectedKeys(prev => {
       const next = new Set();
@@ -697,9 +666,12 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                 />
               </th>
               {[
-                'Row', 'Account No', 'Customer', 'Net Type (Master)', 'Net Type (NGEN)', 
-                'Prev Date (CEB)', 'Curr Date (CEB)', 'kWh Import', 'kWh Export', 'kWh Sales', 
-                'Rate (Master)', 'Rate (NGEN)', 'Bill Set Off', 'Payment Settled', 'Status', 'Actions'
+                'Row', 'Account No', 'Net Type', 
+                'kWh Import', 'kWh Export', 'Unit Rate', 'Bill Set Off',
+                'kWh Unit Sales (Calculated / Excel)',
+                'kWh Sales Amount (Calculated / Excel)',
+                'Payment Settled (Calculated / Excel)',
+                'Status', 'Actions'
               ].map(h => (
                 <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
@@ -707,8 +679,36 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
           </thead>
           <tbody>
             {displayed.map((row, i) => {
-              const hasTypeMismatch = isTypeMismatch(row);
-              const hasRateMismatch = isRateMismatch(row);
+              const renderComparisonCell = (calcVal, excelVal, status) => {
+                const isMismatch = status === 'Mismatch';
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{calcVal != null ? calcVal.toFixed(2) : '0.00'}</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Calc)</span>
+                    </div>
+                    {excelVal !== undefined && excelVal !== null && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
+                        <span style={{ color: 'var(--text-secondary)', textDecoration: isMismatch ? 'line-through' : 'none' }}>
+                          {excelVal.toFixed(2)}
+                        </span>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Excel)</span>
+                        <span style={{ 
+                          fontSize: '0.65rem', 
+                          padding: '1px 4px', 
+                          borderRadius: 3, 
+                          background: isMismatch ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                          color: isMismatch ? '#ef4444' : '#10b981',
+                          fontWeight: 600
+                        }}>
+                          {status}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
               return (
                 <React.Fragment key={i}>
                   <tr 
@@ -748,55 +748,31 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                       {renderCell(row.accountNo)}
                       {isAccountInvalid(row.accountNo) && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
                     </td>
-                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
                     
-                    {/* Master Type */}
-                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.solarType)}</td>
-                    
-                    {/* NGEN Type */}
-                    <td style={{ 
-                      padding: '0.6rem 0.85rem', 
-                      whiteSpace: 'nowrap', 
-                      background: hasTypeMismatch ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                      color: hasTypeMismatch ? '#f87171' : 'inherit',
-                      fontWeight: hasTypeMismatch ? 700 : 'normal'
-                    }}>
-                      {renderCell(row.ngenNetType)}
-                      {hasTypeMismatch && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white' }}>Mismatch</span>}
-                    </td>
-
-                    {/* CEB Dates */}
-                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
-                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.ngenNetType)}</td>
 
                     {/* kWh values */}
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
-                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, color: (row.kwhSales ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>
-                      {row.kwhSales != null ? row.kwhSales.toFixed(2) : '—'}
-                    </td>
 
-                    {/* Rates */}
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {row.masterUnitRate != null ? `LKR ${row.masterUnitRate.toFixed(2)}` : '—'}
-                    </td>
-                    <td style={{ 
-                      padding: '0.6rem 0.85rem', 
-                      fontFamily: 'monospace', 
-                      whiteSpace: 'nowrap',
-                      background: hasRateMismatch ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
-                      color: hasRateMismatch ? '#fbbf24' : 'inherit'
-                    }}>
                       {row.ngenUnitRate != null ? `LKR ${row.ngenUnitRate.toFixed(2)}` : '—'}
-                      {hasRateMismatch && <span style={{ marginLeft: 4, cursor: 'help' }} title="Unit Rate differs from Master Data. Master Data rate will be used.">⚠</span>}
                     </td>
 
-                    {/* Set Off & Payment */}
+                    {/* Set Off */}
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: '#ef4444', whiteSpace: 'nowrap' }}>
                       {row.billSetOff != null ? `LKR ${row.billSetOff.toLocaleString()}` : '—'}
                     </td>
-                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#6366f1', whiteSpace: 'nowrap' }}>
-                      {row.paymentSettled != null ? `LKR ${row.paymentSettled.toLocaleString()}` : '—'}
+
+                    {/* Calculations comparison */}
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                      {renderComparisonCell(row.calculatedKwhUnitSales, row.excelKwhUnitSales, row.kwhUnitSalesStatus)}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                      {renderComparisonCell(row.calculatedKwhSalesAmount, row.excelKwhSalesAmount, row.kwhSalesAmountStatus)}
+                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                      {renderComparisonCell(row.calculatedPaymentSettled, row.excelPaymentSettled, row.paymentSettledStatus)}
                     </td>
 
                     <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
@@ -814,26 +790,20 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                   {expandedRow === i && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
                       <td colSpan={17} style={{ padding: '1rem 1.5rem' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          <div><strong>Address:</strong> {row.customerAddress || '—'}</div>
-                          <div><strong>Ref No:</strong> {row.refNo || '—'}</div>
-                          <div><strong>Mobile:</strong> {row.mobileNo || '—'}</div>
-                          <div><strong>Prev Reading Date:</strong> {row.prevReadingDate || '—'}</div>
-                          <div><strong>Curr Reading Date:</strong> {row.currReadingDate || '—'}</div>
-                          <div><strong>Sales Amount:</strong> {row.salesAmount != null ? `LKR ${Number(row.salesAmount).toLocaleString()}` : '—'}</div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {row.errors?.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
+                            </div>
+                          )}
+                          {row.warnings?.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
+                            </div>
+                          )}
                         </div>
-                        {row.errors?.length > 0 && (
-                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                            <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
-                          </div>
-                        )}
-                        {row.warnings?.length > 0 && (
-                          <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                            <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
-                          </div>
-                        )}
                       </td>
                     </tr>
                   )}

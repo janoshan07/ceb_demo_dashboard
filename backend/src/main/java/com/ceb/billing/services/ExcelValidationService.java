@@ -36,18 +36,18 @@ public class ExcelValidationService {
         if (solarType == null) {
             return null;
         }
-        String s = solarType.trim().replaceAll("[^a-zA-Z0-9]", "").toUpperCase();
+        String s = solarType.trim().toLowerCase().replaceAll("[^a-z0-9]", "");
         
-        if (s.equals("ACCOUNTING") || s.equals("NETACCOUNTING")) {
+        if (s.equals("accounting") || s.equals("netaccounting")) {
             return "Net Accounting";
         }
-        if (s.equals("METERING") || s.equals("NETMETERING")) {
+        if (s.equals("metering") || s.equals("netmetering")) {
             return "Net Metering";
         }
-        if (s.equals("PLUS") || s.equals("NETPLUS")) {
+        if (s.equals("plus") || s.equals("netplus")) {
             return "Net Plus";
         }
-        if (s.equals("PLUSPLUS") || s.equals("NETPLUSPLUS")) {
+        if (s.equals("plusplus") || s.equals("netplusplus")) {
             return "Net Plus Plus";
         }
         
@@ -61,8 +61,8 @@ public class ExcelValidationService {
         String st = normalizeSolarType(solarType);
         String tt = tariffType.trim().toUpperCase();
 
-        boolean isFixed = tt.contains("FIX");
-        boolean isVariable = tt.contains("VAR");
+        boolean isFixed = tt.contains("FIX") || tt.contains("FIXED");
+        boolean isVariable = tt.contains("VAR") || tt.contains("VARIABLE");
 
         if (isFixed) {
             if ("Net Accounting".equalsIgnoreCase(st)) {
@@ -73,12 +73,7 @@ public class ExcelValidationService {
                 return "L5005";
             }
         } else if (isVariable) {
-            if ("Net Accounting".equalsIgnoreCase(st) || 
-                "Net Plus".equalsIgnoreCase(st) || 
-                "Net Plus Plus".equalsIgnoreCase(st) ||
-                "Net Metering".equalsIgnoreCase(st)) {
-                return "L5006";
-            }
+            return "L5006";
         }
         return "";
     }
@@ -218,13 +213,9 @@ public class ExcelValidationService {
         if (expectedLCode == null || expectedLCode.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code cannot be generated for the given Type and Fix/Variable combination", false));
         } else {
-            if (!expectedLCode.equalsIgnoreCase(billingMode != null ? billingMode.trim() : "")) {
-                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code does not match the Type and Fix/Variable combination. Expected: " + expectedLCode, false));
-            } else {
-                boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
-                if (!ecExists) {
-                    result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code '" + expectedLCode + "' does not exist in the database", false));
-                }
+            boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
+            if (!ecExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code '" + expectedLCode + "' does not exist in the database", false));
             }
         }
 
@@ -365,18 +356,14 @@ public class ExcelValidationService {
             }
         }
 
-        // Lookup validation for L-Code / Expense Code matching solarType and tariffType combination
+        // Auto-generate L-Code/Expense Code matching solarType and tariffType combination
         String expectedLCode = deriveLCode(solarType, tariffType);
         if (expectedLCode == null || expectedLCode.isEmpty()) {
             result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code cannot be generated for the given Type and Fix/Variable combination", false));
         } else {
-            if (!expectedLCode.equalsIgnoreCase(billingMode != null ? billingMode.trim() : "")) {
-                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code does not match the Type and Fix/Variable combination. Expected: " + expectedLCode, false));
-            } else {
-                boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
-                if (!ecExists) {
-                    result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code '" + expectedLCode + "' does not exist in the database", false));
-                }
+            boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
+            if (!ecExists) {
+                result.addError(new ExcelValidationError(sheetName, rowNum, "Exp. Code", "L-Code '" + expectedLCode + "' does not exist in the database", false));
             }
         }
 

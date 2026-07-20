@@ -385,35 +385,101 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — CEB Assist
 // ═══════════════════════════════════════════════════════════════════════════
-const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
+const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDuplicate }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
-  const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
-  const errorRows = displayed.filter(r => r.status === 'ERROR');
-  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
-  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+  const allCount = rows.length;
+  const validCount = rows.filter(r => r.status === 'VALID').length;
+  const errorCount = rows.filter(r => r.status === 'ERROR').length;
+  const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+  const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+
+  const displayed = rows.filter(r => {
+    if (activeFilter === 'ALL') {
+      return filterErrors ? r.status !== 'VALID' : true;
+    }
+    if (activeFilter === 'VALID') return r.status === 'VALID';
+    if (activeFilter === 'ERROR') return r.status === 'ERROR';
+    if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
+    if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+    return true;
+  });
+
+  const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
+  const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
 
   React.useEffect(() => {
     setSelectedKeys(prev => {
       const next = new Set();
-      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      const currentValidKeys = new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo));
       prev.forEach(k => {
         if (currentValidKeys.has(k)) next.add(k);
       });
       return next;
     });
-  }, [rows, filterErrors]);
+  }, [rows, activeFilter, filterErrors]);
 
   if (!displayed.length) return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-      <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-      <div style={{ fontWeight: 600 }}>All records matched!</div>
+    <div>
+      {renderFilterTabs()}
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+      </div>
     </div>
   );
 
+  function renderFilterTabs() {
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {[
+          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
+          { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
+          { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
+          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveFilter(tab.key)}
+            style={{
+              padding: '0.45rem 0.9rem',
+              borderRadius: 8,
+              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>{tab.label}</span>
+            <span style={{
+              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+              color: activeFilter === tab.key ? 'black' : tab.color,
+              padding: '0.05rem 0.35rem',
+              borderRadius: 20,
+              fontSize: '0.68rem',
+              fontWeight: 700
+            }}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div>
+      {renderFilterTabs()}
+      
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -428,7 +494,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
             <Trash2 size={16} />
-            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+            Selected {selectedKeys.size} record {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
           </div>
           <button
             onClick={() => {
@@ -468,7 +534,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                   }}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                      setSelectedKeys(new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo)));
                     } else {
                       setSelectedKeys(new Set());
                     }
@@ -476,7 +542,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                   style={{ cursor: 'pointer', width: 14, height: 14 }}
                 />
               </th>
-              {['Row','Account No','Customer Name','Prv. Rdg. Date','Crnt. Rdg. Date','Matched','Status','Actions'].map(h => (
+              {['Row','Account No','Prv. Rdg. Date','Crnt. Rdg. Date','Status','Actions'].map(h => (
                 <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -489,7 +555,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                    {row.status === 'ERROR' ? (
+                    {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
                       <input 
                         type="checkbox"
                         checked={selectedKeys.has(row.rowNum || row.accountNo)}
@@ -521,35 +587,35 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                     {row.accountNo || <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 600, fontSize: '0.75rem' }}>Empty</span>}
                     {isAccountInvalid(row.accountNo) && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
                   </td>
-                  <td style={{ padding: '0.6rem 0.85rem' }}>{row.customerName || <span style={{ color: 'var(--text-muted)' }}>Not found</span>}</td>
                   <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.prevReadingDate || '—'}</td>
                   <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.currReadingDate || '—'}</td>
-                  <td style={{ padding: '0.6rem 0.85rem' }}>
-                    <span style={{ color: row.customerExists ? '#10b981' : '#ef4444', fontWeight: 600, fontSize: '0.75rem' }}>
-                      {row.customerExists ? '✓ Yes' : '✗ No'}
-                    </span>
-                  </td>
                   <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
                   <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: '0.35rem' }}>
                       <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
                         Correct
                       </button>
-                      {row.status === 'ERROR' && onDeleteRows && (
-                        <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      {row.status === 'DUPLICATE' && onKeepDuplicate && (
+                        <button onClick={() => onKeepDuplicate(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
+                          Keep
+                        </button>
+                      )}
+                      {(row.status === 'ERROR' || row.status === 'DUPLICATE') && onDeleteRows && (
+                        <button onClick={() => onDeleteRows([row])} title="Delete this record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                           <Trash2 size={12} /> Delete
                         </button>
                       )}
                     </div>
                   </td>
                 </tr>
-                {expandedRow === i && row.errors?.length > 0 && (
+                {expandedRow === i && (row.status === 'DUPLICATE' || row.errors?.length > 0) && (
                   <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
                     <td colSpan={9} style={{ padding: '0.75rem 1.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                         <AlertTriangle size={15} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
                         <ul style={{ margin: 0, paddingLeft: '1rem', color: '#ef4444', fontSize: '0.78rem', lineHeight: 1.7 }}>
-                          {row.errors.map((e, ei) => <li key={ei}>{e}</li>)}
+                          {row.status === 'DUPLICATE' && <li>{row.duplicateReason || 'Duplicate Account Number found'}</li>}
+                          {row.errors?.map((e, ei) => <li key={ei}>{e}</li>)}
                         </ul>
                       </div>
                     </td>
@@ -567,14 +633,31 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — NGEN
 // ═══════════════════════════════════════════════════════════════════════════
-const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
+const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDuplicate }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
-  const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
-  const errorRows = displayed.filter(r => r.status === 'ERROR');
-  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
-  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+  const allCount = rows.length;
+  const validCount = rows.filter(r => r.status === 'VALID').length;
+  const errorCount = rows.filter(r => r.status === 'ERROR').length;
+  const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+  const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+
+  const displayed = rows.filter(r => {
+    if (activeFilter === 'ALL') {
+      return filterErrors ? r.status !== 'VALID' : true;
+    }
+    if (activeFilter === 'VALID') return r.status === 'VALID';
+    if (activeFilter === 'ERROR') return r.status === 'ERROR';
+    if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
+    if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+    return true;
+  });
+
+  const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
+  const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
 
   const renderCell = (val, prefix = '') => {
     if (val === undefined || val === null || String(val).trim() === '') {
@@ -586,23 +669,72 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
   React.useEffect(() => {
     setSelectedKeys(prev => {
       const next = new Set();
-      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      const currentValidKeys = new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo));
       prev.forEach(k => {
         if (currentValidKeys.has(k)) next.add(k);
       });
       return next;
     });
-  }, [rows, filterErrors]);
+  }, [rows, activeFilter, filterErrors]);
 
   if (!displayed.length) return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-      <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-      <div style={{ fontWeight: 600 }}>All records are valid!</div>
+    <div>
+      {renderFilterTabs()}
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+      </div>
     </div>
   );
 
+  function renderFilterTabs() {
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {[
+          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
+          { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
+          { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
+          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveFilter(tab.key)}
+            style={{
+              padding: '0.45rem 0.9rem',
+              borderRadius: 8,
+              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>{tab.label}</span>
+            <span style={{
+              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+              color: activeFilter === tab.key ? 'black' : tab.color,
+              padding: '0.05rem 0.35rem',
+              borderRadius: 20,
+              fontSize: '0.68rem',
+              fontWeight: 700
+            }}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div>
+      {renderFilterTabs()}
+      
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -617,7 +749,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
             <Trash2 size={16} />
-            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+            Selected {selectedKeys.size} record {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
           </div>
           <button
             onClick={() => {
@@ -657,7 +789,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                   }}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                      setSelectedKeys(new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo)));
                     } else {
                       setSelectedKeys(new Set());
                     }
@@ -694,15 +826,13 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                         </span>
                         <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Excel)</span>
                         <span style={{ 
-                          fontSize: '0.65rem', 
-                          padding: '1px 4px', 
-                          borderRadius: 3, 
-                          background: isMismatch ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                          color: isMismatch ? '#ef4444' : '#10b981',
-                          fontWeight: 600
-                        }}>
-                          {status}
-                        </span>
+                           fontSize: '0.65rem', 
+                           padding: '1px 4px', 
+                           borderRadius: 3, 
+                           background: isMismatch ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                           color: isMismatch ? '#ef4444' : '#10b981',
+                           fontWeight: 600
+                        }}>{status}</span>
                       </div>
                     )}
                   </div>
@@ -716,7 +846,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                     style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                      {row.status === 'ERROR' ? (
+                      {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
                         <input 
                           type="checkbox"
                           checked={selectedKeys.has(row.rowNum || row.accountNo)}
@@ -751,7 +881,6 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                     
                     <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.ngenNetType)}</td>
 
-                    {/* kWh values */}
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
 
@@ -759,12 +888,10 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                       {row.ngenUnitRate != null ? `LKR ${row.ngenUnitRate.toFixed(2)}` : '—'}
                     </td>
 
-                    {/* Set Off */}
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: '#ef4444', whiteSpace: 'nowrap' }}>
                       {row.billSetOff != null ? `LKR ${row.billSetOff.toLocaleString()}` : '—'}
                     </td>
 
-                    {/* Calculations comparison */}
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                       {renderComparisonCell(row.calculatedKwhUnitSales, row.excelKwhUnitSales, row.kwhUnitSalesStatus)}
                     </td>
@@ -779,18 +906,29 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                     <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: '0.35rem' }}>
                         {onCorrectRow && <button onClick={() => onCorrectRow(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
-                        {row.status === 'ERROR' && onDeleteRows && (
-                          <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        {row.status === 'DUPLICATE' && onKeepDuplicate && (
+                          <button onClick={() => onKeepDuplicate(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>
+                            Keep
+                          </button>
+                        )}
+                        {(row.status === 'ERROR' || row.status === 'DUPLICATE') && onDeleteRows && (
+                          <button onClick={() => onDeleteRows([row])} title="Delete this record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                             <Trash2 size={12} /> Delete
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
-                  {expandedRow === i && (
+                  {expandedRow === i && (row.status === 'DUPLICATE' || row.errors?.length > 0 || row.warnings?.length > 0) && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
                       <td colSpan={17} style={{ padding: '1rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {row.status === 'DUPLICATE' && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <AlertTriangle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Account Number found'}</span>
+                            </div>
+                          )}
                           {row.errors?.length > 0 && (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
                               <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
@@ -821,14 +959,31 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
 //  STAT CARD
 // ═══════════════════════════════════════════════════════════════════════════
 
-const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
+const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDuplicate }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
-  const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+  const [activeFilter, setActiveFilter] = useState('ALL');
 
-  const errorRows = displayed.filter(r => r.status === 'ERROR');
-  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
-  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+  const allCount = rows.length;
+  const validCount = rows.filter(r => r.status === 'VALID').length;
+  const errorCount = rows.filter(r => r.status === 'ERROR').length;
+  const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+  const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+
+  const displayed = rows.filter(r => {
+    if (activeFilter === 'ALL') {
+      return filterErrors ? r.status !== 'VALID' : true;
+    }
+    if (activeFilter === 'VALID') return r.status === 'VALID';
+    if (activeFilter === 'ERROR') return r.status === 'ERROR';
+    if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
+    if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+    return true;
+  });
+
+  const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
+  const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
 
   const renderCell = (val, prefix = '') => {
     if (val === undefined || val === null || String(val).trim() === '') {
@@ -862,23 +1017,72 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
   React.useEffect(() => {
     setSelectedKeys(prev => {
       const next = new Set();
-      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      const currentValidKeys = new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo));
       prev.forEach(k => {
         if (currentValidKeys.has(k)) next.add(k);
       });
       return next;
     });
-  }, [rows, filterErrors]);
+  }, [rows, activeFilter, filterErrors]);
 
   if (!displayed.length) return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-      <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-      <div style={{ fontWeight: 600 }}>All records are valid!</div>
+    <div>
+      {renderFilterTabs()}
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+      </div>
     </div>
   );
 
+  function renderFilterTabs() {
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {[
+          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
+          { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
+          { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
+          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveFilter(tab.key)}
+            style={{
+              padding: '0.45rem 0.9rem',
+              borderRadius: 8,
+              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>{tab.label}</span>
+            <span style={{
+              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+              color: activeFilter === tab.key ? 'black' : tab.color,
+              padding: '0.05rem 0.35rem',
+              borderRadius: 20,
+              fontSize: '0.68rem',
+              fontWeight: 700
+            }}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div>
+      {renderFilterTabs()}
+      
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -893,7 +1097,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
             <Trash2 size={16} />
-            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+            Selected {selectedKeys.size} record {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
           </div>
           <button
             onClick={() => {
@@ -931,7 +1135,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                   ref={el => { if (el) el.indeterminate = isSomeSelected; }}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                      setSelectedKeys(new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo)));
                     } else {
                       setSelectedKeys(new Set());
                     }
@@ -962,7 +1166,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                     style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                      {row.status === 'ERROR' ? (
+                      {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
                         <input 
                           type="checkbox"
                           checked={selectedKeys.has(row.rowNum || row.accountNo)}
@@ -1038,8 +1242,13 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                     <td style={{ padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', gap: '0.35rem' }}>
                         {onCorrectRow && <button onClick={() => onCorrectRow(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>Edit</button>}
-                        {row.status === 'ERROR' && onDeleteRows && (
-                          <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                        {row.status === 'DUPLICATE' && onKeepDuplicate && (
+                          <button onClick={() => onKeepDuplicate(row)} style={{ padding: '0.22rem 0.5rem', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600 }}>
+                            Keep
+                          </button>
+                        )}
+                        {(row.status === 'ERROR' || row.status === 'DUPLICATE') && onDeleteRows && (
+                          <button onClick={() => onDeleteRows([row])} title="Delete this record" style={{ padding: '0.22rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                             <Trash2 size={12} /> Delete
                           </button>
                         )}
@@ -1063,6 +1272,12 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
                           <div><strong>Bank Account No:</strong> {row.bankAccountNo || '—'}</div>
                           <div><strong>Unit Rate:</strong> {row.unitRate != null ? `LKR ${Number(row.unitRate).toFixed(2)}` : '—'}</div>
                         </div>
+                        {row.status === 'DUPLICATE' && (
+                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                            <AlertTriangle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                            <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Account Number found'}</span>
+                          </div>
+                        )}
                         {row.errors?.length > 0 && (
                           <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
                             <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
@@ -1268,6 +1483,81 @@ const UploadPage = () => {
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [filterErrors, setFilterErrors] = useState(false);
+
+  const reevaluateDuplicates = (rows, stepName) => {
+    const groups = {};
+    rows.forEach((row) => {
+      const cleanErrors = (row.errors || []).filter(e => !e.includes("Duplicate") && !e.includes("duplicate"));
+      row.errors = cleanErrors;
+      if (row.status === 'DUPLICATE') {
+        row.status = cleanErrors.length > 0 ? 'ERROR' : 'VALID';
+      }
+
+      const acc = String(row.accountNo || '').trim();
+      if (/^\d{10}$/.test(acc) && !row.keepDuplicate) {
+        if (!groups[acc]) groups[acc] = [];
+        groups[acc].push(row);
+      }
+    });
+
+    Object.keys(groups).forEach(acc => {
+      const group = groups[acc];
+      if (group.length > 1) {
+        const firstRowNum = group[0].rowNum;
+        group.forEach((row, i) => {
+          row.status = 'DUPLICATE';
+          row.isOriginalDuplicate = i === 0;
+          row.originalRowNum = firstRowNum;
+          row.duplicateReason = `Duplicate Account Number found in ${stepName} file (Row #${firstRowNum})`;
+        });
+      }
+    });
+
+    return rows;
+  };
+
+  const updatePreviewState = (newRows) => {
+    const stepLabel = wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : wizardStep === 3 ? 'NGEN' : 'NPAY';
+    const reevaluated = reevaluateDuplicates(newRows, stepLabel);
+    
+    const totalRows = reevaluated.length;
+    const errorCount = reevaluated.filter(r => r.status === 'ERROR').length;
+    const duplicateCount = reevaluated.filter(r => r.status === 'DUPLICATE').length;
+    const warningCount = reevaluated.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+    const validCount = reevaluated.filter(r => r.status === 'VALID').length;
+
+    setPreview(prev => ({
+      ...prev,
+      rows: reevaluated,
+      totalRows,
+      errorCount,
+      duplicateCount,
+      warningCount,
+      validCount,
+      matchedCount: validCount
+    }));
+  };
+
+  const handleKeepDuplicate = (row) => {
+    setPreview(prev => {
+      if (!prev || !prev.rows) return prev;
+      const updatedRows = prev.rows.map(r => {
+        if ((r.rowNum && r.rowNum === row.rowNum) || r.accountNo === row.accountNo) {
+          return {
+            ...r,
+            keepDuplicate: true,
+            status: (r.errors && r.errors.length > 0) ? 'ERROR' : 'VALID'
+          };
+        }
+        return r;
+      });
+      setTimeout(() => {
+        updatePreviewState(updatedRows);
+      }, 0);
+      return prev;
+    });
+    showToast(`Account #${row.accountNo} duplicate flagged as kept.`, 'success');
+  };
 
   // ── Upload history ────────────────────────────────────────────────────
   const [uploadHistory, setUploadHistory] = useState([]);
@@ -1643,11 +1933,12 @@ const UploadPage = () => {
         return r;
       });
 
-      const errorCount = newRows.filter(r => r.status === 'ERROR').length;
+      setTimeout(() => {
+        updatePreviewState(newRows);
+      }, 0);
       return {
         ...prev,
-        rows: newRows,
-        errorCount
+        rows: newRows
       };
     });
 
@@ -1657,7 +1948,7 @@ const UploadPage = () => {
     }));
 
     setCorrectingRow(null);
-    showToast('Row correction stored. Revalidation will run upon approval.', 'success');
+    showToast('Row correction stored and revalidated.', 'success');
   };
 
   const handleRestoreRow = (deletedRow) => {
@@ -1770,19 +2061,12 @@ const UploadPage = () => {
         const rKey = r.rowNum || r.accountNo;
         return !delKeys.has(rKey);
       });
-      const errorCount = newRows.filter(r => r.status === 'ERROR').length;
-      const warningCount = newRows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
-      const validCount = newRows.filter(r => r.status === 'VALID').length;
-      const matchedCount = newRows.filter(r => r.customerExists).length;
-      const unmatchedCount = newRows.filter(r => !r.customerExists).length;
+      setTimeout(() => {
+        updatePreviewState(newRows);
+      }, 0);
       return {
         ...prev,
-        rows: newRows,
-        totalRows: newRows.length,
-        errorCount,
-        warningCount: warningCount || 0,
-        matchedCount: matchedCount || 0,
-        unmatchedCount: unmatchedCount || 0,
+        rows: newRows
       };
     });
 
@@ -2305,10 +2589,29 @@ const UploadPage = () => {
           </button>
         )}
         {preview && (
-          <button className="btn" onClick={handleMasterApprove} disabled={approving}
-            style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> {isAdmin ? 'Approve & Import' : 'Save Master Data & Proceed to Step 2'}</>}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
+              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
+              </span>
+            )}
+            <button className="btn" onClick={handleMasterApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
+              style={{
+                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
+                fontWeight: 600,
+                padding: '0.6rem 1.75rem',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
+                border: 'none',
+                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
+              }}>
+              {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> {isAdmin ? 'Approve & Import' : 'Save Master Data & Proceed to Step 2'}</>}
+            </button>
+          </div>
         )}
       </div>
 
@@ -2317,7 +2620,8 @@ const UploadPage = () => {
         <div style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Valid" value={preview.totalRows - preview.errorCount} color="#10b981" icon={<CheckCircle size={18} />} />
+            <StatCard label="Valid" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={18} />} />
+            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
 
@@ -2332,12 +2636,8 @@ const UploadPage = () => {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Row Preview</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={filterErrors} onChange={e => setFilterErrors(e.target.checked)} />
-              Show errors only
-            </label>
           </div>
-          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
+          <MasterDataTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} onKeepDuplicate={handleKeepDuplicate} />
 
           {/* Deleted Records Audit Log */}
           {renderRejectedRecordsSection(1)}
@@ -2381,10 +2681,29 @@ const UploadPage = () => {
           </button>
         )}
         {preview && (
-          <button className="btn" onClick={handleCebApprove} disabled={approving}
-            style={{ background: 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Merging…</> : <><Check size={15} /> {isAdmin ? 'Approve & Merge' : 'Save CEB Assist & Proceed to Step 3'}</>}
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
+              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
+              </span>
+            )}
+            <button className="btn" onClick={handleCebApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
+              style={{
+                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
+                fontWeight: 600,
+                padding: '0.6rem 1.75rem',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
+                border: 'none',
+                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
+              }}>
+              {approving ? <><Loader size={15} className="animate-spin" /> Merging…</> : <><Check size={15} /> {isAdmin ? 'Approve & Merge' : 'Save CEB Assist & Proceed to Step 3'}</>}
+            </button>
+          </div>
         )}
       </div>
 
@@ -2392,18 +2711,14 @@ const UploadPage = () => {
         <div style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Matched" value={preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
-            <StatCard label="Unmatched" value={preview.unmatchedCount} color={preview.unmatchedCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+            <StatCard label="Valid" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={18} />} />
+            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Row Preview</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={filterErrors} onChange={e => setFilterErrors(e.target.checked)} />
-              Show errors / unmatched only
-            </label>
           </div>
-          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
+          <CebAssistTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} onKeepDuplicate={handleKeepDuplicate} />
 
           {/* Deleted Records Audit Log */}
           {renderRejectedRecordsSection(2)}
@@ -2451,17 +2766,36 @@ const UploadPage = () => {
           </button>
         )}
         {preview && (
-          <button className="btn" onClick={handleNgenApprove} disabled={approving}
-            style={{ background: isAdmin ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#10b981,#059669)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {approving ? (
-              <><Loader size={15} className="animate-spin" /> {isAdmin ? 'Submitting…' : 'Saving…'}</>
-            ) : (
-              <>
-                {isAdmin ? <Zap size={15} /> : <Check size={15} />}
-                {isAdmin ? 'Approve & Finalize' : 'Save NGEN & Proceed to Step 4'}
-              </>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
+              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
+              </span>
             )}
-          </button>
+            <button className="btn" onClick={handleNgenApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
+              style={{
+                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : (isAdmin ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#10b981,#059669)'),
+                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
+                fontWeight: 600,
+                padding: '0.6rem 1.75rem',
+                borderRadius: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
+                border: 'none',
+                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
+              }}>
+              {approving ? (
+                <><Loader size={15} className="animate-spin" /> {isAdmin ? 'Submitting…' : 'Saving…'}</>
+              ) : (
+                <>
+                  {isAdmin ? <Zap size={15} /> : <Check size={15} />}
+                  {isAdmin ? 'Approve & Finalize' : 'Save NGEN & Proceed to Step 4'}
+                </>
+              )}
+            </button>
+          </div>
         )}
       </div>
 
@@ -2469,18 +2803,15 @@ const UploadPage = () => {
         <div style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Matched" value={preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
+            <StatCard label="Valid" value={preview.validCount ?? preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
             <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Calculated Preview</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={filterErrors} onChange={e => setFilterErrors(e.target.checked)} />
-              Show errors / warnings only
-            </label>
           </div>
-          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
+          <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} onKeepDuplicate={handleKeepDuplicate} />
 
           {/* Deleted Records Audit Log */}
           {renderRejectedRecordsSection(3)}
@@ -2529,24 +2860,24 @@ const UploadPage = () => {
         )}
         {preview && (
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            {preview.errorCount > 0 && (
+            {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
               <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <XCircle size={14} /> Please resolve or delete all validation errors before submitting.
+                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
               </span>
             )}
-            <button className="btn" onClick={handleNpayApprove} disabled={approving || preview.errorCount > 0}
+            <button className="btn" onClick={handleNpayApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
               style={{
-                background: (preview.errorCount > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
-                color: (preview.errorCount > 0) ? 'var(--text-secondary)' : 'white',
+                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
+                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
                 fontWeight: 600,
                 padding: '0.6rem 1.75rem',
                 borderRadius: 10,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                cursor: (preview.errorCount > 0) ? 'not-allowed' : 'pointer',
+                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
                 border: 'none',
-                opacity: (preview.errorCount > 0) ? 0.6 : 1
+                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
               }}>
               {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> {isAdmin ? 'Approve & Finalize' : 'Submit to Admin for Approval'}</>}
             </button>
@@ -2558,18 +2889,15 @@ const UploadPage = () => {
         <div style={{ marginTop: '1.5rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Matched" value={preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
+            <StatCard label="Valid" value={preview.validCount ?? preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
             <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Merged Preview</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-              <input type="checkbox" checked={filterErrors} onChange={e => setFilterErrors(e.target.checked)} />
-              Show errors / warnings only
-            </label>
+            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Row Preview</div>
           </div>
-          <NpayTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} />
+          <NpayTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} onKeepDuplicate={handleKeepDuplicate} />
 
           {/* Deleted Records Audit Log */}
           {renderRejectedRecordsSection(4)}

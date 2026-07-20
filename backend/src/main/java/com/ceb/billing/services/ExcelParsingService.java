@@ -163,7 +163,6 @@ public class ExcelParsingService {
                 // Optional indices
                 Integer bankCodeCol = colIndices.get("bankcode");
                 Integer branchCodeCol = colIndices.get("branchcode");
-                Integer billingModeCol = colIndices.get("billingmode");
                 Integer costCodeCol = colIndices.get("costcode");
                 Integer tariffTypeCol = colIndices.get("tarifftype");
 

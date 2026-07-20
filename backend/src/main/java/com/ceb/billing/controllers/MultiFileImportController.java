@@ -52,6 +52,7 @@ public class MultiFileImportController {
             // Clean up cache for this session
             fileCache.remove(sessionId + "-CEB");
             fileCache.remove(sessionId + "-NGEN");
+            fileCache.remove(sessionId + "-NPAY");
             return ResponseEntity.ok(Map.of("message", "Session discarded. You can start a new import."));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("message", e.getMessage()));

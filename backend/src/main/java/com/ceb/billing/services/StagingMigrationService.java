@@ -142,7 +142,7 @@ public class StagingMigrationService {
                     customer.setExpenseCode(expenseCodeRepository.findByExpCode(cleanEc)
                         .orElseGet(() -> {
                             try {
-                                return expenseCodeRepository.findById(Long.valueOf(cleanEc)).orElse(null);
+                                return expenseCodeRepository.findById(Long.parseLong(cleanEc)).orElse(null);
                             } catch (Exception ignored) {
                                 return null;
                             }
@@ -193,7 +193,7 @@ public class StagingMigrationService {
                     customer.setExpenseCode(expenseCodeRepository.findByExpCode(cleanEc)
                         .orElseGet(() -> {
                             try {
-                                return expenseCodeRepository.findById(Long.valueOf(cleanEc)).orElse(null);
+                                return expenseCodeRepository.findById(Long.parseLong(cleanEc)).orElse(null);
                             } catch (Exception ignored) {
                                 return null;
                             }

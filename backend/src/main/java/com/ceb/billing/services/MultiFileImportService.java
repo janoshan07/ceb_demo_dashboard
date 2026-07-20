@@ -1101,6 +1101,7 @@ public class MultiFileImportService {
         result.put("masterCustomerCount", session.getMasterCustomerCount());
         result.put("cebAssistCount", session.getCebAssistCount());
         result.put("ngenCount", session.getNgenCount());
+        result.put("npayCount", session.getNpayCount());
         result.put("createdAt", session.getCreatedAt());
         return result;
     }
@@ -2047,6 +2048,7 @@ public class MultiFileImportService {
 
             // Name check: CEB Assist Name vs NPAY Name
             String cebName = ceb != null ? (String) ceb.get("customerName") : null;
+            row.put("cebName", cebName != null ? cebName : "");
             if (cebName != null && !cebName.trim().isEmpty() && npayName != null && !npayName.trim().isEmpty()) {
                 if (!cebName.trim().equalsIgnoreCase(npayName.trim())) {
                     warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim()));
@@ -2098,6 +2100,149 @@ public class MultiFileImportService {
 
     public List<Map<String, Object>> getMainDataset(Long sessionId) {
         return MAIN_DATA_CACHE.getOrDefault(sessionId, new ArrayList<>());
+    }
+
+    @Transactional
+    public Map<String, Object> approveMainDataset(Long sessionId, String username,
+                                                  Map<String, Map<String, Object>> corrections) throws Exception {
+        ImportSession session = sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        List<Map<String, Object>> mainDataset = getMainDataset(sessionId);
+        if (mainDataset.isEmpty()) {
+            throw new IllegalStateException("No Main Dataset found. Please approve files first.");
+        }
+
+        List<Map<String, Object>> correctedDataset = new ArrayList<>();
+        for (Map<String, Object> row : mainDataset) {
+            String accountNo = (String) row.get("accountNo");
+            String rowNumStr = String.valueOf(row.get("rowNum"));
+
+            Map<String, Object> corr = null;
+            if (corrections != null) {
+                if (corrections.containsKey(rowNumStr)) {
+                    corr = corrections.get(rowNumStr);
+                } else if (accountNo != null && corrections.containsKey(accountNo)) {
+                    corr = corrections.get(accountNo);
+                }
+            }
+
+            if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                Map<String, Object> finalRow = new LinkedHashMap<>(row);
+                finalRow.put("deleted", true);
+                correctedDataset.add(finalRow);
+                continue;
+            }
+
+            Map<String, Object> finalRow = new LinkedHashMap<>(row);
+            if (corr != null) {
+                finalRow.putAll(corr);
+            }
+            revalidateMergedRow(finalRow);
+            correctedDataset.add(finalRow);
+        }
+
+        MAIN_DATA_CACHE.put(sessionId, correctedDataset);
+
+        session.setStage("MAIN_DATASET_APPROVED");
+        sessionRepository.save(session);
+
+        auditLogService.log("MAIN_DATASET_APPROVED",
+                String.format("Main Dataset cross-file validation approved by %s for session %d.", username, sessionId));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("stage", "MAIN_DATASET_APPROVED");
+        result.put("message", "Main dataset cross-file validation approved successfully.");
+        return result;
+    }
+
+    private void revalidateMergedRow(Map<String, Object> row) {
+        List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>();
+
+        String accountNo = (String) row.get("accountNo");
+
+        Double kwhImport = parseDouble(row.get("kwhImport"));
+        Double kwhExport = parseDouble(row.get("kwhExport"));
+        Double kwhSales = parseDouble(row.get("kwhSales"));
+        Double unitRate = parseDouble(row.get("unitRate"));
+        Double salesAmount = parseDouble(row.get("salesAmount"));
+        Double paymentSettled = parseDouble(row.get("paymentSettled"));
+
+        Double energyPurchase = parseDouble(row.get("energyPurchase"));
+        Double billSetOff = parseDouble(row.get("billSetOff"));
+        Double retentionMoney = parseDouble(row.get("retentionMoney"));
+        Double payment = parseDouble(row.get("payment"));
+
+        String ngenNetType = (String) row.get("ngenNetType");
+        String npayNetType = (String) row.get("npayNetType");
+        String solarType = (String) row.get("solarType");
+
+        String customerName = (String) row.get("customerName");
+        String npayName = (String) row.get("npayName");
+        String cebName = (String) row.get("cebName");
+
+        // Cross-file comparisons between NGEN and NPAY:
+        if (salesAmount != null && energyPurchase != null && Math.abs(salesAmount - energyPurchase) > 0.05) {
+            warnings.add(String.format("Sales Amount / Energy Purchase mismatch: NGEN=%.2f, NPAY=%.2f", salesAmount, energyPurchase));
+        }
+        Double ngenBillSetOff = parseDouble(row.get("ngenBillSetOff"));
+        if (ngenBillSetOff != null && billSetOff != null && Math.abs(ngenBillSetOff - billSetOff) > 0.05) {
+            warnings.add(String.format("Bill OutStd Set Off / Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, billSetOff));
+        }
+        Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
+        if (ngenRetentionMoney != null && retentionMoney != null && Math.abs(ngenRetentionMoney - retentionMoney) > 0.05) {
+            warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, retentionMoney));
+        }
+        if (paymentSettled != null && payment != null && Math.abs(paymentSettled - payment) > 0.05) {
+            warnings.add(String.format("Payment Settled vs Payment mismatch: NGEN=%.2f, NPAY=%.2f", paymentSettled, payment));
+        }
+
+        String normNgen = ExcelValidationService.normalizeSolarType(ngenNetType);
+        String normNpay = ExcelValidationService.normalizeSolarType(npayNetType);
+        if (normNgen != null && normNpay != null && !normNgen.equalsIgnoreCase(normNpay)) {
+            warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType));
+        }
+
+        if (cebName != null && !cebName.trim().isEmpty() && npayName != null && !npayName.trim().isEmpty()) {
+            if (!cebName.trim().equalsIgnoreCase(npayName.trim())) {
+                warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim()));
+            }
+        }
+
+        // 6. Master Data Comparison
+        boolean hasMaster = (solarType != null || (accountNo != null && customerRepository.existsById(accountNo)));
+        if (!hasMaster) {
+            errors.add("Account No not found in customer database or Master Data");
+        } else {
+            String activeNetType = solarType;
+            if (activeNetType != null) {
+                String normSolar = ExcelValidationService.normalizeSolarType(activeNetType);
+                if (ngenNetType != null) {
+                    String normNgen2 = ExcelValidationService.normalizeSolarType(ngenNetType);
+                    if (normSolar != null && normNgen2 != null && !normSolar.equals(normNgen2)) {
+                        errors.add(String.format("Net Type Mismatch: NGEN='%s', Master='%s'", ngenNetType, solarType));
+                    }
+                }
+                if (npayNetType != null) {
+                    String normNpay2 = ExcelValidationService.normalizeSolarType(npayNetType);
+                    if (normSolar != null && normNpay2 != null && !normSolar.equals(normNpay2)) {
+                        errors.add(String.format("Net Type Mismatch: NPAY='%s', Master='%s'", npayNetType, solarType));
+                    }
+                }
+            }
+
+            if (customerName != null && !"—".equals(customerName) && npayName != null && !npayName.trim().isEmpty()) {
+                if (!customerName.trim().equalsIgnoreCase(npayName.trim())) {
+                    warnings.add(String.format("Name mismatch: NPAY='%s', Master='%s'", npayName, customerName));
+                }
+            }
+        }
+
+        row.put("errors", errors);
+        row.put("warnings", warnings);
+        row.put("status", !errors.isEmpty() ? "ERROR" : !warnings.isEmpty() ? "WARNING" : "VALID");
     }
 
     @Transactional

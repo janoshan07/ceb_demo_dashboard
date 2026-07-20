@@ -49,7 +49,7 @@ public class StagingChangeController {
             @RequestBody Map<String, Object> updatedFields) {
         
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(stagingId);
+        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(Objects.requireNonNull(stagingId));
         if (optStaging.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -65,7 +65,6 @@ public class StagingChangeController {
             proposedData.putAll(updatedFields);
 
             // Re-validate to get correct validation errors/status
-            String validationStatus = "VALID";
             List<String> errorMsgs = new ArrayList<>();
             String rowType = stagingRow.getRowType();
             String sheetName = rawData.get("sheetName") != null ? rawData.get("sheetName").toString() : "Sheet";
@@ -99,7 +98,6 @@ public class StagingChangeController {
                                 bankCode, branchCode, bankAccountNo, agreementDate, panelCapacity, solarType,
                                 costCode, billingMode, refNo, unitRate, tariffType);
 
-                validationStatus = valResult.hasErrors() ? "ERROR" : valResult.hasWarnings() ? "WARNING" : "VALID";
                 for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
                     errorMsgs.add(err.getErrorMessage());
                 }
@@ -146,7 +144,6 @@ public class StagingChangeController {
                                 new java.util.HashSet<>()
                         );
 
-                validationStatus = valResult.hasDuplicate() ? "DUPLICATE" : valResult.hasErrors() ? "ERROR" : valResult.hasWarnings() ? "WARNING" : "VALID";
                 for (com.ceb.billing.models.ExcelValidationError err : valResult.getValidationMessages()) {
                     errorMsgs.add(err.getErrorMessage());
                 }
@@ -182,7 +179,7 @@ public class StagingChangeController {
             @PathVariable Long stagingId) {
 
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
-        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(stagingId);
+        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(Objects.requireNonNull(stagingId));
         if (optStaging.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -231,7 +228,7 @@ public class StagingChangeController {
             @RequestParam(value = "rejectionReason", required = false, defaultValue = "") String reason) {
 
         String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-        Optional<StagingChangeLog> optProposal = changeLogRepository.findById(proposalId);
+        Optional<StagingChangeLog> optProposal = changeLogRepository.findById(Objects.requireNonNull(proposalId));
         if (optProposal.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -241,7 +238,7 @@ public class StagingChangeController {
         }
 
         try {
-            Optional<BillingUploadStaging> optStaging = stagingRepository.findById(proposal.getStagingId());
+            Optional<BillingUploadStaging> optStaging = stagingRepository.findById(Objects.requireNonNull(proposal.getStagingId()));
             if ("EDIT".equals(proposal.getActionType())) {
                 if (optStaging.isPresent()) {
                     BillingUploadStaging stagingRow = optStaging.get();
@@ -373,7 +370,7 @@ public class StagingChangeController {
             @RequestParam(value = "reason", required = false, defaultValue = "") String reason) {
 
         String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-        Optional<StagingChangeLog> optProposal = changeLogRepository.findById(proposalId);
+        Optional<StagingChangeLog> optProposal = changeLogRepository.findById(Objects.requireNonNull(proposalId));
         if (optProposal.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -399,11 +396,11 @@ public class StagingChangeController {
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> adminDeleteRow(@PathVariable Long stagingId) {
         String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
-        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(stagingId);
+        Optional<BillingUploadStaging> optStaging = stagingRepository.findById(Objects.requireNonNull(stagingId));
         if (optStaging.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-        stagingRepository.delete(optStaging.get());
+        stagingRepository.delete(Objects.requireNonNull(optStaging.get()));
         auditLogService.log("STAGING_ROW_DELETED_BY_ADMIN",
                 String.format("Admin %s directly deleted staging row ID %d", adminUsername, stagingId));
         return ResponseEntity.ok(new MessageResponse("Staging row deleted directly by admin."));

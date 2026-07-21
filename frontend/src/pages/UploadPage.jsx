@@ -2492,6 +2492,22 @@ const UploadPage = () => {
   const handleNgenApprove = async () => {
     if (!file || !preview) { showToast('Please preview the file first.', 'warning'); return; }
     if (!session?.sessionId) { showToast('No active import session.', 'error'); return; }
+    // Duplicates and validation errors do NOT block NGEN progression: a customer may have
+    // multiple payment transactions within the same billing period, so duplicate Account No
+    // records can be legitimate. Unresolved records stay in Pending status and remain reviewable
+    // until the final comparison stages. Critical import failures (corrupt file, missing columns,
+    // preview generation failure) are already handled during Preview and prevent this step entirely.
+    const pendingCount = (preview.errorCount || 0) + (preview.duplicateCount || 0);
+    if (pendingCount > 0) {
+      const confirmed = await showConfirm({
+        title: 'Proceed to Step 4 with Unresolved Records?',
+        message: `${pendingCount} NGEN record(s) still have validation errors or duplicate Account Numbers. Duplicate payments within the same billing period can be valid, so these records will be kept in Pending status and remain reviewable until the final comparison stages. Do you want to proceed to Step 4?`,
+        confirmText: 'Yes, Proceed to Step 4',
+        cancelText: 'Cancel',
+        type: 'warning'
+      });
+      if (!confirmed) return;
+    }
     try {
       setApproving(true);
       const fd = new FormData();
@@ -2977,23 +2993,23 @@ const UploadPage = () => {
         {preview && (
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
-              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
+              <span style={{ color: '#f59e0b', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <AlertTriangle size={14} /> Unresolved errors/duplicates will be kept in Pending status and remain reviewable — you can still proceed.
               </span>
             )}
-            <button className="btn" onClick={handleNgenApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
+            <button className="btn" onClick={handleNgenApprove} disabled={approving}
               style={{
-                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : (isAdmin ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#10b981,#059669)'),
-                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
+                background: isAdmin ? 'linear-gradient(135deg,#f59e0b,#d97706)' : 'linear-gradient(135deg,#10b981,#059669)',
+                color: 'white',
                 fontWeight: 600,
                 padding: '0.6rem 1.75rem',
                 borderRadius: 10,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 border: 'none',
-                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
+                opacity: 1
               }}>
               {approving ? (
                 <><Loader size={15} className="animate-spin" /> {isAdmin ? 'Submitting…' : 'Saving…'}</>

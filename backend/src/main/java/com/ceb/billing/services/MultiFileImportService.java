@@ -1470,6 +1470,103 @@ public class MultiFileImportService {
     //  STEP 4 — NPAY
     // ════════════════════════════════════════════════════════════════════
 
+    /**
+     * NPAY-specific column aliases (logical field -> accepted header variants).
+     * Aliases are compared after normalization (lowercase, punctuation/space stripped),
+     * so "Energy Purchase", "Energy Purches" and "Energy Purch." all resolve to energyPurchase.
+     * This is intentionally isolated from the shared PreviewService.FIELD_ALIASES and from the
+     * NGEN aliases so that improving NPAY header detection does not affect any other import step.
+     */
+    private static final LinkedHashMap<String, List<String>> NPAY_COLUMN_ALIASES = new LinkedHashMap<>();
+    static {
+        NPAY_COLUMN_ALIASES.put("accountNo", Arrays.asList(
+                "accountno", "accountnumber", "acctno", "accno", "account", "acc"));
+        NPAY_COLUMN_ALIASES.put("npayNetType", Arrays.asList(
+                "nettype", "solartype", "systemtype", "npaynettype", "net", "type"));
+        NPAY_COLUMN_ALIASES.put("npayName", Arrays.asList(
+                "customername", "custname", "accountname", "consumername", "name"));
+        NPAY_COLUMN_ALIASES.put("energyPurchase", Arrays.asList(
+                "energypurchase", "energypurches", "energypurch", "energypurchased", "energybought",
+                "purchaseenergy", "energy", "purchase", "purches"));
+        NPAY_COLUMN_ALIASES.put("billSetOff", Arrays.asList(
+                "billsetoff", "billsetof", "billset", "billsetoffamount",
+                "billoutstandingsetoff", "billoutstdsetoff", "billoutsetoff", "billoutstandingsetof",
+                "billoutstanding", "billoutstd", "billos", "outstandingsetoff", "setoffamount",
+                "setoff", "setof", "outstanding"));
+        NPAY_COLUMN_ALIASES.put("retentionMoney", Arrays.asList(
+                "retentionmoney", "retnmoney", "retmoney", "retention", "retn"));
+        NPAY_COLUMN_ALIASES.put("payment", Arrays.asList(
+                "payment", "paymentsettled", "paymentamount", "amountpaid", "netpayment", "paid", "pay"));
+    }
+
+    /**
+     * Detect NPAY columns using flexible header normalization + abbreviation aliases.
+     * Normalization ignores case, spaces and punctuation ('.', '-', '_', etc.).
+     * Pass 1 resolves exact normalized matches; Pass 2 falls back to substring matches
+     * for any fields still unmapped. A column is never assigned to more than one field.
+     */
+    private Map<String, Integer> detectNpayColumns(Sheet sheet, int headerRowIdx) {
+        Map<String, Integer> result = new HashMap<>();
+        Row headerRow = sheet.getRow(headerRowIdx);
+        if (headerRow == null) return result;
+
+        boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum()
+                && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+        int lastCellNum = headerRow.getLastCellNum();
+        if (hasSubHeader) {
+            Row subRow = sheet.getRow(headerRowIdx + 1);
+            if (subRow != null && subRow.getLastCellNum() > lastCellNum) {
+                lastCellNum = subRow.getLastCellNum();
+            }
+        }
+
+        List<String> cleanHeaders = new ArrayList<>();
+        for (int col = 0; col < lastCellNum; col++) {
+            String raw = previewService.getColCleanHeader(sheet, headerRowIdx, hasSubHeader, col);
+            cleanHeaders.add(raw != null ? raw.toLowerCase().replaceAll("[^a-z0-9]", "") : "");
+        }
+
+        Set<Integer> used = new HashSet<>();
+
+        // Pass 1 — exact normalized match
+        for (Map.Entry<String, List<String>> entry : NPAY_COLUMN_ALIASES.entrySet()) {
+            for (String alias : entry.getValue()) {
+                String a = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (a.isEmpty()) continue;
+                for (int col = 0; col < cleanHeaders.size(); col++) {
+                    if (used.contains(col)) continue;
+                    if (cleanHeaders.get(col).equals(a)) {
+                        result.put(entry.getKey(), col);
+                        used.add(col);
+                        break;
+                    }
+                }
+                if (result.containsKey(entry.getKey())) break;
+            }
+        }
+
+        // Pass 2 — substring fallback for still-unmapped fields
+        for (Map.Entry<String, List<String>> entry : NPAY_COLUMN_ALIASES.entrySet()) {
+            if (result.containsKey(entry.getKey())) continue;
+            for (String alias : entry.getValue()) {
+                String a = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (a.isEmpty()) continue;
+                for (int col = 0; col < cleanHeaders.size(); col++) {
+                    if (used.contains(col)) continue;
+                    String h = cleanHeaders.get(col);
+                    if (!h.isEmpty() && h.contains(a)) {
+                        result.put(entry.getKey(), col);
+                        used.add(col);
+                        break;
+                    }
+                }
+                if (result.containsKey(entry.getKey())) break;
+            }
+        }
+
+        return result;
+    }
+
     public Map<String, Object> previewNpay(byte[] fileBytes, String filename, Long sessionId) throws Exception {
         List<Map<String, Object>> rows = new ArrayList<>();
 
@@ -1478,7 +1575,7 @@ public class MultiFileImportService {
 
             Sheet sheet = workbook.getSheetAt(0);
             int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+            Map<String, Integer> npayCols = detectNpayColumns(sheet, headerRowIdx);
 
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
@@ -1488,13 +1585,14 @@ public class MultiFileImportService {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
 
-                String accountNo        = strVal(row, colMap.get("accountno"));
-                String npayNetType      = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
-                String npayName         = colMap.containsKey("customername") && colMap.get("customername") != null ? strVal(row, colMap.get("customername")) : null;
-                Double energyPurchase   = numVal(row, colMap.get("energypurchase"));
-                Double billSetOff       = numVal(row, colMap.get("billsetoff"));
-                Double retentionMoney   = numVal(row, colMap.get("retentionmoney"));
-                Double payment          = numVal(row, colMap.get("payment"));
+                // Read values directly from the uploaded Excel file — no calculations, no comparisons.
+                String accountNo        = strVal(row, npayCols.get("accountNo"));
+                String npayNetType      = strVal(row, npayCols.get("npayNetType"));
+                String npayName         = strVal(row, npayCols.get("npayName"));
+                Double energyPurchase   = numVal(row, npayCols.get("energyPurchase"));
+                Double billSetOff       = numVal(row, npayCols.get("billSetOff"));
+                Double retentionMoney   = numVal(row, npayCols.get("retentionMoney"));
+                Double payment          = numVal(row, npayCols.get("payment"));
 
                 String cleanAcc = accountNo != null ? accountNo.trim() : "";
 
@@ -1586,7 +1684,7 @@ public class MultiFileImportService {
 
             Sheet sheet = workbook.getSheetAt(0);
             int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+            Map<String, Integer> npayCols = detectNpayColumns(sheet, headerRowIdx);
 
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
@@ -1596,13 +1694,14 @@ public class MultiFileImportService {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
 
-                String accountNo        = strVal(row, colMap.get("accountno"));
-                String npayNetType      = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
-                String npayName         = colMap.containsKey("customername") && colMap.get("customername") != null ? strVal(row, colMap.get("customername")) : null;
-                Double energyPurchase   = numVal(row, colMap.get("energypurchase"));
-                Double billSetOff       = numVal(row, colMap.get("billsetoff"));
-                Double retentionMoney   = numVal(row, colMap.get("retentionmoney"));
-                Double payment          = numVal(row, colMap.get("payment"));
+                // Read values directly from the uploaded Excel file — no calculations, no comparisons.
+                String accountNo        = strVal(row, npayCols.get("accountNo"));
+                String npayNetType      = strVal(row, npayCols.get("npayNetType"));
+                String npayName         = strVal(row, npayCols.get("npayName"));
+                Double energyPurchase   = numVal(row, npayCols.get("energyPurchase"));
+                Double billSetOff       = numVal(row, npayCols.get("billSetOff"));
+                Double retentionMoney   = numVal(row, npayCols.get("retentionMoney"));
+                Double payment          = numVal(row, npayCols.get("payment"));
 
                 String rowNumStr = String.valueOf(r + 1);
                 Map<String, Object> corr = null;

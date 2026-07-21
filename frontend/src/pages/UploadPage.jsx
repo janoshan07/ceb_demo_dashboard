@@ -1038,28 +1038,6 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     return prefix ? `${prefix}${val}` : String(val);
   };
 
-  const normalizeSolarType = (solarType) => {
-    if (!solarType) return "";
-    const s = String(solarType).trim().replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-    if (s === "ACCOUNTING" || s === "NETACCOUNTING") return "Net Accounting";
-    if (s === "METERING" || s === "NETMETERING") return "Net Metering";
-    if (s === "PLUS" || s === "NETPLUS") return "Net Plus";
-    if (s === "PLUSPLUS" || s === "NETPLUSPLUS") return "Net Plus Plus";
-    return String(solarType).trim();
-  };
-
-  const isNetTypeMismatch = (row) => {
-    if (!row.solarType || !row.npayNetType) return false;
-    const t1 = normalizeSolarType(row.solarType);
-    const t2 = normalizeSolarType(row.npayNetType);
-    return t1 !== t2;
-  };
-
-  const isNameMismatch = (row) => {
-    if (!row.customerName || !row.npayName || row.customerName === "—" || row.npayName === "—") return false;
-    return row.customerName.trim().toLowerCase() !== row.npayName.trim().toLowerCase();
-  };
-
   React.useEffect(() => {
     setSelectedKeys(prev => {
       const next = new Set();
@@ -1190,8 +1168,8 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                 />
               </th>
               {[
-                'Row', 'Account No', 'Customer (NPAY)', 'Customer (Master)',
-                'Net Type (NPAY)', 'Net Type (Master)', 'Energy Purchase', 'Bill Set Off',
+                'Row', 'Account No', 'Net Type', 'Name',
+                'Energy Purchase', 'Bill Set Off',
                 'Retention Money', 'Payment', 'Status', 'Actions'
               ].map(h => (
                 <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
@@ -1200,8 +1178,6 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           </thead>
           <tbody>
             {displayed.map((row, i) => {
-              const hasNetTypeMismatch = isNetTypeMismatch(row);
-              const hasNameMismatch = isNameMismatch(row);
               const accInvalid = isAccountInvalid(row.accountNo);
               const accEmpty = isAccountEmpty(row.accountNo);
 
@@ -1248,28 +1224,8 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       {!accEmpty && accInvalid && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
                     </td>
 
-                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.npayName)}</td>
-                    <td style={{ 
-                      padding: '0.6rem 0.85rem', 
-                      whiteSpace: 'nowrap',
-                      background: hasNameMismatch ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
-                      color: hasNameMismatch ? '#fbbf24' : 'inherit'
-                    }}>
-                      {renderCell(row.customerName)}
-                      {hasNameMismatch && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#fbbf24', color: '#1e1b4b', fontWeight: 600 }}>Mismatch</span>}
-                    </td>
-
                     <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.npayNetType)}</td>
-                    <td style={{ 
-                      padding: '0.6rem 0.85rem', 
-                      whiteSpace: 'nowrap',
-                      background: hasNetTypeMismatch ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                      color: hasNetTypeMismatch ? '#f87171' : 'inherit',
-                      fontWeight: hasNetTypeMismatch ? 700 : 'normal'
-                    }}>
-                      {renderCell(row.solarType)}
-                      {hasNetTypeMismatch && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white' }}>Mismatch</span>}
-                    </td>
+                    <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.npayName)}</td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>
                       {row.energyPurchase != null ? `LKR ${Number(row.energyPurchase).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '—'}
@@ -1301,41 +1257,29 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       </div>
                     </td>
                   </tr>
-                  {expandedRow === i && (
+                  {expandedRow === i && (row.status === 'DUPLICATE' || row.errors?.length > 0 || row.warnings?.length > 0) && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
-                      <td colSpan={13} style={{ padding: '1rem 1.5rem' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          <div><strong>Address:</strong> {row.customerAddress || '—'}</div>
-                          <div><strong>Ref No:</strong> {row.refNo || '—'}</div>
-                          <div><strong>Mobile:</strong> {row.mobileNo || '—'}</div>
-                          <div><strong>Prev Reading Date (CEB):</strong> {row.prevReadingDate || '—'}</div>
-                          <div><strong>Curr Reading Date (CEB):</strong> {row.currReadingDate || '—'}</div>
-                          <div><strong>kWh Import (NGEN):</strong> {row.kwhImport ?? '—'}</div>
-                          <div><strong>kWh Export (NGEN):</strong> {row.kwhExport ?? '—'}</div>
-                          <div><strong>kWh Sales (NGEN):</strong> {row.kwhSales != null ? row.kwhSales.toFixed(2) : '—'}</div>
-                          <div><strong>Bank Code:</strong> {row.bankCode || '—'}</div>
-                          <div><strong>Branch Code:</strong> {row.branchCode || '—'}</div>
-                          <div><strong>Bank Account No:</strong> {row.bankAccountNo || '—'}</div>
-                          <div><strong>Unit Rate:</strong> {row.unitRate != null ? `LKR ${Number(row.unitRate).toFixed(2)}` : '—'}</div>
+                      <td colSpan={11} style={{ padding: '1rem 1.5rem' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                          {row.status === 'DUPLICATE' && (
+                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <AlertTriangle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Account Number found'}</span>
+                            </div>
+                          )}
+                          {row.errors?.length > 0 && (
+                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
+                            </div>
+                          )}
+                          {row.warnings?.length > 0 && (
+                            <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
+                            </div>
+                          )}
                         </div>
-                        {row.status === 'DUPLICATE' && (
-                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                            <AlertTriangle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Account Number found'}</span>
-                          </div>
-                        )}
-                        {row.errors?.length > 0 && (
-                          <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                            <XCircle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.errors.join(' · ')}</span>
-                          </div>
-                        )}
-                        {row.warnings?.length > 0 && (
-                          <div style={{ marginTop: '0.4rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                            <AlertTriangle size={13} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                            <span style={{ color: '#f59e0b', fontSize: '0.73rem' }}>{row.warnings.join(' · ')}</span>
-                          </div>
-                        )}
                       </td>
                     </tr>
                   )}
@@ -2540,7 +2484,7 @@ const UploadPage = () => {
       if (!res.ok) { showToast(data.message || 'Preview failed.', 'error'); return; }
       const isolated = isolateInvalidAccountRows(data);
       setPreview(isolated);
-      showToast(`Preview loaded: ${data.totalRows} rows, ${data.warningCount} name warnings.`,
+      showToast(`Preview loaded: ${data.totalRows} rows, ${data.warningCount} warnings.`,
         data.warningCount > 0 ? 'warning' : 'success');
     } catch (e) {
       showToast('Preview failed: ' + e.message, 'error');
@@ -2552,6 +2496,22 @@ const UploadPage = () => {
   const handleNpayApprove = async () => {
     if (!file || !preview) { showToast('Please preview the file first.', 'warning'); return; }
     if (!session?.sessionId) { showToast('No active import session.', 'error'); return; }
+    // Duplicates and validation errors do NOT block NPAY progression: a customer may make
+    // multiple payments, so duplicate Account No records can be legitimate. Unresolved records
+    // stay in Pending status and remain reviewable until the final comparison stages. Critical
+    // import failures (corrupt file, missing columns, preview generation failure) are already
+    // handled during Preview and prevent this step entirely.
+    const pendingCount = (preview.errorCount || 0) + (preview.duplicateCount || 0);
+    if (pendingCount > 0) {
+      const confirmed = await showConfirm({
+        title: 'Proceed to Step 5 with Unresolved Records?',
+        message: `${pendingCount} NPAY record(s) still have validation errors or duplicate Account Numbers. Customers may make multiple payments, so duplicate records can be valid — these records will be kept in Pending status and remain reviewable until the final comparison stages. Do you want to proceed and generate the Main Dataset?`,
+        confirmText: 'Yes, Proceed to Step 5',
+        cancelText: 'Cancel',
+        type: 'warning'
+      });
+      if (!confirmed) return;
+    }
     try {
       setApproving(true);
       const fd = new FormData();
@@ -3062,13 +3022,11 @@ const UploadPage = () => {
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
           <Info size={16} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>NPAY Sheet Upload &amp; Merge</strong>
+            <strong style={{ color: 'white' }}>NPAY Sheet Upload</strong>
             <br />
             Required columns: <span style={{ color: '#f59e0b' }}>Account No, Net Type, Name, Energy Purchase, Bill Set Off, Retention Money, Payment</span>.
             <br />
-            The system will automatically retrieve the bank details from the Master Data and perform mismatch checks on Net Type and Name.
-            <br />
-            <span style={{ color: '#f59e0b' }}>⚠ Any mismatched Net Types will be flagged as errors. Name differences will be flagged as warnings.</span>
+            Values are read <em>directly from the uploaded Excel file</em> and displayed exactly as they appear — no recalculation is performed and no comparison is made with Master Data, CEB Assist, or NGEN.
           </div>
         </div>
       </div>
@@ -3080,29 +3038,29 @@ const UploadPage = () => {
         {file && !preview && (
           <button className="btn" onClick={handleNpayPreview} disabled={uploading}
             style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview &amp; Merge</>}
+            {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview</>}
           </button>
         )}
         {preview && (
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
-              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
+              <span style={{ color: '#f59e0b', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <AlertTriangle size={14} /> Unresolved errors/duplicates will be kept in Pending status and remain reviewable — you can still proceed.
               </span>
             )}
-            <button className="btn" onClick={handleNpayApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
+            <button className="btn" onClick={handleNpayApprove} disabled={approving}
               style={{
-                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#f59e0b,#d97706)',
-                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
+                background: 'linear-gradient(135deg,#f59e0b,#d97706)',
+                color: 'white',
                 fontWeight: 600,
                 padding: '0.6rem 1.75rem',
                 borderRadius: 10,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
+                cursor: 'pointer',
                 border: 'none',
-                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
+                opacity: 1
               }}>
               {approving ? <><Loader size={15} className="animate-spin" /> Submitting…</> : <><Zap size={15} /> Approve NPAY & Generate Main Dataset</>}
             </button>

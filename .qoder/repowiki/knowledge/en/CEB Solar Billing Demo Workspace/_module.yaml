@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: ""
-title: CEB Solar Billing Demo (Backend + Frontend)
+title: CEB Solar Billing Demo Workspace
 scope:
     - README.md
     - schema.sql

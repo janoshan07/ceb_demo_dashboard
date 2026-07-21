@@ -39,6 +39,12 @@
 - [User.java](file://backend/src/main/java/com/ceb/billing/entities/User.java)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Updated Multi-File Import Coordination section to reflect concurrent processing capabilities and enhanced orchestration logic
+- Enhanced performance considerations with new concurrency patterns and resource management strategies
+- Updated troubleshooting guide to address concurrent import scenarios and error handling improvements
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -56,7 +62,7 @@ This document describes the business logic services that power billing data inge
 - Prediction algorithms for billing calculations and trend analysis
 - Alert management system
 - Audit logging mechanisms
-- Multi-file import coordination
+- Concurrent multi-file import coordination with enhanced orchestration logic
 - Service layer architecture patterns, transaction management, and error handling strategies
 - Examples of complex business rules, data validation logic, and external integrations
 - Performance optimization techniques and caching strategies
@@ -206,13 +212,15 @@ S12 --> E8
 - Excel Parsing Service: Reads uploaded workbooks, normalizes rows into staging entities, and prepares them for validation and migration.
 - Excel Validation Services: Validate headers, sheet configurations, and row-level data against configured templates and mappings.
 - Workbook Scanner Service: Inspects workbook structure and metadata to guide parsing and validation.
-- Multi-File Import Service: Coordinates batch imports across multiple files with session tracking, auditing, and rollback-friendly semantics.
+- Multi-File Import Service: Coordinates batch imports across multiple files with session tracking, auditing, rollback-friendly semantics, and **enhanced concurrent processing capabilities**.
 - Prediction Service: Computes billing predictions and trend analysis using historical records and reference lookups.
 - Alert Service: Manages alerts based on thresholds, anomalies, or policy violations detected during processing.
 - Audit Log Service: Records immutable audit trails for critical operations.
 - Preview Service: Provides pre-migration previews of staged data for review.
 - Staging Migration Service: Moves validated staging records into production tables and logs changes.
 - Report Service: Aggregates data for reporting and dashboards.
+
+**Updated** Enhanced Multi-File Import Service now supports concurrent file processing with improved orchestration logic and better resource management.
 
 **Section sources**
 - [ExcelParsingService.java](file://backend/src/main/java/com/ceb/billing/services/ExcelParsingService.java)
@@ -460,15 +468,19 @@ AuditLogService --> StagingChangeLog : "writes"
 
 ### Multi-File Import Coordination
 Responsibilities:
-- Orchestrate batch imports across multiple files
+- Orchestrate batch imports across multiple files with **enhanced concurrent processing capabilities**
 - Track sessions and batches for progress and rollback
 - Aggregate validation and migration outcomes
+- **Implement sophisticated error handling and retry mechanisms**
+
+**Updated** The Multi-File Import Service has been significantly refactored to support concurrent file processing, improving throughput and resource utilization while maintaining data integrity and comprehensive audit trails.
 
 Workflow:
 - Create an ImportSession to group related files
+- Process files concurrently with controlled parallelism
 - For each file, create an ImportBatch and process via parsing and validation
-- Persist ImportAuditLog entries for each step
-- On success, trigger migration; on failure, record errors and allow retry
+- Persist ImportAuditLog entries for each step with detailed progress tracking
+- On success, trigger migration; on failure, record errors and allow selective retry
 
 ```mermaid
 sequenceDiagram
@@ -478,14 +490,18 @@ participant Service as "MultiFileImportService"
 participant Session as "ImportSession"
 participant Batch as "ImportBatch"
 participant Audit as "ImportAuditLog"
+participant Executor as "ConcurrentExecutor"
 Client->>Controller : "POST /api/multi-file/import"
 Controller->>Service : "startSession(files)"
 Service->>Session : "create session"
-loop "for each file"
+Service->>Executor : "initialize concurrent executor"
+loop "for each file (concurrent)"
 Service->>Batch : "create batch"
 Service->>Service : "parse and validate"
 Service->>Audit : "record event"
+Service->>Executor : "process with thread pool"
 end
+Service->>Executor : "await completion"
 Service-->>Controller : "session summary"
 Controller-->>Client : "import status"
 ```
@@ -579,6 +595,7 @@ Key dependencies and relationships:
 - Validation services depend on HeaderMapping and SheetConfiguration for rule definitions
 - Prediction service depends on BillingRecord and dimension entities for analytics
 - Audit and alert services depend on their respective entities for persistence
+- **Multi-File Import Service coordinates multiple services concurrently with enhanced orchestration**
 
 ```mermaid
 graph LR
@@ -594,6 +611,8 @@ Pred --> EC["ExpenseCode"]
 Pred --> NT["NetType"]
 Aud["AuditLogService"] --> AL["AuditLog"]
 Alt["AlertService"] --> ALT["Alert"]
+MFI["MultiFileImportService"] --> MP["Multiple Processes"]
+MFI --> Coord["Orchestration Layer"]
 ```
 
 **Diagram sources**
@@ -607,6 +626,7 @@ Alt["AlertService"] --> ALT["Alert"]
 - [PredictionService.java](file://backend/src/main/java/com/ceb/billing/services/PredictionService.java)
 - [AuditLogService.java](file://backend/src/main/java/com/ceb/billing/services/AuditLogService.java)
 - [AlertService.java](file://backend/src/main/java/com/ceb/billing/services/AlertService.java)
+- [MultiFileImportService.java](file://backend/src/main/java/com/ceb/billing/services/MultiFileImportService.java)
 - [HeaderMapping.java](file://backend/src/main/java/com/ceb/billing/entities/HeaderMapping.java)
 - [SheetConfiguration.java](file://backend/src/main/java/com/ceb/billing/entities/SheetConfiguration.java)
 - [BillingRecord.java](file://backend/src/main/java/com/ceb/billing/entities/BillingRecord.java)
@@ -628,6 +648,7 @@ Alt["AlertService"] --> ALT["Alert"]
 - [PredictionService.java](file://backend/src/main/java/com/ceb/billing/services/PredictionService.java)
 - [AuditLogService.java](file://backend/src/main/java/com/ceb/billing/services/AuditLogService.java)
 - [AlertService.java](file://backend/src/main/java/com/ceb/billing/services/AlertService.java)
+- [MultiFileImportService.java](file://backend/src/main/java/com/ceb/billing/services/MultiFileImportService.java)
 - [HeaderMapping.java](file://backend/src/main/java/com/ceb/billing/entities/HeaderMapping.java)
 - [SheetConfiguration.java](file://backend/src/main/java/com/ceb/billing/entities/SheetConfiguration.java)
 - [BillingRecord.java](file://backend/src/main/java/com/ceb/billing/entities/BillingRecord.java)
@@ -646,8 +667,11 @@ Alt["AlertService"] --> ALT["Alert"]
 - Index frequently queried columns (dates, IDs, codes) in the database
 - Defer heavy computations (trend analysis) to background jobs when possible
 - Cache prediction outputs keyed by parameters to avoid recomputation
+- **Implement concurrent file processing with controlled thread pools to maximize throughput**
+- **Utilize connection pooling and optimized database transactions for bulk operations**
+- **Apply backpressure mechanisms to prevent resource exhaustion during high-volume imports**
 
-[No sources needed since this section provides general guidance]
+**Updated** Added performance optimizations for concurrent multi-file processing including thread pool management, connection pooling, and backpressure mechanisms.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -657,6 +681,11 @@ Common issues and resolutions:
 - Import session stalls: Check ImportAuditLog for failed steps and retry specific batches
 - Prediction anomalies: Validate historical data completeness and parameter ranges
 - Alert noise: Tune thresholds and filters in alert generation logic
+- **Concurrent import failures: Monitor thread pool utilization and adjust concurrency limits based on system resources**
+- **Memory issues during bulk imports: Implement streaming processing and monitor heap usage**
+- **Database connection timeouts: Configure connection pool settings and optimize query performance**
+
+**Updated** Added troubleshooting guidance for concurrent import scenarios, memory management, and database connection issues.
 
 **Section sources**
 - [ExcelValidationService.java](file://backend/src/main/java/com/ceb/billing/services/ExcelValidationService.java)
@@ -667,4 +696,6 @@ Common issues and resolutions:
 - [AlertService.java](file://backend/src/main/java/com/ceb/billing/services/AlertService.java)
 
 ## Conclusion
-The business logic services provide a robust foundation for billing data ingestion, validation, transformation, prediction, alerting, and auditability. The layered architecture ensures maintainability and scalability. By following the recommended performance practices and leveraging comprehensive audit and alert mechanisms, the system supports reliable operations and informed decision-making.
+The business logic services provide a robust foundation for billing data ingestion, validation, transformation, prediction, alerting, and auditability. The layered architecture ensures maintainability and scalability. With the recent enhancements to concurrent multi-file processing capabilities, the system now offers improved throughput and resource efficiency while maintaining comprehensive audit trails and error handling. By following the recommended performance practices and leveraging enhanced orchestration mechanisms, the system supports reliable operations and informed decision-making at scale.
+
+**Updated** Enhanced conclusion reflecting the significant improvements in concurrent processing capabilities and overall system performance.

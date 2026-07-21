@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: frontend
-title: Solar Grid Billing & Analytics Web Dashboard (React/Vite)
+title: CEB Solar-Grid Billing Dashboard (React SPA)
 scope:
     - frontend/
 source_files: []

@@ -254,7 +254,25 @@ public class MultiFileImportService {
                 cachedRow.put("billingMode", billingMode);
                 cachedRow.put("rowNum", r + 1);
 
+                // Store validation status so unresolved records are tracked as Pending
+                List<String> rowErrors = validateMasterDataRow(cachedRow);
+                if (rowErrors.isEmpty()) {
+                    cachedRow.put("validationStatus", "VALID");
+                    cachedRow.put("validationErrors", "");
+                } else {
+                    cachedRow.put("validationStatus", "PENDING");
+                    cachedRow.put("validationErrors", String.join("; ", rowErrors));
+                }
+
                 cachedRows.add(cachedRow);
+            }
+        }
+
+        // Count pending records for audit and response
+        int pendingCount = 0;
+        for (Map<String, Object> row : cachedRows) {
+            if ("PENDING".equals(row.get("validationStatus"))) {
+                pendingCount++;
             }
         }
 
@@ -266,8 +284,8 @@ public class MultiFileImportService {
         sessionRepository.save(session);
 
         auditLogService.log("MASTER_DATA_APPROVED",
-                String.format("Master Data staged by %s for session %d. Customers: %d, Skipped: %d",
-                        username, session.getId(), cachedRows.size(), skippedRows));
+                String.format("Master Data staged by %s for session %d. Customers: %d, Pending: %d, Skipped: %d",
+                        username, session.getId(), cachedRows.size(), pendingCount, skippedRows));
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", session.getId());
@@ -275,8 +293,9 @@ public class MultiFileImportService {
         result.put("newCustomers", cachedRows.size());
         result.put("updatedCustomers", 0);
         result.put("skippedRows", skippedRows);
+        result.put("pendingCount", pendingCount);
         result.put("totalImported", cachedRows.size());
-        result.put("message", String.format("Master Data staged successfully. %d customers cached.", cachedRows.size()));
+        result.put("message", String.format("Master Data staged successfully. %d customers cached (%d pending).", cachedRows.size(), pendingCount));
         return result;
     }
 
@@ -476,6 +495,109 @@ public class MultiFileImportService {
     //  STEP 3 — NGEN
     // ════════════════════════════════════════════════════════════════════
 
+    /**
+     * NGEN-specific column aliases (logical field -> accepted header variants).
+     * Aliases are compared after normalization (lowercase, punctuation/space stripped),
+     * so "Retention Money", "Retn Money", "RETENTION_MONEY" all resolve to retentionMoney.
+     * This is intentionally isolated from the shared PreviewService.FIELD_ALIASES so that
+     * improving NGEN header detection does not affect any other import step.
+     */
+    private static final LinkedHashMap<String, List<String>> NGEN_COLUMN_ALIASES = new LinkedHashMap<>();
+    static {
+        NGEN_COLUMN_ALIASES.put("accountNo", Arrays.asList(
+                "accountno", "accountnumber", "acctno", "accno", "account", "acc"));
+        NGEN_COLUMN_ALIASES.put("ngenNetType", Arrays.asList(
+                "nettype", "solartype", "systemtype", "ngennettype", "net", "type"));
+        NGEN_COLUMN_ALIASES.put("kwhImport", Arrays.asList(
+                "kwhimport", "importkwh", "kwhin", "imports", "import", "importunits", "importunit"));
+        NGEN_COLUMN_ALIASES.put("kwhExport", Arrays.asList(
+                "kwhexport", "exportkwh", "kwhout", "exports", "export", "exportunits", "exportunit"));
+        NGEN_COLUMN_ALIASES.put("kwhUnitSales", Arrays.asList(
+                "kwhunitsales", "kwhunitssales", "kwhsalesunits", "unitsales", "kwhsales", "salesunits", "netunits", "sales"));
+        NGEN_COLUMN_ALIASES.put("ngenUnitRate", Arrays.asList(
+                "unitrate", "unitcost", "perunit", "tariff", "rate", "price"));
+        NGEN_COLUMN_ALIASES.put("retentionMoney", Arrays.asList(
+                "retentionmoney", "retnmoney", "retmoney", "retention", "retn"));
+        NGEN_COLUMN_ALIASES.put("kwhSalesAmount", Arrays.asList(
+                "kwhsalesamount", "salesamount", "totalamount", "netamount", "billamount", "amount", "total"));
+        NGEN_COLUMN_ALIASES.put("billSetOff", Arrays.asList(
+                "billoutstandingsetoff", "billoutstdsetoff", "billoutsetoff", "billsetoff", "billoutstanding",
+                "billoutstd", "outstandingsetoff", "setoff", "outstanding"));
+        NGEN_COLUMN_ALIASES.put("paymentSettled", Arrays.asList(
+                "paymentsettled", "paymentsettle", "paymentsettlement", "pmtsettled", "payment", "settled"));
+        NGEN_COLUMN_ALIASES.put("outstandingBalance", Arrays.asList(
+                "outstandingbalance", "outstandingbal", "outstbalance", "closingbalance", "outbalance",
+                "obalance", "obal", "balance"));
+    }
+
+    /**
+     * Detect NGEN columns using flexible header normalization + abbreviation aliases.
+     * Normalization ignores case, spaces and punctuation ('.', '-', '_', etc.).
+     * Pass 1 resolves exact normalized matches; Pass 2 falls back to substring matches
+     * for any fields still unmapped. A column is never assigned to more than one field.
+     */
+    private Map<String, Integer> detectNgenColumns(Sheet sheet, int headerRowIdx) {
+        Map<String, Integer> result = new HashMap<>();
+        Row headerRow = sheet.getRow(headerRowIdx);
+        if (headerRow == null) return result;
+
+        boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum()
+                && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+        int lastCellNum = headerRow.getLastCellNum();
+        if (hasSubHeader) {
+            Row subRow = sheet.getRow(headerRowIdx + 1);
+            if (subRow != null && subRow.getLastCellNum() > lastCellNum) {
+                lastCellNum = subRow.getLastCellNum();
+            }
+        }
+
+        List<String> cleanHeaders = new ArrayList<>();
+        for (int col = 0; col < lastCellNum; col++) {
+            String raw = previewService.getColCleanHeader(sheet, headerRowIdx, hasSubHeader, col);
+            cleanHeaders.add(raw != null ? raw.toLowerCase().replaceAll("[^a-z0-9]", "") : "");
+        }
+
+        Set<Integer> used = new HashSet<>();
+
+        // Pass 1 — exact normalized match
+        for (Map.Entry<String, List<String>> entry : NGEN_COLUMN_ALIASES.entrySet()) {
+            for (String alias : entry.getValue()) {
+                String a = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (a.isEmpty()) continue;
+                for (int col = 0; col < cleanHeaders.size(); col++) {
+                    if (used.contains(col)) continue;
+                    if (cleanHeaders.get(col).equals(a)) {
+                        result.put(entry.getKey(), col);
+                        used.add(col);
+                        break;
+                    }
+                }
+                if (result.containsKey(entry.getKey())) break;
+            }
+        }
+
+        // Pass 2 — substring fallback for still-unmapped fields
+        for (Map.Entry<String, List<String>> entry : NGEN_COLUMN_ALIASES.entrySet()) {
+            if (result.containsKey(entry.getKey())) continue;
+            for (String alias : entry.getValue()) {
+                String a = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                if (a.isEmpty()) continue;
+                for (int col = 0; col < cleanHeaders.size(); col++) {
+                    if (used.contains(col)) continue;
+                    String h = cleanHeaders.get(col);
+                    if (!h.isEmpty() && h.contains(a)) {
+                        result.put(entry.getKey(), col);
+                        used.add(col);
+                        break;
+                    }
+                }
+                if (result.containsKey(entry.getKey())) break;
+            }
+        }
+
+        return result;
+    }
+
     public Map<String, Object> previewNgen(byte[] fileBytes, String filename, Long sessionId) throws Exception {
         List<Map<String, Object>> rows = new ArrayList<>();
 
@@ -484,7 +606,7 @@ public class MultiFileImportService {
 
             Sheet sheet = workbook.getSheetAt(0);
             int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+            Map<String, Integer> ngenCols = detectNgenColumns(sheet, headerRowIdx);
 
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
@@ -494,30 +616,34 @@ public class MultiFileImportService {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
 
-                String accountNo     = strVal(row, colMap.get("accountno"));
-                Double kwhImport     = numVal(row, colMap.get("imports"));
-                Double kwhExport     = numVal(row, colMap.get("exports"));
-                Double ngenUnitRate  = colMap.containsKey("unitcost") && colMap.get("unitcost") != null ? numVal(row, colMap.get("unitcost")) : null;
-                Double billSetOff    = numVal(row, colMap.get("billsetoff"));
-                Double retentionMoney = colMap.containsKey("retentionmoney") && colMap.get("retentionmoney") != null ? numVal(row, colMap.get("retentionmoney")) : null;
-                String ngenNetType   = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
-
-                // Excel values for calculations
-                Double excelKwhUnitSales  = colMap.containsKey("kwhsales") && colMap.get("kwhsales") != null ? numVal(row, colMap.get("kwhsales")) : null;
-                Double excelKwhSalesAmount = colMap.containsKey("totalamount") && colMap.get("totalamount") != null ? numVal(row, colMap.get("totalamount")) : null;
-                Double excelPaymentSettled = colMap.containsKey("paymentsettled") && colMap.get("paymentsettled") != null ? numVal(row, colMap.get("paymentsettled")) : null;
+                // Read values directly from the uploaded Excel file — no calculations.
+                String accountNo          = strVal(row, ngenCols.get("accountNo"));
+                String ngenNetType        = strVal(row, ngenCols.get("ngenNetType"));
+                Double kwhImport          = numVal(row, ngenCols.get("kwhImport"));
+                Double kwhExport          = numVal(row, ngenCols.get("kwhExport"));
+                Double kwhUnitSales       = numVal(row, ngenCols.get("kwhUnitSales"));
+                Double ngenUnitRate       = numVal(row, ngenCols.get("ngenUnitRate"));
+                Double retentionMoney     = numVal(row, ngenCols.get("retentionMoney"));
+                Double billSetOff         = numVal(row, ngenCols.get("billSetOff"));
+                Double kwhSalesAmount     = numVal(row, ngenCols.get("kwhSalesAmount"));
+                Double paymentSettled     = numVal(row, ngenCols.get("paymentSettled"));
+                Double outstandingBalance = numVal(row, ngenCols.get("outstandingBalance"));
 
                 String cleanAcc = accountNo != null ? accountNo.trim() : "";
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
                 rowData.put("rowNum", r + 1);
                 rowData.put("accountNo", cleanAcc);
-                rowData.put("kwhImport", kwhImport != null ? kwhImport : 0.0);
-                rowData.put("kwhExport", kwhExport != null ? kwhExport : 0.0);
-                rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
-                rowData.put("retentionMoney", retentionMoney != null ? retentionMoney : 0.0);
                 rowData.put("ngenNetType", ngenNetType != null ? ngenNetType : "");
-                rowData.put("ngenUnitRate", ngenUnitRate != null ? ngenUnitRate : 0.0);
+                rowData.put("kwhImport", kwhImport);
+                rowData.put("kwhExport", kwhExport);
+                rowData.put("kwhUnitSales", kwhUnitSales);
+                rowData.put("ngenUnitRate", ngenUnitRate);
+                rowData.put("retentionMoney", retentionMoney);
+                rowData.put("billSetOff", billSetOff);
+                rowData.put("kwhSalesAmount", kwhSalesAmount);
+                rowData.put("paymentSettled", paymentSettled);
+                rowData.put("outstandingBalance", outstandingBalance);
 
                 List<String> errors = new ArrayList<>();
                 List<String> warnings = new ArrayList<>();
@@ -538,64 +664,6 @@ public class MultiFileImportService {
                 if (ngenUnitRate == null) errors.add("Unit Rate is missing or invalid");
                 if (billSetOff == null) errors.add("Bill OutStd Set Off is missing or invalid");
                 if (retentionMoney == null) errors.add("Retention Money is missing or invalid");
-
-                // Calculations
-                double imp = kwhImport != null ? kwhImport : 0.0;
-                double exp = kwhExport != null ? kwhExport : 0.0;
-                double rate = ngenUnitRate != null ? ngenUnitRate : 0.0;
-                double setOff = billSetOff != null ? billSetOff : 0.0;
-
-                double calculatedKwhUnitSales = exp - imp;
-                double calculatedKwhSalesAmount = rate * calculatedKwhUnitSales;
-                double calculatedPaymentSettled = calculatedKwhSalesAmount - setOff;
-
-                calculatedKwhUnitSales = Math.round(calculatedKwhUnitSales * 100.0) / 100.0;
-                calculatedKwhSalesAmount = Math.round(calculatedKwhSalesAmount * 100.0) / 100.0;
-                calculatedPaymentSettled = Math.round(calculatedPaymentSettled * 100.0) / 100.0;
-
-                rowData.put("calculatedKwhUnitSales", calculatedKwhUnitSales);
-                rowData.put("calculatedKwhSalesAmount", calculatedKwhSalesAmount);
-                rowData.put("calculatedPaymentSettled", calculatedPaymentSettled);
-
-                rowData.put("excelKwhUnitSales", excelKwhUnitSales);
-                rowData.put("excelKwhSalesAmount", excelKwhSalesAmount);
-                rowData.put("excelPaymentSettled", excelPaymentSettled);
-
-                String kwhUnitSalesStatus = "Matched";
-                if (excelKwhUnitSales != null) {
-                    double diff = Math.abs(calculatedKwhUnitSales - excelKwhUnitSales);
-                    if (diff > 0.05) {
-                        kwhUnitSalesStatus = "Mismatch";
-                        errors.add(String.format("kWh Unit Sales Mismatch: Excel=%.2f, Calculated=%.2f", excelKwhUnitSales, calculatedKwhUnitSales));
-                    }
-                } else {
-                    errors.add("Excel kWh Unit Sales is missing");
-                }
-                rowData.put("kwhUnitSalesStatus", kwhUnitSalesStatus);
-
-                String kwhSalesAmountStatus = "Matched";
-                if (excelKwhSalesAmount != null) {
-                    double diff = Math.abs(calculatedKwhSalesAmount - excelKwhSalesAmount);
-                    if (diff > 0.05) {
-                        kwhSalesAmountStatus = "Mismatch";
-                        errors.add(String.format("kWh Sales Amount Mismatch: Excel=%.2f, Calculated=%.2f", excelKwhSalesAmount, calculatedKwhSalesAmount));
-                    }
-                } else {
-                    errors.add("Excel kWh Sales Amount is missing");
-                }
-                rowData.put("kwhSalesAmountStatus", kwhSalesAmountStatus);
-
-                String paymentSettledStatus = "Matched";
-                if (excelPaymentSettled != null) {
-                    double diff = Math.abs(calculatedPaymentSettled - excelPaymentSettled);
-                    if (diff > 0.05) {
-                        paymentSettledStatus = "Mismatch";
-                        errors.add(String.format("Payment Settled Mismatch: Excel=%.2f, Calculated=%.2f", excelPaymentSettled, calculatedPaymentSettled));
-                    }
-                } else {
-                    errors.add("Excel Payment Settled is missing");
-                }
-                rowData.put("paymentSettledStatus", paymentSettledStatus);
 
                 rowData.put("errors", errors);
                 rowData.put("warnings", warnings);
@@ -653,7 +721,7 @@ public class MultiFileImportService {
 
             Sheet sheet = workbook.getSheetAt(0);
             int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+            Map<String, Integer> ngenCols = detectNgenColumns(sheet, headerRowIdx);
 
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
@@ -663,13 +731,18 @@ public class MultiFileImportService {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
 
-                String accountNo     = strVal(row, colMap.get("accountno"));
-                Double kwhImport     = numVal(row, colMap.get("imports"));
-                Double kwhExport     = numVal(row, colMap.get("exports"));
-                Double ngenUnitRate  = colMap.containsKey("unitcost") && colMap.get("unitcost") != null ? numVal(row, colMap.get("unitcost")) : null;
-                Double billSetOff    = numVal(row, colMap.get("billsetoff"));
-                Double retentionMoney = colMap.containsKey("retentionmoney") && colMap.get("retentionmoney") != null ? numVal(row, colMap.get("retentionmoney")) : null;
-                String ngenNetType   = colMap.containsKey("solartype") && colMap.get("solartype") != null ? strVal(row, colMap.get("solartype")) : null;
+                // Read values directly from the uploaded Excel file — no calculations.
+                String accountNo          = strVal(row, ngenCols.get("accountNo"));
+                String ngenNetType        = strVal(row, ngenCols.get("ngenNetType"));
+                Double kwhImport          = numVal(row, ngenCols.get("kwhImport"));
+                Double kwhExport          = numVal(row, ngenCols.get("kwhExport"));
+                Double kwhUnitSales       = numVal(row, ngenCols.get("kwhUnitSales"));
+                Double ngenUnitRate       = numVal(row, ngenCols.get("ngenUnitRate"));
+                Double retentionMoney     = numVal(row, ngenCols.get("retentionMoney"));
+                Double billSetOff         = numVal(row, ngenCols.get("billSetOff"));
+                Double kwhSalesAmount     = numVal(row, ngenCols.get("kwhSalesAmount"));
+                Double paymentSettled     = numVal(row, ngenCols.get("paymentSettled"));
+                Double outstandingBalance = numVal(row, ngenCols.get("outstandingBalance"));
 
                 String rowNumStr = String.valueOf(r + 1);
                 Map<String, Object> corr = null;
@@ -682,23 +755,16 @@ public class MultiFileImportService {
                 }
 
                 if (corr != null) {
-                    if (corr.containsKey("accountNo"))    accountNo    = (String) corr.get("accountNo");
-                    if (corr.containsKey("kwhImport")) {
-                        kwhImport = parseDouble(corr.get("kwhImport"));
-                    }
-                    if (corr.containsKey("kwhExport")) {
-                        kwhExport = parseDouble(corr.get("kwhExport"));
-                    }
-                    if (corr.containsKey("ngenUnitRate")) {
-                        ngenUnitRate = parseDouble(corr.get("ngenUnitRate"));
-                    }
-                    if (corr.containsKey("billSetOff")) {
-                        billSetOff = parseDouble(corr.get("billSetOff"));
-                    }
-                    if (corr.containsKey("retentionMoney")) {
-                        retentionMoney = parseDouble(corr.get("retentionMoney"));
-                    }
-                    if (corr.containsKey("ngenNetType"))  ngenNetType  = (String) corr.get("ngenNetType");
+                    if (corr.containsKey("accountNo"))          accountNo          = (String) corr.get("accountNo");
+                    if (corr.containsKey("kwhImport"))          kwhImport          = parseDouble(corr.get("kwhImport"));
+                    if (corr.containsKey("kwhExport"))          kwhExport          = parseDouble(corr.get("kwhExport"));
+                    if (corr.containsKey("kwhUnitSales"))       kwhUnitSales       = parseDouble(corr.get("kwhUnitSales"));
+                    if (corr.containsKey("ngenUnitRate"))       ngenUnitRate       = parseDouble(corr.get("ngenUnitRate"));
+                    if (corr.containsKey("billSetOff"))         billSetOff         = parseDouble(corr.get("billSetOff"));
+                    if (corr.containsKey("retentionMoney"))     retentionMoney     = parseDouble(corr.get("retentionMoney"));
+                    if (corr.containsKey("paymentSettled"))     paymentSettled     = parseDouble(corr.get("paymentSettled"));
+                    if (corr.containsKey("outstandingBalance")) outstandingBalance = parseDouble(corr.get("outstandingBalance"));
+                    if (corr.containsKey("ngenNetType"))        ngenNetType        = (String) corr.get("ngenNetType");
                 }
 
                 if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
@@ -713,31 +779,19 @@ public class MultiFileImportService {
                 }
                 accountNo = accountNo.trim();
 
-                double imp = kwhImport != null ? kwhImport : 0.0;
-                double exp = kwhExport != null ? kwhExport : 0.0;
-                double rate = ngenUnitRate != null ? ngenUnitRate : 0.0;
-                double setOff = billSetOff != null ? billSetOff : 0.0;
-                double ret = retentionMoney != null ? retentionMoney : 0.0;
-
-                double calculatedKwhUnitSales = exp - imp;
-                double calculatedKwhSalesAmount = rate * calculatedKwhUnitSales;
-                double calculatedPaymentSettled = calculatedKwhSalesAmount - setOff;
-
-                calculatedKwhUnitSales = Math.round(calculatedKwhUnitSales * 100.0) / 100.0;
-                calculatedKwhSalesAmount = Math.round(calculatedKwhSalesAmount * 100.0) / 100.0;
-                calculatedPaymentSettled = Math.round(calculatedPaymentSettled * 100.0) / 100.0;
-
+                // Store Excel values exactly as read. Field names preserved for Step 5 (Main Data Set).
                 Map<String, Object> rowData = new LinkedHashMap<>();
                 rowData.put("rowNum", r + 1);
                 rowData.put("accountNo", accountNo);
-                rowData.put("kwhImport", imp);
-                rowData.put("kwhExport", exp);
-                rowData.put("kwhSales", calculatedKwhUnitSales);
-                rowData.put("ngenUnitRate", rate);
-                rowData.put("billSetOff", setOff);
-                rowData.put("retentionMoney", ret);
-                rowData.put("salesAmount", calculatedKwhSalesAmount);
-                rowData.put("paymentSettled", calculatedPaymentSettled);
+                rowData.put("kwhImport", kwhImport != null ? kwhImport : 0.0);
+                rowData.put("kwhExport", kwhExport != null ? kwhExport : 0.0);
+                rowData.put("kwhSales", kwhUnitSales != null ? kwhUnitSales : 0.0);
+                rowData.put("ngenUnitRate", ngenUnitRate != null ? ngenUnitRate : 0.0);
+                rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                rowData.put("retentionMoney", retentionMoney != null ? retentionMoney : 0.0);
+                rowData.put("salesAmount", kwhSalesAmount != null ? kwhSalesAmount : 0.0);
+                rowData.put("paymentSettled", paymentSettled != null ? paymentSettled : 0.0);
+                rowData.put("outstandingBalance", outstandingBalance != null ? outstandingBalance : 0.0);
                 rowData.put("ngenNetType", ngenNetType != null ? ngenNetType : "");
 
                 processedRows.add(rowData);

@@ -18,6 +18,14 @@
 - [application.properties](file://backend/src/main/resources/application.properties)
 </cite>
 
+## Update Summary
+**Changes Made**
+- Enhanced multi-file upload system with comprehensive batch processing capabilities
+- Added new MultiFileImportController providing HTTP endpoints for multiple file uploads
+- Improved import workflow coordination with enhanced session and batch management
+- Expanded batch processing APIs with better progress tracking and error handling
+- Updated architecture diagrams to reflect the new multi-file import system structure
+
 ## Table of Contents
 1. [Introduction](#introduction)
 2. [Project Structure](#project-structure)
@@ -32,6 +40,8 @@
 
 ## Introduction
 This document provides comprehensive API documentation for file upload and Excel processing endpoints. It covers multi-file upload, file validation, Excel parsing, header mapping, data validation, progress tracking, and batch processing workflows. The focus is on HTTP methods, multipart form data handling, supported formats (.xlsx, .xls), request/response schemas, error handling, and integration patterns for automated workflows.
+
+**Updated** Enhanced with comprehensive multi-file import system featuring batch processing capabilities and improved workflow coordination through the new MultiFileImportController.
 
 ## Project Structure
 The backend implements a layered architecture:
@@ -52,9 +62,11 @@ C1 --> S5["PreviewService"]
 C1 --> S6["WorkbookScannerService"]
 C2 --> S3
 C2 --> S4
-S2 --> E1["ImportBatch"]
-S2 --> E2["ImportSession"]
+S1 --> E1["ImportBatch"]
+S1 --> E2["ImportSession"]
 S2 --> E3["BillingUploadStaging"]
+S2 --> E1
+S2 --> E2
 ```
 
 **Diagram sources**
@@ -84,7 +96,7 @@ S2 --> E3["BillingUploadStaging"]
 - [BillingUploadStaging.java](file://backend/src/main/java/com/ceb/billing/entities/BillingUploadStaging.java)
 
 ## Core Components
-- Multi-file upload controller handles multipart/form-data requests for one or more Excel files, creates import sessions and batches, and returns status information.
+- **Enhanced Multi-file Upload Controller**: Handles multipart/form-data requests for one or more Excel files, creates import sessions and batches, and returns status information with improved batch processing capabilities.
 - Validation controller exposes endpoints to validate headers and row-level data before committing imports.
 - Parsing service reads Excel workbooks (.xlsx, .xls), extracts sheets and rows, and maps them into staging entities.
 - Validation services enforce schema rules, header mappings, and data constraints.
@@ -92,8 +104,10 @@ S2 --> E3["BillingUploadStaging"]
 - Workbook scanner inspects workbook structure (sheets, headers) to support validation and preview.
 
 Key response models:
-- Upload response includes session identifiers, batch identifiers, and status metadata.
+- Upload response includes session identifiers, batch identifiers, and status metadata with enhanced batch processing information.
 - Validation error model describes field-level issues with messages and locations.
+
+**Updated** Enhanced core components with comprehensive multi-file import system providing better batch processing coordination and workflow management.
 
 **Section sources**
 - [MultiFileImportController.java](file://backend/src/main/java/com/ceb/billing/controllers/MultiFileImportController.java)
@@ -113,7 +127,7 @@ The upload pipeline follows these steps:
 - Parsing service reads the workbook(s), normalizes headers, and populates BillingUploadStaging records.
 - Validation services check header mappings and row-level constraints.
 - Preview service returns sample rows for confirmation.
-- Batch processing commits validated rows to final tables and updates statuses.
+- Batch processing commits validated rows to final tables and updates statuses with enhanced coordination.
 
 ```mermaid
 sequenceDiagram
@@ -157,7 +171,7 @@ Prev-->>Client : {previewRows[]}
 
 ## Detailed Component Analysis
 
-### Multi-file Upload Endpoints
+### Enhanced Multi-file Upload Endpoints
 - Endpoint: POST /api/multi-upload
 - Content-Type: multipart/form-data
 - Parameters:
@@ -165,10 +179,11 @@ Prev-->>Client : {previewRows[]}
   - Optional metadata fields may be included per file if required by implementation
 - Behavior:
   - Validates content type and size limits
-  - Creates ImportSession and ImportBatch records
+  - Creates ImportSession and ImportBatch records with enhanced batch processing coordination
   - Returns upload status and identifiers for subsequent operations
+  - Provides comprehensive batch processing capabilities
 - Response:
-  - Success: JSON object containing sessionId, batchId, and status
+  - Success: JSON object containing sessionId, batchId, and status with enhanced batch information
   - Error: Standard error response with message and code
 
 Request example (conceptual):
@@ -182,11 +197,14 @@ Response schema (success):
   - sessionId: string
   - batchId: string
   - status: string (e.g., "accepted", "processing")
+  - batchInfo: enhanced batch processing information
 
 Error scenarios:
 - Unsupported format: reject non-.xlsx/.xls files
 - Exceeded size limit: return size error
 - Malformed multipart: return malformed request error
+
+**Updated** Enhanced multi-file upload endpoints with comprehensive batch processing capabilities and improved workflow coordination.
 
 **Section sources**
 - [MultiFileImportController.java](file://backend/src/main/java/com/ceb/billing/controllers/MultiFileImportController.java)
@@ -238,15 +256,16 @@ Row-level validation:
 **Section sources**
 - [PreviewService.java](file://backend/src/main/java/com/ceb/billing/services/PreviewService.java)
 
-### Batch Processing APIs
+### Enhanced Batch Processing APIs
 - Endpoint: POST /api/batch/process
-- Purpose: Commit validated rows from staging to final tables and update statuses
+- Purpose: Commit validated rows from staging to final tables and update statuses with enhanced coordination
 - Request:
   - sessionId: string
   - batchId: string
 - Response:
   - status: string (e.g., "completed", "failed")
   - summary: counts of processed, skipped, failed rows
+  - batchProgress: enhanced progress tracking information
 - Errors:
   - Session not found
   - Validation failures prevent commit
@@ -255,6 +274,9 @@ Row-level validation:
 Progress tracking:
 - Polling pattern using sessionId/batchId to retrieve current status
 - Status transitions: accepted -> processing -> completed/failed
+- Enhanced batch coordination with improved workflow management
+
+**Updated** Enhanced batch processing APIs with improved coordination and comprehensive progress tracking capabilities.
 
 **Section sources**
 - [MultiFileImportController.java](file://backend/src/main/java/com/ceb/billing/controllers/MultiFileImportController.java)
@@ -341,6 +363,8 @@ MultiFileImportController --> PreviewService : "uses"
 MultiFileImportController --> WorkbookScannerService : "uses"
 ExcelImportValidationController --> ExcelValidationService : "uses"
 ExcelImportValidationController --> HeaderValidationService : "uses"
+MultiFileImportService --> ImportBatch : "manages"
+MultiFileImportService --> ImportSession : "coordinates"
 ExcelParsingService --> ImportBatch : "creates"
 ExcelParsingService --> ImportSession : "references"
 ExcelParsingService --> BillingUploadStaging : "populates"
@@ -378,8 +402,7 @@ ExcelParsingService --> BillingUploadStaging : "populates"
 - Configure server-side multipart size limits appropriately to prevent memory pressure.
 - Optimize database writes by batching staging inserts and commits.
 - Cache header mappings and template configurations to reduce repeated lookups.
-
-[No sources needed since this section provides general guidance]
+- **Enhanced** Implement efficient batch processing strategies for multi-file uploads to improve throughput and resource utilization.
 
 ## Troubleshooting Guide
 Common issues and resolutions:
@@ -389,6 +412,7 @@ Common issues and resolutions:
 - Header mismatches: Review header mapping configuration and report specific missing/misnamed columns.
 - Validation failures: Inspect ExcelValidationError entries for row and field details; correct source data accordingly.
 - Processing timeouts: Increase timeout settings for long-running imports and implement retry/backoff strategies.
+- **Enhanced** Multi-file upload issues: Verify all files are properly formatted and within size limits; check batch processing coordination.
 
 Configuration references:
 - Server properties such as multipart max size and request timeouts can be tuned in application configuration.
@@ -402,7 +426,7 @@ Configuration references:
 ## Conclusion
 The API provides robust multi-file upload, validation, preview, and batch processing capabilities for Excel workbooks. By leveraging clear request/response schemas, structured validation errors, and progress tracking, clients can build reliable automated workflows for importing billing data. Proper configuration and error handling ensure stability and performance across diverse file sizes and complexities.
 
-[No sources needed since this section summarizes without analyzing specific files]
+**Updated** Enhanced with comprehensive multi-file import system providing advanced batch processing capabilities and improved workflow coordination for enterprise-scale file processing operations.
 
 ## Appendices
 
@@ -410,6 +434,7 @@ The API provides robust multi-file upload, validation, preview, and batch proces
 - Supported formats: .xlsx, .xls
 - Multipart form data handling for multiple files
 - Size limits configured via server properties
+- **Enhanced** Support for concurrent multi-file processing with batch coordination
 
 **Section sources**
 - [application.properties](file://backend/src/main/resources/application.properties)
@@ -420,5 +445,13 @@ The API provides robust multi-file upload, validation, preview, and batch proces
 - Use sessionId and batchId to correlate requests and track progress.
 - Implement retries with exponential backoff for transient failures.
 - Log and surface validation errors to users for corrective action.
+- **Enhanced** Leverage batch processing capabilities for high-volume file imports with improved coordination and progress tracking.
 
-[No sources needed since this section provides general guidance]
+### Multi-file Import Workflow
+The enhanced multi-file import system provides:
+- Concurrent file processing with batch coordination
+- Comprehensive progress tracking across multiple files
+- Enhanced error handling and recovery mechanisms
+- Improved resource management for large-scale imports
+
+**Updated** Added comprehensive multi-file import workflow documentation reflecting the new batch processing capabilities.

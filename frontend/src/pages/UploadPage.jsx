@@ -192,7 +192,24 @@ const StatusBadge = ({ status }) => {
 const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
-  const displayed = filterErrors ? rows.filter(r => r.status !== 'VALID') : rows;
+  const [activeFilter, setActiveFilter] = useState('ALL');
+
+  const allCount = rows.length;
+  const validCount = rows.filter(r => r.status === 'VALID').length;
+  const errorCount = rows.filter(r => r.status === 'ERROR').length;
+  const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
+  const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+
+  const displayed = rows.filter(r => {
+    if (activeFilter === 'ALL') {
+      return filterErrors ? r.status === 'ERROR' : true;
+    }
+    if (activeFilter === 'VALID') return r.status === 'VALID';
+    if (activeFilter === 'ERROR') return r.status === 'ERROR';
+    if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
+    if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+    return true;
+  });
 
   const errorRows = displayed.filter(r => r.status === 'ERROR');
   const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
@@ -216,15 +233,63 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
     });
   }, [rows, filterErrors]);
 
+  function renderFilterTabs() {
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+        {[
+          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
+          { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
+          { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
+          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+        ].map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveFilter(tab.key)}
+            style={{
+              padding: '0.45rem 0.9rem',
+              borderRadius: 8,
+              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>{tab.label}</span>
+            <span style={{
+              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+              color: activeFilter === tab.key ? 'black' : tab.color,
+              padding: '0.05rem 0.35rem',
+              borderRadius: 20,
+              fontSize: '0.68rem',
+              fontWeight: 700
+            }}>{tab.count}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   if (!displayed.length) return (
-    <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-      <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-      <div style={{ fontWeight: 600 }}>All records are valid!</div>
+    <div>
+      {renderFilterTabs()}
+      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+      </div>
     </div>
   );
 
   return (
     <div>
+      {renderFilterTabs()}
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -401,7 +466,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
 
   const displayed = rows.filter(r => {
     if (activeFilter === 'ALL') {
-      return filterErrors ? r.status !== 'VALID' : true;
+      return filterErrors ? r.status === 'ERROR' : true;
     }
     if (activeFilter === 'VALID') return r.status === 'VALID';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
@@ -649,7 +714,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 
   const displayed = rows.filter(r => {
     if (activeFilter === 'ALL') {
-      return filterErrors ? r.status !== 'VALID' : true;
+      return filterErrors ? r.status === 'ERROR' : true;
     }
     if (activeFilter === 'VALID') return r.status === 'VALID';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
@@ -801,11 +866,10 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                 />
               </th>
               {[
-                'Row', 'Account No', 'Net Type', 
-                'kWh Import', 'kWh Export', 'Unit Rate', 'Bill Set Off',
-                'kWh Unit Sales (Calculated / Excel)',
-                'kWh Sales Amount (Calculated / Excel)',
-                'Payment Settled (Calculated / Excel)',
+                'Row', 'Account No', 'Net Type',
+                'kWh Import', 'kWh Export', 'kWh Unit Sales', 'Unit Rate',
+                'Retention Money', 'Bill Outstanding Set Off', 'kWh Unit Sales Amount', 'Payment Settled',
+                'Outstanding Balance',
                 'Status', 'Actions'
               ].map(h => (
                 <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
@@ -814,34 +878,6 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           </thead>
           <tbody>
             {displayed.map((row, i) => {
-              const renderComparisonCell = (calcVal, excelVal, status) => {
-                const isMismatch = status === 'Mismatch';
-                return (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontWeight: 600, color: '#f3f4f6' }}>{calcVal != null ? calcVal.toFixed(2) : '0.00'}</span>
-                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Calc)</span>
-                    </div>
-                    {excelVal !== undefined && excelVal !== null && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.78rem' }}>
-                        <span style={{ color: 'var(--text-secondary)', textDecoration: isMismatch ? 'line-through' : 'none' }}>
-                          {excelVal.toFixed(2)}
-                        </span>
-                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>(Excel)</span>
-                        <span style={{ 
-                           fontSize: '0.65rem', 
-                           padding: '1px 4px', 
-                           borderRadius: 3, 
-                           background: isMismatch ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                           color: isMismatch ? '#ef4444' : '#10b981',
-                           fontWeight: 600
-                        }}>{status}</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              };
-
               return (
                 <React.Fragment key={i}>
                   <tr 
@@ -886,9 +922,14 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhUnitSales ?? '—'}</td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
                       {row.ngenUnitRate != null ? `LKR ${row.ngenUnitRate.toFixed(2)}` : '—'}
+                    </td>
+
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                      {row.retentionMoney != null ? `LKR ${row.retentionMoney.toLocaleString()}` : '—'}
                     </td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: '#ef4444', whiteSpace: 'nowrap' }}>
@@ -896,13 +937,15 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                     </td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {renderComparisonCell(row.calculatedKwhUnitSales, row.excelKwhUnitSales, row.kwhUnitSalesStatus)}
+                      {row.kwhSalesAmount != null ? `LKR ${row.kwhSalesAmount.toLocaleString()}` : '—'}
                     </td>
+
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {renderComparisonCell(row.calculatedKwhSalesAmount, row.excelKwhSalesAmount, row.kwhSalesAmountStatus)}
+                      {row.paymentSettled != null ? `LKR ${row.paymentSettled.toLocaleString()}` : '—'}
                     </td>
+
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {renderComparisonCell(row.calculatedPaymentSettled, row.excelPaymentSettled, row.paymentSettledStatus)}
+                      {row.outstandingBalance != null ? `LKR ${row.outstandingBalance.toLocaleString()}` : '—'}
                     </td>
 
                     <td style={{ padding: '0.6rem 0.85rem' }}><StatusBadge status={row.status} /></td>
@@ -975,7 +1018,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 
   const displayed = rows.filter(r => {
     if (activeFilter === 'ALL') {
-      return filterErrors ? r.status !== 'VALID' : true;
+      return filterErrors ? r.status === 'ERROR' : true;
     }
     if (activeFilter === 'VALID') return r.status === 'VALID';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
@@ -1493,6 +1536,8 @@ const UploadPage = () => {
   const [uploading, setUploading] = useState(false);
   const [approving, setApproving] = useState(false);
   const [filterErrors, setFilterErrors] = useState(false);
+  const [mainDatasetFilter, setMainDatasetFilter] = useState('ALL');
+  const [masterComparisonFilter, setMasterComparisonFilter] = useState('ALL');
 
   const reevaluateDuplicates = (rows, stepName) => {
     const groups = {};
@@ -1693,15 +1738,6 @@ const UploadPage = () => {
     if (!correctingRow) return;
     const key = correctingRow.rowNum || correctingRow.accountNo;
     const updated = { ...correctingFields };
-
-    if (wizardStep === 3) {
-      const imp = parseFloat(updated.kwhImport) || 0;
-      const exp = parseFloat(updated.kwhExport) || 0;
-      const rate = parseFloat(updated.unitRate || updated.effectiveUnitRate) || 0;
-      const sales = exp - imp;
-      updated.kwhSales = sales;
-      updated.paymentSettled = sales * rate - (parseFloat(updated.billSetOff) || 0);
-    }
 
     if (correctingRow.isFromDeletedLog) {
       const acc = updated.accountNo || '';
@@ -2334,17 +2370,48 @@ const UploadPage = () => {
 
   const handleMasterApprove = async () => {
     if (!file || !preview) { showToast('Please preview the file first.', 'warning'); return; }
-    const validRows = preview.rows.filter(r => r.status === 'VALID').length;
-    if (validRows === 0) { showToast('No valid rows to import.', 'error'); return; }
+    // Critical errors that block progression
+    const hasGlobalErrors = preview.globalErrors?.length > 0;
+    const hasDuplicates = (preview.duplicateCount || 0) > 0;
+    if (hasGlobalErrors) {
+      showToast('Cannot proceed: schema/column errors detected. Please fix the Excel file and re-upload.', 'error');
+      return;
+    }
+    if (hasDuplicates) {
+      showToast('Cannot proceed: duplicate Account Numbers must be resolved or deleted before continuing.', 'error');
+      return;
+    }
+    const totalRows = preview.rows?.length || 0;
+    if (totalRows === 0) { showToast('No records to import.', 'error'); return; }
+    // Non-critical errors: show confirmation before proceeding
+    const pendingCount = preview.errorCount || 0;
+    if (pendingCount > 0) {
+      const confirmed = await showConfirm({
+        title: 'Proceed with Unresolved Records?',
+        message: `${pendingCount} record(s) have unresolved validation errors (missing customer details, unrecognized codes, etc.). These records will be stored in Pending status and can be corrected later by an Officer or Admin. Do you want to proceed to Step 2?`,
+        confirmText: 'Yes, Proceed to Step 2',
+        cancelText: 'Cancel',
+        type: 'warning'
+      });
+      if (!confirmed) return;
+    }
     try {
       setApproving(true);
       const fd = new FormData();
       // File is cached server-side during upload/preview step
       fd.append('correctionsJson', JSON.stringify(rowCorrections));
       const res = await authFetch('/api/officer/import/master-data/approve', { method: 'POST', body: fd });
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (parseErr) {
+        const text = await res.text().catch(() => '');
+        showToast(text || `Approval failed (HTTP ${res.status}).`, 'error');
+        return;
+      }
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
-      showToast(`✅ Master Data approved! ${data.newCustomers} new, ${data.updatedCustomers} updated.`, 'success');
+      const pendingMsg = pendingCount > 0 ? ` (${pendingCount} pending)` : '';
+      showToast(`✅ Master Data approved! ${data.newCustomers} records staged${pendingMsg}.`, 'success');
       setSession({ hasActiveSession: true, sessionId: data.sessionId, stage: 'MASTER_APPROVED', masterCustomerCount: data.totalImported });
       setWizardStep(2);
       fetchHistory();
@@ -2729,24 +2796,29 @@ const UploadPage = () => {
         )}
         {preview && (
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
-              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <XCircle size={14} /> Please resolve or delete all validation errors/duplicates before submitting.
+            {((preview.errorCount || 0) > 0 && (preview.duplicateCount || 0) === 0 && !preview.globalErrors?.length) && (
+              <span style={{ color: '#f59e0b', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <AlertTriangle size={14} /> {preview.errorCount} record(s) have unresolved errors — they will remain in Pending status and can be corrected later.
               </span>
             )}
-            <button className="btn" onClick={handleMasterApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
+            {((preview.duplicateCount || 0) > 0 || preview.globalErrors?.length > 0) && (
+              <span style={{ color: '#ef4444', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <XCircle size={14} /> {preview.globalErrors?.length ? 'Schema errors detected — please fix the Excel file.' : 'Duplicate Account Numbers must be resolved before proceeding.'}
+              </span>
+            )}
+            <button className="btn" onClick={handleMasterApprove} disabled={approving || (preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0}
               style={{
-                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
-                color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
+                background: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                color: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? 'var(--text-secondary)' : 'white',
                 fontWeight: 600,
                 padding: '0.6rem 1.75rem',
                 borderRadius: 10,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                cursor: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'not-allowed' : 'pointer',
+                cursor: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? 'not-allowed' : 'pointer',
                 border: 'none',
-                opacity: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 0.6 : 1
+                opacity: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? 0.6 : 1
               }}>
               {approving ? <><Loader size={15} className="animate-spin" /> Importing…</> : <><Check size={15} /> {isAdmin ? 'Approve & Import' : 'Save Master Data & Proceed to Step 2'}</>}
             </button>
@@ -2761,7 +2833,7 @@ const UploadPage = () => {
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
             <StatCard label="Valid" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={18} />} />
             <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
-            <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+            <StatCard label="Pending" value={preview.errorCount || 0} color={(preview.errorCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<Clock size={18} />} />
           </div>
 
           {preview.globalErrors?.length > 0 && (
@@ -2885,23 +2957,21 @@ const UploadPage = () => {
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
             <strong style={{ color: 'white' }}>NGEN Sheet</strong>
             <br />
-            Required columns: <span style={{ color: '#f59e0b' }}>Account No, kWh Import, kWh Export, Unit Rate, Bi</span>
+            Required columns: <span style={{ color: '#f59e0b' }}>Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate, Retention Money, Bill Outstanding Set Off, Payment Settled, Outstanding Balance</span>
             <br />
-            The system will automatically calculate: <em>kWh Sales = kWh Export − kWh Import</em> and <em>Payment Settled = kWh Sales × Unit Rate</em> (from Master Data).
-            <br />
-            <span style={{ color: '#f59e0b' }}>⚠ Unit Rate mismatches between NGEN and Master Data will be flagged as warnings.</span>
+            Values are read <em>directly from the uploaded Excel file</em> and displayed exactly as they appear — no recalculation is performed.
           </div>
         </div>
       </div>
 
       <FileDropZone file={file} onFileSelected={handleFileSelect}
-        hint="Requires: Account No, kWh Import, kWh Export, Unit Rate, Bi" />
+        hint="Requires: Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate" />
 
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
         {file && !preview && (
           <button className="btn" onClick={handleNgenPreview} disabled={uploading}
             style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', border: 'none' }}>
-            {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview &amp; Calculate</>}
+            {uploading ? <><Loader size={15} className="animate-spin" /> Analysing…</> : <><Eye size={15} /> Preview</>}
           </button>
         )}
         {preview && (
@@ -2948,7 +3018,7 @@ const UploadPage = () => {
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Calculated Preview</div>
+            <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>NGEN Preview</div>
           </div>
           <NgenTable rows={preview.rows || []} filterErrors={filterErrors} onCorrectRow={handleCorrectRow} onDeleteRows={handleDeleteRows} onKeepDuplicate={handleKeepDuplicate} />
 
@@ -3063,6 +3133,14 @@ const UploadPage = () => {
     }
     const { rows, totalRecords, errorCount, warningCount, validCount, duplicateCount } = mainDataset;
     const hasErrors = (errorCount || 0) > 0 || (duplicateCount || 0) > 0;
+    const filteredRows = (rows || []).filter(r => {
+      if (mainDatasetFilter === 'ALL') return true;
+      if (mainDatasetFilter === 'VALID') return r.status === 'VALID';
+      if (mainDatasetFilter === 'ERROR') return r.status === 'ERROR';
+      if (mainDatasetFilter === 'WARNING') return r.status === 'WARNING';
+      if (mainDatasetFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+      return true;
+    });
     return (
       <div>
         <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -3083,6 +3161,40 @@ const UploadPage = () => {
           <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
         </div>
 
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          {[
+            { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
+            { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
+            { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
+            { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
+            { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#ec4899' },
+          ].map(tab => (
+            <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
+              style={{
+                padding: '0.45rem 0.9rem', borderRadius: 8,
+                background: mainDatasetFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                border: mainDatasetFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                color: mainDatasetFilter === tab.key ? 'white' : 'var(--text-secondary)',
+                cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+              }}>
+              <span>{tab.label}</span>
+              <span style={{
+                background: mainDatasetFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+                color: mainDatasetFilter === tab.key ? 'black' : tab.color,
+                padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
+              }}>{tab.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {filteredRows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+            <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+            <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+          </div>
+        ) : (
         <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
@@ -3093,7 +3205,7 @@ const UploadPage = () => {
               </tr>
             </thead>
             <tbody>
-              {(rows || []).map((row, i) => (
+              {filteredRows.map((row, i) => (
                 <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
@@ -3135,6 +3247,7 @@ const UploadPage = () => {
             </tbody>
           </table>
         </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
           <button onClick={() => loadMainDataset()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
@@ -3173,6 +3286,13 @@ const UploadPage = () => {
     }
     const { rows, totalRecords, errorCount, warningCount, validCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
     const hasErrors = (errorCount || 0) > 0;
+    const filteredRows = (rows || []).filter(r => {
+      if (masterComparisonFilter === 'ALL') return true;
+      if (masterComparisonFilter === 'VALID') return r.status === 'VALID';
+      if (masterComparisonFilter === 'ERROR') return r.status === 'ERROR';
+      if (masterComparisonFilter === 'WARNING') return r.status === 'WARNING';
+      return true;
+    });
     return (
       <div>
         <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -3195,6 +3315,39 @@ const UploadPage = () => {
           <StatCard label="Not Found" value={notFoundCount || 0} color={notFoundCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
         </div>
 
+        {/* Filter tabs */}
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          {[
+            { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
+            { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
+            { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
+            { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
+          ].map(tab => (
+            <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
+              style={{
+                padding: '0.45rem 0.9rem', borderRadius: 8,
+                background: masterComparisonFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                border: masterComparisonFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                color: masterComparisonFilter === tab.key ? 'white' : 'var(--text-secondary)',
+                cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+              }}>
+              <span>{tab.label}</span>
+              <span style={{
+                background: masterComparisonFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+                color: masterComparisonFilter === tab.key ? 'black' : tab.color,
+                padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
+              }}>{tab.count}</span>
+            </button>
+          ))}
+        </div>
+
+        {filteredRows.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+            <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+            <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+          </div>
+        ) : (
         <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
@@ -3205,7 +3358,7 @@ const UploadPage = () => {
               </tr>
             </thead>
             <tbody>
-              {(rows || []).map((row, i) => (
+              {filteredRows.map((row, i) => (
                 <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
@@ -3257,6 +3410,7 @@ const UploadPage = () => {
             </tbody>
           </table>
         </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
           <button onClick={() => loadMasterComparison()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>

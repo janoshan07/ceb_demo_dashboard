@@ -1,6 +1,6 @@
 schema_version: 1
 module_path: backend
-title: CEB Billing Management REST API (Spring Boot)
+title: CEB Solar Billing REST Backend (Spring Boot)
 scope:
     - backend/
 source_files: []

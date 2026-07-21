@@ -1,0 +1,1 @@
+Single-module Spring Boot 3.2 backend exposing a JWT-secured REST API for CEB solar-billing Excel import, staging, validation, and reporting against MySQL/H2.

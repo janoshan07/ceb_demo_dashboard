@@ -2027,16 +2027,26 @@ public class MultiFileImportService {
 
         List<Map<String, Object>> ngenStaged = loadNgenDataFromStaging(sessionId);
         Map<String, Map<String, Object>> ngenMap = new HashMap<>();
+        Map<String, Integer> ngenCounts = new HashMap<>();
         for (Map<String, Object> n : ngenStaged) {
             String acc = (String) n.get("accountNo");
-            if (acc != null) ngenMap.put(acc.trim(), n);
+            if (acc != null) {
+                String key = acc.trim();
+                ngenMap.putIfAbsent(key, n);
+                ngenCounts.merge(key, 1, Integer::sum);
+            }
         }
 
         List<Map<String, Object>> npayStaged = loadNpayDataFromStaging(sessionId);
         Map<String, Map<String, Object>> npayMap = new HashMap<>();
+        Map<String, Integer> npayCounts = new HashMap<>();
         for (Map<String, Object> p : npayStaged) {
             String acc = (String) p.get("accountNo");
-            if (acc != null) npayMap.put(acc.trim(), p);
+            if (acc != null) {
+                String key = acc.trim();
+                npayMap.putIfAbsent(key, p);
+                npayCounts.merge(key, 1, Integer::sum);
+            }
         }
 
         // Gather all unique account numbers from CEB, NGEN, and NPAY only (no Master Data)
@@ -2054,131 +2064,189 @@ public class MultiFileImportService {
             row.put("accountNo", acc);
 
             // No Master Data lookup in Step 5 — only CEB, NGEN, NPAY
-            String customerName = "—";
-            String customerAddress = "—";
-            String refNo = "—";
-            String costCode = "—";
-            String mobileNo = "—";
-            Double panelCapacity = null;
-            String agreementDate = null;
-            String bankCode = "—";
-            String branchCode = "—";
-            String bankAccountNo = "—";
-            String solarType = null;
-            String tariffType = null;
-            String billingMode = null;
-            Double masterUnitRate = null;
+            row.put("customerName", "—");
+            row.put("customerAddress", "—");
+            row.put("refNo", "—");
+            row.put("costCode", "—");
+            row.put("mobileNo", "—");
+            row.put("panelCapacity", null);
+            row.put("agreementDate", null);
+            row.put("bankCode", "—");
+            row.put("branchCode", "—");
+            row.put("bankAccountNo", "—");
+            row.put("solarType", null);
+            row.put("tariffType", null);
+            row.put("billingMode", null);
 
-            row.put("customerName", customerName);
-            row.put("customerAddress", customerAddress);
-            row.put("refNo", refNo);
-            row.put("costCode", costCode);
-            row.put("mobileNo", mobileNo);
-            row.put("panelCapacity", panelCapacity);
-            row.put("agreementDate", agreementDate);
-            row.put("bankCode", bankCode);
-            row.put("branchCode", branchCode);
-            row.put("bankAccountNo", bankAccountNo);
-            row.put("solarType", solarType);
-            row.put("tariffType", tariffType);
-            row.put("billingMode", billingMode);
-            row.put("unitRate", masterUnitRate);
-
-            // 1. CEB Data
             Map<String, Object> ceb = cebMap.get(acc);
-            String prevReadingDate = ceb != null ? (String) ceb.get("prevReadingDate") : null;
-            String currReadingDate = ceb != null ? (String) ceb.get("currReadingDate") : null;
+            Map<String, Object> ngen = ngenMap.get(acc);
+            Map<String, Object> npay = npayMap.get(acc);
+            boolean hasCeb = ceb != null;
+            boolean hasNgen = ngen != null;
+            boolean hasNpay = npay != null;
+            row.put("hasCeb", hasCeb);
+            row.put("hasNgen", hasNgen);
+            row.put("hasNpay", hasNpay);
+
+            int ngc = ngenCounts.getOrDefault(acc, 0);
+            int npc = npayCounts.getOrDefault(acc, 0);
+            row.put("ngenSourceCount", ngc);
+            row.put("npaySourceCount", npc);
+
+            // ── 1. CEB Assist fields: Account No, Previous/Current Reading Date ──
+            String prevReadingDate = hasCeb ? (String) ceb.get("prevReadingDate") : null;
+            String currReadingDate = hasCeb ? (String) ceb.get("currReadingDate") : null;
             row.put("prevReadingDate", prevReadingDate);
             row.put("currReadingDate", currReadingDate);
+            String cebName = hasCeb ? (String) ceb.get("customerName") : null;
+            row.put("cebName", cebName != null ? cebName : "");
 
-            // 2. NGEN Data
-            Map<String, Object> ngen = ngenMap.get(acc);
-            Double kwhImport = ngen != null && ngen.get("kwhImport") != null ? ((Number) ngen.get("kwhImport")).doubleValue() : null;
-            Double kwhExport = ngen != null && ngen.get("kwhExport") != null ? ((Number) ngen.get("kwhExport")).doubleValue() : null;
-            Double kwhSales = ngen != null && ngen.get("kwhSales") != null ? ((Number) ngen.get("kwhSales")).doubleValue() : null;
-            Double ngenUnitRate = ngen != null && ngen.get("ngenUnitRate") != null ? ((Number) ngen.get("ngenUnitRate")).doubleValue() : null;
-            Double ngenBillSetOff = ngen != null && ngen.get("billSetOff") != null ? ((Number) ngen.get("billSetOff")).doubleValue() : 0.0;
-            Double ngenRetentionMoney = ngen != null && ngen.get("retentionMoney") != null ? ((Number) ngen.get("retentionMoney")).doubleValue() : 0.0;
-            String ngenNetType = ngen != null ? (String) ngen.get("ngenNetType") : null;
-            Double ngenSalesAmount = ngen != null && ngen.get("salesAmount") != null ? ((Number) ngen.get("salesAmount")).doubleValue() : null;
-            Double ngenPaymentSettled = ngen != null && ngen.get("paymentSettled") != null ? ((Number) ngen.get("paymentSettled")).doubleValue() : null;
+            // ── 2. NGEN fields ──
+            Double kwhImport = numOrNull(ngen, "kwhImport");
+            Double kwhExport = numOrNull(ngen, "kwhExport");
+            Double kwhSales = numOrNull(ngen, "kwhSales");
+            Double ngenUnitRate = numOrNull(ngen, "ngenUnitRate");
+            Double ngenBillSetOff = numOrNull(ngen, "billSetOff");
+            Double ngenRetentionMoney = numOrNull(ngen, "retentionMoney");
+            Double ngenSalesAmount = numOrNull(ngen, "salesAmount");
+            Double ngenPaymentSettled = numOrNull(ngen, "paymentSettled");
+            String ngenNetType = hasNgen ? (String) ngen.get("ngenNetType") : null;
 
             row.put("kwhImport", kwhImport);
             row.put("kwhExport", kwhExport);
             row.put("kwhSales", kwhSales);
             row.put("ngenUnitRate", ngenUnitRate);
+            row.put("unitRate", ngenUnitRate);
             row.put("ngenBillSetOff", ngenBillSetOff);
             row.put("ngenRetentionMoney", ngenRetentionMoney);
             row.put("ngenNetType", ngenNetType);
             row.put("salesAmount", ngenSalesAmount);
             row.put("paymentSettled", ngenPaymentSettled);
 
-            // 3. NPAY Data
-            Map<String, Object> npay = npayMap.get(acc);
-            String npayNetType = npay != null ? (String) npay.get("npayNetType") : null;
-            String npayName = npay != null ? (String) npay.get("npayName") : null;
-            Double npayEnergyPurchase = npay != null && npay.get("energyPurchase") != null ? ((Number) npay.get("energyPurchase")).doubleValue() : 0.0;
-            Double npayBillSetOff = npay != null && npay.get("billSetOff") != null ? ((Number) npay.get("billSetOff")).doubleValue() : 0.0;
-            Double npayRetentionMoney = npay != null && npay.get("retentionMoney") != null ? ((Number) npay.get("retentionMoney")).doubleValue() : 0.0;
-            Double npayPayment = npay != null && npay.get("payment") != null ? ((Number) npay.get("payment")).doubleValue() : 0.0;
+            // ── 3. NPAY fields ──
+            String npayNetType = hasNpay ? (String) npay.get("npayNetType") : null;
+            String npayName = hasNpay ? (String) npay.get("npayName") : null;
+            Double npayEnergyPurchase = numOrNull(npay, "energyPurchase");
+            Double npayBillSetOff = numOrNull(npay, "billSetOff");
+            Double npayRetentionMoney = numOrNull(npay, "retentionMoney");
+            Double npayPayment = numOrNull(npay, "payment");
 
             row.put("npayNetType", npayNetType);
             row.put("npayName", npayName);
-            row.put("energyPurchase", npayEnergyPurchase);
-            row.put("billSetOff", npayBillSetOff);
-            row.put("retentionMoney", npayRetentionMoney);
-            row.put("payment", npayPayment);
+            row.put("npayEnergyPurchase", npayEnergyPurchase);
+            row.put("npayBillSetOff", npayBillSetOff);
+            row.put("npayRetentionMoney", npayRetentionMoney);
+            row.put("npayPayment", npayPayment);
 
             List<String> errors = new ArrayList<>();
             List<String> warnings = new ArrayList<>();
+            List<String> missingFields = new ArrayList<>();
+            List<String> mismatchFields = new ArrayList<>();
 
-            // 4. Cross-file checks between CEB, NGEN, and NPAY (Step 5 only)
-            if (ceb == null) {
+            // ── 4. Build merged equivalent fields (NGEN vs NPAY) ──
+            Map<String, Object> mergedNetType = buildMergedType(ngenNetType, npayNetType);
+            Map<String, Object> mergedEnergyPurchase = buildMergedNum(ngenSalesAmount, npayEnergyPurchase, hasNgen, hasNpay);
+            Map<String, Object> mergedBillSetOff = buildMergedNum(ngenBillSetOff, npayBillSetOff, hasNgen, hasNpay);
+            Map<String, Object> mergedRetentionMoney = buildMergedNum(ngenRetentionMoney, npayRetentionMoney, hasNgen, hasNpay);
+            Map<String, Object> mergedPayment = buildMergedNum(ngenPaymentSettled, npayPayment, hasNgen, hasNpay);
+            row.put("mergedNetType", mergedNetType);
+            row.put("mergedEnergyPurchase", mergedEnergyPurchase);
+            row.put("mergedBillSetOff", mergedBillSetOff);
+            row.put("mergedRetentionMoney", mergedRetentionMoney);
+            row.put("mergedPayment", mergedPayment);
+
+            // Effective flat values (NPAY preferred when present, else NGEN) for Step 6 / finalize
+            row.put("energyPurchase", effectiveNum(hasNpay, npayEnergyPurchase, ngenSalesAmount));
+            row.put("billSetOff", effectiveNum(hasNpay, npayBillSetOff, ngenBillSetOff));
+            row.put("retentionMoney", effectiveNum(hasNpay, npayRetentionMoney, ngenRetentionMoney));
+            row.put("payment", effectiveNum(hasNpay, npayPayment, ngenPaymentSettled));
+
+            // ── 5. Missing value detection across the three files ──
+            if (!hasCeb) {
                 warnings.add("No CEB Assist data found for this account");
+                missingFields.add("CEB Assist record");
+            } else {
+                if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); warnings.add("Missing value: Previous Reading Date (CEB)"); }
+                if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); warnings.add("Missing value: Current Reading Date (CEB)"); }
             }
-            if (ngen == null) {
+            if (!hasNgen) {
                 warnings.add("No NGEN billing data found for this account");
+                missingFields.add("NGEN record");
+            } else {
+                if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); warnings.add("Missing value: kWh Import (NGEN)"); }
+                if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); warnings.add("Missing value: kWh Export (NGEN)"); }
+                if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); warnings.add("Missing value: kWh Unit Sales (NGEN)"); }
+                if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); warnings.add("Missing value: Unit Rate (NGEN)"); }
+                if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); warnings.add("Missing value: kWh Sales Amount (NGEN)"); }
+                if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); warnings.add("Missing value: Net Type (NGEN)"); }
             }
-            if (npay == null) {
+            if (!hasNpay) {
                 warnings.add("No NPAY billing data found for this account");
+                missingFields.add("NPAY record");
+            } else {
+                if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); warnings.add("Missing value: Name (NPAY)"); }
+                if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); warnings.add("Missing value: Net Type (NPAY)"); }
+                if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); warnings.add("Missing value: Energy Purchase (NPAY)"); }
             }
 
-            // Cross-file comparisons between NGEN and NPAY:
-            if (ngen != null && npay != null) {
-                if (ngenSalesAmount != null && Math.abs(ngenSalesAmount - npayEnergyPurchase) > 0.05) {
-                    warnings.add(String.format("Sales Amount / Energy Purchase mismatch: NGEN=%.2f, NPAY=%.2f", ngenSalesAmount, npayEnergyPurchase));
-                }
-                if (Math.abs(ngenBillSetOff - npayBillSetOff) > 0.05) {
-                    warnings.add(String.format("Bill OutStd Set Off / Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, npayBillSetOff));
-                }
-                if (Math.abs(ngenRetentionMoney - npayRetentionMoney) > 0.05) {
-                    warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney));
-                }
-                if (ngenPaymentSettled != null && Math.abs(ngenPaymentSettled - npayPayment) > 0.05) {
-                    warnings.add(String.format("Payment Settled vs Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment));
-                }
-
-                String normNgen = ExcelValidationService.normalizeSolarType(ngenNetType);
-                String normNpay = ExcelValidationService.normalizeSolarType(npayNetType);
-                if (normNgen != null && normNpay != null && !normNgen.equalsIgnoreCase(normNpay)) {
-                    warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType));
-                }
+            // ── 6. Mismatch detection on merged fields ──
+            if (Boolean.TRUE.equals(mergedNetType.get("mismatch"))) {
+                mismatchFields.add("Net Type");
+                warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType));
+            }
+            if (Boolean.TRUE.equals(mergedEnergyPurchase.get("mismatch"))) {
+                mismatchFields.add("Energy Purchase / kWh Sales Amount");
+                warnings.add(String.format("Energy Purchase / kWh Sales Amount mismatch: NGEN=%.2f, NPAY=%.2f", ngenSalesAmount, npayEnergyPurchase));
+            }
+            if (Boolean.TRUE.equals(mergedBillSetOff.get("mismatch"))) {
+                mismatchFields.add("Bill Set Off");
+                warnings.add(String.format("Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, npayBillSetOff));
+            }
+            if (Boolean.TRUE.equals(mergedRetentionMoney.get("mismatch"))) {
+                mismatchFields.add("Retention Money");
+                warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney));
+            }
+            if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) {
+                mismatchFields.add("Payment");
+                warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment));
             }
 
             // Name check: CEB Assist Name vs NPAY Name
-            String cebName = ceb != null ? (String) ceb.get("customerName") : null;
-            row.put("cebName", cebName != null ? cebName : "");
             if (cebName != null && !cebName.trim().isEmpty() && npayName != null && !npayName.trim().isEmpty()) {
                 if (!cebName.trim().equalsIgnoreCase(npayName.trim())) {
+                    mismatchFields.add("Name");
                     warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim()));
                 }
             }
 
-            // No Master Data comparison here — deferred to Step 6
+            // ── 7. Duplicate detection (Account No carried more than once from NGEN/NPAY) ──
+            boolean isDuplicate = ngc > 1 || npc > 1;
+            if (isDuplicate) {
+                List<String> src = new ArrayList<>();
+                if (ngc > 1) src.add("NGEN (" + ngc + " records)");
+                if (npc > 1) src.add("NPAY (" + npc + " records)");
+                String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
+                row.put("duplicateReason", dupReason);
+                warnings.add(dupReason);
+            }
+
+            // ── 8. Errors: missing/invalid Account No ──
+            if (acc == null || acc.trim().isEmpty()) {
+                errors.add("Account No is missing");
+            }
+
+            // ── 9. Status precedence: ERROR > DUPLICATE > WARNING > VALID ──
+            String status;
+            if (!errors.isEmpty()) status = "ERROR";
+            else if (isDuplicate) status = "DUPLICATE";
+            else if (!warnings.isEmpty()) status = "WARNING";
+            else status = "VALID";
 
             row.put("errors", errors);
             row.put("warnings", warnings);
-            row.put("status", !errors.isEmpty() ? "ERROR" : !warnings.isEmpty() ? "WARNING" : "VALID");
+            row.put("missingFields", missingFields);
+            row.put("mismatchFields", mismatchFields);
+            row.put("status", status);
 
             mergedList.add(row);
         }
@@ -2245,6 +2313,49 @@ public class MultiFileImportService {
         result.put("stage", "MAIN_DATASET_APPROVED");
         result.put("message", "Main dataset cross-file validation approved successfully.");
         return result;
+    }
+
+    /**
+     * Re-applies corrections and recomputes merge/mismatch/duplicate/status for every row without
+     * advancing the session stage. Used by the Step 5 "Revalidate" action so officers can see the
+     * effect of their edits before approving. Deleted rows are dropped from the returned dataset.
+     */
+    @Transactional
+    public List<Map<String, Object>> revalidateMainDataset(Long sessionId,
+                                                           Map<String, Map<String, Object>> corrections) {
+        List<Map<String, Object>> mainDataset = getMainDataset(sessionId);
+        if (mainDataset.isEmpty()) {
+            throw new IllegalStateException("No Main Dataset found. Please approve files first.");
+        }
+
+        List<Map<String, Object>> revalidated = new ArrayList<>();
+        for (Map<String, Object> row : mainDataset) {
+            String accountNo = (String) row.get("accountNo");
+            String rowNumStr = String.valueOf(row.get("rowNum"));
+
+            Map<String, Object> corr = null;
+            if (corrections != null) {
+                if (corrections.containsKey(rowNumStr)) {
+                    corr = corrections.get(rowNumStr);
+                } else if (accountNo != null && corrections.containsKey(accountNo)) {
+                    corr = corrections.get(accountNo);
+                }
+            }
+
+            if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                continue;
+            }
+
+            Map<String, Object> finalRow = new LinkedHashMap<>(row);
+            if (corr != null) {
+                finalRow.putAll(corr);
+            }
+            revalidateMergedRow(finalRow);
+            revalidated.add(finalRow);
+        }
+
+        MAIN_DATA_CACHE.put(sessionId, revalidated);
+        return revalidated;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -2460,62 +2571,174 @@ public class MultiFileImportService {
     private void revalidateMergedRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+        List<String> missingFields = new ArrayList<>();
+        List<String> mismatchFields = new ArrayList<>();
 
         String accountNo = (String) row.get("accountNo");
+        boolean hasCeb = Boolean.TRUE.equals(row.get("hasCeb"));
+        boolean hasNgen = Boolean.TRUE.equals(row.get("hasNgen"));
+        boolean hasNpay = Boolean.TRUE.equals(row.get("hasNpay"));
+
+        String prevReadingDate = (String) row.get("prevReadingDate");
+        String currReadingDate = (String) row.get("currReadingDate");
 
         Double kwhImport = parseDouble(row.get("kwhImport"));
         Double kwhExport = parseDouble(row.get("kwhExport"));
         Double kwhSales = parseDouble(row.get("kwhSales"));
-        Double unitRate = parseDouble(row.get("unitRate"));
-        Double salesAmount = parseDouble(row.get("salesAmount"));
-        Double paymentSettled = parseDouble(row.get("paymentSettled"));
-
-        Double energyPurchase = parseDouble(row.get("energyPurchase"));
-        Double billSetOff = parseDouble(row.get("billSetOff"));
-        Double retentionMoney = parseDouble(row.get("retentionMoney"));
-        Double payment = parseDouble(row.get("payment"));
-
+        Double ngenUnitRate = parseDouble(row.get("ngenUnitRate"));
+        Double ngenBillSetOff = parseDouble(row.get("ngenBillSetOff"));
+        Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
+        Double ngenSalesAmount = parseDouble(row.get("salesAmount"));
+        Double ngenPaymentSettled = parseDouble(row.get("paymentSettled"));
         String ngenNetType = (String) row.get("ngenNetType");
-        String npayNetType = (String) row.get("npayNetType");
-        String solarType = (String) row.get("solarType");
 
-        String customerName = (String) row.get("customerName");
+        Double npayEnergyPurchase = parseDouble(row.get("npayEnergyPurchase"));
+        Double npayBillSetOff = parseDouble(row.get("npayBillSetOff"));
+        Double npayRetentionMoney = parseDouble(row.get("npayRetentionMoney"));
+        Double npayPayment = parseDouble(row.get("npayPayment"));
+        String npayNetType = (String) row.get("npayNetType");
         String npayName = (String) row.get("npayName");
         String cebName = (String) row.get("cebName");
 
-        // Cross-file comparisons between NGEN and NPAY:
-        if (salesAmount != null && energyPurchase != null && Math.abs(salesAmount - energyPurchase) > 0.05) {
-            warnings.add(String.format("Sales Amount / Energy Purchase mismatch: NGEN=%.2f, NPAY=%.2f", salesAmount, energyPurchase));
+        int ngc = row.get("ngenSourceCount") != null ? ((Number) row.get("ngenSourceCount")).intValue() : (hasNgen ? 1 : 0);
+        int npc = row.get("npaySourceCount") != null ? ((Number) row.get("npaySourceCount")).intValue() : (hasNpay ? 1 : 0);
+
+        // Rebuild merged equivalent fields (NGEN vs NPAY)
+        Map<String, Object> mergedNetType = buildMergedType(ngenNetType, npayNetType);
+        Map<String, Object> mergedEnergyPurchase = buildMergedNum(ngenSalesAmount, npayEnergyPurchase, hasNgen, hasNpay);
+        Map<String, Object> mergedBillSetOff = buildMergedNum(ngenBillSetOff, npayBillSetOff, hasNgen, hasNpay);
+        Map<String, Object> mergedRetentionMoney = buildMergedNum(ngenRetentionMoney, npayRetentionMoney, hasNgen, hasNpay);
+        Map<String, Object> mergedPayment = buildMergedNum(ngenPaymentSettled, npayPayment, hasNgen, hasNpay);
+        row.put("mergedNetType", mergedNetType);
+        row.put("mergedEnergyPurchase", mergedEnergyPurchase);
+        row.put("mergedBillSetOff", mergedBillSetOff);
+        row.put("mergedRetentionMoney", mergedRetentionMoney);
+        row.put("mergedPayment", mergedPayment);
+
+        row.put("unitRate", ngenUnitRate);
+        row.put("energyPurchase", effectiveNum(hasNpay, npayEnergyPurchase, ngenSalesAmount));
+        row.put("billSetOff", effectiveNum(hasNpay, npayBillSetOff, ngenBillSetOff));
+        row.put("retentionMoney", effectiveNum(hasNpay, npayRetentionMoney, ngenRetentionMoney));
+        row.put("payment", effectiveNum(hasNpay, npayPayment, ngenPaymentSettled));
+
+        // Missing value detection across the three files
+        if (!hasCeb) { warnings.add("No CEB Assist data found for this account"); missingFields.add("CEB Assist record"); }
+        else {
+            if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); warnings.add("Missing value: Previous Reading Date (CEB)"); }
+            if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); warnings.add("Missing value: Current Reading Date (CEB)"); }
         }
-        Double ngenBillSetOff = parseDouble(row.get("ngenBillSetOff"));
-        if (ngenBillSetOff != null && billSetOff != null && Math.abs(ngenBillSetOff - billSetOff) > 0.05) {
-            warnings.add(String.format("Bill OutStd Set Off / Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, billSetOff));
+        if (!hasNgen) { warnings.add("No NGEN billing data found for this account"); missingFields.add("NGEN record"); }
+        else {
+            if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); warnings.add("Missing value: kWh Import (NGEN)"); }
+            if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); warnings.add("Missing value: kWh Export (NGEN)"); }
+            if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); warnings.add("Missing value: kWh Unit Sales (NGEN)"); }
+            if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); warnings.add("Missing value: Unit Rate (NGEN)"); }
+            if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); warnings.add("Missing value: kWh Sales Amount (NGEN)"); }
+            if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); warnings.add("Missing value: Net Type (NGEN)"); }
         }
-        Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
-        if (ngenRetentionMoney != null && retentionMoney != null && Math.abs(ngenRetentionMoney - retentionMoney) > 0.05) {
-            warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, retentionMoney));
-        }
-        if (paymentSettled != null && payment != null && Math.abs(paymentSettled - payment) > 0.05) {
-            warnings.add(String.format("Payment Settled vs Payment mismatch: NGEN=%.2f, NPAY=%.2f", paymentSettled, payment));
+        if (!hasNpay) { warnings.add("No NPAY billing data found for this account"); missingFields.add("NPAY record"); }
+        else {
+            if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); warnings.add("Missing value: Name (NPAY)"); }
+            if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); warnings.add("Missing value: Net Type (NPAY)"); }
+            if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); warnings.add("Missing value: Energy Purchase (NPAY)"); }
         }
 
-        String normNgen = ExcelValidationService.normalizeSolarType(ngenNetType);
-        String normNpay = ExcelValidationService.normalizeSolarType(npayNetType);
-        if (normNgen != null && normNpay != null && !normNgen.equalsIgnoreCase(normNpay)) {
-            warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType));
-        }
+        // Mismatch detection on merged fields
+        if (Boolean.TRUE.equals(mergedNetType.get("mismatch"))) { mismatchFields.add("Net Type"); warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType)); }
+        if (Boolean.TRUE.equals(mergedEnergyPurchase.get("mismatch"))) { mismatchFields.add("Energy Purchase / kWh Sales Amount"); warnings.add(String.format("Energy Purchase / kWh Sales Amount mismatch: NGEN=%.2f, NPAY=%.2f", ngenSalesAmount, npayEnergyPurchase)); }
+        if (Boolean.TRUE.equals(mergedBillSetOff.get("mismatch"))) { mismatchFields.add("Bill Set Off"); warnings.add(String.format("Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, npayBillSetOff)); }
+        if (Boolean.TRUE.equals(mergedRetentionMoney.get("mismatch"))) { mismatchFields.add("Retention Money"); warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney)); }
+        if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) { mismatchFields.add("Payment"); warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment)); }
 
         if (cebName != null && !cebName.trim().isEmpty() && npayName != null && !npayName.trim().isEmpty()) {
-            if (!cebName.trim().equalsIgnoreCase(npayName.trim())) {
-                warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim()));
-            }
+            if (!cebName.trim().equalsIgnoreCase(npayName.trim())) { mismatchFields.add("Name"); warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim())); }
         }
 
-        // No Master Data comparison in Step 5 revalidation — deferred to Step 6
+        boolean isDuplicate = ngc > 1 || npc > 1;
+        if (isDuplicate) {
+            List<String> src = new ArrayList<>();
+            if (ngc > 1) src.add("NGEN (" + ngc + " records)");
+            if (npc > 1) src.add("NPAY (" + npc + " records)");
+            String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
+            row.put("duplicateReason", dupReason);
+            warnings.add(dupReason);
+        }
+
+        if (accountNo == null || accountNo.trim().isEmpty()) errors.add("Account No is missing");
+
+        String status;
+        if (!errors.isEmpty()) status = "ERROR";
+        else if (isDuplicate) status = "DUPLICATE";
+        else if (!warnings.isEmpty()) status = "WARNING";
+        else status = "VALID";
 
         row.put("errors", errors);
         row.put("warnings", warnings);
-        row.put("status", !errors.isEmpty() ? "ERROR" : !warnings.isEmpty() ? "WARNING" : "VALID");
+        row.put("missingFields", missingFields);
+        row.put("mismatchFields", mismatchFields);
+        row.put("status", status);
+    }
+
+    // ── Step 5 merge helpers ─────────────────────────────────────────────
+    private Double numOrNull(Map<String, Object> m, String key) {
+        if (m == null) return null;
+        Object v = m.get(key);
+        if (v == null) return null;
+        if (v instanceof Number) return ((Number) v).doubleValue();
+        try { return Double.valueOf(Double.parseDouble(v.toString().trim())); } catch (Exception e) { return null; }
+    }
+
+    private Double effectiveNum(boolean npayPresent, Double npayVal, Double ngenVal) {
+        if (npayPresent) return npayVal != null ? npayVal : 0.0;
+        return ngenVal != null ? ngenVal : 0.0;
+    }
+
+    private Map<String, Object> buildMergedNum(Double ngenVal, Double npayVal, boolean ngenPresent, boolean npayPresent) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ngen", ngenVal);
+        m.put("npay", npayVal);
+        boolean mismatch = false;
+        String source;
+        Double display = null;
+        if (ngenPresent && npayPresent) {
+            source = "BOTH";
+            boolean nn = ngenVal != null, pn = npayVal != null;
+            if (nn && pn) {
+                if (Math.abs(ngenVal - npayVal) > 0.05) mismatch = true;
+                else display = ngenVal;
+            } else if (nn) display = ngenVal;
+            else if (pn) display = npayVal;
+        } else if (ngenPresent) { source = "NGEN"; display = ngenVal; }
+        else if (npayPresent) { source = "NPAY"; display = npayVal; }
+        else { source = "NONE"; }
+        m.put("mismatch", mismatch);
+        m.put("source", source);
+        m.put("display", display);
+        return m;
+    }
+
+    private Map<String, Object> buildMergedType(String ngenType, String npayType) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ngen", ngenType);
+        m.put("npay", npayType);
+        boolean ngenPresent = ngenType != null && !ngenType.trim().isEmpty();
+        boolean npayPresent = npayType != null && !npayType.trim().isEmpty();
+        boolean mismatch = false;
+        String source;
+        String display = null;
+        if (ngenPresent && npayPresent) {
+            source = "BOTH";
+            String a = ExcelValidationService.normalizeSolarType(ngenType);
+            String b = ExcelValidationService.normalizeSolarType(npayType);
+            if (a != null && b != null && !a.equalsIgnoreCase(b)) mismatch = true;
+            else display = ngenType;
+        } else if (ngenPresent) { source = "NGEN"; display = ngenType; }
+        else if (npayPresent) { source = "NPAY"; display = npayType; }
+        else { source = "NONE"; }
+        m.put("mismatch", mismatch);
+        m.put("source", source);
+        m.put("display", display);
+        return m;
     }
 
     @Transactional

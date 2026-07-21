@@ -1348,6 +1348,10 @@ const UploadPage = () => {
   const [masterComparison, setMasterComparison] = useState(null); // { rows, matchedCount, mismatchCount, notFoundCount }
   const [masterComparisonLoading, setMasterComparisonLoading] = useState(false);
   const [mainCorrections, setMainCorrections] = useState({});
+  const [mainExpandedRow, setMainExpandedRow] = useState(null);
+  const [editingMainRow, setEditingMainRow] = useState(null);
+  const [editingMainFields, setEditingMainFields] = useState({});
+  const [mainRevalidating, setMainRevalidating] = useState(false);
 
   // ── Session state ─────────────────────────────────────────────────────
   const [session, setSession] = useState(null); // { sessionId, stage, masterCustomerCount, cebAssistCount, ngenCount, npayCount }
@@ -2555,6 +2559,19 @@ const UploadPage = () => {
 
   const handleApproveMainDataset = async () => {
     if (!session?.sessionId) return;
+    // Only real ERRORS block approval. Warnings (mismatches / missing values) and duplicate
+    // Account Numbers carried from NGEN/NPAY do NOT block — they stay reviewable in Step 6.
+    const warnDup = (mainDataset?.warningCount || 0) + (mainDataset?.duplicateCount || 0);
+    if (warnDup > 0) {
+      const confirmed = await showConfirm({
+        title: 'Approve Main Dataset with Warnings / Duplicates?',
+        message: `${warnDup} merged record(s) still have warnings (field mismatches or missing values) or duplicate Account Numbers carried from NGEN/NPAY. These do not block approval and remain reviewable during Master Data comparison. Approve and continue to Step 6?`,
+        confirmText: 'Yes, Approve & Continue',
+        cancelText: 'Cancel',
+        type: 'warning'
+      });
+      if (!confirmed) return;
+    }
     try {
       setApproving(true);
       const fd = new FormData();
@@ -2573,6 +2590,89 @@ const UploadPage = () => {
       setApproving(false);
     }
   };
+
+  // Posts current corrections to the Step 5 revalidate endpoint and refreshes the merged dataset.
+  const revalidateWithCorrections = async (corrections, successMsg) => {
+    if (!session?.sessionId) return;
+    try {
+      setMainRevalidating(true);
+      const fd = new FormData();
+      fd.append('correctionsJson', JSON.stringify(corrections));
+      const res = await authFetch(`/api/officer/import/${session.sessionId}/revalidate-main-dataset`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Revalidation failed.', 'error'); return; }
+      const rows = Array.isArray(data) ? data : (data.rows || []);
+      const errorCount = rows.filter(r => r.status === 'ERROR').length;
+      const warningCount = rows.filter(r => r.status === 'WARNING').length;
+      const validCount = rows.filter(r => r.status === 'VALID').length;
+      const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount });
+      if (successMsg) showToast(successMsg, 'success');
+    } catch (e) {
+      showToast('Revalidation failed: ' + e.message, 'error');
+    } finally {
+      setMainRevalidating(false);
+    }
+  };
+
+  const handleMainRevalidate = () => revalidateWithCorrections(mainCorrections, 'Main Dataset revalidated.');
+
+  const handleMainEditRow = (row) => {
+    setEditingMainRow(row);
+    setEditingMainFields({
+      prevReadingDate: row.prevReadingDate ?? '',
+      currReadingDate: row.currReadingDate ?? '',
+      kwhImport: row.kwhImport ?? '',
+      kwhExport: row.kwhExport ?? '',
+      kwhSales: row.kwhSales ?? '',
+      ngenUnitRate: row.ngenUnitRate ?? '',
+      ngenNetType: row.ngenNetType ?? '',
+      salesAmount: row.salesAmount ?? '',
+      ngenBillSetOff: row.ngenBillSetOff ?? '',
+      ngenRetentionMoney: row.ngenRetentionMoney ?? '',
+      paymentSettled: row.paymentSettled ?? '',
+      npayName: row.npayName ?? '',
+      npayNetType: row.npayNetType ?? '',
+      npayEnergyPurchase: row.npayEnergyPurchase ?? '',
+      npayBillSetOff: row.npayBillSetOff ?? '',
+      npayRetentionMoney: row.npayRetentionMoney ?? '',
+      npayPayment: row.npayPayment ?? ''
+    });
+  };
+
+  const handleSaveMainCorrection = async () => {
+    if (!editingMainRow) return;
+    const key = String(editingMainRow.rowNum ?? editingMainRow.accountNo);
+    const numKeys = ['kwhImport', 'kwhExport', 'kwhSales', 'ngenUnitRate', 'salesAmount', 'ngenBillSetOff', 'ngenRetentionMoney', 'paymentSettled', 'npayEnergyPurchase', 'npayBillSetOff', 'npayRetentionMoney', 'npayPayment'];
+    const cleaned = {};
+    Object.entries(editingMainFields).forEach(([k, v]) => {
+      if (numKeys.includes(k)) {
+        cleaned[k] = (v === '' || v === null) ? null : (isNaN(Number(v)) ? v : Number(v));
+      } else {
+        cleaned[k] = (v === '' ? null : v);
+      }
+    });
+    const nextCorrections = { ...mainCorrections, [key]: { ...(mainCorrections[key] || {}), ...cleaned } };
+    setMainCorrections(nextCorrections);
+    setEditingMainRow(null);
+    await revalidateWithCorrections(nextCorrections, 'Row updated and revalidated.');
+  };
+
+  const handleMainDeleteRow = async (row) => {
+    const confirmed = await showConfirm({
+      title: 'Delete Merged Record?',
+      message: `Remove the merged record for Account No: ${row.accountNo || row.rowNum} from the Main Dataset?\n\nThe underlying CEB Assist, NGEN, and NPAY source records are NOT affected — this only excludes the merged row from the final import.`,
+      confirmText: 'Delete Record',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!confirmed) return;
+    const key = String(row.rowNum ?? row.accountNo);
+    const nextCorrections = { ...mainCorrections, [key]: { deleted: true } };
+    setMainCorrections(nextCorrections);
+    await revalidateWithCorrections(nextCorrections, 'Merged record removed from Main Dataset.');
+  };
+
 
   // ── Step 6: Master Data Comparison ──────────────────────────────────────
   const loadMasterComparison = async (sid) => {
@@ -3106,7 +3206,8 @@ const UploadPage = () => {
       );
     }
     const { rows, totalRecords, errorCount, warningCount, validCount, duplicateCount } = mainDataset;
-    const hasErrors = (errorCount || 0) > 0 || (duplicateCount || 0) > 0;
+    // Only real ERRORS block approval; duplicates and warnings do not.
+    const hasErrors = (errorCount || 0) > 0;
     const filteredRows = (rows || []).filter(r => {
       if (mainDatasetFilter === 'ALL') return true;
       if (mainDatasetFilter === 'VALID') return r.status === 'VALID';
@@ -3115,6 +3216,34 @@ const UploadPage = () => {
       if (mainDatasetFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
       return true;
     });
+    const fmtLKR = (v) => (v == null ? '—' : `LKR ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+    const srcTag = (label) => <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)', marginLeft: 4, letterSpacing: '0.02em' }}>{label}</span>;
+    const mismatchBadge = <span style={{ fontSize: '0.56rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', padding: '0 4px', borderRadius: 4, alignSelf: 'flex-start', marginTop: 2 }}>MISMATCH</span>;
+    const renderMergedNum = (m) => {
+      if (!m || m.source === 'NONE') return <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>;
+      if (m.mismatch) return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, fontFamily: 'monospace' }}>
+          <span style={{ color: '#f59e0b', fontSize: '0.72rem' }}>NGEN: {fmtLKR(m.ngen)}</span>
+          <span style={{ color: '#f59e0b', fontSize: '0.72rem' }}>NPAY: {fmtLKR(m.npay)}</span>
+          {mismatchBadge}
+        </div>
+      );
+      const val = m.display != null ? m.display : (m.ngen != null ? m.ngen : m.npay);
+      return <span style={{ fontFamily: 'monospace' }}>{fmtLKR(val)}{srcTag(m.source === 'BOTH' ? 'NGEN / NPAY' : m.source)}</span>;
+    };
+    const renderMergedType = (m) => {
+      if (!m || m.source === 'NONE') return <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>;
+      if (m.mismatch) return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ color: '#f59e0b', fontSize: '0.72rem' }}>NGEN: {m.ngen || '—'}</span>
+          <span style={{ color: '#f59e0b', fontSize: '0.72rem' }}>NPAY: {m.npay || '—'}</span>
+          {mismatchBadge}
+        </div>
+      );
+      const val = m.display || m.ngen || m.npay;
+      return <span>{val}{srcTag(m.source === 'BOTH' ? 'NGEN / NPAY' : m.source)}</span>;
+    };
+    const renderPlain = (v) => (v == null || String(v).trim() === '' ? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span> : v);
     return (
       <div>
         <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -3173,51 +3302,89 @@ const UploadPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['#', 'Account No', 'Customer Name', 'Prev Reading', 'Curr Reading', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Bill Set Off', 'Payment', 'Net Type', 'Name Match', 'Status', 'Errors'].map(h => (
+                {['#', 'Account No', 'Prev Reading', 'Curr Reading', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Net Type', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Name', 'Status', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row, i) => (
-                <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+              {filteredRows.map((row, i) => {
+                const rowKey = row.rowNum ?? row.accountNo ?? i;
+                const expanded = mainExpandedRow === rowKey;
+                const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason;
+                return (
+                <React.Fragment key={rowKey}>
+                <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expanded ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.effectiveUnitRate ?? row.unitRate ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.billSetOff ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.netType || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                    {row.nameMatchStatus === 'MATCH' ? <span style={{ color: '#10b981', fontWeight: 600 }}>Match</span>
-                      : row.nameMatchStatus === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontWeight: 600 }}>Mismatch</span>
-                      : '—'}
-                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.prevReadingDate)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.currReadingDate)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.ngenUnitRate ?? row.unitRate ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderMergedType(row.mergedNetType)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedEnergyPurchase)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedBillSetOff)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedRetentionMoney)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedPayment)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     <span style={{
                       padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'DUPLICATE' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)',
-                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' || row.status === 'DUPLICATE' ? '#f59e0b' : 'var(--text-muted)'
+                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
+                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
                     }}>{row.status}</span>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>
-                    {row.errors && row.errors.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                        {row.errors.map((err, idx) => (
-                          <div key={idx} style={{ color: '#ef4444', fontSize: '0.72rem', display: 'flex', gap: '0.2rem', alignItems: 'center' }}>
-                            <AlertTriangle size={11} style={{ flexShrink: 0 }} /> {err}
-                          </div>
-                        ))}
-                      </div>
-                    ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button onClick={() => handleMainEditRow(row)} title="Edit merged record"
+                        style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Pencil size={11} /> Edit
+                      </button>
+                      <button onClick={() => handleMainDeleteRow(row)} title="Delete merged record"
+                        style={{ padding: '0.22rem 0.5rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                        <Trash2 size={11} /> Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
-              ))}
+                {expanded && hasDetail && (
+                  <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
+                    <td colSpan={16} style={{ padding: '0.75rem 1.25rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                        {row.duplicateReason && (
+                          <div style={{ color: '#ec4899', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                            <AlertTriangle size={12} /> <strong>Duplicate:</strong> {row.duplicateReason}
+                          </div>
+                        )}
+                        {row.errors?.length > 0 && (
+                          <div style={{ color: '#ef4444' }}><strong>Errors:</strong> {row.errors.join('; ')}</div>
+                        )}
+                        {row.mismatchFields?.length > 0 && (
+                          <div style={{ color: '#f59e0b' }}><strong>Mismatched fields:</strong> {row.mismatchFields.join(', ')}</div>
+                        )}
+                        {row.missingFields?.length > 0 && (
+                          <div style={{ color: '#f59e0b' }}><strong>Missing values:</strong> {row.missingFields.join(', ')}</div>
+                        )}
+                        {row.warnings?.length > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <strong style={{ color: 'var(--text-secondary)' }}>All warnings:</strong>
+                            {row.warnings.map((w, wi) => (
+                              <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -3226,6 +3393,10 @@ const UploadPage = () => {
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
           <button onClick={() => loadMainDataset()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
             <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleMainRevalidate} disabled={mainRevalidating}
+            style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, opacity: mainRevalidating ? 0.6 : 1 }}>
+            {mainRevalidating ? <><Loader size={14} className="animate-spin" /> Revalidating...</> : <><RefreshCw size={14} /> Revalidate</>}
           </button>
           <button onClick={handleApproveMainDataset} disabled={approving || hasErrors}
             style={{
@@ -3238,6 +3409,77 @@ const UploadPage = () => {
             {approving ? <><Loader size={15} className="animate-spin" /> Approving...</> : <><CheckCircle size={15} /> Approve Main Dataset & Compare Master Data</>}
           </button>
         </div>
+
+        {/* ── Edit merged record modal ── */}
+        {editingMainRow && (() => {
+          const ef = editingMainFields;
+          const setF = (k, v) => setEditingMainFields(prev => ({ ...prev, [k]: v }));
+          const fieldInput = (label, key, type = 'text') => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</label>
+              <input type={type} value={ef[key] ?? ''} onChange={e => setF(key, e.target.value)}
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)', borderRadius: 7, padding: '0.45rem 0.6rem', color: 'white', fontSize: '0.8rem', fontFamily: type === 'number' ? 'monospace' : 'inherit' }} />
+            </div>
+          );
+          const groupHeader = (label, color) => (
+            <div style={{ gridColumn: '1 / -1', fontSize: '0.72rem', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.03em', marginTop: '0.35rem', borderBottom: `1px solid ${color}33`, paddingBottom: '0.3rem' }}>{label}</div>
+          );
+          return (
+            <div onClick={() => setEditingMainRow(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1.5rem' }}>
+              <div onClick={e => e.stopPropagation()}
+                style={{ background: 'var(--card-bg, #1a1c23)', border: '1px solid var(--border-color)', borderRadius: 14, width: 'min(760px, 100%)', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.1rem 1.4rem', borderBottom: '1px solid var(--border-color)', position: 'sticky', top: 0, background: 'var(--card-bg, #1a1c23)', zIndex: 1 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Pencil size={15} color="#818cf8" /> Edit Merged Record</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', fontFamily: 'monospace' }}>Account No: {editingMainRow.accountNo || '—'}</div>
+                  </div>
+                  <button onClick={() => setEditingMainRow(null)} title="Cancel"
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 8, padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    <X size={16} />
+                  </button>
+                </div>
+                <div style={{ padding: '1.25rem 1.4rem', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  Edit values below to reconcile mismatches or fill missing data. Underlying CEB Assist, NGEN and NPAY source records are <strong style={{ color: 'var(--text-secondary)' }}>not modified</strong> — changes only apply to this merged row.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.9rem', padding: '0 1.4rem 1.25rem' }}>
+                  {groupHeader('CEB Assist', '#10b981')}
+                  {fieldInput('Previous Reading Date', 'prevReadingDate')}
+                  {fieldInput('Current Reading Date', 'currReadingDate')}
+
+                  {groupHeader('NGEN', '#6366f1')}
+                  {fieldInput('Net Type', 'ngenNetType')}
+                  {fieldInput('kWh Import', 'kwhImport', 'number')}
+                  {fieldInput('kWh Export', 'kwhExport', 'number')}
+                  {fieldInput('kWh Unit Sales', 'kwhSales', 'number')}
+                  {fieldInput('Unit Rate', 'ngenUnitRate', 'number')}
+                  {fieldInput('kWh Sales Amount', 'salesAmount', 'number')}
+                  {fieldInput('Bill Outstanding Set Off', 'ngenBillSetOff', 'number')}
+                  {fieldInput('Retention Money', 'ngenRetentionMoney', 'number')}
+                  {fieldInput('Payment Settled', 'paymentSettled', 'number')}
+
+                  {groupHeader('NPAY', '#f59e0b')}
+                  {fieldInput('Name', 'npayName')}
+                  {fieldInput('Net Type', 'npayNetType')}
+                  {fieldInput('Energy Purchase', 'npayEnergyPurchase', 'number')}
+                  {fieldInput('Bill Set Off', 'npayBillSetOff', 'number')}
+                  {fieldInput('Retention Money', 'npayRetentionMoney', 'number')}
+                  {fieldInput('Payment', 'npayPayment', 'number')}
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1.1rem 1.4rem', borderTop: '1px solid var(--border-color)', position: 'sticky', bottom: 0, background: 'var(--card-bg, #1a1c23)' }}>
+                  <button onClick={() => setEditingMainRow(null)}
+                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+                    Cancel
+                  </button>
+                  <button onClick={handleSaveMainCorrection} disabled={mainRevalidating}
+                    style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.55rem 1.5rem', borderRadius: 10, border: 'none', cursor: mainRevalidating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', opacity: mainRevalidating ? 0.6 : 1 }}>
+                    {mainRevalidating ? <><Loader size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> Save & Revalidate</>}
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     );
   };

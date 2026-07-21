@@ -322,6 +322,24 @@ public class MultiFileImportController {
         }
     }
 
+    @PostMapping({"/admin/import/{sessionId}/revalidate-main-dataset", "/officer/import/{sessionId}/revalidate-main-dataset"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> revalidateMainDataset(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
+        try {
+            Map<String, Map<String, Object>> corrections = correctionsJson != null && !correctionsJson.equals("{}")
+                    ? new com.fasterxml.jackson.databind.ObjectMapper().readValue(correctionsJson,
+                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
+                    : null;
+
+            return ResponseEntity.ok(multiFileImportService.revalidateMainDataset(sessionId, corrections));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Main Dataset revalidation failed: " + e.getMessage()));
+        }
+    }
+
     // ─────────────────────────────────────────────────────────────────────
     //  STEP 6 — MASTER DATA COMPARISON
     // ─────────────────────────────────────────────────────────────────────

@@ -2565,6 +2565,23 @@ public class MultiFileImportService {
             enrichedList.add(enriched);
         }
 
+        // ── Preserve the approved Master Data ordering ──────────────────────
+        //    Display and finalize records in Master Data sequence, using Ref No
+        //    as the primary sort key (e.g. 462-0001, 462-0002, … 462-0539). Rows
+        //    without a usable Ref No keep their original Master Data order (the
+        //    sort is stable). This only reorders rows — no comparison / merge /
+        //    validation / approval logic is changed.
+        enrichedList.sort((a, b) -> {
+            String ra = refNoSortKey(a);
+            String rb = refNoSortKey(b);
+            boolean ea = ra.isEmpty();
+            boolean eb = rb.isEmpty();
+            if (ea && eb) return 0;
+            if (ea) return 1;
+            if (eb) return -1;
+            return naturalCompare(ra, rb);
+        });
+
         // Store enriched dataset (replaces the Step 5 dataset in cache)
         MAIN_DATA_CACHE.put(sessionId, enrichedList);
         session.setStage("MASTER_COMPARISON_GENERATED");
@@ -2580,6 +2597,42 @@ public class MultiFileImportService {
         result.put("rows", enrichedList);
         result.put("message", String.format("Master Data comparison complete. %d matched, %d mismatches, %d not found.", matchCount, mismatchCount, notFoundCount));
         return result;
+    }
+
+    /** Extracts a trimmed Ref No sort key; treats null / blank / "—" as absent. */
+    private static String refNoSortKey(Map<String, Object> row) {
+        Object v = row.get("refNo");
+        if (v == null) return "";
+        String s = v.toString().trim();
+        return "—".equals(s) ? "" : s;
+    }
+
+    /**
+     * Natural (human) ordering so numeric segments sort by value, keeping Ref Nos
+     * such as 462-0001 … 462-0539 in true ascending order regardless of digit
+     * width. Non-numeric segments compare case-insensitively.
+     */
+    private static int naturalCompare(String a, String b) {
+        int i = 0, j = 0, la = a.length(), lb = b.length();
+        while (i < la && j < lb) {
+            char ca = a.charAt(i);
+            char cb = b.charAt(j);
+            if (Character.isDigit(ca) && Character.isDigit(cb)) {
+                int si = i, sj = j;
+                while (i < la && Character.isDigit(a.charAt(i))) i++;
+                while (j < lb && Character.isDigit(b.charAt(j))) j++;
+                String na = a.substring(si, i).replaceFirst("^0+(?=\\d)", "");
+                String nb = b.substring(sj, j).replaceFirst("^0+(?=\\d)", "");
+                if (na.length() != nb.length()) return na.length() - nb.length();
+                int cmp = na.compareTo(nb);
+                if (cmp != 0) return cmp;
+            } else {
+                int cmp = Character.toLowerCase(ca) - Character.toLowerCase(cb);
+                if (cmp != 0) return cmp;
+                i++; j++;
+            }
+        }
+        return (la - i) - (lb - j);
     }
 
     @Transactional

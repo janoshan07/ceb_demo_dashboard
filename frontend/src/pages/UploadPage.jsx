@@ -3604,7 +3604,7 @@ const UploadPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['#', 'Account No', 'Customer Name', 'Address', 'Bank Code', 'Solar Type', 'Unit Rate', 'Tariff', 'L-Code', 'kWh Sales', 'Payment', 'Master Match', 'Net Type Check', 'Name Check', 'Status', 'Errors'].map(h => (
+                {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Status', 'Errors'].map(h => (
                   <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -3612,17 +3612,31 @@ const UploadPage = () => {
             <tbody>
               {filteredRows.map((row, i) => (
                 <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerAddress || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.costCode || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.mobileNo || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.panelCapacity ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.agreementDate || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.bankCode || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.branchCode || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.bankAccountNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.solarType || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.unitRate ?? row.effectiveUnitRate ?? '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.tariffType || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.billingMode || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.energyPurchase ?? row.salesAmount ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.billSetOff ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.retentionMoney ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? row.paymentSettled ?? '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.outstandingBalance ?? '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     {row.masterMatchStatus === 'MATCHED' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.72rem' }}>Matched</span>
                       : row.masterMatchStatus === 'NOT_FOUND' ? <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.72rem' }}>Not Found</span>

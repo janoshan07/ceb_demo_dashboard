@@ -296,7 +296,7 @@ public class MultiFileImportController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getMainDataset(@PathVariable Long sessionId) {
         try {
-            return ResponseEntity.ok(multiFileImportService.getMainDataset(sessionId));
+            return ResponseEntity.ok(multiFileImportService.getMainDatasetWithDuplicates(sessionId));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to retrieve main dataset: " + e.getMessage()));
         }

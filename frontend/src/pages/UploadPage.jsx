@@ -3315,9 +3315,16 @@ const UploadPage = () => {
                 return (
                 <React.Fragment key={rowKey}>
                 <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expanded ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.isDuplicateEntry ? '3px solid #ec4899' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {row.accountNo || '—'}
+                    {row.sourceFile && (
+                      <div style={{ fontFamily: 'inherit', fontSize: '0.58rem', fontWeight: 600, color: '#ec4899', marginTop: 2, letterSpacing: '0.02em' }}>
+                        {row.isDuplicateEntry ? '↳ ' : ''}{row.sourceFile}{row.sourceRowNum != null ? ` · row ${row.sourceRowNum}` : ''}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.prevReadingDate)}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.currReadingDate)}</td>
@@ -3357,6 +3364,11 @@ const UploadPage = () => {
                         {row.duplicateReason && (
                           <div style={{ color: '#ec4899', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                             <AlertTriangle size={12} /> <strong>Duplicate:</strong> {row.duplicateReason}
+                          </div>
+                        )}
+                        {row.sourceFile && (
+                          <div style={{ color: '#ec4899' }}>
+                            <strong>Source:</strong> {row.sourceFile}{row.sourceRowNum != null ? ` (row ${row.sourceRowNum})` : ''}{row.duplicateOccurrence ? ` — ${row.duplicateOccurrence}` : ''}
                           </div>
                         )}
                         {row.errors?.length > 0 && (

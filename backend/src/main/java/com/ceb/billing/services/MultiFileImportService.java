@@ -1257,6 +1257,11 @@ public class MultiFileImportService {
 
     private static final Map<Long, List<Map<String, Object>>> MAIN_DATA_CACHE = new HashMap<>();
 
+    // Holds display/review-only duplicate source records (extra NGEN/NPAY occurrences beyond the
+    // merged primary). Kept separate so Step 6 and the final import continue to see only the
+    // merged primary rows in MAIN_DATA_CACHE — duplicates are never imported automatically.
+    private static final Map<Long, List<Map<String, Object>>> MAIN_DUP_CACHE = new HashMap<>();
+
 
     private List<String> validateMasterDataRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
@@ -2028,24 +2033,28 @@ public class MultiFileImportService {
         List<Map<String, Object>> ngenStaged = loadNgenDataFromStaging(sessionId);
         Map<String, Map<String, Object>> ngenMap = new HashMap<>();
         Map<String, Integer> ngenCounts = new HashMap<>();
+        Map<String, List<Map<String, Object>>> ngenAll = new LinkedHashMap<>();
         for (Map<String, Object> n : ngenStaged) {
             String acc = (String) n.get("accountNo");
             if (acc != null) {
                 String key = acc.trim();
                 ngenMap.putIfAbsent(key, n);
                 ngenCounts.merge(key, 1, Integer::sum);
+                ngenAll.computeIfAbsent(key, k -> new ArrayList<>()).add(n);
             }
         }
 
         List<Map<String, Object>> npayStaged = loadNpayDataFromStaging(sessionId);
         Map<String, Map<String, Object>> npayMap = new HashMap<>();
         Map<String, Integer> npayCounts = new HashMap<>();
+        Map<String, List<Map<String, Object>>> npayAll = new LinkedHashMap<>();
         for (Map<String, Object> p : npayStaged) {
             String acc = (String) p.get("accountNo");
             if (acc != null) {
                 String key = acc.trim();
                 npayMap.putIfAbsent(key, p);
                 npayCounts.merge(key, 1, Integer::sum);
+                npayAll.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
             }
         }
 
@@ -2219,6 +2228,11 @@ public class MultiFileImportService {
                 if (npc > 1) src.add("NPAY (" + npc + " records)");
                 String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
                 row.put("duplicateReason", dupReason);
+                // This merged row is the primary of the duplicate group. The individual
+                // duplicate source records are appended as separate rows after the loop.
+                row.put("isDuplicatePrimary", true);
+                row.put("sourceFile", "Merged (primary)");
+                row.put("duplicateOccurrence", "Primary merged record");
                 warnings.add(dupReason);
             }
 
@@ -2242,6 +2256,33 @@ public class MultiFileImportService {
 
             mergedList.add(row);
         }
+
+        // ── Build separate duplicate-record rows so every duplicate occurrence is visible ──
+        // The merged row above is the "primary"; here we emit one extra row per additional
+        // occurrence carried from NGEN / NPAY. These are display / review-only rows and are
+        // NOT carried into Step 6 or the final import (only the merged primary is).
+        List<Map<String, Object>> dupEntries = new ArrayList<>();
+        for (String acc : allAccounts) {
+            int ngc = ngenCounts.getOrDefault(acc, 0);
+            int npc = npayCounts.getOrDefault(acc, 0);
+            if (ngc <= 1 && npc <= 1) continue;
+            List<String> src = new ArrayList<>();
+            if (ngc > 1) src.add("NGEN (" + ngc + " records)");
+            if (npc > 1) src.add("NPAY (" + npc + " records)");
+            String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
+
+            List<Map<String, Object>> nList = ngenAll.getOrDefault(acc, Collections.emptyList());
+            for (int k = 1; k < nList.size(); k++) {
+                dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, true, nList.get(k), dupReason,
+                        "NGEN occurrence " + (k + 1) + " of " + nList.size()));
+            }
+            List<Map<String, Object>> pList = npayAll.getOrDefault(acc, Collections.emptyList());
+            for (int k = 1; k < pList.size(); k++) {
+                dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, false, pList.get(k), dupReason,
+                        "NPAY occurrence " + (k + 1) + " of " + pList.size()));
+            }
+        }
+        MAIN_DUP_CACHE.put(sessionId, dupEntries);
 
         MAIN_DATA_CACHE.put(sessionId, mergedList);
         session.setStage("MAIN_DATASET_GENERATED");
@@ -2294,6 +2335,9 @@ public class MultiFileImportService {
 
         MAIN_DATA_CACHE.put(sessionId, correctedDataset);
 
+        // Duplicate source rows are review-only for Step 5 and are not carried downstream.
+        MAIN_DUP_CACHE.remove(sessionId);
+
         session.setStage("MAIN_DATASET_APPROVED");
         sessionRepository.save(session);
 
@@ -2320,8 +2364,20 @@ public class MultiFileImportService {
             throw new IllegalStateException("No Main Dataset found. Please approve files first.");
         }
 
-        List<Map<String, Object>> revalidated = new ArrayList<>();
-        for (Map<String, Object> row : mainDataset) {
+        // Revalidate the merged primary rows (kept in MAIN_DATA_CACHE, used downstream).
+        MAIN_DATA_CACHE.put(sessionId, applyCorrectionsAndRevalidate(mainDataset, corrections));
+        // Revalidate the display-only duplicate rows separately (kept in MAIN_DUP_CACHE).
+        List<Map<String, Object>> dups = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        MAIN_DUP_CACHE.put(sessionId, applyCorrectionsAndRevalidate(dups, corrections));
+
+        return getMainDatasetWithDuplicates(sessionId);
+    }
+
+    // Applies row-keyed corrections (skipping deleted rows) and revalidates each surviving row.
+    private List<Map<String, Object>> applyCorrectionsAndRevalidate(List<Map<String, Object>> rows,
+                                                                    Map<String, Map<String, Object>> corrections) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
             String accountNo = (String) row.get("accountNo");
             String rowNumStr = String.valueOf(row.get("rowNum"));
 
@@ -2343,11 +2399,9 @@ public class MultiFileImportService {
                 finalRow.putAll(corr);
             }
             revalidateMergedRow(finalRow);
-            revalidated.add(finalRow);
+            out.add(finalRow);
         }
-
-        MAIN_DATA_CACHE.put(sessionId, revalidated);
-        return revalidated;
+        return out;
     }
 
     // ════════════════════════════════════════════════════════════════════
@@ -2561,6 +2615,12 @@ public class MultiFileImportService {
     }
 
     private void revalidateMergedRow(Map<String, Object> row) {
+        // Duplicate-entry rows are single-source review-only records — revalidate them lightly
+        // (rebuild merged display, keep status DUPLICATE) without cross-file missing-value checks.
+        if (Boolean.TRUE.equals(row.get("isDuplicateEntry"))) {
+            revalidateDuplicateEntryRow(row);
+            return;
+        }
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<String> missingFields = new ArrayList<>();
@@ -2726,6 +2786,179 @@ public class MultiFileImportService {
         m.put("source", source);
         m.put("display", display);
         return m;
+    }
+
+    /**
+     * Builds a display/review-only row for a single duplicate source record (an extra NGEN or NPAY
+     * occurrence beyond the merged primary). The row carries Account No, source file, source row
+     * number, duplicate reason and status = DUPLICATE, and is fully editable/deletable in Step 5.
+     */
+    private Map<String, Object> buildDuplicateEntryRow(int rowNum, String acc, boolean isNgen,
+                                                       Map<String, Object> src, String dupReason, String occLabel) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("rowNum", rowNum);
+        row.put("accountNo", acc);
+
+        // Master placeholders (no Master Data lookup in Step 5)
+        row.put("customerName", "—"); row.put("customerAddress", "—"); row.put("refNo", "—");
+        row.put("costCode", "—"); row.put("mobileNo", "—"); row.put("panelCapacity", null);
+        row.put("agreementDate", null); row.put("bankCode", "—"); row.put("branchCode", "—");
+        row.put("bankAccountNo", "—"); row.put("solarType", null); row.put("tariffType", null);
+        row.put("billingMode", null);
+
+        row.put("isDuplicateEntry", true);
+        row.put("duplicateReason", dupReason);
+        row.put("duplicateOccurrence", occLabel);
+        row.put("hasCeb", false);
+        row.put("cebName", "");
+        row.put("prevReadingDate", null);
+        row.put("currReadingDate", null);
+
+        if (isNgen) {
+            row.put("sourceFile", "NGEN");
+            row.put("sourceRowNum", src.get("rowNum"));
+            row.put("hasNgen", true);
+            row.put("hasNpay", false);
+            row.put("ngenSourceCount", 1);
+            row.put("npaySourceCount", 0);
+            Double kwhImport = numOrNull(src, "kwhImport");
+            Double kwhExport = numOrNull(src, "kwhExport");
+            Double kwhSales = numOrNull(src, "kwhSales");
+            Double ngenUnitRate = numOrNull(src, "ngenUnitRate");
+            Double ngenBillSetOff = numOrNull(src, "billSetOff");
+            Double ngenRetentionMoney = numOrNull(src, "retentionMoney");
+            Double ngenSalesAmount = numOrNull(src, "salesAmount");
+            Double ngenPaymentSettled = numOrNull(src, "paymentSettled");
+            String ngenNetType = (String) src.get("ngenNetType");
+            row.put("kwhImport", kwhImport);
+            row.put("kwhExport", kwhExport);
+            row.put("kwhSales", kwhSales);
+            row.put("ngenUnitRate", ngenUnitRate);
+            row.put("unitRate", ngenUnitRate);
+            row.put("ngenBillSetOff", ngenBillSetOff);
+            row.put("ngenRetentionMoney", ngenRetentionMoney);
+            row.put("ngenNetType", ngenNetType);
+            row.put("salesAmount", ngenSalesAmount);
+            row.put("paymentSettled", ngenPaymentSettled);
+            row.put("npayNetType", null); row.put("npayName", null);
+            row.put("npayEnergyPurchase", null); row.put("npayBillSetOff", null);
+            row.put("npayRetentionMoney", null); row.put("npayPayment", null);
+            row.put("mergedNetType", buildMergedType(ngenNetType, null));
+            row.put("mergedEnergyPurchase", buildMergedNum(ngenSalesAmount, null, true, false));
+            row.put("mergedBillSetOff", buildMergedNum(ngenBillSetOff, null, true, false));
+            row.put("mergedRetentionMoney", buildMergedNum(ngenRetentionMoney, null, true, false));
+            row.put("mergedPayment", buildMergedNum(ngenPaymentSettled, null, true, false));
+            row.put("energyPurchase", ngenSalesAmount != null ? ngenSalesAmount : 0.0);
+            row.put("billSetOff", ngenBillSetOff != null ? ngenBillSetOff : 0.0);
+            row.put("retentionMoney", ngenRetentionMoney != null ? ngenRetentionMoney : 0.0);
+            row.put("payment", ngenPaymentSettled != null ? ngenPaymentSettled : 0.0);
+        } else {
+            row.put("sourceFile", "NPAY");
+            row.put("sourceRowNum", src.get("rowNum"));
+            row.put("hasNgen", false);
+            row.put("hasNpay", true);
+            row.put("ngenSourceCount", 0);
+            row.put("npaySourceCount", 1);
+            String npayNetType = (String) src.get("npayNetType");
+            String npayName = (String) src.get("npayName");
+            Double npayEnergyPurchase = numOrNull(src, "energyPurchase");
+            Double npayBillSetOff = numOrNull(src, "billSetOff");
+            Double npayRetentionMoney = numOrNull(src, "retentionMoney");
+            Double npayPayment = numOrNull(src, "payment");
+            row.put("kwhImport", null); row.put("kwhExport", null); row.put("kwhSales", null);
+            row.put("ngenUnitRate", null); row.put("unitRate", null);
+            row.put("ngenBillSetOff", null); row.put("ngenRetentionMoney", null);
+            row.put("ngenNetType", null); row.put("salesAmount", null); row.put("paymentSettled", null);
+            row.put("npayNetType", npayNetType);
+            row.put("npayName", npayName);
+            row.put("npayEnergyPurchase", npayEnergyPurchase);
+            row.put("npayBillSetOff", npayBillSetOff);
+            row.put("npayRetentionMoney", npayRetentionMoney);
+            row.put("npayPayment", npayPayment);
+            row.put("mergedNetType", buildMergedType(null, npayNetType));
+            row.put("mergedEnergyPurchase", buildMergedNum(null, npayEnergyPurchase, false, true));
+            row.put("mergedBillSetOff", buildMergedNum(null, npayBillSetOff, false, true));
+            row.put("mergedRetentionMoney", buildMergedNum(null, npayRetentionMoney, false, true));
+            row.put("mergedPayment", buildMergedNum(null, npayPayment, false, true));
+            row.put("energyPurchase", npayEnergyPurchase != null ? npayEnergyPurchase : 0.0);
+            row.put("billSetOff", npayBillSetOff != null ? npayBillSetOff : 0.0);
+            row.put("retentionMoney", npayRetentionMoney != null ? npayRetentionMoney : 0.0);
+            row.put("payment", npayPayment != null ? npayPayment : 0.0);
+        }
+
+        List<String> warnings = new ArrayList<>();
+        warnings.add(dupReason);
+        row.put("errors", new ArrayList<String>());
+        row.put("warnings", warnings);
+        row.put("missingFields", new ArrayList<String>());
+        row.put("mismatchFields", new ArrayList<String>());
+        row.put("status", "DUPLICATE");
+        return row;
+    }
+
+    /**
+     * Lightweight revalidation for a duplicate-entry row: rebuilds the merged display objects from
+     * its single-source values (in case the user edited them) but always keeps status = DUPLICATE
+     * and does not apply cross-file missing-value errors.
+     */
+    private void revalidateDuplicateEntryRow(Map<String, Object> row) {
+        boolean hasNgen = Boolean.TRUE.equals(row.get("hasNgen"));
+        boolean hasNpay = Boolean.TRUE.equals(row.get("hasNpay"));
+        Double ngenBillSetOff = parseDouble(row.get("ngenBillSetOff"));
+        Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
+        Double ngenSalesAmount = parseDouble(row.get("salesAmount"));
+        Double ngenPaymentSettled = parseDouble(row.get("paymentSettled"));
+        Double ngenUnitRate = parseDouble(row.get("ngenUnitRate"));
+        String ngenNetType = (String) row.get("ngenNetType");
+        Double npayEnergyPurchase = parseDouble(row.get("npayEnergyPurchase"));
+        Double npayBillSetOff = parseDouble(row.get("npayBillSetOff"));
+        Double npayRetentionMoney = parseDouble(row.get("npayRetentionMoney"));
+        Double npayPayment = parseDouble(row.get("npayPayment"));
+        String npayNetType = (String) row.get("npayNetType");
+
+        row.put("mergedNetType", buildMergedType(ngenNetType, npayNetType));
+        row.put("mergedEnergyPurchase", buildMergedNum(ngenSalesAmount, npayEnergyPurchase, hasNgen, hasNpay));
+        row.put("mergedBillSetOff", buildMergedNum(ngenBillSetOff, npayBillSetOff, hasNgen, hasNpay));
+        row.put("mergedRetentionMoney", buildMergedNum(ngenRetentionMoney, npayRetentionMoney, hasNgen, hasNpay));
+        row.put("mergedPayment", buildMergedNum(ngenPaymentSettled, npayPayment, hasNgen, hasNpay));
+        row.put("unitRate", ngenUnitRate);
+        row.put("energyPurchase", effectiveNum(hasNpay, npayEnergyPurchase, ngenSalesAmount));
+        row.put("billSetOff", effectiveNum(hasNpay, npayBillSetOff, ngenBillSetOff));
+        row.put("retentionMoney", effectiveNum(hasNpay, npayRetentionMoney, ngenRetentionMoney));
+        row.put("payment", effectiveNum(hasNpay, npayPayment, ngenPaymentSettled));
+
+        List<String> warnings = new ArrayList<>();
+        Object dr = row.get("duplicateReason");
+        if (dr != null) warnings.add(dr.toString());
+        row.put("errors", new ArrayList<String>());
+        row.put("warnings", warnings);
+        row.put("missingFields", new ArrayList<String>());
+        row.put("mismatchFields", new ArrayList<String>());
+        row.put("status", "DUPLICATE");
+    }
+
+    /**
+     * Returns the Step 5 display dataset: each merged primary row followed by any of its duplicate
+     * source records, so all duplicate occurrences are visible and grouped together. Internal
+     * callers (Step 6, finalize) keep using {@link #getMainDataset} which is primary-only.
+     */
+    public List<Map<String, Object>> getMainDatasetWithDuplicates(Long sessionId) {
+        List<Map<String, Object>> primary = MAIN_DATA_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        List<Map<String, Object>> dups = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        if (dups.isEmpty()) return new ArrayList<>(primary);
+
+        Map<String, List<Map<String, Object>>> dupByAcc = new LinkedHashMap<>();
+        for (Map<String, Object> d : dups) {
+            String acc = (String) d.get("accountNo");
+            dupByAcc.computeIfAbsent(acc, k -> new ArrayList<>()).add(d);
+        }
+        List<Map<String, Object>> combined = new ArrayList<>();
+        for (Map<String, Object> p : primary) {
+            combined.add(p);
+            List<Map<String, Object>> group = dupByAcc.get((String) p.get("accountNo"));
+            if (group != null) combined.addAll(group);
+        }
+        return combined;
     }
 
     @Transactional

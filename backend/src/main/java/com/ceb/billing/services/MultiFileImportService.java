@@ -2163,30 +2163,30 @@ public class MultiFileImportService {
 
             // ── 5. Missing value detection across the three files ──
             if (!hasCeb) {
-                warnings.add("No CEB Assist data found for this account");
+                errors.add("No CEB Assist data found for this account");
                 missingFields.add("CEB Assist record");
             } else {
-                if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); warnings.add("Missing value: Previous Reading Date (CEB)"); }
-                if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); warnings.add("Missing value: Current Reading Date (CEB)"); }
+                if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); errors.add("Missing value: Previous Reading Date (CEB)"); }
+                if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); errors.add("Missing value: Current Reading Date (CEB)"); }
             }
             if (!hasNgen) {
-                warnings.add("No NGEN billing data found for this account");
+                errors.add("No NGEN billing data found for this account");
                 missingFields.add("NGEN record");
             } else {
-                if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); warnings.add("Missing value: kWh Import (NGEN)"); }
-                if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); warnings.add("Missing value: kWh Export (NGEN)"); }
-                if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); warnings.add("Missing value: kWh Unit Sales (NGEN)"); }
-                if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); warnings.add("Missing value: Unit Rate (NGEN)"); }
-                if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); warnings.add("Missing value: kWh Sales Amount (NGEN)"); }
-                if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); warnings.add("Missing value: Net Type (NGEN)"); }
+                if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); errors.add("Missing value: kWh Import (NGEN)"); }
+                if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); errors.add("Missing value: kWh Export (NGEN)"); }
+                if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); errors.add("Missing value: kWh Unit Sales (NGEN)"); }
+                if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); errors.add("Missing value: Unit Rate (NGEN)"); }
+                if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); errors.add("Missing value: kWh Sales Amount (NGEN)"); }
+                if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); errors.add("Missing value: Net Type (NGEN)"); }
             }
             if (!hasNpay) {
-                warnings.add("No NPAY billing data found for this account");
+                errors.add("No NPAY billing data found for this account");
                 missingFields.add("NPAY record");
             } else {
-                if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); warnings.add("Missing value: Name (NPAY)"); }
-                if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); warnings.add("Missing value: Net Type (NPAY)"); }
-                if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); warnings.add("Missing value: Energy Purchase (NPAY)"); }
+                if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); errors.add("Missing value: Name (NPAY)"); }
+                if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); errors.add("Missing value: Net Type (NPAY)"); }
+                if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); errors.add("Missing value: Energy Purchase (NPAY)"); }
             }
 
             // ── 6. Mismatch detection on merged fields ──
@@ -2209,14 +2209,6 @@ public class MultiFileImportService {
             if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) {
                 mismatchFields.add("Payment");
                 warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment));
-            }
-
-            // Name check: CEB Assist Name vs NPAY Name
-            if (cebName != null && !cebName.trim().isEmpty() && npayName != null && !npayName.trim().isEmpty()) {
-                if (!cebName.trim().equalsIgnoreCase(npayName.trim())) {
-                    mismatchFields.add("Name");
-                    warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim()));
-                }
             }
 
             // ── 7. Duplicate detection (Account No carried more than once from NGEN/NPAY) ──
@@ -2598,7 +2590,6 @@ public class MultiFileImportService {
         Double npayPayment = parseDouble(row.get("npayPayment"));
         String npayNetType = (String) row.get("npayNetType");
         String npayName = (String) row.get("npayName");
-        String cebName = (String) row.get("cebName");
 
         int ngc = row.get("ngenSourceCount") != null ? ((Number) row.get("ngenSourceCount")).intValue() : (hasNgen ? 1 : 0);
         int npc = row.get("npaySourceCount") != null ? ((Number) row.get("npaySourceCount")).intValue() : (hasNpay ? 1 : 0);
@@ -2622,25 +2613,25 @@ public class MultiFileImportService {
         row.put("payment", effectiveNum(hasNpay, npayPayment, ngenPaymentSettled));
 
         // Missing value detection across the three files
-        if (!hasCeb) { warnings.add("No CEB Assist data found for this account"); missingFields.add("CEB Assist record"); }
+        if (!hasCeb) { errors.add("No CEB Assist data found for this account"); missingFields.add("CEB Assist record"); }
         else {
-            if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); warnings.add("Missing value: Previous Reading Date (CEB)"); }
-            if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); warnings.add("Missing value: Current Reading Date (CEB)"); }
+            if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); errors.add("Missing value: Previous Reading Date (CEB)"); }
+            if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); errors.add("Missing value: Current Reading Date (CEB)"); }
         }
-        if (!hasNgen) { warnings.add("No NGEN billing data found for this account"); missingFields.add("NGEN record"); }
+        if (!hasNgen) { errors.add("No NGEN billing data found for this account"); missingFields.add("NGEN record"); }
         else {
-            if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); warnings.add("Missing value: kWh Import (NGEN)"); }
-            if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); warnings.add("Missing value: kWh Export (NGEN)"); }
-            if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); warnings.add("Missing value: kWh Unit Sales (NGEN)"); }
-            if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); warnings.add("Missing value: Unit Rate (NGEN)"); }
-            if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); warnings.add("Missing value: kWh Sales Amount (NGEN)"); }
-            if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); warnings.add("Missing value: Net Type (NGEN)"); }
+            if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); errors.add("Missing value: kWh Import (NGEN)"); }
+            if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); errors.add("Missing value: kWh Export (NGEN)"); }
+            if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); errors.add("Missing value: kWh Unit Sales (NGEN)"); }
+            if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); errors.add("Missing value: Unit Rate (NGEN)"); }
+            if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); errors.add("Missing value: kWh Sales Amount (NGEN)"); }
+            if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); errors.add("Missing value: Net Type (NGEN)"); }
         }
-        if (!hasNpay) { warnings.add("No NPAY billing data found for this account"); missingFields.add("NPAY record"); }
+        if (!hasNpay) { errors.add("No NPAY billing data found for this account"); missingFields.add("NPAY record"); }
         else {
-            if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); warnings.add("Missing value: Name (NPAY)"); }
-            if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); warnings.add("Missing value: Net Type (NPAY)"); }
-            if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); warnings.add("Missing value: Energy Purchase (NPAY)"); }
+            if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); errors.add("Missing value: Name (NPAY)"); }
+            if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); errors.add("Missing value: Net Type (NPAY)"); }
+            if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); errors.add("Missing value: Energy Purchase (NPAY)"); }
         }
 
         // Mismatch detection on merged fields
@@ -2649,10 +2640,6 @@ public class MultiFileImportService {
         if (Boolean.TRUE.equals(mergedBillSetOff.get("mismatch"))) { mismatchFields.add("Bill Set Off"); warnings.add(String.format("Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, npayBillSetOff)); }
         if (Boolean.TRUE.equals(mergedRetentionMoney.get("mismatch"))) { mismatchFields.add("Retention Money"); warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney)); }
         if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) { mismatchFields.add("Payment"); warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment)); }
-
-        if (cebName != null && !cebName.trim().isEmpty() && npayName != null && !npayName.trim().isEmpty()) {
-            if (!cebName.trim().equalsIgnoreCase(npayName.trim())) { mismatchFields.add("Name"); warnings.add(String.format("Name mismatch: CEB Assist Name='%s', NPAY Name='%s'", cebName.trim(), npayName.trim())); }
-        }
 
         boolean isDuplicate = ngc > 1 || npc > 1;
         if (isDuplicate) {

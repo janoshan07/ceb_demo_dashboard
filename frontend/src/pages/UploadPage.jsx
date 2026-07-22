@@ -3302,7 +3302,7 @@ const UploadPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['#', 'Account No', 'Prev Reading', 'Curr Reading', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Net Type', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Name', 'Status', 'Actions'].map(h => (
+                {['#', 'Account No', 'Name', 'Prev Reading', 'Curr Reading', 'Net Type', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Status', 'Actions'].map(h => (
                   <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -3318,18 +3318,18 @@ const UploadPage = () => {
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expanded ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.prevReadingDate)}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.currReadingDate)}</td>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderMergedType(row.mergedNetType)}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.ngenUnitRate ?? row.unitRate ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderMergedType(row.mergedNetType)}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedEnergyPurchase)}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedBillSetOff)}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedRetentionMoney)}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedPayment)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     <span style={{
                       padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
@@ -3366,7 +3366,7 @@ const UploadPage = () => {
                           <div style={{ color: '#f59e0b' }}><strong>Mismatched fields:</strong> {row.mismatchFields.join(', ')}</div>
                         )}
                         {row.missingFields?.length > 0 && (
-                          <div style={{ color: '#f59e0b' }}><strong>Missing values:</strong> {row.missingFields.join(', ')}</div>
+                          <div style={{ color: '#ef4444' }}><strong>Missing values:</strong> {row.missingFields.join(', ')}</div>
                         )}
                         {row.warnings?.length > 0 && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>

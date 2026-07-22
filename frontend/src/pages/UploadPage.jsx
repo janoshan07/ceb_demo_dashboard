@@ -1349,6 +1349,7 @@ const UploadPage = () => {
   const [masterComparisonLoading, setMasterComparisonLoading] = useState(false);
   const [mainCorrections, setMainCorrections] = useState({});
   const [mainExpandedRow, setMainExpandedRow] = useState(null);
+  const [comparisonExpandedRow, setComparisonExpandedRow] = useState(null);
   const [editingMainRow, setEditingMainRow] = useState(null);
   const [editingMainFields, setEditingMainFields] = useState({});
   const [mainRevalidating, setMainRevalidating] = useState(false);
@@ -3604,14 +3605,22 @@ const UploadPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Status', 'Errors'].map(h => (
+                {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Status', 'Issues'].map(h => (
                   <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map((row, i) => (
-                <tr key={row.rowNum || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+              {filteredRows.map((row, i) => {
+                const rowKey = row.rowNum ?? row.accountNo ?? i;
+                const expanded = comparisonExpandedRow === rowKey;
+                const errorCount = row.errors?.length || 0;
+                const warningCount = row.warnings?.length || 0;
+                const hasDetail = errorCount + warningCount > 0;
+                return (
+                <React.Fragment key={rowKey}>
+                <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', background: expanded ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
@@ -3660,19 +3669,55 @@ const UploadPage = () => {
                       color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : 'var(--text-muted)'
                     }}>{row.status}</span>
                   </td>
-                  <td style={{ padding: '0.5rem 0.75rem', maxWidth: 180 }}>
-                    {row.errors && row.errors.length > 0 ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                        {row.errors.map((err, idx) => (
-                          <div key={idx} style={{ color: '#ef4444', fontSize: '0.72rem', display: 'flex', gap: '0.2rem', alignItems: 'center' }}>
-                            <AlertTriangle size={11} style={{ flexShrink: 0 }} /> {err}
-                          </div>
-                        ))}
-                      </div>
+                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                    {hasDetail ? (
+                      <button type="button" onClick={(e) => { e.stopPropagation(); setComparisonExpandedRow(expanded ? null : rowKey); }}
+                        title={expanded ? 'Hide validation details' : 'View validation details'}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700,
+                          background: errorCount > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                          border: errorCount > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(245,158,11,0.3)',
+                          color: errorCount > 0 ? '#ef4444' : '#f59e0b' }}>
+                        {errorCount > 0 ? <XCircle size={12} /> : <AlertTriangle size={12} />}
+                        {errorCount > 0 ? `${errorCount} Error${errorCount > 1 ? 's' : ''}` : `${warningCount} Warning${warningCount > 1 ? 's' : ''}`}
+                        <span style={{ opacity: 0.7, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
+                      </button>
                     ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
                   </td>
                 </tr>
-              ))}
+                {expanded && hasDetail && (
+                  <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
+                    <td colSpan={30} style={{ padding: '0.75rem 1.25rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.72rem' }}>
+                          {row.refNo && row.refNo !== '—' ? `Ref No ${row.refNo}` : `Account No ${row.accountNo || '—'}`} — validation details
+                        </div>
+                        {errorCount > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <strong style={{ color: '#ef4444' }}>Errors:</strong>
+                            {row.errors.map((err, idx) => (
+                              <div key={idx} style={{ color: '#ef4444', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                <XCircle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {err}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {warningCount > 0 && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                            <strong style={{ color: '#f59e0b' }}>Warnings:</strong>
+                            {row.warnings.map((w, wi) => (
+                              <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

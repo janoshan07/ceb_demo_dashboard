@@ -1262,6 +1262,11 @@ public class MultiFileImportService {
     // merged primary rows in MAIN_DATA_CACHE — duplicates are never imported automatically.
     private static final Map<Long, List<Map<String, Object>>> MAIN_DUP_CACHE = new HashMap<>();
 
+    // Holds incomplete merged records (an Account No present in only some of CEB/NGEN/NPAY). These
+    // are auto-removed from the Main Dataset and collected here for review only — Step 6 and the
+    // final import continue to see only the complete merged rows in MAIN_DATA_CACHE.
+    private static final Map<Long, List<Map<String, Object>>> MAIN_REJECTED_CACHE = new HashMap<>();
+
 
     private List<String> validateMasterDataRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
@@ -2065,6 +2070,7 @@ public class MultiFileImportService {
         allAccounts.addAll(npayMap.keySet());
 
         List<Map<String, Object>> mergedList = new ArrayList<>();
+        List<Map<String, Object>> rejectedList = new ArrayList<>();
         int rowIdx = 1;
 
         for (String acc : allAccounts) {
@@ -2241,9 +2247,23 @@ public class MultiFileImportService {
                 errors.add("Account No is missing");
             }
 
-            // ── 9. Status precedence: ERROR > DUPLICATE > WARNING > VALID ──
+            // ── 9. Incomplete merges (an Account No missing an entire CEB / NGEN / NPAY source
+            //        record) are auto-rejected: removed from the Main Dataset and collected in a
+            //        separate Rejected list for review. They are never carried into Step 6 / import.
+            boolean incomplete = !hasCeb || !hasNgen || !hasNpay;
+            if (incomplete) {
+                List<String> missSrc = new ArrayList<>();
+                if (!hasCeb) missSrc.add("CEB Assist");
+                if (!hasNgen) missSrc.add("NGEN");
+                if (!hasNpay) missSrc.add("NPAY");
+                row.put("rejected", true);
+                row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
+            }
+
+            // ── 10. Status precedence: REJECTED > ERROR > DUPLICATE > WARNING > VALID ──
             String status;
-            if (!errors.isEmpty()) status = "ERROR";
+            if (incomplete) status = "REJECTED";
+            else if (!errors.isEmpty()) status = "ERROR";
             else if (isDuplicate) status = "DUPLICATE";
             else if (!warnings.isEmpty()) status = "WARNING";
             else status = "VALID";
@@ -2254,7 +2274,8 @@ public class MultiFileImportService {
             row.put("mismatchFields", mismatchFields);
             row.put("status", status);
 
-            mergedList.add(row);
+            if (incomplete) rejectedList.add(row);
+            else mergedList.add(row);
         }
 
         // ── Build separate duplicate-record rows so every duplicate occurrence is visible ──
@@ -2283,6 +2304,7 @@ public class MultiFileImportService {
             }
         }
         MAIN_DUP_CACHE.put(sessionId, dupEntries);
+        MAIN_REJECTED_CACHE.put(sessionId, rejectedList);
 
         MAIN_DATA_CACHE.put(sessionId, mergedList);
         session.setStage("MAIN_DATASET_GENERATED");
@@ -2335,8 +2357,10 @@ public class MultiFileImportService {
 
         MAIN_DATA_CACHE.put(sessionId, correctedDataset);
 
-        // Duplicate source rows are review-only for Step 5 and are not carried downstream.
+        // Duplicate source rows and rejected (incomplete merge) rows are review-only for Step 5
+        // and are not carried downstream.
         MAIN_DUP_CACHE.remove(sessionId);
+        MAIN_REJECTED_CACHE.remove(sessionId);
 
         session.setStage("MAIN_DATASET_APPROVED");
         sessionRepository.save(session);
@@ -2369,6 +2393,9 @@ public class MultiFileImportService {
         // Revalidate the display-only duplicate rows separately (kept in MAIN_DUP_CACHE).
         List<Map<String, Object>> dups = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
         MAIN_DUP_CACHE.put(sessionId, applyCorrectionsAndRevalidate(dups, corrections));
+        // Revalidate the review-only rejected (incomplete merge) rows separately (kept in MAIN_REJECTED_CACHE).
+        List<Map<String, Object>> rejected = MAIN_REJECTED_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        MAIN_REJECTED_CACHE.put(sessionId, applyCorrectionsAndRevalidate(rejected, corrections));
 
         return getMainDatasetWithDuplicates(sessionId);
     }
@@ -2713,8 +2740,20 @@ public class MultiFileImportService {
 
         if (accountNo == null || accountNo.trim().isEmpty()) errors.add("Account No is missing");
 
+        // Incomplete merges (missing an entire source file) are auto-rejected, mirroring generateMainDataset.
+        boolean incomplete = !hasCeb || !hasNgen || !hasNpay;
+        if (incomplete) {
+            List<String> missSrc = new ArrayList<>();
+            if (!hasCeb) missSrc.add("CEB Assist");
+            if (!hasNgen) missSrc.add("NGEN");
+            if (!hasNpay) missSrc.add("NPAY");
+            row.put("rejected", true);
+            row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
+        }
+
         String status;
-        if (!errors.isEmpty()) status = "ERROR";
+        if (incomplete) status = "REJECTED";
+        else if (!errors.isEmpty()) status = "ERROR";
         else if (isDuplicate) status = "DUPLICATE";
         else if (!warnings.isEmpty()) status = "WARNING";
         else status = "VALID";
@@ -2945,7 +2984,8 @@ public class MultiFileImportService {
     public List<Map<String, Object>> getMainDatasetWithDuplicates(Long sessionId) {
         List<Map<String, Object>> primary = MAIN_DATA_CACHE.getOrDefault(sessionId, new ArrayList<>());
         List<Map<String, Object>> dups = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
-        if (dups.isEmpty()) return new ArrayList<>(primary);
+        List<Map<String, Object>> rejected = MAIN_REJECTED_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        if (dups.isEmpty() && rejected.isEmpty()) return new ArrayList<>(primary);
 
         Map<String, List<Map<String, Object>>> dupByAcc = new LinkedHashMap<>();
         for (Map<String, Object> d : dups) {
@@ -2958,6 +2998,9 @@ public class MultiFileImportService {
             List<Map<String, Object>> group = dupByAcc.get((String) p.get("accountNo"));
             if (group != null) combined.addAll(group);
         }
+        // Rejected (incomplete merge) rows are appended for review only. They are never returned by
+        // getMainDataset (used by Step 6 / finalize), so they are excluded from the final import.
+        combined.addAll(rejected);
         return combined;
     }
 

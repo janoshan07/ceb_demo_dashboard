@@ -2549,7 +2549,8 @@ const UploadPage = () => {
       const warningCount = rows.filter(r => r.status === 'WARNING').length;
       const validCount = rows.filter(r => r.status === 'VALID').length;
       const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
-      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount });
+      const rejectedCount = rows.filter(r => r.status === 'REJECTED').length;
+      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount, rejectedCount });
     } catch (e) {
       showToast('Failed to load main dataset: ' + e.message, 'error');
     } finally {
@@ -2561,11 +2562,18 @@ const UploadPage = () => {
     if (!session?.sessionId) return;
     // Only real ERRORS block approval. Warnings (mismatches / missing values) and duplicate
     // Account Numbers carried from NGEN/NPAY do NOT block — they stay reviewable in Step 6.
+    const rejectedCount = mainDataset?.rejectedCount || 0;
     const warnDup = (mainDataset?.warningCount || 0) + (mainDataset?.duplicateCount || 0);
-    if (warnDup > 0) {
+    if (warnDup > 0 || rejectedCount > 0) {
+      const rejNote = rejectedCount > 0
+        ? `${rejectedCount} incomplete record(s) (missing CEB Assist, NGEN or NPAY data) have been automatically moved to the Rejected list and will NOT be imported. `
+        : '';
+      const warnNote = warnDup > 0
+        ? `${warnDup} merged record(s) still have warnings (field mismatches or missing values) or duplicate Account Numbers carried from NGEN/NPAY. These do not block approval and remain reviewable during Master Data comparison. `
+        : '';
       const confirmed = await showConfirm({
-        title: 'Approve Main Dataset with Warnings / Duplicates?',
-        message: `${warnDup} merged record(s) still have warnings (field mismatches or missing values) or duplicate Account Numbers carried from NGEN/NPAY. These do not block approval and remain reviewable during Master Data comparison. Approve and continue to Step 6?`,
+        title: 'Approve Main Dataset?',
+        message: `${rejNote}${warnNote}Approve and continue to Step 6?`,
         confirmText: 'Yes, Approve & Continue',
         cancelText: 'Cancel',
         type: 'warning'
@@ -2606,7 +2614,8 @@ const UploadPage = () => {
       const warningCount = rows.filter(r => r.status === 'WARNING').length;
       const validCount = rows.filter(r => r.status === 'VALID').length;
       const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
-      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount });
+      const rejectedCount = rows.filter(r => r.status === 'REJECTED').length;
+      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount, rejectedCount });
       if (successMsg) showToast(successMsg, 'success');
     } catch (e) {
       showToast('Revalidation failed: ' + e.message, 'error');
@@ -3205,8 +3214,8 @@ const UploadPage = () => {
         </div>
       );
     }
-    const { rows, totalRecords, errorCount, warningCount, validCount, duplicateCount } = mainDataset;
-    // Only real ERRORS block approval; duplicates and warnings do not.
+    const { rows, totalRecords, errorCount, warningCount, validCount, duplicateCount, rejectedCount } = mainDataset;
+    // Only real ERRORS block approval; duplicates, warnings and auto-rejected records do not.
     const hasErrors = (errorCount || 0) > 0;
     const filteredRows = (rows || []).filter(r => {
       if (mainDatasetFilter === 'ALL') return true;
@@ -3214,6 +3223,7 @@ const UploadPage = () => {
       if (mainDatasetFilter === 'ERROR') return r.status === 'ERROR';
       if (mainDatasetFilter === 'WARNING') return r.status === 'WARNING';
       if (mainDatasetFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+      if (mainDatasetFilter === 'REJECTED') return r.status === 'REJECTED';
       return true;
     });
     const fmtLKR = (v) => (v == null ? '—' : `LKR ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
@@ -3262,7 +3272,15 @@ const UploadPage = () => {
           <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
           <StatCard label="Duplicates" value={duplicateCount || 0} color={(duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+          <StatCard label="Rejected" value={rejectedCount || 0} color={(rejectedCount || 0) > 0 ? '#f43f5e' : '#10b981'} icon={<XCircle size={18} />} />
         </div>
+
+        {(rejectedCount || 0) > 0 && (
+          <div style={{ background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, padding: '0.7rem 1rem', marginBottom: '1rem', display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            <XCircle size={15} color="#f43f5e" style={{ marginTop: 1, flexShrink: 0 }} />
+            <div><strong style={{ color: '#f43f5e' }}>{rejectedCount} incomplete record(s) auto-removed.</strong> Account Numbers missing an entire CEB Assist, NGEN or NPAY record are moved to the <strong>Rejected</strong> list and excluded from the Main Dataset. They are shown here for review only and are not imported. Duplicate records are not affected.</div>
+          </div>
+        )}
 
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
@@ -3272,6 +3290,7 @@ const UploadPage = () => {
             { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
             { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
             { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#ec4899' },
+            { key: 'REJECTED', label: 'Rejected', count: rejectedCount || 0, color: '#f43f5e' },
           ].map(tab => (
             <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
               style={{
@@ -3311,11 +3330,11 @@ const UploadPage = () => {
               {filteredRows.map((row, i) => {
                 const rowKey = row.rowNum ?? row.accountNo ?? i;
                 const expanded = mainExpandedRow === rowKey;
-                const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason;
+                const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.rejectionReason;
                 return (
                 <React.Fragment key={rowKey}>
                 <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.isDuplicateEntry ? '3px solid #ec4899' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
                     {row.accountNo || '—'}
@@ -3340,8 +3359,8 @@ const UploadPage = () => {
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     <span style={{
                       padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
-                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
+                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
+                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
                     }}>{row.status}</span>
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
@@ -3361,6 +3380,11 @@ const UploadPage = () => {
                   <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
                     <td colSpan={16} style={{ padding: '0.75rem 1.25rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                        {row.rejectionReason && (
+                          <div style={{ color: '#f43f5e', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                            <XCircle size={12} /> <strong>Rejected:</strong> {row.rejectionReason}
+                          </div>
+                        )}
                         {row.duplicateReason && (
                           <div style={{ color: '#ec4899', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                             <AlertTriangle size={12} /> <strong>Duplicate:</strong> {row.duplicateReason}

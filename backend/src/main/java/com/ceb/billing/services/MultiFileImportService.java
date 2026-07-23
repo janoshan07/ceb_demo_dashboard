@@ -2227,19 +2227,20 @@ public class MultiFileImportService {
             }
 
             // ── 7. Duplicate detection (Account No carried more than once from NGEN/NPAY) ──
+            // The merged row is the single reconciled record for this account. Every duplicate
+            // source occurrence (including the first) is emitted as its own review-only row after
+            // this loop, so the merged row is NOT itself flagged/counted as a duplicate — otherwise
+            // it would double-count against the totals detected in Step 3 (NGEN) and Step 4 (NPAY).
+            // An informational note is kept so reviewers can see it has duplicate source records.
             boolean isDuplicate = ngc > 1 || npc > 1;
             if (isDuplicate) {
                 List<String> src = new ArrayList<>();
                 if (ngc > 1) src.add("NGEN (" + ngc + " records)");
                 if (npc > 1) src.add("NPAY (" + npc + " records)");
-                String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
+                String dupReason = "Duplicate Account No carried from " + String.join(" and ", src)
+                        + " — see the Duplicates list for every source record";
                 row.put("duplicateReason", dupReason);
-                // This merged row is the primary of the duplicate group. The individual
-                // duplicate source records are appended as separate rows after the loop.
-                row.put("isDuplicatePrimary", true);
-                row.put("sourceFile", "Merged (primary)");
-                row.put("duplicateOccurrence", "Primary merged record");
-                warnings.add(dupReason);
+                row.put("hasDuplicateSources", true);
             }
 
             // ── 8. Errors: missing/invalid Account No ──
@@ -2260,11 +2261,12 @@ public class MultiFileImportService {
                 row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
             }
 
-            // ── 10. Status precedence: REJECTED > ERROR > DUPLICATE > WARNING > VALID ──
+            // ── 10. Status precedence: REJECTED > ERROR > WARNING > VALID ──
+            // Duplicates are represented by dedicated source rows (built below) and are not a
+            // status of the merged row itself, so DUPLICATE is intentionally not in this precedence.
             String status;
             if (incomplete) status = "REJECTED";
             else if (!errors.isEmpty()) status = "ERROR";
-            else if (isDuplicate) status = "DUPLICATE";
             else if (!warnings.isEmpty()) status = "WARNING";
             else status = "VALID";
 
@@ -2278,10 +2280,13 @@ public class MultiFileImportService {
             else mergedList.add(row);
         }
 
-        // ── Build separate duplicate-record rows so every duplicate occurrence is visible ──
-        // The merged row above is the "primary"; here we emit one extra row per additional
-        // occurrence carried from NGEN / NPAY. These are display / review-only rows and are
-        // NOT carried into Step 6 or the final import (only the merged primary is).
+        // ── Build separate duplicate-record rows so EVERY duplicate occurrence is visible ──
+        // For every source (NGEN / NPAY) that carries an Account No more than once we emit one
+        // review-only row per occurrence, including the first ("original"). This keeps the Step 5
+        // Duplicates section a complete, faithful mirror of the duplicates detected in Step 3
+        // (NGEN) and Step 4 (NPAY): the number of DUPLICATE rows here equals the totals flagged in
+        // those steps, and no occurrence is collapsed into the merged row. These rows are display /
+        // review-only and are NOT carried into Step 6 or the final import (only the merged row is).
         List<Map<String, Object>> dupEntries = new ArrayList<>();
         for (String acc : allAccounts) {
             int ngc = ngenCounts.getOrDefault(acc, 0);
@@ -2292,15 +2297,23 @@ public class MultiFileImportService {
             if (npc > 1) src.add("NPAY (" + npc + " records)");
             String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
 
-            List<Map<String, Object>> nList = ngenAll.getOrDefault(acc, Collections.emptyList());
-            for (int k = 1; k < nList.size(); k++) {
-                dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, true, nList.get(k), dupReason,
-                        "NGEN occurrence " + (k + 1) + " of " + nList.size()));
+            if (ngc > 1) {
+                List<Map<String, Object>> nList = ngenAll.getOrDefault(acc, Collections.emptyList());
+                Object originalRowNum = nList.isEmpty() ? null : nList.get(0).get("rowNum");
+                for (int k = 0; k < nList.size(); k++) {
+                    dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, true, nList.get(k), dupReason,
+                            "NGEN occurrence " + (k + 1) + " of " + nList.size() + (k == 0 ? " (original)" : ""),
+                            k == 0, originalRowNum));
+                }
             }
-            List<Map<String, Object>> pList = npayAll.getOrDefault(acc, Collections.emptyList());
-            for (int k = 1; k < pList.size(); k++) {
-                dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, false, pList.get(k), dupReason,
-                        "NPAY occurrence " + (k + 1) + " of " + pList.size()));
+            if (npc > 1) {
+                List<Map<String, Object>> pList = npayAll.getOrDefault(acc, Collections.emptyList());
+                Object originalRowNum = pList.isEmpty() ? null : pList.get(0).get("rowNum");
+                for (int k = 0; k < pList.size(); k++) {
+                    dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, false, pList.get(k), dupReason,
+                            "NPAY occurrence " + (k + 1) + " of " + pList.size() + (k == 0 ? " (original)" : ""),
+                            k == 0, originalRowNum));
+                }
             }
         }
         MAIN_DUP_CACHE.put(sessionId, dupEntries);
@@ -2461,6 +2474,9 @@ public class MultiFileImportService {
         int matchCount = 0;
         int mismatchCount = 0;
         int notFoundCount = 0;
+        // Tracks approved Master Data accounts that were matched by a Main Data Set row, so the
+        // remaining (unmatched) Master Data records can be preserved as base rows afterwards.
+        Set<String> matchedMasterAccounts = new HashSet<>();
 
         for (Map<String, Object> row : mainDataset) {
             Map<String, Object> enriched = new LinkedHashMap<>(row);
@@ -2528,11 +2544,15 @@ public class MultiFileImportService {
                 // Name comparison: NPAY Name vs Master Name
                 String npayName = (String) row.get("npayName");
                 if (masterName != null && !"—".equals(masterName) && npayName != null && !npayName.trim().isEmpty()) {
-                    if (!masterName.trim().equalsIgnoreCase(npayName.trim())) {
+                    // Tolerant name comparison: normalizes case/spaces/punctuation, strips titles and
+                    // matches reordered names, initials, abbreviations and minor spelling variants.
+                    // Only names that clearly refer to different people raise a mismatch warning.
+                    if (!namesMatch(masterName, npayName)) {
                         warnings.add(String.format("Name mismatch: NPAY='%s', Master='%s'", npayName, masterName));
                     }
                 }
 
+                matchedMasterAccounts.add(acc);
                 matchCount++;
             } else {
                 // Check DB for existing customer
@@ -2565,6 +2585,54 @@ public class MultiFileImportService {
             enrichedList.add(enriched);
         }
 
+        // ── Preserve EVERY approved Master Data record ──────────────────────
+        //    The loop above walks the Main Data Set, so a Master Data account with no matching
+        //    Main row would otherwise be dropped from Step 6. Here we add those Master Data
+        //    records back as base rows, keeping every Master Data column exactly as stored, and
+        //    mark the imported (Main Data Set) fields as missing ("—"/null). No comparison,
+        //    merge, validation or approval logic for the existing rows is changed.
+        int masterOnlyCount = 0;
+        int nextRowNum = 0;
+        for (Map<String, Object> e : enrichedList) {
+            Object rn = e.get("rowNum");
+            if (rn instanceof Number) nextRowNum = Math.max(nextRowNum, ((Number) rn).intValue());
+        }
+        for (Map<String, Object> m : masterStaged) {
+            String mAcc = m.get("accountNo") != null ? m.get("accountNo").toString().trim() : null;
+            if (mAcc == null || mAcc.isEmpty() || matchedMasterAccounts.contains(mAcc)) continue;
+
+            // Base row = the Master Data record itself, preserving every Master column as stored.
+            Map<String, Object> enriched = new LinkedHashMap<>(m);
+            enriched.put("accountNo", mAcc);
+            enriched.put("rowNum", ++nextRowNum);
+            enriched.put("masterDataFound", true);
+            // Display-only in Step 6: this Master Data account has no billing to import, so it is
+            // excluded from the final billing insertion (its customer profile is still saved).
+            enriched.put("masterOnly", true);
+
+            // Imported Main Data Set fields have no matching account — mark them as missing.
+            enriched.put("prevReadingDate", "—");
+            enriched.put("currReadingDate", "—");
+            enriched.put("kwhImport", null);
+            enriched.put("kwhExport", null);
+            enriched.put("kwhSales", null);
+            enriched.put("energyPurchase", null);
+            enriched.put("salesAmount", null);
+            enriched.put("billSetOff", null);
+            enriched.put("retentionMoney", null);
+            enriched.put("payment", null);
+            enriched.put("paymentSettled", null);
+
+            List<String> errors = new ArrayList<>();
+            List<String> warnings = new ArrayList<>();
+            warnings.add("No matching Main Data Set (billing) record — imported fields marked as missing.");
+            enriched.put("errors", errors);
+            enriched.put("warnings", warnings);
+            enriched.put("status", "WARNING");
+            enrichedList.add(enriched);
+            masterOnlyCount++;
+        }
+
         // ── Preserve the approved Master Data ordering ──────────────────────
         //    Display and finalize records in Master Data sequence, using Ref No
         //    as the primary sort key (e.g. 462-0001, 462-0002, … 462-0539). Rows
@@ -2594,8 +2662,9 @@ public class MultiFileImportService {
         result.put("matchedCount", matchCount);
         result.put("mismatchCount", mismatchCount);
         result.put("notFoundCount", notFoundCount);
+        result.put("masterOnlyCount", masterOnlyCount);
         result.put("rows", enrichedList);
-        result.put("message", String.format("Master Data comparison complete. %d matched, %d mismatches, %d not found.", matchCount, mismatchCount, notFoundCount));
+        result.put("message", String.format("Master Data comparison complete. %d matched, %d mismatches, %d not found, %d master-only (no billing).", matchCount, mismatchCount, notFoundCount, masterOnlyCount));
         return result;
     }
 
@@ -2633,6 +2702,80 @@ public class MultiFileImportService {
             }
         }
         return (la - i) - (lb - j);
+    }
+
+    /** Common honorific / title tokens stripped before comparing names. */
+    private static final java.util.Set<String> NAME_TITLES = new java.util.HashSet<>(java.util.Arrays.asList(
+            "MR", "MRS", "MS", "MISS", "DR", "REV", "PROF", "MDM", "MADAM", "MASTER", "MESSRS", "SIR", "HON"));
+
+    /**
+     * Splits a name into normalized uppercase tokens for comparison:
+     *   • upper-cases (case-insensitive),
+     *   • treats '.', ',', '-', '(', ')' and any non-alphanumeric char as a separator,
+     *   • trims and collapses spaces,
+     *   • drops common honorific titles (Mr, Mrs, Dr, Rev, …).
+     * e.g. "DR.N. PRATHEESH" -> [N, PRATHEESH]; "A.L.H.Sahabdeen" -> [A, L, H, SAHABDEEN].
+     */
+    private static java.util.List<String> nameTokens(String s) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (s == null) return out;
+        String n = s.toUpperCase().replaceAll("[^A-Z0-9]", " ").trim();
+        if (n.isEmpty()) return out;
+        for (String tok : n.split("\\s+")) {
+            if (tok.isEmpty() || NAME_TITLES.contains(tok)) continue;
+            out.add(tok);
+        }
+        return out;
+    }
+
+    /** True when two significant (multi-letter) name words are close enough to be the same. */
+    private static boolean wordsSimilar(String a, String b) {
+        if (a.equals(b)) return true;
+        int minLen = Math.min(a.length(), b.length());
+        // one word is a prefix/suffix of the other (e.g. SAHABDEE ↔ SAHABDEEN, SOTHY ↔ ...SOTHY)
+        if (minLen >= 4 && (a.startsWith(b) || b.startsWith(a) || a.endsWith(b) || b.endsWith(a))) return true;
+        // minor spelling variants (e.g. SANTHAKUMAR ↔ SHANTHAKUMAR, RAVISHANKAR ↔ RAVISHANGER)
+        if (minLen >= 5 && levenshtein(a, b) <= Math.max(2, minLen / 4)) return true;
+        return false;
+    }
+
+    /**
+     * Tolerant person/business name comparison used by Step 6. Two names are considered the same
+     * person when they share at least one significant (multi-letter) word after normalization,
+     * tolerating reordering, initials vs expanded names, abbreviations and minor spelling variants.
+     * Returns false only when the names clearly refer to different people.
+     */
+    private static boolean namesMatch(String masterName, String npayName) {
+        java.util.List<String> ta = nameTokens(masterName);
+        java.util.List<String> tb = nameTokens(npayName);
+        java.util.List<String> wa = new java.util.ArrayList<>();
+        java.util.List<String> wb = new java.util.ArrayList<>();
+        for (String t : ta) if (t.length() >= 2) wa.add(t);
+        for (String t : tb) if (t.length() >= 2) wb.add(t);
+        // If either side is only initials, fall back to comparing the full token sets.
+        if (wa.isEmpty() || wb.isEmpty()) {
+            return new java.util.HashSet<>(ta).equals(new java.util.HashSet<>(tb));
+        }
+        for (String a : wa)
+            for (String b : wb)
+                if (wordsSimilar(a, b)) return true;
+        return false;
+    }
+
+    /** Standard Levenshtein edit distance (two-row DP). */
+    private static int levenshtein(String a, String b) {
+        int[] prev = new int[b.length() + 1];
+        int[] cur = new int[b.length() + 1];
+        for (int j = 0; j <= b.length(); j++) prev[j] = j;
+        for (int i = 1; i <= a.length(); i++) {
+            cur[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int cost = a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1;
+                cur[j] = Math.min(Math.min(cur[j - 1] + 1, prev[j] + 1), prev[j - 1] + cost);
+            }
+            int[] tmp = prev; prev = cur; cur = tmp;
+        }
+        return prev[b.length()];
     }
 
     @Transactional
@@ -2786,9 +2929,10 @@ public class MultiFileImportService {
             List<String> src = new ArrayList<>();
             if (ngc > 1) src.add("NGEN (" + ngc + " records)");
             if (npc > 1) src.add("NPAY (" + npc + " records)");
-            String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
+            String dupReason = "Duplicate Account No carried from " + String.join(" and ", src)
+                    + " — see the Duplicates list for every source record";
             row.put("duplicateReason", dupReason);
-            warnings.add(dupReason);
+            row.put("hasDuplicateSources", true);
         }
 
         if (accountNo == null || accountNo.trim().isEmpty()) errors.add("Account No is missing");
@@ -2807,7 +2951,6 @@ public class MultiFileImportService {
         String status;
         if (incomplete) status = "REJECTED";
         else if (!errors.isEmpty()) status = "ERROR";
-        else if (isDuplicate) status = "DUPLICATE";
         else if (!warnings.isEmpty()) status = "WARNING";
         else status = "VALID";
 
@@ -2886,7 +3029,8 @@ public class MultiFileImportService {
      * number, duplicate reason and status = DUPLICATE, and is fully editable/deletable in Step 5.
      */
     private Map<String, Object> buildDuplicateEntryRow(int rowNum, String acc, boolean isNgen,
-                                                       Map<String, Object> src, String dupReason, String occLabel) {
+                                                       Map<String, Object> src, String dupReason, String occLabel,
+                                                       boolean isOriginal, Object originalRowNum) {
         Map<String, Object> row = new LinkedHashMap<>();
         row.put("rowNum", rowNum);
         row.put("accountNo", acc);
@@ -2899,6 +3043,8 @@ public class MultiFileImportService {
         row.put("billingMode", null);
 
         row.put("isDuplicateEntry", true);
+        row.put("isOriginalDuplicate", isOriginal);
+        row.put("originalRowNum", originalRowNum);
         row.put("duplicateReason", dupReason);
         row.put("duplicateOccurrence", occLabel);
         row.put("hasCeb", false);
@@ -3048,12 +3194,23 @@ public class MultiFileImportService {
         List<Map<String, Object>> combined = new ArrayList<>();
         for (Map<String, Object> p : primary) {
             combined.add(p);
-            List<Map<String, Object>> group = dupByAcc.get((String) p.get("accountNo"));
+            List<Map<String, Object>> group = dupByAcc.remove((String) p.get("accountNo"));
             if (group != null) combined.addAll(group);
         }
         // Rejected (incomplete merge) rows are appended for review only. They are never returned by
         // getMainDataset (used by Step 6 / finalize), so they are excluded from the final import.
-        combined.addAll(rejected);
+        // Attach any duplicate source records for those accounts too, so an incomplete account's
+        // duplicates remain visible in the Duplicates section.
+        for (Map<String, Object> r : rejected) {
+            combined.add(r);
+            List<Map<String, Object>> group = dupByAcc.remove((String) r.get("accountNo"));
+            if (group != null) combined.addAll(group);
+        }
+        // Any remaining duplicate source records belong to accounts that were neither a merged
+        // primary nor a rejected row — append them so no duplicate is ever dropped from the view.
+        for (List<Map<String, Object>> group : dupByAcc.values()) {
+            combined.addAll(group);
+        }
         return combined;
     }
 
@@ -3080,6 +3237,10 @@ public class MultiFileImportService {
         int skippedCount = 0;
 
         for (Map<String, Object> row : mainDataset) {
+            // Master-only rows (Master Data records with no matching Main Data Set billing) are
+            // shown in Step 6 for completeness but carry no importable billing — exclude them from
+            // the final import. Their customer profiles are still persisted from masterStaged below.
+            if (Boolean.TRUE.equals(row.get("masterOnly"))) continue;
             String accountNo = (String) row.get("accountNo");
             String rowNumStr = String.valueOf(row.get("rowNum"));
 

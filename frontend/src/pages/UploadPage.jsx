@@ -3267,6 +3267,27 @@ const UploadPage = () => {
           </div>
         </div>
 
+        {/* Action buttons (top — matches the layout used in Steps 1–4) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <button onClick={() => loadMainDataset()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleMainRevalidate} disabled={mainRevalidating}
+            style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, opacity: mainRevalidating ? 0.6 : 1 }}>
+            {mainRevalidating ? <><Loader size={14} className="animate-spin" /> Revalidating...</> : <><RefreshCw size={14} /> Revalidate</>}
+          </button>
+          <button onClick={handleApproveMainDataset} disabled={approving || hasErrors}
+            style={{
+              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+              color: hasErrors ? 'var(--text-muted)' : 'white',
+              fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
+              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+              opacity: hasErrors ? 0.6 : 1
+            }}>
+            {approving ? <><Loader size={15} className="animate-spin" /> Approving...</> : <><CheckCircle size={15} /> Approve Main Dataset & Compare Master Data</>}
+          </button>
+        </div>
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
           <StatCard label="Total Records" value={totalRecords} color="white" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
@@ -3394,6 +3415,7 @@ const UploadPage = () => {
                         {row.sourceFile && (
                           <div style={{ color: '#ec4899' }}>
                             <strong>Source:</strong> {row.sourceFile}{row.sourceRowNum != null ? ` (row ${row.sourceRowNum})` : ''}{row.duplicateOccurrence ? ` — ${row.duplicateOccurrence}` : ''}
+                            {row.originalRowNum != null && !row.isOriginalDuplicate ? ` · original at row ${row.originalRowNum}` : ''}
                           </div>
                         )}
                         {row.errors?.length > 0 && (
@@ -3426,26 +3448,6 @@ const UploadPage = () => {
           </table>
         </div>
         )}
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-          <button onClick={() => loadMainDataset()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button onClick={handleMainRevalidate} disabled={mainRevalidating}
-            style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600, opacity: mainRevalidating ? 0.6 : 1 }}>
-            {mainRevalidating ? <><Loader size={14} className="animate-spin" /> Revalidating...</> : <><RefreshCw size={14} /> Revalidate</>}
-          </button>
-          <button onClick={handleApproveMainDataset} disabled={approving || hasErrors}
-            style={{
-              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
-              color: hasErrors ? 'var(--text-muted)' : 'white',
-              fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
-              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
-              opacity: hasErrors ? 0.6 : 1
-            }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Approving...</> : <><CheckCircle size={15} /> Approve Main Dataset & Compare Master Data</>}
-          </button>
-        </div>
 
         {/* ── Edit merged record modal ── */}
         {editingMainRow && (() => {
@@ -3556,6 +3558,23 @@ const UploadPage = () => {
             Main Dataset records have been compared with approved Master Data by Account Number.
             Customer profiles (name, address, bank details, solar type) have been merged. Review and approve to finalize the import and update the Customer Directory.
           </div>
+        </div>
+
+        {/* Action buttons (top — matches the layout used in Steps 1–4) */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '1.25rem' }}>
+          <button onClick={() => loadMasterComparison()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+          <button onClick={handleApproveMasterComparison} disabled={approving || hasErrors}
+            style={{
+              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+              color: hasErrors ? 'var(--text-muted)' : 'white',
+              fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
+              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+              opacity: hasErrors ? 0.6 : 1
+            }}>
+            {approving ? <><Loader size={15} className="animate-spin" /> Finalizing...</> : <><CheckCircle size={15} /> Approve & Finalize Import</>}
+          </button>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
@@ -3722,22 +3741,6 @@ const UploadPage = () => {
           </table>
         </div>
         )}
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-          <button onClick={() => loadMasterComparison()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button onClick={handleApproveMasterComparison} disabled={approving || hasErrors}
-            style={{
-              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
-              color: hasErrors ? 'var(--text-muted)' : 'white',
-              fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
-              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
-              opacity: hasErrors ? 0.6 : 1
-            }}>
-            {approving ? <><Loader size={15} className="animate-spin" /> Finalizing...</> : <><CheckCircle size={15} /> Approve & Finalize Import</>}
-          </button>
-        </div>
       </div>
     );
   };

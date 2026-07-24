@@ -2125,6 +2125,7 @@ public class MultiFileImportService {
             Double ngenRetentionMoney = numOrNull(ngen, "retentionMoney");
             Double ngenSalesAmount = numOrNull(ngen, "salesAmount");
             Double ngenPaymentSettled = numOrNull(ngen, "paymentSettled");
+            Double ngenOutstandingBalance = numOrNull(ngen, "outstandingBalance");
             String ngenNetType = hasNgen ? (String) ngen.get("ngenNetType") : null;
 
             row.put("kwhImport", kwhImport);
@@ -2137,6 +2138,9 @@ public class MultiFileImportService {
             row.put("ngenNetType", ngenNetType);
             row.put("salesAmount", ngenSalesAmount);
             row.put("paymentSettled", ngenPaymentSettled);
+            // Carry the NGEN Outstanding Balance through unchanged so it reaches Step 6. It is a
+            // pass-through display value only — never recalculated and not a required validation field.
+            row.put("outstandingBalance", ngenOutstandingBalance);
 
             // ── 3. NPAY fields ──
             String npayNetType = hasNpay ? (String) npay.get("npayNetType") : null;
@@ -2470,6 +2474,19 @@ public class MultiFileImportService {
             if (acc != null) masterMap.put(acc.trim(), m);
         }
 
+        // ── Carry the approved NGEN "Outstanding Balance" through to Step 6 ──
+        //    Step 5 merges NGEN by first occurrence per Account No but does not copy the
+        //    Outstanding Balance into the merged row. Map it here by Account No so it can be
+        //    surfaced in the final Step 6 preview. The value is preserved exactly as imported
+        //    from NGEN (Step 3) — no recalculation or modification. The first NGEN occurrence
+        //    per account is used, matching the Step 5 merge choice.
+        Map<String, Object> ngenOutstandingByAcc = new HashMap<>();
+        for (Map<String, Object> n : loadNgenDataFromStaging(sessionId)) {
+            String nAcc = n.get("accountNo") != null ? n.get("accountNo").toString().trim() : null;
+            if (nAcc == null || nAcc.isEmpty()) continue;
+            ngenOutstandingByAcc.putIfAbsent(nAcc, n.get("outstandingBalance"));
+        }
+
         List<Map<String, Object>> enrichedList = new ArrayList<>();
         int matchCount = 0;
         int mismatchCount = 0;
@@ -2481,6 +2498,12 @@ public class MultiFileImportService {
         for (Map<String, Object> row : mainDataset) {
             Map<String, Object> enriched = new LinkedHashMap<>(row);
             String acc = (String) row.get("accountNo");
+
+            // Surface the NGEN Outstanding Balance for this Account No, preserving the imported
+            // value exactly. If NGEN has no matching record the field stays empty (null).
+            if (acc != null && ngenOutstandingByAcc.containsKey(acc.trim())) {
+                enriched.put("outstandingBalance", ngenOutstandingByAcc.get(acc.trim()));
+            }
 
             Map<String, Object> masterCust = masterMap.get(acc);
             List<String> errors = new ArrayList<>(row.get("errors") != null ? (List<String>) row.get("errors") : Collections.emptyList());
@@ -2622,6 +2645,7 @@ public class MultiFileImportService {
             enriched.put("retentionMoney", null);
             enriched.put("payment", null);
             enriched.put("paymentSettled", null);
+            enriched.put("outstandingBalance", null);
 
             List<String> errors = new ArrayList<>();
             List<String> warnings = new ArrayList<>();
@@ -3067,6 +3091,7 @@ public class MultiFileImportService {
             Double ngenRetentionMoney = numOrNull(src, "retentionMoney");
             Double ngenSalesAmount = numOrNull(src, "salesAmount");
             Double ngenPaymentSettled = numOrNull(src, "paymentSettled");
+            Double ngenOutstandingBalance = numOrNull(src, "outstandingBalance");
             String ngenNetType = (String) src.get("ngenNetType");
             row.put("kwhImport", kwhImport);
             row.put("kwhExport", kwhExport);
@@ -3078,6 +3103,7 @@ public class MultiFileImportService {
             row.put("ngenNetType", ngenNetType);
             row.put("salesAmount", ngenSalesAmount);
             row.put("paymentSettled", ngenPaymentSettled);
+            row.put("outstandingBalance", ngenOutstandingBalance);
             row.put("npayNetType", null); row.put("npayName", null);
             row.put("npayEnergyPurchase", null); row.put("npayBillSetOff", null);
             row.put("npayRetentionMoney", null); row.put("npayPayment", null);
@@ -3107,6 +3133,7 @@ public class MultiFileImportService {
             row.put("ngenUnitRate", null); row.put("unitRate", null);
             row.put("ngenBillSetOff", null); row.put("ngenRetentionMoney", null);
             row.put("ngenNetType", null); row.put("salesAmount", null); row.put("paymentSettled", null);
+            row.put("outstandingBalance", null);
             row.put("npayNetType", npayNetType);
             row.put("npayName", npayName);
             row.put("npayEnergyPurchase", npayEnergyPurchase);

@@ -2942,6 +2942,127 @@ public class MultiFileImportService {
         return result;
     }
 
+    /**
+     * Edits the single mismatched field of one Step 6 review record and immediately revalidates only
+     * that record by re-running the SAME comparison used elsewhere (namesMatch for Name, epsilon
+     * tolerance for Unit Rate, normalizeSolarType equality for Net Type). No comparison, validation,
+     * merge, duplicate or approval logic is changed — the existing helpers are simply reused on the
+     * edited value. Supported field values: "name", "unitRate", "netType".
+     *
+     * If the edit resolves the mismatch the corresponding *Match flag flips to MATCH (the record
+     * leaves the review list and counts as Valid); otherwise it stays MISMATCH. An audit record of
+     * the old value, new value, who edited and when is kept in all cases.
+     */
+    @Transactional
+    public Map<String, Object> editMismatchField(Long sessionId, String username, String accountNo,
+                                                 String field, String newValue) {
+        sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+        if (accountNo == null || accountNo.trim().isEmpty()) {
+            throw new IllegalArgumentException("Account No is required.");
+        }
+        if (field == null || field.trim().isEmpty()) {
+            throw new IllegalArgumentException("Field is required.");
+        }
+        String acctKey = accountNo.trim();
+        String fld = field.trim();
+
+        List<Map<String, Object>> dataset = getMainDataset(sessionId);
+        Map<String, Object> target = null;
+        for (Map<String, Object> row : dataset) {
+            Object accObj = row.get("accountNo");
+            String acc = accObj != null ? accObj.toString().trim() : null;
+            if (acctKey.equals(acc)) { target = row; break; }
+        }
+        if (target == null) {
+            throw new IllegalArgumentException("Record not found for Account No: " + accountNo);
+        }
+
+        String oldValue;
+        boolean resolved;
+        String flagKey;
+        String auditAction;
+
+        switch (fld) {
+            case "name": {
+                Object oldObj = target.get("npayName");
+                oldValue = oldObj != null ? oldObj.toString() : "";
+                target.put("npayName", newValue);
+                String masterName = target.get("masterName") != null ? target.get("masterName").toString() : null;
+                boolean match = masterName != null && !"—".equals(masterName)
+                        && newValue != null && !newValue.trim().isEmpty()
+                        && namesMatch(masterName, newValue);
+                target.put("nameMatch", match ? "MATCH" : "MISMATCH");
+                resolved = match;
+                flagKey = "nameMatch";
+                auditAction = "NAME_MISMATCH_EDITED";
+                break;
+            }
+            case "unitRate": {
+                Object oldObj = target.get("mainUnitRate");
+                oldValue = oldObj != null ? oldObj.toString() : "";
+                Double newRate = parseDouble(newValue);
+                target.put("mainUnitRate", newRate);
+                target.put("ngenUnitRate", newRate);
+                Object mObj = target.get("masterUnitRate");
+                Double masterRate = mObj instanceof Number ? ((Number) mObj).doubleValue() : null;
+                if (masterRate != null && newRate != null) {
+                    boolean match = Math.abs(masterRate - newRate) <= 1e-6;
+                    target.put("unitRateMatch", match ? "MATCH" : "MISMATCH");
+                    resolved = match;
+                } else {
+                    // Missing either value — no comparable difference remains, treat as resolved.
+                    target.put("unitRateMatch", "MATCH");
+                    resolved = true;
+                }
+                flagKey = "unitRateMatch";
+                auditAction = "UNIT_RATE_MISMATCH_EDITED";
+                break;
+            }
+            case "netType": {
+                Object oldObj = target.get("mainNetType");
+                oldValue = oldObj != null ? oldObj.toString() : "";
+                target.put("mainNetType", newValue);
+                target.put("ngenNetType", newValue);
+                String masterNet = target.get("masterNetType") != null ? target.get("masterNetType").toString() : null;
+                if (masterNet != null && newValue != null && !newValue.trim().isEmpty()) {
+                    String normMaster = ExcelValidationService.normalizeSolarType(masterNet);
+                    String normMain = ExcelValidationService.normalizeSolarType(newValue);
+                    boolean match = normMaster != null && normMain != null && normMaster.equals(normMain);
+                    target.put("netTypeMatch", match ? "MATCH" : "MISMATCH");
+                    resolved = match;
+                } else {
+                    target.put("netTypeMatch", "MATCH");
+                    resolved = true;
+                }
+                flagKey = "netTypeMatch";
+                auditAction = "NET_TYPE_MISMATCH_EDITED";
+                break;
+            }
+            default:
+                throw new IllegalArgumentException("Unsupported field for edit: " + field);
+        }
+
+        MAIN_DATA_CACHE.put(sessionId, dataset);
+
+        auditLogService.log(auditAction,
+                String.format("%s edited %s for account %s in session %d at %s. Old value: '%s', New value: '%s'. Result: %s",
+                        username, fld, acctKey, sessionId, java.time.LocalDateTime.now(),
+                        oldValue, newValue, resolved ? "RESOLVED (Valid)" : "STILL MISMATCH"));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("accountNo", acctKey);
+        result.put("field", fld);
+        result.put("oldValue", oldValue);
+        result.put("newValue", newValue);
+        result.put("resolved", resolved);
+        result.put("flag", target.get(flagKey));
+        result.put("row", target);
+        result.put("rows", dataset);
+        return result;
+    }
+
     /** Extracts a trimmed Ref No sort key; treats null / blank / "—" as absent. */
     private static String refNoSortKey(Map<String, Object> row) {
         Object v = row.get("refNo");

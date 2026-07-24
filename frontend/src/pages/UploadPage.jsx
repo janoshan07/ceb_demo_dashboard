@@ -1496,6 +1496,10 @@ const UploadPage = () => {
   // ── Step 6: Net Type Mismatch review workflow ──
   const [netTypeMismatchSelected, setNetTypeMismatchSelected] = useState([]); // Account Nos selected for bulk approval
   const [netTypeApproving, setNetTypeApproving] = useState(false);
+  // ── Step 6: inline edit of a single mismatched field (name / unitRate / netType) ──
+  const [editingMismatch, setEditingMismatch] = useState(null); // { field, accountNo } currently being edited
+  const [editMismatchValue, setEditMismatchValue] = useState('');
+  const [editMismatchSaving, setEditMismatchSaving] = useState(false);
 
   const reevaluateDuplicates = (rows, stepName) => {
     const groups = {};
@@ -2881,6 +2885,70 @@ const UploadPage = () => {
     }
   };
 
+  // ── Step 6: Edit a single mismatched field then revalidate only that record ──
+  // Available per record in each Mismatch Review section (Name → Name, Unit Rate → Unit Rate,
+  // Net Type → Net Type). The server updates only the edited field, re-runs the SAME comparison
+  // for that one record and reports whether the mismatch is resolved. If resolved the record is
+  // flipped to a MATCH locally (leaves the review list, Valid ↑, mismatch count ↓); otherwise it
+  // stays in review. The comparison/validation logic itself is not changed.
+  const handleEditMismatch = async (field, accountNo, newValue) => {
+    const sessionId = session?.sessionId;
+    if (!sessionId) return;
+    const flagKeyByField = { name: 'nameMatch', unitRate: 'unitRateMatch', netType: 'netTypeMatch' };
+    const flagKey = flagKeyByField[field];
+    if (!flagKey) return;
+    try {
+      setEditMismatchSaving(true);
+      const fd = new FormData();
+      fd.append('accountNo', String(accountNo));
+      fd.append('field', field);
+      fd.append('newValue', newValue == null ? '' : String(newValue));
+      const res = await authFetch(`/api/officer/import/${sessionId}/edit-mismatch-field`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Edit failed.', 'error'); return; }
+      const acc = String(accountNo).trim();
+      const newFlag = data.flag; // 'MATCH' (resolved) or 'MISMATCH'
+      // Patch the edited row locally (value + new flag) and refresh the validation summary counts.
+      setMasterComparison(prev => {
+        if (!prev) return prev;
+        const rows = prev.rows.map(r => {
+          const a = r.accountNo != null ? String(r.accountNo).trim() : null;
+          if (a !== acc) return r;
+          const patched = { ...r, [flagKey]: newFlag };
+          if (field === 'name') patched.npayName = newValue;
+          if (field === 'unitRate') {
+            const n = (newValue === '' || newValue == null) ? null : Number(newValue);
+            patched.mainUnitRate = (n == null || isNaN(n)) ? null : n;
+            patched.ngenUnitRate = patched.mainUnitRate;
+          }
+          if (field === 'netType') { patched.mainNetType = newValue; patched.ngenNetType = newValue; }
+          return patched;
+        });
+        const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
+        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
+        const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
+        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+        return { ...prev, rows, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, validCount };
+      });
+      // If resolved, drop it from the relevant bulk-selection set.
+      if (data.resolved) {
+        if (field === 'name') setNameMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
+        if (field === 'unitRate') setUnitRateMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
+        if (field === 'netType') setNetTypeMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
+      }
+      setEditingMismatch(null);
+      setEditMismatchValue('');
+      showToast(
+        data.resolved ? '✅ Mismatch resolved — record marked Valid.' : '✏️ Value updated — still a mismatch, kept in review.',
+        data.resolved ? 'success' : 'info'
+      );
+    } catch (e) {
+      showToast('Edit failed: ' + e.message, 'error');
+    } finally {
+      setEditMismatchSaving(false);
+    }
+  };
+
   const handleFinalize = async (sid) => {
     const sessionId = sid || session?.sessionId;
     if (!sessionId) return;
@@ -3836,6 +3904,7 @@ const UploadPage = () => {
                           {nameMismatchRows.map((row, i) => {
                             const acc = String(row.accountNo);
                             const checked = nameMismatchSelected.includes(acc);
+                            const isEditing = editingMismatch && editingMismatch.field === 'name' && String(editingMismatch.accountNo) === acc;
                             return (
                               <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
@@ -3843,16 +3912,41 @@ const UploadPage = () => {
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.npayName || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>
+                                  {isEditing ? (
+                                    <input type="text" value={editMismatchValue} autoFocus onChange={e => setEditMismatchValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleEditMismatch('name', acc, editMismatchValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMismatchValue(''); } }}
+                                      style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem' }} />
+                                  ) : (row.npayName || '—')}
+                                </td>
                                 <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.masterName || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
                                   <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Name Mismatch</span>
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                  <button type="button" onClick={() => handleApproveNames([acc])} disabled={nameApproving}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: nameApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: nameApproving ? 0.6 : 1 }}>
-                                    <CheckCircle size={12} /> Approve Name
-                                  </button>
+                                  {isEditing ? (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleEditMismatch('name', acc, editMismatchValue)} disabled={editMismatchSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: editMismatchSaving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: editMismatchSaving ? 0.6 : 1 }}>
+                                        {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingMismatch(null); setEditMismatchValue(''); }} disabled={editMismatchSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleApproveNames([acc])} disabled={nameApproving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: nameApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: nameApproving ? 0.6 : 1 }}>
+                                        <CheckCircle size={12} /> Approve Name
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'name', accountNo: acc }); setEditMismatchValue(row.npayName || ''); }}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
+                                        <Pencil size={12} /> Edit Name
+                                      </button>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -3926,6 +4020,7 @@ const UploadPage = () => {
                           {unitRateMismatchRows.map((row, i) => {
                             const acc = String(row.accountNo);
                             const checked = unitRateMismatchSelected.includes(acc);
+                            const isEditing = editingMismatch && editingMismatch.field === 'unitRate' && String(editingMismatch.accountNo) === acc;
                             return (
                               <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
@@ -3934,15 +4029,40 @@ const UploadPage = () => {
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.masterUnitRate ?? '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.mainUnitRate ?? '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>
+                                  {isEditing ? (
+                                    <input type="number" step="any" value={editMismatchValue} autoFocus onChange={e => setEditMismatchValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleEditMismatch('unitRate', acc, editMismatchValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMismatchValue(''); } }}
+                                      style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                                  ) : (row.mainUnitRate ?? '—')}
+                                </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
                                   <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Unit Rate Mismatch</span>
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                  <button type="button" onClick={() => handleApproveUnitRates([acc])} disabled={unitRateApproving}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: unitRateApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: unitRateApproving ? 0.6 : 1 }}>
-                                    <CheckCircle size={12} /> Approve Unit Rate
-                                  </button>
+                                  {isEditing ? (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleEditMismatch('unitRate', acc, editMismatchValue)} disabled={editMismatchSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: editMismatchSaving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: editMismatchSaving ? 0.6 : 1 }}>
+                                        {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingMismatch(null); setEditMismatchValue(''); }} disabled={editMismatchSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleApproveUnitRates([acc])} disabled={unitRateApproving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: unitRateApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: unitRateApproving ? 0.6 : 1 }}>
+                                        <CheckCircle size={12} /> Approve Unit Rate
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'unitRate', accountNo: acc }); setEditMismatchValue(row.mainUnitRate ?? ''); }}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
+                                        <Pencil size={12} /> Edit Unit Rate
+                                      </button>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             );
@@ -4017,6 +4137,7 @@ const UploadPage = () => {
                           {netTypeMismatchRows.map((row, i) => {
                             const acc = String(row.accountNo);
                             const checked = netTypeMismatchSelected.includes(acc);
+                            const isEditing = editingMismatch && editingMismatch.field === 'netType' && String(editingMismatch.accountNo) === acc;
                             return (
                               <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
@@ -4025,15 +4146,40 @@ const UploadPage = () => {
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>{row.masterNetType || '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem' }}>{row.mainNetType || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  {isEditing ? (
+                                    <input type="text" value={editMismatchValue} autoFocus onChange={e => setEditMismatchValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleEditMismatch('netType', acc, editMismatchValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMismatchValue(''); } }}
+                                      style={{ width: '160px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem' }} />
+                                  ) : (row.mainNetType || '—')}
+                                </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
                                   <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Net Type Mismatch</span>
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                  <button type="button" onClick={() => handleApproveNetTypes([acc])} disabled={netTypeApproving}
-                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: netTypeApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: netTypeApproving ? 0.6 : 1 }}>
-                                    <CheckCircle size={12} /> Approve Net Type
-                                  </button>
+                                  {isEditing ? (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleEditMismatch('netType', acc, editMismatchValue)} disabled={editMismatchSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: editMismatchSaving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: editMismatchSaving ? 0.6 : 1 }}>
+                                        {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingMismatch(null); setEditMismatchValue(''); }} disabled={editMismatchSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleApproveNetTypes([acc])} disabled={netTypeApproving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: netTypeApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: netTypeApproving ? 0.6 : 1 }}>
+                                        <CheckCircle size={12} /> Approve Net Type
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'netType', accountNo: acc }); setEditMismatchValue(row.mainNetType || ''); }}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
+                                        <Pencil size={12} /> Edit Net Type
+                                      </button>
+                                    </div>
+                                  )}
                                 </td>
                               </tr>
                             );

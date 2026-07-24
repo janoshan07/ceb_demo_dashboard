@@ -448,6 +448,28 @@ public class MultiFileImportController {
         }
     }
 
+    /**
+     * Edits the single mismatched field (name / unitRate / netType) of one Step 6 review record and
+     * immediately revalidates only that record using the existing comparison helpers. If the edit
+     * resolves the mismatch the record becomes Valid and leaves the review list; otherwise it stays.
+     */
+    @PostMapping({"/admin/import/{sessionId}/edit-mismatch-field", "/officer/import/{sessionId}/edit-mismatch-field"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> editMismatchField(
+            @PathVariable Long sessionId,
+            @RequestParam("accountNo") String accountNo,
+            @RequestParam("field") String field,
+            @RequestParam(value = "newValue", required = false, defaultValue = "") String newValue) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            Map<String, Object> result = multiFileImportService.editMismatchField(sessionId, username, accountNo, field, newValue);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Mismatch field edit failed: " + e.getMessage()));
+        }
+    }
+
     @PostMapping({"/admin/import/{sessionId}/finalize", "/officer/import/{sessionId}/finalize"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> finalizeImport(

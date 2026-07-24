@@ -1267,6 +1267,12 @@ public class MultiFileImportService {
     // final import continue to see only the complete merged rows in MAIN_DATA_CACHE.
     private static final Map<Long, List<Map<String, Object>>> MAIN_REJECTED_CACHE = new HashMap<>();
 
+    // Per-session set of Account Numbers whose Master-vs-NPAY name mismatch has been reviewer-approved
+    // (confirmed to refer to the same customer). Approved accounts are treated as a name MATCH and are
+    // never re-flagged as a name mismatch on subsequent Step 6 comparisons — the underlying name
+    // comparison logic is left unchanged.
+    private static final Map<Long, Set<String>> NAME_APPROVED_CACHE = new HashMap<>();
+
 
     private List<String> validateMasterDataRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
@@ -2452,6 +2458,15 @@ public class MultiFileImportService {
     //  STEP 6 — MASTER DATA COMPARISON
     // ════════════════════════════════════════════════════════════════════
 
+    /**
+     * Formats a Unit Rate for display in a mismatch message, trimming redundant
+     * trailing zeros (e.g. 25.0 → "25", 25.50 → "25.5") without altering the value.
+     */
+    private String formatUnitRate(Double v) {
+        if (v == null) return "—";
+        return java.math.BigDecimal.valueOf(v).stripTrailingZeros().toPlainString();
+    }
+
     @Transactional
     public Map<String, Object> compareWithMasterData(Long sessionId) throws Exception {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
@@ -2564,15 +2579,35 @@ public class MultiFileImportService {
                     }
                 }
 
-                // Name comparison: NPAY Name vs Master Name
+                // ── Unit Rate comparison: approved Master Data Unit Rate ↔ Main Data Set Unit Rate (NGEN) ──
+                // Matched by Account No. Both approved values are compared as-is — neither is modified,
+                // overwritten or recalculated. A difference is reported as a validation error so the row
+                // is flagged (ERROR status), shown in the row-level issue details and counted in the
+                // Errors summary. Equal values leave the row unaffected.
+                Object mainUnitRateObj = row.get("ngenUnitRate");
+                Double mainUnitRate = mainUnitRateObj instanceof Number ? ((Number) mainUnitRateObj).doubleValue() : null;
+                if (masterUnitRate != null && mainUnitRate != null
+                        && Math.abs(masterUnitRate - mainUnitRate) > 1e-6) {
+                    errors.add(String.format("Unit Rate Mismatch: Master = %s, Main = %s",
+                            formatUnitRate(masterUnitRate), formatUnitRate(mainUnitRate)));
+                }
+
+                // ── Name comparison: NPAY Name vs Master Name (review-only) ──
+                // The comparison itself (namesMatch) is unchanged. Detected mismatches are surfaced
+                // through the dedicated Step 6 "Name Mismatch Review" workflow via the nameMatch flag
+                // instead of the normal errors/warnings list, so they can be reviewer-approved. An
+                // account already approved by a reviewer is treated as a match and never re-flagged.
                 String npayName = (String) row.get("npayName");
-                if (masterName != null && !"—".equals(masterName) && npayName != null && !npayName.trim().isEmpty()) {
+                enriched.put("masterName", masterName);
+                Set<String> nameApprovedAccts = NAME_APPROVED_CACHE.getOrDefault(sessionId, Collections.emptySet());
+                if (acc != null && nameApprovedAccts.contains(acc.trim())) {
+                    enriched.put("nameMatch", "MATCH");
+                    enriched.put("nameApproved", true);
+                } else if (masterName != null && !"—".equals(masterName) && npayName != null && !npayName.trim().isEmpty()) {
                     // Tolerant name comparison: normalizes case/spaces/punctuation, strips titles and
                     // matches reordered names, initials, abbreviations and minor spelling variants.
-                    // Only names that clearly refer to different people raise a mismatch warning.
-                    if (!namesMatch(masterName, npayName)) {
-                        warnings.add(String.format("Name mismatch: NPAY='%s', Master='%s'", npayName, masterName));
-                    }
+                    // Only names that clearly refer to different people are flagged as a mismatch.
+                    enriched.put("nameMatch", namesMatch(masterName, npayName) ? "MATCH" : "MISMATCH");
                 }
 
                 matchedMasterAccounts.add(acc);
@@ -2689,6 +2724,58 @@ public class MultiFileImportService {
         result.put("masterOnlyCount", masterOnlyCount);
         result.put("rows", enrichedList);
         result.put("message", String.format("Master Data comparison complete. %d matched, %d mismatches, %d not found, %d master-only (no billing).", matchCount, mismatchCount, notFoundCount, masterOnlyCount));
+        return result;
+    }
+
+    /**
+     * Approves one or more Name Mismatch records in Step 6 (single or bulk). The reviewer confirms
+     * that the flagged NPAY / Master Data names refer to the same customer. Approved accounts are
+     * remembered for the session so the same mismatch is not re-flagged on later comparisons, the
+     * matching cached rows are flipped from a name MISMATCH to MATCH (removing them from the review
+     * list and restoring them to Valid), and an audit record of who approved and when is kept.
+     *
+     * No comparison, merge, duplicate handling or import/approval logic is changed — only the
+     * name-review state of the affected rows is updated.
+     */
+    @Transactional
+    public Map<String, Object> approveNameMismatch(Long sessionId, String username, List<String> accountNos) {
+        sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        Set<String> approvedSet = new HashSet<>();
+        if (accountNos != null) {
+            for (String a : accountNos) {
+                if (a != null && !a.trim().isEmpty()) approvedSet.add(a.trim());
+            }
+        }
+
+        // Persist the approvals so the same name mismatch is not re-validated on later comparisons.
+        NAME_APPROVED_CACHE.computeIfAbsent(sessionId, k -> new HashSet<>()).addAll(approvedSet);
+
+        // Patch the cached Step 6 dataset: mark each matching row's name check as approved / valid.
+        List<Map<String, Object>> dataset = getMainDataset(sessionId);
+        List<String> approvedAccounts = new ArrayList<>();
+        for (Map<String, Object> row : dataset) {
+            Object accObj = row.get("accountNo");
+            String acc = accObj != null ? accObj.toString().trim() : null;
+            if (acc != null && approvedSet.contains(acc) && "MISMATCH".equals(row.get("nameMatch"))) {
+                row.put("nameMatch", "MATCH");
+                row.put("nameApproved", true);
+                approvedAccounts.add(acc);
+            }
+        }
+        MAIN_DATA_CACHE.put(sessionId, dataset);
+
+        auditLogService.log("NAME_MISMATCH_APPROVED",
+                String.format("%s approved %d name mismatch record(s) for session %d at %s. Accounts: %s",
+                        username, approvedAccounts.size(), sessionId,
+                        java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("approvedCount", approvedAccounts.size());
+        result.put("approvedAccounts", approvedAccounts);
+        result.put("rows", dataset);
         return result;
     }
 

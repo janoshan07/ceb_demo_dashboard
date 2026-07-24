@@ -1487,6 +1487,9 @@ const UploadPage = () => {
   const [filterErrors, setFilterErrors] = useState(false);
   const [mainDatasetFilter, setMainDatasetFilter] = useState('ALL');
   const [masterComparisonFilter, setMasterComparisonFilter] = useState('ALL');
+  // ── Step 6: Name Mismatch review workflow ──
+  const [nameMismatchSelected, setNameMismatchSelected] = useState([]); // Account Nos selected for bulk approval
+  const [nameApproving, setNameApproving] = useState(false);
 
   const reevaluateDuplicates = (rows, stepName) => {
     const groups = {};
@@ -2696,11 +2699,16 @@ const UploadPage = () => {
       const rows = data.rows || [];
       const errorCount = rows.filter(r => r.status === 'ERROR').length;
       const warningCount = rows.filter(r => r.status === 'WARNING').length;
-      const validCount = rows.filter(r => r.status === 'VALID').length;
+      // Name-mismatch records are surfaced through the dedicated "Name Mismatch Review"
+      // workflow, not the normal Errors/Valid lists. They are excluded from the Valid
+      // count until a reviewer approves them (which flips nameMatch to 'MATCH').
+      const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
+      const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH').length;
       setMasterComparison({
-        rows, totalRecords: rows.length, errorCount, warningCount, validCount,
+        rows, totalRecords: rows.length, errorCount, warningCount, validCount, nameMismatchCount,
         matchedCount: data.matchedCount, mismatchCount: data.mismatchCount, notFoundCount: data.notFoundCount
       });
+      setNameMismatchSelected([]);
     } catch (e) {
       showToast('Comparison failed: ' + e.message, 'error');
     } finally {
@@ -2725,6 +2733,49 @@ const UploadPage = () => {
       showToast('Approval failed: ' + e.message, 'error');
     } finally {
       setApproving(false);
+    }
+  };
+
+  // ── Step 6: Approve Name Mismatch (single or bulk) ──────────────────────
+  // Confirms the flagged NPAY / Master Data names refer to the same customer. Approved
+  // records are marked name-valid: removed from the Name Mismatch Review list, their Valid
+  // count increases and Name Mismatch count decreases, with a server-side audit log of who
+  // approved and when. The underlying name comparison is not re-run — approvals are cached
+  // server-side so subsequent comparisons treat these accounts as a match.
+  const handleApproveNames = async (accountNos) => {
+    const sessionId = session?.sessionId;
+    if (!sessionId) return;
+    const accts = (accountNos || []).filter(a => a != null && String(a).trim() !== '');
+    if (accts.length === 0) { showToast('No Name Mismatch records selected.', 'error'); return; }
+    try {
+      setNameApproving(true);
+      const fd = new FormData();
+      fd.append('accountNosJson', JSON.stringify(accts));
+      const res = await authFetch(`/api/officer/import/${sessionId}/approve-name-mismatch`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Name approval failed.', 'error'); return; }
+      const approvedSet = new Set((data.approvedAccounts || accts).map(a => String(a).trim()));
+      // Patch the Step 6 rows locally: flip approved accounts to a name MATCH and refresh
+      // the validation summary (Name Mismatch ↓, Valid ↑) without re-running the comparison.
+      setMasterComparison(prev => {
+        if (!prev) return prev;
+        const rows = prev.rows.map(r => {
+          const acc = r.accountNo != null ? String(r.accountNo).trim() : null;
+          if (acc && approvedSet.has(acc) && r.nameMatch === 'MISMATCH') {
+            return { ...r, nameMatch: 'MATCH', nameApproved: true };
+          }
+          return r;
+        });
+        const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
+        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH').length;
+        return { ...prev, rows, nameMismatchCount, validCount };
+      });
+      setNameMismatchSelected(prev => prev.filter(a => !approvedSet.has(String(a).trim())));
+      showToast(`✅ ${data.approvedCount ?? approvedSet.size} name mismatch record(s) approved as Valid.`, 'success');
+    } catch (e) {
+      showToast('Name approval failed: ' + e.message, 'error');
+    } finally {
+      setNameApproving(false);
     }
   };
 
@@ -3539,11 +3590,12 @@ const UploadPage = () => {
         </div>
       );
     }
-    const { rows, totalRecords, errorCount, warningCount, validCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
+    const { rows, totalRecords, errorCount, warningCount, validCount, nameMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
     const hasErrors = (errorCount || 0) > 0;
+    const nameMismatchRows = (rows || []).filter(r => r.nameMatch === 'MISMATCH');
     const filteredRows = (rows || []).filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
-      if (masterComparisonFilter === 'VALID') return r.status === 'VALID';
+      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && r.nameMatch !== 'MISMATCH';
       if (masterComparisonFilter === 'ERROR') return r.status === 'ERROR';
       if (masterComparisonFilter === 'WARNING') return r.status === 'WARNING';
       return true;
@@ -3582,6 +3634,7 @@ const UploadPage = () => {
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
           <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
+          <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<User size={18} />} />
           <StatCard label="Matched" value={matchedCount || 0} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="Mismatched" value={mismatchCount || 0} color={mismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Not Found" value={notFoundCount || 0} color={notFoundCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
@@ -3594,6 +3647,7 @@ const UploadPage = () => {
             { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
             { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
             { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
+            { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#f59e0b' },
           ].map(tab => (
             <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
               style={{
@@ -3614,7 +3668,96 @@ const UploadPage = () => {
           ))}
         </div>
 
-        {filteredRows.length === 0 ? (
+        {masterComparisonFilter === 'NAME_MISMATCH' ? (
+          (() => {
+            const allAccts = nameMismatchRows.map(r => String(r.accountNo));
+            const allSelected = allAccts.length > 0 && allAccts.every(a => nameMismatchSelected.includes(a));
+            const toggleOne = (acc) => setNameMismatchSelected(prev => prev.includes(acc) ? prev.filter(a => a !== acc) : [...prev, acc]);
+            const toggleAll = () => setNameMismatchSelected(allSelected ? [] : allAccts);
+            return (
+              <div>
+                <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  <User size={17} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'white' }}>Name Mismatch Review</strong>
+                    <br />
+                    These records matched on Account Number but the NPAY name differs from the Master Data name.
+                    If you confirm they refer to the same customer, approve them to mark the record Valid. Approved
+                    records are removed from this list and are not re-flagged unless the record is edited.
+                  </div>
+                </div>
+
+                {nameMismatchRows.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+                    <div style={{ fontWeight: 600 }}>No name mismatches to review.</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>All name comparisons are matched or have been approved.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {nameMismatchSelected.length} of {nameMismatchRows.length} selected
+                      </div>
+                      <button type="button" onClick={() => handleApproveNames(nameMismatchSelected)}
+                        disabled={nameApproving || nameMismatchSelected.length === 0}
+                        style={{
+                          background: nameMismatchSelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                          color: nameMismatchSelected.length === 0 ? 'var(--text-muted)' : 'white',
+                          fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: 10, border: 'none',
+                          cursor: (nameApproving || nameMismatchSelected.length === 0) ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem',
+                          opacity: (nameApproving || nameMismatchSelected.length === 0) ? 0.6 : 1
+                        }}>
+                        {nameApproving ? <><Loader size={14} className="animate-spin" /> Approving...</> : <><CheckCircle size={14} /> Approve Selected ({nameMismatchSelected.length})</>}
+                      </button>
+                    </div>
+                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
+                              <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </th>
+                            {['Ref No', 'Account No', 'NPAY Name', 'Master Data Name', 'Comparison Status', 'Action'].map(h => (
+                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {nameMismatchRows.map((row, i) => {
+                            const acc = String(row.accountNo);
+                            const checked = nameMismatchSelected.includes(acc);
+                            return (
+                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.npayName || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.masterName || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Name Mismatch</span>
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <button type="button" onClick={() => handleApproveNames([acc])} disabled={nameApproving}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: nameApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: nameApproving ? 0.6 : 1 }}>
+                                    <CheckCircle size={12} /> Approve Name
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()
+        ) : filteredRows.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
             <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
             <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
@@ -3639,7 +3782,7 @@ const UploadPage = () => {
                 return (
                 <React.Fragment key={rowKey}>
                 <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', background: expanded ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'ERROR' ? '3px solid #ef4444' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>

@@ -8,6 +8,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -379,6 +380,27 @@ public class MultiFileImportController {
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("message", "Master comparison approval failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Approve one or more Step 6 Name Mismatch records (single or bulk). Confirms the flagged
+     * NPAY / Master Data names refer to the same customer, marking those records name-valid.
+     */
+    @PostMapping({"/admin/import/{sessionId}/approve-name-mismatch", "/officer/import/{sessionId}/approve-name-mismatch"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> approveNameMismatch(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "accountNosJson", required = false, defaultValue = "[]") String accountNosJson) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            List<String> accountNos = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                    accountNosJson, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+            Map<String, Object> result = multiFileImportService.approveNameMismatch(sessionId, username, accountNos);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Name mismatch approval failed: " + e.getMessage()));
         }
     }
 

@@ -404,6 +404,50 @@ public class MultiFileImportController {
         }
     }
 
+    /**
+     * Approve one or more Step 6 Unit Rate Mismatch records (single or bulk). Confirms the
+     * difference between the Master Data Unit Rate and the Main Data Set (NGEN) Unit Rate is
+     * acceptable, marking those records unit-rate-valid.
+     */
+    @PostMapping({"/admin/import/{sessionId}/approve-unit-rate-mismatch", "/officer/import/{sessionId}/approve-unit-rate-mismatch"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> approveUnitRateMismatch(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "accountNosJson", required = false, defaultValue = "[]") String accountNosJson) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            List<String> accountNos = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                    accountNosJson, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+            Map<String, Object> result = multiFileImportService.approveUnitRateMismatch(sessionId, username, accountNos);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Unit rate mismatch approval failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Approves one or more Step 6 Net Type Mismatch records (single or bulk). The reviewer confirms
+     * the difference between the Master Data Net Type and the Main Data Set Net Type is acceptable,
+     * marking those records net-type-valid.
+     */
+    @PostMapping({"/admin/import/{sessionId}/approve-net-type-mismatch", "/officer/import/{sessionId}/approve-net-type-mismatch"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> approveNetTypeMismatch(
+            @PathVariable Long sessionId,
+            @RequestParam(value = "accountNosJson", required = false, defaultValue = "[]") String accountNosJson) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            List<String> accountNos = new com.fasterxml.jackson.databind.ObjectMapper().readValue(
+                    accountNosJson, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+            Map<String, Object> result = multiFileImportService.approveNetTypeMismatch(sessionId, username, accountNos);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(Map.of("message", "Net type mismatch approval failed: " + e.getMessage()));
+        }
+    }
+
     @PostMapping({"/admin/import/{sessionId}/finalize", "/officer/import/{sessionId}/finalize"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> finalizeImport(

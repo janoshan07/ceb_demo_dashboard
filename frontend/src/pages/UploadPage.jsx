@@ -1490,6 +1490,12 @@ const UploadPage = () => {
   // ── Step 6: Name Mismatch review workflow ──
   const [nameMismatchSelected, setNameMismatchSelected] = useState([]); // Account Nos selected for bulk approval
   const [nameApproving, setNameApproving] = useState(false);
+  // ── Step 6: Unit Rate Mismatch review workflow ──
+  const [unitRateMismatchSelected, setUnitRateMismatchSelected] = useState([]); // Account Nos selected for bulk approval
+  const [unitRateApproving, setUnitRateApproving] = useState(false);
+  // ── Step 6: Net Type Mismatch review workflow ──
+  const [netTypeMismatchSelected, setNetTypeMismatchSelected] = useState([]); // Account Nos selected for bulk approval
+  const [netTypeApproving, setNetTypeApproving] = useState(false);
 
   const reevaluateDuplicates = (rows, stepName) => {
     const groups = {};
@@ -2703,12 +2709,20 @@ const UploadPage = () => {
       // workflow, not the normal Errors/Valid lists. They are excluded from the Valid
       // count until a reviewer approves them (which flips nameMatch to 'MATCH').
       const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
-      const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH').length;
+      // Unit Rate mismatches are likewise surfaced through the dedicated "Unit Rate Mismatch
+      // Review" workflow and excluded from Valid until a reviewer approves them.
+      const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
+      // Net Type mismatches are likewise surfaced through the dedicated "Net Type Mismatch
+      // Review" workflow and excluded from Valid until a reviewer approves them.
+      const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
+      const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
       setMasterComparison({
-        rows, totalRecords: rows.length, errorCount, warningCount, validCount, nameMismatchCount,
+        rows, totalRecords: rows.length, errorCount, warningCount, validCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount,
         matchedCount: data.matchedCount, mismatchCount: data.mismatchCount, notFoundCount: data.notFoundCount
       });
       setNameMismatchSelected([]);
+      setUnitRateMismatchSelected([]);
+      setNetTypeMismatchSelected([]);
     } catch (e) {
       showToast('Comparison failed: ' + e.message, 'error');
     } finally {
@@ -2776,6 +2790,94 @@ const UploadPage = () => {
       showToast('Name approval failed: ' + e.message, 'error');
     } finally {
       setNameApproving(false);
+    }
+  };
+
+  // ── Step 6: Approve Unit Rate Mismatch (single or bulk) ─────────────────
+  // Confirms the difference between the Master Data Unit Rate and the Main Data Set (NGEN)
+  // Unit Rate is acceptable. Approved records are marked unit-rate-valid: removed from the Unit
+  // Rate Mismatch Review list, their Valid count increases and Unit Rate Mismatch count
+  // decreases, with a server-side audit log of who approved and when. The comparison is not
+  // re-run — approvals are cached server-side (against the approved rate pair) so the record is
+  // not re-flagged unless the Unit Rate changes.
+  const handleApproveUnitRates = async (accountNos) => {
+    const sessionId = session?.sessionId;
+    if (!sessionId) return;
+    const accts = (accountNos || []).filter(a => a != null && String(a).trim() !== '');
+    if (accts.length === 0) { showToast('No Unit Rate Mismatch records selected.', 'error'); return; }
+    try {
+      setUnitRateApproving(true);
+      const fd = new FormData();
+      fd.append('accountNosJson', JSON.stringify(accts));
+      const res = await authFetch(`/api/officer/import/${sessionId}/approve-unit-rate-mismatch`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Unit rate approval failed.', 'error'); return; }
+      const approvedSet = new Set((data.approvedAccounts || accts).map(a => String(a).trim()));
+      // Patch the Step 6 rows locally: flip approved accounts to a unit rate MATCH and refresh
+      // the validation summary (Unit Rate Mismatch ↓, Valid ↑) without re-running the comparison.
+      setMasterComparison(prev => {
+        if (!prev) return prev;
+        const rows = prev.rows.map(r => {
+          const acc = r.accountNo != null ? String(r.accountNo).trim() : null;
+          if (acc && approvedSet.has(acc) && r.unitRateMatch === 'MISMATCH') {
+            return { ...r, unitRateMatch: 'MATCH', unitRateApproved: true };
+          }
+          return r;
+        });
+        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
+        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH').length;
+        return { ...prev, rows, unitRateMismatchCount, validCount };
+      });
+      setUnitRateMismatchSelected(prev => prev.filter(a => !approvedSet.has(String(a).trim())));
+      showToast(`✅ ${data.approvedCount ?? approvedSet.size} unit rate mismatch record(s) approved as Valid.`, 'success');
+    } catch (e) {
+      showToast('Unit rate approval failed: ' + e.message, 'error');
+    } finally {
+      setUnitRateApproving(false);
+    }
+  };
+
+  // ── Step 6: Approve Net Type Mismatch (single or bulk) ──────────────────
+  // Confirms the difference between the Master Data Net Type and the Main Data Set Net Type is
+  // acceptable. Approved records are marked net-type-valid: removed from the Net Type Mismatch
+  // Review list, their Valid count increases and Net Type Mismatch count decreases, with a
+  // server-side audit log of who approved and when. The comparison is not re-run — approvals are
+  // cached server-side (against the approved normalized pair) so the record is not re-flagged
+  // unless a Net Type value changes.
+  const handleApproveNetTypes = async (accountNos) => {
+    const sessionId = session?.sessionId;
+    if (!sessionId) return;
+    const accts = (accountNos || []).filter(a => a != null && String(a).trim() !== '');
+    if (accts.length === 0) { showToast('No Net Type Mismatch records selected.', 'error'); return; }
+    try {
+      setNetTypeApproving(true);
+      const fd = new FormData();
+      fd.append('accountNosJson', JSON.stringify(accts));
+      const res = await authFetch(`/api/officer/import/${sessionId}/approve-net-type-mismatch`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Net type approval failed.', 'error'); return; }
+      const approvedSet = new Set((data.approvedAccounts || accts).map(a => String(a).trim()));
+      // Patch the Step 6 rows locally: flip approved accounts to a net type MATCH and refresh
+      // the validation summary (Net Type Mismatch ↓, Valid ↑) without re-running the comparison.
+      setMasterComparison(prev => {
+        if (!prev) return prev;
+        const rows = prev.rows.map(r => {
+          const acc = r.accountNo != null ? String(r.accountNo).trim() : null;
+          if (acc && approvedSet.has(acc) && r.netTypeMatch === 'MISMATCH') {
+            return { ...r, netTypeMatch: 'MATCH', netTypeApproved: true };
+          }
+          return r;
+        });
+        const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
+        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+        return { ...prev, rows, netTypeMismatchCount, validCount };
+      });
+      setNetTypeMismatchSelected(prev => prev.filter(a => !approvedSet.has(String(a).trim())));
+      showToast(`✅ ${data.approvedCount ?? approvedSet.size} net type mismatch record(s) approved as Valid.`, 'success');
+    } catch (e) {
+      showToast('Net type approval failed: ' + e.message, 'error');
+    } finally {
+      setNetTypeApproving(false);
     }
   };
 
@@ -3590,12 +3692,14 @@ const UploadPage = () => {
         </div>
       );
     }
-    const { rows, totalRecords, errorCount, warningCount, validCount, nameMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
+    const { rows, totalRecords, errorCount, warningCount, validCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
     const hasErrors = (errorCount || 0) > 0;
     const nameMismatchRows = (rows || []).filter(r => r.nameMatch === 'MISMATCH');
+    const unitRateMismatchRows = (rows || []).filter(r => r.unitRateMatch === 'MISMATCH');
+    const netTypeMismatchRows = (rows || []).filter(r => r.netTypeMatch === 'MISMATCH');
     const filteredRows = (rows || []).filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
-      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && r.nameMatch !== 'MISMATCH';
+      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH';
       if (masterComparisonFilter === 'ERROR') return r.status === 'ERROR';
       if (masterComparisonFilter === 'WARNING') return r.status === 'WARNING';
       return true;
@@ -3635,6 +3739,8 @@ const UploadPage = () => {
           <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
           <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<User size={18} />} />
+          <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Matched" value={matchedCount || 0} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="Mismatched" value={mismatchCount || 0} color={mismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Not Found" value={notFoundCount || 0} color={notFoundCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
@@ -3648,6 +3754,8 @@ const UploadPage = () => {
             { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
             { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
             { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#f59e0b' },
+            { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#f59e0b' },
+            { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#f59e0b' },
           ].map(tab => (
             <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
               style={{
@@ -3757,6 +3865,187 @@ const UploadPage = () => {
               </div>
             );
           })()
+        ) : masterComparisonFilter === 'UNIT_RATE_MISMATCH' ? (
+          (() => {
+            const allAccts = unitRateMismatchRows.map(r => String(r.accountNo));
+            const allSelected = allAccts.length > 0 && allAccts.every(a => unitRateMismatchSelected.includes(a));
+            const toggleOne = (acc) => setUnitRateMismatchSelected(prev => prev.includes(acc) ? prev.filter(a => a !== acc) : [...prev, acc]);
+            const toggleAll = () => setUnitRateMismatchSelected(allSelected ? [] : allAccts);
+            return (
+              <div>
+                <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  <AlertTriangle size={17} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'white' }}>Unit Rate Mismatch Review</strong>
+                    <br />
+                    These records matched on Account Number but the approved Master Data Unit Rate differs
+                    from the Main Data Set (NGEN) Unit Rate. If you confirm the difference is acceptable,
+                    approve them to mark the record Valid. Approved records are removed from this list and
+                    are not re-flagged unless the Unit Rate changes.
+                  </div>
+                </div>
+
+                {unitRateMismatchRows.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+                    <div style={{ fontWeight: 600 }}>No unit rate mismatches to review.</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>All Unit Rate comparisons are matched or have been approved.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {unitRateMismatchSelected.length} of {unitRateMismatchRows.length} selected
+                      </div>
+                      <button type="button" onClick={() => handleApproveUnitRates(unitRateMismatchSelected)}
+                        disabled={unitRateApproving || unitRateMismatchSelected.length === 0}
+                        style={{
+                          background: unitRateMismatchSelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                          color: unitRateMismatchSelected.length === 0 ? 'var(--text-muted)' : 'white',
+                          fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: 10, border: 'none',
+                          cursor: (unitRateApproving || unitRateMismatchSelected.length === 0) ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem',
+                          opacity: (unitRateApproving || unitRateMismatchSelected.length === 0) ? 0.6 : 1
+                        }}>
+                        {unitRateApproving ? <><Loader size={14} className="animate-spin" /> Approving...</> : <><CheckCircle size={14} /> Approve Selected ({unitRateMismatchSelected.length})</>}
+                      </button>
+                    </div>
+                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
+                              <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </th>
+                            {['Ref No', 'Account No', 'Master Data Unit Rate', 'Main Data Set (NGEN) Unit Rate', 'Comparison Status', 'Action'].map(h => (
+                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {unitRateMismatchRows.map((row, i) => {
+                            const acc = String(row.accountNo);
+                            const checked = unitRateMismatchSelected.includes(acc);
+                            return (
+                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.masterUnitRate ?? '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.mainUnitRate ?? '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Unit Rate Mismatch</span>
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <button type="button" onClick={() => handleApproveUnitRates([acc])} disabled={unitRateApproving}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: unitRateApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: unitRateApproving ? 0.6 : 1 }}>
+                                    <CheckCircle size={12} /> Approve Unit Rate
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()
+        ) : masterComparisonFilter === 'NET_TYPE_MISMATCH' ? (
+          (() => {
+            const allAccts = netTypeMismatchRows.map(r => String(r.accountNo));
+            const allSelected = allAccts.length > 0 && allAccts.every(a => netTypeMismatchSelected.includes(a));
+            const toggleOne = (acc) => setNetTypeMismatchSelected(prev => prev.includes(acc) ? prev.filter(a => a !== acc) : [...prev, acc]);
+            const toggleAll = () => setNetTypeMismatchSelected(allSelected ? [] : allAccts);
+            return (
+              <div>
+                <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  <AlertTriangle size={17} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'white' }}>Net Type Mismatch Review</strong>
+                    <br />
+                    These records matched on Account Number but the Master Data Net Type differs from the
+                    Main Data Set Net Type even after normalization (equivalents such as "Net Accounting"
+                    and "ACCOUNTING" are treated as matches). If you confirm the difference is acceptable,
+                    approve them to mark the record Valid. Approved records are removed from this list and
+                    are not re-flagged unless the Net Type changes.
+                  </div>
+                </div>
+
+                {netTypeMismatchRows.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+                    <div style={{ fontWeight: 600 }}>No net type mismatches to review.</div>
+                    <div style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>All Net Type comparisons are matched or have been approved.</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        {netTypeMismatchSelected.length} of {netTypeMismatchRows.length} selected
+                      </div>
+                      <button type="button" onClick={() => handleApproveNetTypes(netTypeMismatchSelected)}
+                        disabled={netTypeApproving || netTypeMismatchSelected.length === 0}
+                        style={{
+                          background: netTypeMismatchSelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                          color: netTypeMismatchSelected.length === 0 ? 'var(--text-muted)' : 'white',
+                          fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: 10, border: 'none',
+                          cursor: (netTypeApproving || netTypeMismatchSelected.length === 0) ? 'not-allowed' : 'pointer',
+                          display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem',
+                          opacity: (netTypeApproving || netTypeMismatchSelected.length === 0) ? 0.6 : 1
+                        }}>
+                        {netTypeApproving ? <><Loader size={14} className="animate-spin" /> Approving...</> : <><CheckCircle size={14} /> Approve Selected ({netTypeMismatchSelected.length})</>}
+                      </button>
+                    </div>
+                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
+                              <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </th>
+                            {['Ref No', 'Account No', 'Master Data Net Type', 'Main Data Set Net Type', 'Comparison Status', 'Action'].map(h => (
+                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {netTypeMismatchRows.map((row, i) => {
+                            const acc = String(row.accountNo);
+                            const checked = netTypeMismatchSelected.includes(acc);
+                            return (
+                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>{row.masterNetType || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>{row.mainNetType || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Net Type Mismatch</span>
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <button type="button" onClick={() => handleApproveNetTypes([acc])} disabled={netTypeApproving}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: netTypeApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: netTypeApproving ? 0.6 : 1 }}>
+                                    <CheckCircle size={12} /> Approve Net Type
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()
         ) : filteredRows.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
             <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
@@ -3767,7 +4056,7 @@ const UploadPage = () => {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Status', 'Issues'].map(h => (
+                {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Unit Rate Check', 'Status', 'Issues'].map(h => (
                   <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -3816,12 +4105,17 @@ const UploadPage = () => {
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     {row.netTypeMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
-                      : row.netTypeMatch === 'MISMATCH' ? <span style={{ color: '#ef4444', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                      : row.netTypeMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
                       : '—'}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
                     {row.nameMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
                       : row.nameMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                      : '—'}
+                  </td>
+                  <td style={{ padding: '0.5rem 0.75rem' }}>
+                    {row.unitRateMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
+                      : row.unitRateMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
                       : '—'}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem' }}>
@@ -3848,7 +4142,7 @@ const UploadPage = () => {
                 </tr>
                 {expanded && hasDetail && (
                   <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
-                    <td colSpan={30} style={{ padding: '0.75rem 1.25rem' }}>
+                    <td colSpan={31} style={{ padding: '0.75rem 1.25rem' }}>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
                         <div style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.72rem' }}>
                           {row.refNo && row.refNo !== '—' ? `Ref No ${row.refNo}` : `Account No ${row.accountNo || '—'}`} — validation details

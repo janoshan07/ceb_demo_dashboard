@@ -1273,6 +1273,19 @@ public class MultiFileImportService {
     // comparison logic is left unchanged.
     private static final Map<Long, Set<String>> NAME_APPROVED_CACHE = new HashMap<>();
 
+    // Per-session map of Account No → the reviewer-approved Unit Rate signature ("master|main").
+    // A Master-vs-Main Unit Rate mismatch whose current signature matches the approved one is
+    // treated as a match and never re-flagged; if either Unit Rate value changes the signature no
+    // longer matches, so the record is re-flagged for review. The comparison logic is unchanged.
+    private static final Map<Long, Map<String, String>> UNIT_RATE_APPROVED_CACHE = new HashMap<>();
+
+    // Per-session map of Account No → the reviewer-approved Net Type signature ("normMaster|normMain",
+    // using the normalized Net Type values). A Master-vs-Main Net Type mismatch whose current
+    // normalized signature matches the approved one is treated as a match and never re-flagged; if
+    // either Net Type value changes such that the normalized signature differs, the record is
+    // re-flagged for review. The normalization / comparison logic itself is unchanged.
+    private static final Map<Long, Map<String, String>> NET_TYPE_APPROVED_CACHE = new HashMap<>();
+
 
     private List<String> validateMasterDataRow(Map<String, Object> row) {
         List<String> errors = new ArrayList<>();
@@ -2563,33 +2576,64 @@ public class MultiFileImportService {
                 String ngenNetType = (String) row.get("ngenNetType");
                 String npayNetType = (String) row.get("npayNetType");
 
-                if (masterSolarType != null) {
+                // ── Net Type comparison: Master Data Net Type ↔ Main Data Set Net Type (review-only) ──
+                // Values are normalized before comparison (case-insensitive, spaces and '.'/'-'/'_'
+                // ignored) so equivalents such as "Net Accounting" and "ACCOUNTING", "Net Plus" and
+                // "PLUS", "Net Plus Plus" and "PLUS PLUS", "Net Metering" and "METERING" do NOT count as
+                // a mismatch. A genuine (post-normalization) difference is surfaced through the
+                // dedicated Step 6 "Net Type Mismatch Review" workflow via the netTypeMatch flag
+                // (instead of the normal errors list) so it can be reviewer-approved. An account
+                // approved for the same normalized pair is treated as a match and not re-flagged
+                // unless a Net Type value changes such that the normalized signature differs.
+                String mainNetType = (ngenNetType != null && !ngenNetType.trim().isEmpty())
+                        ? ngenNetType
+                        : (npayNetType != null && !npayNetType.trim().isEmpty() ? npayNetType : null);
+                enriched.put("masterNetType", masterSolarType);
+                enriched.put("mainNetType", mainNetType);
+                if (masterSolarType != null && mainNetType != null) {
                     String normMaster = ExcelValidationService.normalizeSolarType(masterSolarType);
-                    if (ngenNetType != null) {
-                        String normNgen = ExcelValidationService.normalizeSolarType(ngenNetType);
-                        if (normMaster != null && normNgen != null && !normMaster.equals(normNgen)) {
-                            errors.add(String.format("Net Type Mismatch: NGEN='%s', Master='%s'", ngenNetType, masterSolarType));
+                    String normMain = ExcelValidationService.normalizeSolarType(mainNetType);
+                    if (normMaster != null && normMain != null && !normMaster.equals(normMain)) {
+                        String netSignature = normMaster + "|" + normMain;
+                        String approvedSig = acc != null
+                                ? NET_TYPE_APPROVED_CACHE.getOrDefault(sessionId, Collections.emptyMap()).get(acc.trim())
+                                : null;
+                        if (approvedSig != null && approvedSig.equals(netSignature)) {
+                            enriched.put("netTypeMatch", "MATCH");
+                            enriched.put("netTypeApproved", true);
+                        } else {
+                            enriched.put("netTypeMatch", "MISMATCH");
                         }
-                    }
-                    if (npayNetType != null) {
-                        String normNpay = ExcelValidationService.normalizeSolarType(npayNetType);
-                        if (normMaster != null && normNpay != null && !normMaster.equals(normNpay)) {
-                            errors.add(String.format("Net Type Mismatch: NPAY='%s', Master='%s'", npayNetType, masterSolarType));
-                        }
+                    } else {
+                        enriched.put("netTypeMatch", "MATCH");
                     }
                 }
 
                 // ── Unit Rate comparison: approved Master Data Unit Rate ↔ Main Data Set Unit Rate (NGEN) ──
-                // Matched by Account No. Both approved values are compared as-is — neither is modified,
-                // overwritten or recalculated. A difference is reported as a validation error so the row
-                // is flagged (ERROR status), shown in the row-level issue details and counted in the
-                // Errors summary. Equal values leave the row unaffected.
+                // Matched by Account No. Both approved values are compared as-is (epsilon tolerance) —
+                // neither is modified, overwritten or recalculated. The comparison itself is unchanged;
+                // a difference is now surfaced through the dedicated Step 6 "Unit Rate Mismatch Review"
+                // workflow via the unitRateMatch flag (instead of the normal errors list) so it can be
+                // reviewer-approved. An account approved by a reviewer for the same pair of rates is
+                // treated as a match and is not re-flagged unless either Unit Rate value changes.
                 Object mainUnitRateObj = row.get("ngenUnitRate");
                 Double mainUnitRate = mainUnitRateObj instanceof Number ? ((Number) mainUnitRateObj).doubleValue() : null;
+                enriched.put("masterUnitRate", masterUnitRate);
+                enriched.put("mainUnitRate", mainUnitRate);
                 if (masterUnitRate != null && mainUnitRate != null
                         && Math.abs(masterUnitRate - mainUnitRate) > 1e-6) {
-                    errors.add(String.format("Unit Rate Mismatch: Master = %s, Main = %s",
-                            formatUnitRate(masterUnitRate), formatUnitRate(mainUnitRate)));
+                    String rateSignature = formatUnitRate(masterUnitRate) + "|" + formatUnitRate(mainUnitRate);
+                    String approvedSig = acc != null
+                            ? UNIT_RATE_APPROVED_CACHE.getOrDefault(sessionId, Collections.emptyMap()).get(acc.trim())
+                            : null;
+                    if (approvedSig != null && approvedSig.equals(rateSignature)) {
+                        enriched.put("unitRateMatch", "MATCH");
+                        enriched.put("unitRateApproved", true);
+                    } else {
+                        enriched.put("unitRateMatch", "MISMATCH");
+                    }
+                } else if (masterUnitRate != null && mainUnitRate != null) {
+                    enriched.put("unitRateMatch", "MATCH");
                 }
 
                 // ── Name comparison: NPAY Name vs Master Name (review-only) ──
@@ -2768,6 +2812,125 @@ public class MultiFileImportService {
 
         auditLogService.log("NAME_MISMATCH_APPROVED",
                 String.format("%s approved %d name mismatch record(s) for session %d at %s. Accounts: %s",
+                        username, approvedAccounts.size(), sessionId,
+                        java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("approvedCount", approvedAccounts.size());
+        result.put("approvedAccounts", approvedAccounts);
+        result.put("rows", dataset);
+        return result;
+    }
+
+    /**
+     * Approves one or more Unit Rate Mismatch records in Step 6 (single or bulk). The reviewer
+     * confirms the difference between the approved Master Data Unit Rate and the Main Data Set
+     * (NGEN) Unit Rate is acceptable. The exact approved rate pair is remembered for the session
+     * so the record is not re-flagged unless either Unit Rate value later changes; the matching
+     * cached rows are flipped from a Unit Rate MISMATCH to MATCH (removing them from the review
+     * list and restoring them to Valid), and an audit record of who approved and when is kept.
+     *
+     * No comparison, merge, duplicate handling or import/approval logic is changed — only the
+     * unit-rate-review state of the affected rows is updated.
+     */
+    @Transactional
+    public Map<String, Object> approveUnitRateMismatch(Long sessionId, String username, List<String> accountNos) {
+        sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        Set<String> approvedSet = new HashSet<>();
+        if (accountNos != null) {
+            for (String a : accountNos) {
+                if (a != null && !a.trim().isEmpty()) approvedSet.add(a.trim());
+            }
+        }
+
+        Map<String, String> approvedSigs = UNIT_RATE_APPROVED_CACHE.computeIfAbsent(sessionId, k -> new HashMap<>());
+
+        // Patch the cached Step 6 dataset: mark each matching row's unit rate check as approved / valid.
+        List<Map<String, Object>> dataset = getMainDataset(sessionId);
+        List<String> approvedAccounts = new ArrayList<>();
+        for (Map<String, Object> row : dataset) {
+            Object accObj = row.get("accountNo");
+            String acc = accObj != null ? accObj.toString().trim() : null;
+            if (acc != null && approvedSet.contains(acc) && "MISMATCH".equals(row.get("unitRateMatch"))) {
+                Object mObj = row.get("masterUnitRate");
+                Object nObj = row.get("mainUnitRate");
+                Double m = mObj instanceof Number ? ((Number) mObj).doubleValue() : null;
+                Double n = nObj instanceof Number ? ((Number) nObj).doubleValue() : null;
+                // Remember the exact rate pair that was approved so the record is only re-flagged
+                // if either Unit Rate later changes (its signature would no longer match).
+                approvedSigs.put(acc, formatUnitRate(m) + "|" + formatUnitRate(n));
+                row.put("unitRateMatch", "MATCH");
+                row.put("unitRateApproved", true);
+                approvedAccounts.add(acc);
+            }
+        }
+        MAIN_DATA_CACHE.put(sessionId, dataset);
+
+        auditLogService.log("UNIT_RATE_MISMATCH_APPROVED",
+                String.format("%s approved %d unit rate mismatch record(s) for session %d at %s. Accounts: %s",
+                        username, approvedAccounts.size(), sessionId,
+                        java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("sessionId", sessionId);
+        result.put("approvedCount", approvedAccounts.size());
+        result.put("approvedAccounts", approvedAccounts);
+        result.put("rows", dataset);
+        return result;
+    }
+
+    /**
+     * Approves one or more Net Type Mismatch records in Step 6 (single or bulk). The reviewer
+     * confirms the difference between the Master Data Net Type and the Main Data Set Net Type is
+     * acceptable. The exact approved normalized pair is remembered for the session so the record is
+     * not re-flagged unless a Net Type value later changes such that the normalized signature
+     * differs; the matching cached rows are flipped from a Net Type MISMATCH to MATCH (removing
+     * them from the review list and restoring them to Valid), and an audit record of who approved
+     * and when is kept.
+     *
+     * No normalization, comparison, merge, duplicate handling or import/approval logic is changed
+     * — only the net-type-review state of the affected rows is updated.
+     */
+    @Transactional
+    public Map<String, Object> approveNetTypeMismatch(Long sessionId, String username, List<String> accountNos) {
+        sessionRepository.findById(sessionId.longValue())
+                .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
+
+        Set<String> approvedSet = new HashSet<>();
+        if (accountNos != null) {
+            for (String a : accountNos) {
+                if (a != null && !a.trim().isEmpty()) approvedSet.add(a.trim());
+            }
+        }
+
+        Map<String, String> approvedSigs = NET_TYPE_APPROVED_CACHE.computeIfAbsent(sessionId, k -> new HashMap<>());
+
+        // Patch the cached Step 6 dataset: mark each matching row's net type check as approved / valid.
+        List<Map<String, Object>> dataset = getMainDataset(sessionId);
+        List<String> approvedAccounts = new ArrayList<>();
+        for (Map<String, Object> row : dataset) {
+            Object accObj = row.get("accountNo");
+            String acc = accObj != null ? accObj.toString().trim() : null;
+            if (acc != null && approvedSet.contains(acc) && "MISMATCH".equals(row.get("netTypeMatch"))) {
+                String normMaster = ExcelValidationService.normalizeSolarType(
+                        row.get("masterNetType") != null ? row.get("masterNetType").toString() : null);
+                String normMain = ExcelValidationService.normalizeSolarType(
+                        row.get("mainNetType") != null ? row.get("mainNetType").toString() : null);
+                // Remember the exact normalized pair that was approved so the record is only
+                // re-flagged if a Net Type later changes (its normalized signature would differ).
+                approvedSigs.put(acc, normMaster + "|" + normMain);
+                row.put("netTypeMatch", "MATCH");
+                row.put("netTypeApproved", true);
+                approvedAccounts.add(acc);
+            }
+        }
+        MAIN_DATA_CACHE.put(sessionId, dataset);
+
+        auditLogService.log("NET_TYPE_MISMATCH_APPROVED",
+                String.format("%s approved %d net type mismatch record(s) for session %d at %s. Accounts: %s",
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 

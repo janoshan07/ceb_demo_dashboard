@@ -56,6 +56,9 @@ public class StagingMigrationService {
     @Autowired
     private ExpenseCodeRepository expenseCodeRepository;
 
+    @Autowired
+    private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository monthlyDirectorySnapshotRepository;
+
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
@@ -328,6 +331,13 @@ public class StagingMigrationService {
                 System.err.println("Error generating alerts: " + e.getMessage());
             }
         }
+
+        // ── Monthly Customer Directory activation ──────────────────────
+        //    The Officer's Step 6 approval already captured the complete final
+        //    dataset as a PENDING_APPROVAL snapshot. The Admin's final approval
+        //    of the staged batch automatically promotes it to APPROVED — no
+        //    data is rebuilt or recompared.
+        updateDirectorySnapshotStatus(history, "APPROVED", approvedBy);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -347,6 +357,39 @@ public class StagingMigrationService {
 
     private boolean isNotBlank(String s) {
         return s != null && !s.trim().isEmpty();
+    }
+
+    /**
+     * Promotes (or rejects) the pending Monthly Customer Directory snapshot that belongs to the
+     * import session behind this staged batch. The session id is carried in the batch's file name
+     * ("Multi-File Import (Session {id})"). Snapshot data itself is never modified here.
+     */
+    private void updateDirectorySnapshotStatus(UploadHistory history, String newStatus, String actor) {
+        try {
+            String fileName = history.getFilename();
+            if (fileName == null) return;
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("Session\\s+(\\d+)").matcher(fileName);
+            if (!m.find()) return;
+            Long sessionId = Long.valueOf(m.group(1));
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> pending =
+                    monthlyDirectorySnapshotRepository.findBySessionIdAndStatus(sessionId, "PENDING_APPROVAL");
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : pending) {
+                snap.setStatus(newStatus);
+                if ("APPROVED".equals(newStatus)) {
+                    snap.setApprovedBy(actor);
+                    snap.setApprovalDate(java.time.LocalDateTime.now());
+                }
+                monthlyDirectorySnapshotRepository.save(snap);
+            }
+            if (!pending.isEmpty()) {
+                auditLogService.log("DIRECTORY_SNAPSHOT_" + newStatus, String.format(
+                        "Monthly Customer Directory snapshot for session %d marked %s by %s (final Admin decision on batch %d).",
+                        sessionId, newStatus, actor, history.getId()));
+            }
+        } catch (Exception e) {
+            // Never fail the batch decision because of the directory bookkeeping.
+            System.err.println("Error updating Monthly Directory snapshot status: " + e.getMessage());
+        }
     }
 
 
@@ -378,5 +421,9 @@ public class StagingMigrationService {
         uploadHistoryRepository.save(history);
 
         auditLogService.log("STAGING_REJECTED", String.format("Batch ID %d rejected by %s. Reason: %s", batchId, rejectedBy, reason));
+
+        // A rejected batch never received the final Admin approval — mark the pending
+        // Monthly Customer Directory snapshot for that session as REJECTED too.
+        updateDirectorySnapshotStatus(history, "REJECTED", rejectedBy);
     }
 }

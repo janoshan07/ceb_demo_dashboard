@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useToast } from '../context/ToastContext';
 import { 
   FileSpreadsheet, 
@@ -45,6 +45,9 @@ const deriveLCode = (solarType, tariffType) => {
   }
   return '';
 };
+
+// Worst-status wins when several staged source rows are grouped under one Account No.
+const STATUS_RANK = { INVALID: 4, DUPLICATE: 3, WARNING: 2, VALID: 1 };
 
 const StagingReview = ({ authFetch, onConfirmAction }) => {
   const { showToast } = useToast();
@@ -341,22 +344,58 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
     }
   };
 
-  // Summary Metrics calculations
-  const totalRows = stagingRows.length;
-  const validRows = stagingRows.filter(r => r.validationStatus === 'VALID').length;
-  const invalidRows = stagingRows.filter(r => r.validationStatus === 'INVALID').length;
-  const duplicateRows = stagingRows.filter(r => r.validationStatus === 'DUPLICATE').length;
-  const warningRows = stagingRows.filter(r => r.validationStatus === 'WARNING').length;
-  const isCustomerBatch = stagingRows.some(r => r.rowType === 'CUSTOMER_PROFILE');
+  // ── Grouping: one review row per Account No ───────────────────────────────
+  // A batch stages a CUSTOMER_PROFILE row and one or more BILLING rows for the same account;
+  // showing them flat displayed each customer twice. Grouping is display-only: every underlying
+  // staging row keeps its own validation info and its own Correct/Delete actions, and the
+  // grouped view is re-derived from the fetched rows on every refresh (never duplicated).
+  const groupedRows = useMemo(() => {
+    const map = new Map();
+    stagingRows.forEach(row => {
+      const acc = row.accountNo !== undefined && row.accountNo !== null && String(row.accountNo).trim() !== ''
+        ? String(row.accountNo).trim()
+        : `__row_${row.stagingId}`;
+      if (!map.has(acc)) map.set(acc, []);
+      map.get(acc).push(row);
+    });
+    return [...map.entries()].map(([groupKey, sources], i) => {
+      const profile = sources.find(s => s.rowType === 'CUSTOMER_PROFILE') || null;
+      const billings = sources.filter(s => s.rowType !== 'CUSTOMER_PROFILE');
+      // Merged display data: first billing row's fields, with the profile's customer fields on top.
+      const merged = Object.assign({}, billings[0] || {}, profile || {});
+      const status = sources.reduce((worst, s) =>
+        (STATUS_RANK[s.validationStatus] || 0) > (STATUS_RANK[worst] || 0) ? s.validationStatus : worst, 'VALID');
+      // Union of every source row's validation messages, deduped.
+      const seen = new Set();
+      const errors = [];
+      sources.forEach(s => (s.errors || []).forEach(err => {
+        const k = `${err.field}|${err.errorMessage}|${err.warning}`;
+        if (!seen.has(k)) { seen.add(k); errors.push(err); }
+      }));
+      return { ...merged, groupKey, sources, profile, billings, validationStatus: status, errors, index: i + 1 };
+    });
+  }, [stagingRows]);
+
+  // Summary Metrics calculations (each Account No counted once)
+  const totalRows = groupedRows.length;
+  const validRows = groupedRows.filter(r => r.validationStatus === 'VALID').length;
+  const invalidRows = groupedRows.filter(r => r.validationStatus === 'INVALID').length;
+  const duplicateRows = groupedRows.filter(r => r.validationStatus === 'DUPLICATE').length;
+  const warningRows = groupedRows.filter(r => r.validationStatus === 'WARNING').length;
+  const isCustomerBatch = groupedRows.some(r => r.profile);
+  const hasBillingData = groupedRows.some(r => r.billings.length > 0);
   const [rowFilter, setRowFilter] = useState('ALL');
 
-  const filteredRows = stagingRows.filter(row => {
+  const groupIsCorrected = (group) =>
+    group.sources.some(s => proposals.some(p => p.stagingId === s.stagingId && p.status === 'APPROVED'));
+
+  const filteredRows = groupedRows.filter(row => {
     if (rowFilter === 'ALL') return true;
     if (rowFilter === 'VALID') return row.validationStatus === 'VALID';
     if (rowFilter === 'INVALID') return row.validationStatus === 'INVALID';
     if (rowFilter === 'WARNING') return row.validationStatus === 'WARNING';
     if (rowFilter === 'CORRECTED') {
-      return proposals.some(p => p.stagingId === row.stagingId && p.status === 'APPROVED');
+      return groupIsCorrected(row);
     }
     return true;
   });
@@ -699,7 +738,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                   { key: 'VALID', label: 'Valid Only', count: validRows },
                   { key: 'INVALID', label: 'Errors Only', count: invalidRows },
                   { key: 'WARNING', label: 'Warnings Only', count: warningRows },
-                  { key: 'CORRECTED', label: 'Corrected Only', count: stagingRows.filter(r => proposals.some(p => p.stagingId === r.stagingId && p.status === 'APPROVED')).length }
+                  { key: 'CORRECTED', label: 'Corrected Only', count: groupedRows.filter(groupIsCorrected).length }
                 ].map(f => (
                   <button
                     key={f.key}
@@ -741,7 +780,9 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                         [
                           'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
                           'Mobile', 'Capacity', 'Agreement Date', 'Bank', 'Branch',
-                          'Bank Account', 'Solar Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Severity', 'Validation Errors / Warnings', 'Action'
+                          'Bank Account', 'Solar Type', 'Unit Rate', 'Fix/Variable', 'L-Code',
+                          ...(hasBillingData ? ['Billing Period', 'Net (Imp / Exp)', 'Unit Cost'] : []),
+                          'Severity', 'Validation Errors / Warnings', 'Action'
                         ].map(h => (
                           <th key={h} style={{ whiteSpace: 'nowrap' }}>{h}</th>
                         ))
@@ -760,20 +801,23 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                       const isDuplicate = row.validationStatus === 'DUPLICATE';
                       const isInvalid = row.validationStatus === 'INVALID';
                       
-                      const rowCorrections = proposals.filter(p => p.stagingId === row.stagingId && p.status === 'APPROVED');
+                      // Corrections may target any of the grouped source rows.
+                      const rowCorrections = proposals.filter(p => row.sources.some(s => s.stagingId === p.stagingId) && p.status === 'APPROVED');
                       const isCorrected = rowCorrections.length > 0;
 
                       let correctedFields = [];
                       if (isCorrected) {
-                        try {
-                          const orig = JSON.parse(rowCorrections[0].originalData || '{}');
-                          const mod = JSON.parse(rowCorrections[0].modifiedData || '{}');
-                          Object.keys(mod).forEach(k => {
-                            if (String(orig[k]) !== String(mod[k])) {
-                              correctedFields.push(k);
-                            }
-                          });
-                        } catch (e) {}
+                        rowCorrections.forEach(rc => {
+                          try {
+                            const orig = JSON.parse(rc.originalData || '{}');
+                            const mod = JSON.parse(rc.modifiedData || '{}');
+                            Object.keys(mod).forEach(k => {
+                              if (String(orig[k]) !== String(mod[k])) {
+                                correctedFields.push(k);
+                              }
+                            });
+                          } catch (e) {}
+                        });
                       }
 
                       let correctedBadge = null;
@@ -834,7 +878,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                       };
                       
                       return (
-                        <tr key={row.stagingId} style={{ backgroundColor: rowBg }}>
+                        <tr key={row.groupKey} style={{ backgroundColor: rowBg }}>
                           <td style={{ fontWeight: 600 }}>{row.index}</td>
                           <td style={{ fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap' }}>{renderCell(row.accountNo, 'accountNo')}</td>
                           <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.customerName, 'customerName')}</td>
@@ -862,6 +906,17 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                               </td>
                               <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.tariffType, 'tariffType')}</td>
                               <td style={{ whiteSpace: 'nowrap' }}>{renderCell(row.billingMode, 'billingMode')}</td>
+                              {hasBillingData && (
+                                <>
+                                  <td style={{ fontSize: '0.8rem', whiteSpace: 'nowrap' }}>
+                                    {row.fromDate ? `${row.fromDate} to ${row.toDate}` : '—'}
+                                  </td>
+                                  <td>
+                                    {row.importUnits !== undefined ? `${row.importUnits} / ${row.exportUnits}` : '—'}
+                                  </td>
+                                  <td>{row.unitCost !== undefined ? `LKR ${row.unitCost}` : '—'}</td>
+                                </>
+                              )}
                             </>
                           ) : (
                             <>
@@ -879,6 +934,11 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                               {badge}
                               {correctedBadge}
+                              {row.billings.length > 1 && (
+                                <span className="badge" style={{ backgroundColor: 'rgba(168,85,247,0.12)', color: '#a855f7', padding: '0.15rem 0.45rem', fontSize: '0.7rem', border: '1px solid rgba(168,85,247,0.2)' }}>
+                                  {row.billings.length} billing rows grouped
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td>
@@ -905,24 +965,35 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                             )}
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'center' }}>
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                                onClick={() => handleOpenEditModal(row)}
-                              >
-                                <Edit2 size={12} />
-                                Correct
-                              </button>
-                              <button
-                                type="button"
-                                className="btn btn-logout"
-                                style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}
-                                onClick={() => handleAdminDeleteRow(row.stagingId)}
-                              >
-                                Delete
-                              </button>
+                            {/* One Correct/Delete pair per underlying staging row — grouping never
+                                hides a source record or its individual actions. */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'center' }}>
+                              {row.sources.map((src) => (
+                                <div key={src.stagingId} style={{ display: 'flex', gap: '0.35rem', alignItems: 'center', justifyContent: 'center' }}>
+                                  {row.sources.length > 1 && (
+                                    <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 700, minWidth: 56, textAlign: 'right' }}>
+                                      {src.rowType === 'CUSTOMER_PROFILE' ? 'Profile' : (row.billings.length > 1 ? `Billing #${row.billings.indexOf(src) + 1}` : 'Billing')}
+                                    </span>
+                                  )}
+                                  <button
+                                    type="button"
+                                    className="btn btn-secondary"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                                    onClick={() => handleOpenEditModal(src)}
+                                  >
+                                    <Edit2 size={12} />
+                                    Correct
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="btn btn-logout"
+                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', width: 'auto', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#ef4444' }}
+                                    onClick={() => handleAdminDeleteRow(src.stagingId)}
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ))}
                             </div>
                           </td>
                         </tr>

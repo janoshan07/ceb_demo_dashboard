@@ -63,9 +63,11 @@ public class MonthlyDirectoryService {
     };
 
     /**
-     * Builds and persists a new monthly snapshot from the approved main-dataset cache. Mirrors the
-     * finalize step's row selection (excludes master-only rows and rows marked deleted, overlays any
-     * corrections) so the archive matches exactly what is imported — without changing finalize logic.
+     * Builds and persists a new monthly snapshot from the approved main-dataset cache. Captures the
+     * COMPLETE Step 6 dataset exactly as displayed — including master-only rows, error/warning/
+     * duplicate/mismatch records and every merged field — with any Step 6 corrections overlaid
+     * (only rows the user explicitly deleted in Step 6 are skipped, as they are no longer shown).
+     * Records are stored sorted by Account No ascending. Finalize logic is not changed.
      */
     @Transactional
     public Map<String, Object> createSnapshot(Long sessionId, String username, String datasetName,
@@ -79,7 +81,6 @@ public class MonthlyDirectoryService {
 
         List<Map<String, Object>> finalData = new ArrayList<>();
         for (Map<String, Object> row : mainDataset) {
-            if (Boolean.TRUE.equals(row.get("masterOnly"))) continue;
             String accountNo = row.get("accountNo") != null ? String.valueOf(row.get("accountNo")) : null;
             String rowNumStr = String.valueOf(row.get("rowNum"));
 
@@ -96,6 +97,9 @@ public class MonthlyDirectoryService {
             if (corr != null) finalRow.putAll(corr);
             finalData.add(finalRow);
         }
+
+        // Directory display order: Account No ascending (numeric-aware).
+        finalData.sort(Comparator.comparing(r -> accountSortKey(r.get("accountNo"))));
 
         String name = datasetName != null ? datasetName.trim() : "";
         if (name.isEmpty()) {
@@ -270,6 +274,15 @@ public class MonthlyDirectoryService {
     }
 
     // ── helpers ──────────────────────────────────────────────────────────────
+
+    /** Numeric-aware sort key so e.g. account "9" orders before "10" and before "100". */
+    private String accountSortKey(Object acc) {
+        String s = acc == null ? "" : String.valueOf(acc).trim();
+        if (s.matches("\\d+")) {
+            return String.format("%030d", new java.math.BigInteger(s));
+        }
+        return s;
+    }
 
     private String defaultName(String billingMonth) {
         if (billingMonth != null && !billingMonth.trim().isEmpty()) {

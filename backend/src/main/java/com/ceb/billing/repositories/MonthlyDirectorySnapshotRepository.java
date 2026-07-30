@@ -11,4 +11,7 @@ public interface MonthlyDirectorySnapshotRepository extends JpaRepository<Monthl
 
     /** Newest archived month first. */
     List<MonthlyDirectorySnapshot> findAllByOrderByCreatedDateDesc();
+
+    /** Snapshots created from one import session in a given status (e.g. PENDING_APPROVAL). */
+    List<MonthlyDirectorySnapshot> findBySessionIdAndStatus(Long sessionId, String status);
 }

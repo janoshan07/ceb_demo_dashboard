@@ -2534,8 +2534,20 @@ public class MultiFileImportService {
             }
 
             Map<String, Object> masterCust = masterMap.get(acc);
-            List<String> errors = new ArrayList<>(row.get("errors") != null ? (List<String>) row.get("errors") : Collections.emptyList());
-            List<String> warnings = new ArrayList<>(row.get("warnings") != null ? (List<String>) row.get("warnings") : Collections.emptyList());
+            List<String> errors = new ArrayList<>();
+            Object errorsObj = row.get("errors");
+            if (errorsObj instanceof List) {
+                for (Object o : (List<?>) errorsObj) {
+                    if (o != null) errors.add(o.toString());
+                }
+            }
+            List<String> warnings = new ArrayList<>();
+            Object warningsObj = row.get("warnings");
+            if (warningsObj instanceof List) {
+                for (Object o : (List<?>) warningsObj) {
+                    if (o != null) warnings.add(o.toString());
+                }
+            }
 
             if (masterCust != null) {
                 // Enrich with Master Data profile
@@ -3354,6 +3366,63 @@ public class MultiFileImportService {
         row.put("missingFields", missingFields);
         row.put("mismatchFields", mismatchFields);
         row.put("status", status);
+    }
+
+    /**
+     * Revalidates a SINGLE archived Monthly Customer Directory record in place, reusing the exact
+     * same merged-row validation and Master-Data comparison rules used during import. This is an
+     * additive helper for the post-Step-6 directory editing workflow — it introduces no new
+     * validation logic and changes none of the existing import/comparison/approval behaviour.
+     *
+     * The Master-Data comparison flags (name / unit rate / net type) are recomputed from the
+     * master* and main values already stored on the record, so no master-staging lookup is needed
+     * after the import session has been finalized.
+     */
+    public void revalidateDirectoryRecord(Map<String, Object> row) {
+        if (row == null) return;
+
+        // 1) Re-run the standard merged-row validation (errors / warnings / status / mismatchFields).
+        revalidateMergedRow(row);
+
+        // 2) Recompute the Step 6 Master-Data comparison flags using the same comparison helpers.
+        // ── Name ──
+        String masterName = row.get("masterName") != null ? String.valueOf(row.get("masterName")) : null;
+        String npayName = row.get("npayName") != null ? String.valueOf(row.get("npayName")) : null;
+        if (Boolean.TRUE.equals(row.get("nameApproved"))) {
+            row.put("nameMatch", "MATCH");
+        } else if (masterName != null && !"—".equals(masterName) && npayName != null && !npayName.trim().isEmpty()) {
+            row.put("nameMatch", namesMatch(masterName, npayName) ? "MATCH" : "MISMATCH");
+        }
+
+        // ── Unit Rate ──
+        Double masterUnitRate = parseDouble(row.get("masterUnitRate"));
+        Double mainUnitRate = parseDouble(row.get("ngenUnitRate"));
+        row.put("mainUnitRate", mainUnitRate);
+        if (masterUnitRate != null && mainUnitRate != null) {
+            if (Math.abs(masterUnitRate - mainUnitRate) > 1e-6) {
+                row.put("unitRateMatch", Boolean.TRUE.equals(row.get("unitRateApproved")) ? "MATCH" : "MISMATCH");
+            } else {
+                row.put("unitRateMatch", "MATCH");
+            }
+        }
+
+        // ── Net Type ──
+        String masterNetType = row.get("masterNetType") != null ? String.valueOf(row.get("masterNetType")) : null;
+        String ngenNetType = row.get("ngenNetType") != null ? String.valueOf(row.get("ngenNetType")) : null;
+        String npayNetType = row.get("npayNetType") != null ? String.valueOf(row.get("npayNetType")) : null;
+        String mainNetType = (ngenNetType != null && !ngenNetType.trim().isEmpty())
+                ? ngenNetType
+                : (npayNetType != null && !npayNetType.trim().isEmpty() ? npayNetType : null);
+        row.put("mainNetType", mainNetType);
+        if (masterNetType != null && mainNetType != null) {
+            String normMaster = ExcelValidationService.normalizeSolarType(masterNetType);
+            String normMain = ExcelValidationService.normalizeSolarType(mainNetType);
+            if (normMaster != null && normMain != null && !normMaster.equals(normMain)) {
+                row.put("netTypeMatch", Boolean.TRUE.equals(row.get("netTypeApproved")) ? "MATCH" : "MISMATCH");
+            } else {
+                row.put("netTypeMatch", "MATCH");
+            }
+        }
     }
 
     // ── Step 5 merge helpers ─────────────────────────────────────────────

@@ -7,7 +7,8 @@ import {
   TrendingUp, 
   ShieldAlert, 
   LogOut, 
-  Zap 
+  Zap,
+  Archive 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import edlLogo from '../assets/edl_logo.jpg';
@@ -82,6 +83,19 @@ const Sidebar = () => {
               >
                 <FileSpreadsheet size={20} />
                 <span>Upload Billing</span>
+              </NavLink>
+            </li>
+          )}
+
+          {/* Billing Officer & Admin — archived monthly directories */}
+          {(user.role === 'ADMIN' || user.role === 'OFFICER') && (
+            <li>
+              <NavLink 
+                to="/monthly-directory" 
+                className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+              >
+                <Archive size={20} />
+                <span>Monthly Directory</span>
               </NavLink>
             </li>
           )}

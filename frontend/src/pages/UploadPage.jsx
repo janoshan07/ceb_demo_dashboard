@@ -5,7 +5,7 @@ import {
   Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle,
   FileText, Loader, Trash2, Eye,
   Check, RefreshCw, Layers, Zap, User, Info,
-  Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft
+  Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft, Archive
 } from 'lucide-react';
 
 // Helper to automatically derive L-Code based on solarType and tariffType
@@ -1384,6 +1384,11 @@ const UploadPage = () => {
   const [masterComparison, setMasterComparison] = useState(null); // { rows, matchedCount, mismatchCount, notFoundCount }
   const [masterComparisonLoading, setMasterComparisonLoading] = useState(false);
   const [mainCorrections, setMainCorrections] = useState({});
+  // ── Post-Step-6: Monthly Customer Directory archive dialog ──
+  const [showDirectoryNaming, setShowDirectoryNaming] = useState(false);
+  const [directoryName, setDirectoryName] = useState('');
+  const [directoryBillingMonth, setDirectoryBillingMonth] = useState('');
+  const [savingDirectory, setSavingDirectory] = useState(false);
   const [mainExpandedRow, setMainExpandedRow] = useState(null);
   const [comparisonExpandedRow, setComparisonExpandedRow] = useState(null);
   const [editingMainRow, setEditingMainRow] = useState(null);
@@ -2807,6 +2812,26 @@ const UploadPage = () => {
 
   const handleApproveMasterComparison = async () => {
     if (!session?.sessionId) return;
+    // Step 6 approval is ALWAYS allowed. Validation errors, warnings, duplicates and
+    // name / unit-rate / net-type mismatches never block approval — they are saved as-is.
+    // If any records still carry unresolved issues, confirm before archiving them; nothing
+    // is ever auto-removed or auto-corrected.
+    const mc = masterComparison || {};
+    const mcRows = mc.rows || [];
+    const duplicateCount = mcRows.filter(r => r.status === 'DUPLICATE' || r.hasDuplicateSources || r.isDuplicateEntry).length;
+    const issueCount = (mc.errorCount || 0) + (mc.warningCount || 0)
+      + (mc.nameMismatchCount || 0) + (mc.unitRateMismatchCount || 0) + (mc.netTypeMismatchCount || 0)
+      + duplicateCount;
+    if (issueCount > 0) {
+      const proceed = await showConfirm({
+        title: 'Save records with validation issues?',
+        message: 'Some records still contain validation issues. Do you want to continue and save them to the Monthly Customer Directory?',
+        confirmText: 'Continue & Save',
+        cancelText: 'Go Back',
+        type: 'warning'
+      });
+      if (!proceed) return;
+    }
     try {
       setApproving(true);
       const fd = new FormData();
@@ -2816,8 +2841,8 @@ const UploadPage = () => {
       if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
       showToast('✅ Master Data comparison approved!', 'success');
       setSession(prev => ({ ...prev, stage: 'MASTER_COMPARISON_APPROVED' }));
-      // Now finalize
-      handleFinalize(session.sessionId);
+      // Before finalizing, let the user name & archive this month's Customer Directory snapshot.
+      openDirectoryNaming();
     } catch (e) {
       showToast('Approval failed: ' + e.message, 'error');
     } finally {
@@ -3153,6 +3178,63 @@ const UploadPage = () => {
       showToast('Finalization failed: ' + e.message, 'error');
     } finally {
       setApproving(false);
+    }
+  };
+
+  // ── Monthly Customer Directory archive (post Step 6 approval) ──────────────
+  // Derives the billing month label the same way Step 6 does (most frequent reading month),
+  // without touching any comparison/validation logic.
+  const computeBillingMonthLabel = (rows) => {
+    const counts = {};
+    (rows || []).forEach(r => {
+      const d = parseFlexibleDate(r.currReadingDate) || parseFlexibleDate(r.prevReadingDate);
+      if (d) { const k = `${d.getUTCFullYear()}-${d.getUTCMonth()}`; counts[k] = (counts[k] || 0) + 1; }
+    });
+    let best = null;
+    Object.entries(counts).forEach(([k, c]) => { if (!best || c > best[1]) best = [k, c]; });
+    if (!best) { const now = new Date(); return now.toLocaleString('en-US', { month: 'long', year: 'numeric' }); }
+    const [y, m] = best[0].split('-').map(Number);
+    return new Date(Date.UTC(y, m, 1)).toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  };
+
+  const openDirectoryNaming = () => {
+    const label = computeBillingMonthLabel(masterComparison?.rows);
+    setDirectoryBillingMonth(label);
+    setDirectoryName(`${label} Billing`);
+    setShowDirectoryNaming(true);
+  };
+
+  // Archives the approved dataset as a permanent monthly snapshot, then runs the existing
+  // finalize flow unchanged.
+  const handleConfirmSaveDirectory = async () => {
+    const sid = session?.sessionId;
+    if (!sid) return;
+    try {
+      setSavingDirectory(true);
+      const summary = masterComparison ? {
+        totalRecords: masterComparison.totalRecords,
+        validCount: masterComparison.validCount,
+        warningCount: masterComparison.warningCount,
+        errorCount: masterComparison.errorCount,
+        nameMismatchCount: masterComparison.nameMismatchCount,
+        unitRateMismatchCount: masterComparison.unitRateMismatchCount,
+        netTypeMismatchCount: masterComparison.netTypeMismatchCount,
+      } : {};
+      const fd = new FormData();
+      fd.append('datasetName', directoryName || '');
+      fd.append('billingMonth', directoryBillingMonth || '');
+      fd.append('validationSummaryJson', JSON.stringify(summary));
+      fd.append('correctionsJson', JSON.stringify(mainCorrections));
+      const res = await authFetch(`/api/officer/import/${sid}/save-directory`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Failed to save Monthly Directory.', 'error'); setSavingDirectory(false); return; }
+      showToast(`🗂️ "${data.datasetName}" saved to Monthly Customer Directory.`, 'success');
+      setShowDirectoryNaming(false);
+      setSavingDirectory(false);
+      handleFinalize(sid);
+    } catch (e) {
+      showToast('Failed to save Monthly Directory: ' + e.message, 'error');
+      setSavingDirectory(false);
     }
   };
 
@@ -4134,13 +4216,13 @@ const UploadPage = () => {
           <button onClick={() => loadMasterComparison()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <button onClick={handleApproveMasterComparison} disabled={approving || hasErrors}
+          <button onClick={handleApproveMasterComparison} disabled={approving}
             style={{
-              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
-              color: hasErrors ? 'var(--text-muted)' : 'white',
+              background: 'linear-gradient(135deg,#10b981,#059669)',
+              color: 'white',
               fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
-              cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
-              opacity: hasErrors ? 0.6 : 1
+              cursor: approving ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+              opacity: approving ? 0.7 : 1
             }}>
             {approving ? <><Loader size={15} className="animate-spin" /> Finalizing...</> : <><CheckCircle size={15} /> Approve & Finalize Import</>}
           </button>
@@ -5418,6 +5500,32 @@ const UploadPage = () => {
             </div>
 
             <div />
+          </div>
+        </div>
+      )}
+
+      {/* Monthly Customer Directory — name & save dialog (post Step 6 approval) */}
+      {showDirectoryNaming && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '520px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Archive size={20} color="#10b981" /> Save Monthly Customer Directory</h3>
+              <button type="button" onClick={() => { if (!savingDirectory) setShowDirectoryNaming(false); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              The approved dataset for <strong style={{ color: 'white' }}>{directoryBillingMonth}</strong> will be archived permanently as a separate monthly snapshot. Enter or edit a name below.
+            </p>
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 600 }}>Dataset Name</label>
+              <input type="text" autoFocus value={directoryName} onChange={e => setDirectoryName(e.target.value)} placeholder={`${directoryBillingMonth} Billing`} style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.9rem' }} />
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>Leave blank to use the default: <strong>{directoryBillingMonth} Billing</strong></div>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button type="button" disabled={savingDirectory} onClick={() => setShowDirectoryNaming(false)} style={{ flex: 1, padding: '0.7rem', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: savingDirectory ? 'not-allowed' : 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button type="button" disabled={savingDirectory} onClick={handleConfirmSaveDirectory} style={{ flex: 2, padding: '0.7rem', background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none', color: 'white', borderRadius: 10, cursor: savingDirectory ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: savingDirectory ? 0.7 : 1 }}>
+                {savingDirectory ? <><Loader size={15} className="animate-spin" /> Saving & Finalizing...</> : <><Save size={15} /> Save & Finalize Import</>}
+              </button>
+            </div>
           </div>
         </div>
       )}

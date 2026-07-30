@@ -9,6 +9,7 @@ import Dashboard from './pages/Dashboard';
 import CustomerDetails from './pages/CustomerDetails';
 import Reports from './pages/Reports';
 import UploadPage from './pages/UploadPage';
+import MonthlyCustomerDirectory from './pages/MonthlyCustomerDirectory';
 import Admin from './pages/Admin';
 
 const ProtectedLayout = ({ children }) => {
@@ -87,6 +88,17 @@ const App = () => {
             <ProtectedLayout>
               <RoleGuard allowedRoles={['ADMIN', 'OFFICER']}>
                 <UploadPage />
+              </RoleGuard>
+            </ProtectedLayout>
+          } 
+        />
+
+        <Route 
+          path="/monthly-directory" 
+          element={
+            <ProtectedLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'OFFICER']}>
+                <MonthlyCustomerDirectory />
               </RoleGuard>
             </ProtectedLayout>
           } 

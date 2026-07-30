@@ -52,6 +52,42 @@ export const isAccountInvalid = (acc) => {
   return !/^\d+$/.test(clean) || clean.length !== 10;
 };
 
+// ── Agreement Expiry helpers (Step 6 — Agreement Expiry Review) ──────────────
+// Parses the flexible date strings carried on comparison rows (ISO "yyyy-MM-dd"
+// preferred, with day-first "dd/MM/yyyy"-style fallbacks) into a UTC Date, or null.
+export const parseFlexibleDate = (val) => {
+  if (val === undefined || val === null) return null;
+  const s = String(val).trim();
+  if (!s || s === '—') return null;
+  let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})/);
+  if (m) {
+    const a = +m[1], b = +m[2];
+    // Day-first by default; swap when the first segment can only be a month.
+    const [day, month] = b > 12 && a <= 12 ? [b, a] : [a, b];
+    if (month >= 1 && month <= 12) return new Date(Date.UTC(+m[3], month - 1, day));
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+// Agreement Expiry = Agreement Date + 7 years.
+export const computeAgreementExpiry = (agreementDate) => {
+  const d = parseFlexibleDate(agreementDate);
+  if (!d) return null;
+  return new Date(Date.UTC(d.getUTCFullYear() + 7, d.getUTCMonth(), d.getUTCDate()));
+};
+
+// Categorizes an agreement expiry date against the uploaded billing month window:
+// EXPIRED (before the billing month), EXPIRING_SOON (within it), ACTIVE (after it).
+export const agreementExpiryStatus = (expiry, billingMonthStart, billingMonthEnd) => {
+  if (!expiry) return 'UNKNOWN';
+  if (expiry < billingMonthStart) return 'EXPIRED';
+  if (expiry <= billingMonthEnd) return 'EXPIRING_SOON';
+  return 'ACTIVE';
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 //  WIZARD STEP INDICATOR
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1500,6 +1536,18 @@ const UploadPage = () => {
   const [editingMismatch, setEditingMismatch] = useState(null); // { field, accountNo } currently being edited
   const [editMismatchValue, setEditMismatchValue] = useState('');
   const [editMismatchSaving, setEditMismatchSaving] = useState(false);
+  // ── Step 6: Agreement Expiry Review workflow (additional review section only) ──
+  const [agreementExpiryFilter, setAgreementExpiryFilter] = useState('ALL'); // ALL | EXPIRED | EXPIRING_SOON | ACTIVE
+  const [agreementExpirySort, setAgreementExpirySort] = useState({ key: 'expiryDate', dir: 'asc' });
+  const [agreementExpirySelected, setAgreementExpirySelected] = useState([]); // Account Nos selected for bulk actions
+  const [agreementApproved, setAgreementApproved] = useState({}); // accountNo -> { approvedBy, approvedAt }
+  const [agreementRateAudit, setAgreementRateAudit] = useState([]); // Unit Rate edit audit log (old/new/by/time)
+  const [showAgreementAudit, setShowAgreementAudit] = useState(false);
+  const [editingAgreementRate, setEditingAgreementRate] = useState(null); // Account No being edited inline
+  const [agreementRateValue, setAgreementRateValue] = useState('');
+  const [agreementRateSaving, setAgreementRateSaving] = useState(false);
+  const [bulkRateEditOpen, setBulkRateEditOpen] = useState(false);
+  const [bulkRateValue, setBulkRateValue] = useState('');
 
   const reevaluateDuplicates = (rows, stepName) => {
     const groups = {};
@@ -2727,6 +2775,7 @@ const UploadPage = () => {
       setNameMismatchSelected([]);
       setUnitRateMismatchSelected([]);
       setNetTypeMismatchSelected([]);
+      setAgreementExpirySelected([]);
     } catch (e) {
       showToast('Comparison failed: ' + e.message, 'error');
     } finally {
@@ -2947,6 +2996,116 @@ const UploadPage = () => {
     } finally {
       setEditMismatchSaving(false);
     }
+  };
+
+  // ── Step 6: Agreement Expiry Review — Edit Unit Rate (single record) ───────
+  // Saves ONLY the Unit Rate through the existing edit-mismatch-field endpoint (field
+  // 'unitRate'), which persists the value server-side with its own audit entry and re-runs
+  // just that record's unit rate check — no other comparison/validation logic is touched.
+  // The record is updated immediately in the local Step 6 rows and an audit log entry
+  // (old value, new value, edited by, edited time) is kept for the review section.
+  const handleSaveAgreementRate = async (row, newValue, { silent = false } = {}) => {
+    const sessionId = session?.sessionId;
+    if (!sessionId) return false;
+    const acc = String(row.accountNo || '').trim();
+    if (!acc) { if (!silent) showToast('Record has no Account Number — Unit Rate cannot be saved.', 'error'); return false; }
+    const parsed = Number(newValue);
+    if (newValue === '' || newValue == null || isNaN(parsed) || parsed < 0) {
+      if (!silent) showToast('Enter a valid Unit Rate.', 'error');
+      return false;
+    }
+    const oldValue = row.mainUnitRate ?? row.unitRate ?? row.effectiveUnitRate ?? null;
+    try {
+      const fd = new FormData();
+      fd.append('accountNo', acc);
+      fd.append('field', 'unitRate');
+      fd.append('newValue', String(parsed));
+      const res = await authFetch(`/api/officer/import/${sessionId}/edit-mismatch-field`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { if (!silent) showToast(data.message || 'Unit Rate update failed.', 'error'); return false; }
+      const newFlag = data.flag; // 'MATCH' or 'MISMATCH' from the unchanged comparison logic
+      // Patch the record immediately in the local Step 6 rows and refresh the summary counts.
+      setMasterComparison(prev => {
+        if (!prev) return prev;
+        const rows = prev.rows.map(r => {
+          const a = r.accountNo != null ? String(r.accountNo).trim() : null;
+          if (a !== acc) return r;
+          const patched = { ...r, unitRateMatch: newFlag, mainUnitRate: parsed, ngenUnitRate: parsed };
+          if (r.unitRate !== undefined) patched.unitRate = parsed;
+          if (r.effectiveUnitRate !== undefined) patched.effectiveUnitRate = parsed;
+          return patched;
+        });
+        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
+        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+        return { ...prev, rows, unitRateMismatchCount, validCount };
+      });
+      // Keep the Agreement Expiry Review audit log: old value, new value, edited by, edited time.
+      setAgreementRateAudit(prevLog => [{
+        accountNo: acc,
+        refNo: row.refNo || '—',
+        customerName: row.customerName || '—',
+        oldValue: oldValue,
+        newValue: parsed,
+        editedBy: user?.username || 'Unknown',
+        editedAt: new Date().toISOString()
+      }, ...prevLog]);
+      if (!silent) showToast(`✅ Unit Rate updated for Account ${acc}.`, 'success');
+      return true;
+    } catch (e) {
+      if (!silent) showToast('Unit Rate update failed: ' + e.message, 'error');
+      return false;
+    }
+  };
+
+  // ── Step 6: Agreement Expiry Review — inline single edit wrapper ──────────
+  const handleSaveAgreementRateInline = async (row) => {
+    setAgreementRateSaving(true);
+    const ok = await handleSaveAgreementRate(row, agreementRateValue);
+    setAgreementRateSaving(false);
+    if (ok) { setEditingAgreementRate(null); setAgreementRateValue(''); }
+  };
+
+  // ── Step 6: Agreement Expiry Review — Bulk Edit Unit Rate ─────────────────
+  // Applies one Unit Rate to every selected record (each save is persisted and audited
+  // individually through the same single-record path).
+  const handleBulkAgreementRateEdit = async (rows) => {
+    const parsed = Number(bulkRateValue);
+    if (bulkRateValue === '' || isNaN(parsed) || parsed < 0) { showToast('Enter a valid Unit Rate.', 'error'); return; }
+    const targets = rows.filter(r => agreementExpirySelected.includes(String(r.accountNo)));
+    if (targets.length === 0) { showToast('No records selected.', 'error'); return; }
+    setAgreementRateSaving(true);
+    let okCount = 0;
+    for (const row of targets) {
+      // Sequential so each edit gets its own server-side + local audit entry.
+      const ok = await handleSaveAgreementRate(row, parsed, { silent: true });
+      if (ok) okCount++;
+    }
+    setAgreementRateSaving(false);
+    setBulkRateEditOpen(false);
+    setBulkRateValue('');
+    showToast(
+      okCount === targets.length
+        ? `✅ Unit Rate updated for ${okCount} record(s).`
+        : `⚠️ Unit Rate updated for ${okCount} of ${targets.length} record(s).`,
+      okCount === targets.length ? 'success' : 'error'
+    );
+  };
+
+  // ── Step 6: Agreement Expiry Review — Approve (single or bulk) ────────────
+  // Marks the selected agreement records as reviewed for this session (who / when).
+  // This is purely an additional review acknowledgement — it does not alter the
+  // existing merge, validation, mismatch detection or approval logic in any way.
+  const handleApproveAgreements = (accountNos) => {
+    const accts = (accountNos || []).map(a => String(a).trim()).filter(a => a !== '');
+    if (accts.length === 0) { showToast('No Agreement Expiry records selected.', 'error'); return; }
+    const stamp = { approvedBy: user?.username || 'Unknown', approvedAt: new Date().toISOString() };
+    setAgreementApproved(prev => {
+      const copy = { ...prev };
+      accts.forEach(a => { copy[a] = stamp; });
+      return copy;
+    });
+    setAgreementExpirySelected(prev => prev.filter(a => !accts.includes(String(a).trim())));
+    showToast(`✅ ${accts.length} agreement record(s) marked as reviewed.`, 'success');
   };
 
   const handleFinalize = async (sid) => {
@@ -3765,6 +3924,36 @@ const UploadPage = () => {
     const nameMismatchRows = (rows || []).filter(r => r.nameMatch === 'MISMATCH');
     const unitRateMismatchRows = (rows || []).filter(r => r.unitRateMatch === 'MISMATCH');
     const netTypeMismatchRows = (rows || []).filter(r => r.netTypeMatch === 'MISMATCH');
+    // ── Agreement Expiry Review (additional section — no comparison logic changed) ──
+    // Billing month of the current upload = most frequent month among the reading dates.
+    const billingMonthKey = (() => {
+      const counts = {};
+      (rows || []).forEach(r => {
+        const d = parseFlexibleDate(r.currReadingDate) || parseFlexibleDate(r.prevReadingDate);
+        if (d) { const k = `${d.getUTCFullYear()}-${d.getUTCMonth()}`; counts[k] = (counts[k] || 0) + 1; }
+      });
+      let best = null;
+      Object.entries(counts).forEach(([k, c]) => { if (!best || c > best[1]) best = [k, c]; });
+      return best ? best[0] : null;
+    })();
+    const now = new Date();
+    const [bmYear, bmMonth] = billingMonthKey ? billingMonthKey.split('-').map(Number) : [now.getFullYear(), now.getMonth()];
+    const billingMonthStart = new Date(Date.UTC(bmYear, bmMonth, 1));
+    const billingMonthEnd = new Date(Date.UTC(bmYear, bmMonth + 1, 0, 23, 59, 59));
+    const billingMonthLabel = billingMonthStart.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    // Agreement Expiry = Agreement Date + 7 years, categorized against the billing month.
+    const agreementRows = (rows || []).map(r => {
+      const expiry = computeAgreementExpiry(r.agreementDate);
+      return {
+        ...r,
+        agreementExpiryDate: expiry,
+        agreementStatus: agreementExpiryStatus(expiry, billingMonthStart, billingMonthEnd),
+        currentUnitRate: r.mainUnitRate ?? r.unitRate ?? r.effectiveUnitRate ?? null
+      };
+    });
+    const agreementExpiredCount = agreementRows.filter(r => r.agreementStatus === 'EXPIRED').length;
+    const agreementExpiringCount = agreementRows.filter(r => r.agreementStatus === 'EXPIRING_SOON').length;
+    const agreementActiveCount = agreementRows.filter(r => r.agreementStatus === 'ACTIVE').length;
     const filteredRows = (rows || []).filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
       if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH';
@@ -3809,6 +3998,8 @@ const UploadPage = () => {
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<User size={18} />} />
           <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Agreement Expired" value={agreementExpiredCount} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
+          <StatCard label="Agreement Expiring Soon" value={agreementExpiringCount} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
           <StatCard label="Matched" value={matchedCount || 0} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="Mismatched" value={mismatchCount || 0} color={mismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Not Found" value={notFoundCount || 0} color={notFoundCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
@@ -3824,6 +4015,7 @@ const UploadPage = () => {
             { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#f59e0b' },
             { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#f59e0b' },
             { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#f59e0b' },
+            { key: 'AGREEMENT_EXPIRY', label: 'Agreement Expiry Review', count: agreementExpiredCount + agreementExpiringCount, color: agreementExpiredCount > 0 ? '#ef4444' : agreementExpiringCount > 0 ? '#f97316' : '#10b981' },
           ].map(tab => (
             <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
               style={{
@@ -4189,6 +4381,279 @@ const UploadPage = () => {
                     </div>
                   </>
                 )}
+              </div>
+            );
+          })()
+        ) : masterComparisonFilter === 'AGREEMENT_EXPIRY' ? (
+          (() => {
+            const statusMeta = {
+              EXPIRED:       { label: 'Expired',           color: '#ef4444', bg: 'rgba(239,68,68,0.15)',  rowBg: 'rgba(239,68,68,0.07)' },
+              EXPIRING_SOON: { label: 'Expiring Soon',     color: '#f97316', bg: 'rgba(249,115,22,0.15)', rowBg: 'rgba(249,115,22,0.07)' },
+              ACTIVE:        { label: 'Active',            color: '#10b981', bg: 'rgba(16,185,129,0.15)', rowBg: 'rgba(16,185,129,0.04)' },
+              UNKNOWN:       { label: 'No Agreement Date', color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.08)', rowBg: 'transparent' }
+            };
+            const fmtDate = (d) => d ? d.toISOString().slice(0, 10) : '—';
+            const list = agreementRows.filter(r => agreementExpiryFilter === 'ALL' ? true : r.agreementStatus === agreementExpiryFilter);
+            const sortVal = (r, key) => {
+              switch (key) {
+                case 'refNo': return String(r.refNo || '');
+                case 'accountNo': return String(r.accountNo || '');
+                case 'customerName': return String(r.customerName || '').toLowerCase();
+                case 'agreementDate': { const d = parseFlexibleDate(r.agreementDate); return d ? d.getTime() : Infinity; }
+                case 'expiryDate': return r.agreementExpiryDate ? r.agreementExpiryDate.getTime() : Infinity;
+                case 'unitRate': return r.currentUnitRate != null ? Number(r.currentUnitRate) : Infinity;
+                case 'status': return ({ EXPIRED: 0, EXPIRING_SOON: 1, ACTIVE: 2, UNKNOWN: 3 })[r.agreementStatus];
+                default: return 0;
+              }
+            };
+            const sorted = [...list].sort((a, b) => {
+              const va = sortVal(a, agreementExpirySort.key);
+              const vb = sortVal(b, agreementExpirySort.key);
+              const cmp = typeof va === 'string' || typeof vb === 'string'
+                ? String(va).localeCompare(String(vb), undefined, { numeric: true })
+                : (va === vb ? 0 : va < vb ? -1 : 1);
+              return agreementExpirySort.dir === 'asc' ? cmp : -cmp;
+            });
+            const toggleSort = (key) => setAgreementExpirySort(prev =>
+              prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' });
+            const selectableAccts = sorted.filter(r => r.accountNo != null && String(r.accountNo).trim() !== '').map(r => String(r.accountNo));
+            const allSelected = selectableAccts.length > 0 && selectableAccts.every(a => agreementExpirySelected.includes(a));
+            const toggleOne = (acc) => setAgreementExpirySelected(prev => prev.includes(acc) ? prev.filter(a => a !== acc) : [...prev, acc]);
+            const toggleAll = () => setAgreementExpirySelected(allSelected ? [] : selectableAccts);
+            const sortableCols = [
+              { key: 'refNo', label: 'Ref No' },
+              { key: 'accountNo', label: 'Account No' },
+              { key: 'customerName', label: 'Customer Name' },
+              { key: 'agreementDate', label: 'Agreement Date' },
+              { key: 'expiryDate', label: 'Agreement Expiry Date' },
+              { key: 'unitRate', label: 'Current Unit Rate' },
+              { key: 'status', label: 'Status' },
+            ];
+            const subFilters = [
+              { key: 'ALL', label: 'All', count: agreementRows.length, color: 'var(--text-secondary)' },
+              { key: 'EXPIRED', label: 'Expired', count: agreementExpiredCount, color: '#ef4444' },
+              { key: 'EXPIRING_SOON', label: 'Expiring Soon', count: agreementExpiringCount, color: '#f97316' },
+              { key: 'ACTIVE', label: 'Active', count: agreementActiveCount, color: '#10b981' },
+            ];
+            return (
+              <div>
+                <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                  <Clock size={17} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'white' }}>Agreement Expiry Review</strong>
+                    <br />
+                    Agreement Expiry = Agreement Date + 7 years, compared against the uploaded billing month
+                    (<strong style={{ color: 'white' }}>{billingMonthLabel}</strong>).
+                    Records already past 7 years are <span style={{ color: '#ef4444', fontWeight: 700 }}>Expired</span>,
+                    records reaching 7 years within the billing month are <span style={{ color: '#f97316', fontWeight: 700 }}>Expiring Soon</span>,
+                    and the rest are <span style={{ color: '#10b981', fontWeight: 700 }}>Active</span>.
+                    You can update the Unit Rate here — every change is applied immediately and recorded in the audit log below.
+                  </div>
+                </div>
+
+                {/* Sub-filter chips: All / Expired / Expiring Soon / Active */}
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                  {subFilters.map(f => (
+                    <button key={f.key} type="button" onClick={() => setAgreementExpiryFilter(f.key)}
+                      style={{
+                        padding: '0.4rem 0.85rem', borderRadius: 8,
+                        background: agreementExpiryFilter === f.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                        border: agreementExpiryFilter === f.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                        color: agreementExpiryFilter === f.key ? 'white' : 'var(--text-secondary)',
+                        cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                        display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+                      }}>
+                      <span>{f.label}</span>
+                      <span style={{
+                        background: agreementExpiryFilter === f.key ? f.color : 'rgba(255,255,255,0.08)',
+                        color: agreementExpiryFilter === f.key ? 'black' : f.color,
+                        padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
+                      }}>{f.count}</span>
+                    </button>
+                  ))}
+                </div>
+
+                {sorted.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                    <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+                    <div style={{ fontWeight: 600 }}>No agreement records found for this filter.</div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Bulk actions: Select All / Bulk Edit Unit Rate / Bulk Approve */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                        <button type="button" onClick={toggleAll}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                          <Check size={13} /> {allSelected ? 'Clear Selection' : 'Select All'}
+                        </button>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          {agreementExpirySelected.length} of {selectableAccts.length} selected
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                        {bulkRateEditOpen ? (
+                          <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                            <input type="number" step="any" min="0" value={bulkRateValue} autoFocus placeholder="New Unit Rate"
+                              onChange={e => setBulkRateValue(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') handleBulkAgreementRateEdit(sorted); if (e.key === 'Escape') { setBulkRateEditOpen(false); setBulkRateValue(''); } }}
+                              style={{ width: 130, padding: '0.45rem 0.6rem', borderRadius: 8, border: '1px solid rgba(59,130,246,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                            <button type="button" onClick={() => handleBulkAgreementRateEdit(sorted)} disabled={agreementRateSaving}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.45rem 0.85rem', borderRadius: 8, cursor: agreementRateSaving ? 'not-allowed' : 'pointer', fontSize: '0.76rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', opacity: agreementRateSaving ? 0.6 : 1 }}>
+                              {agreementRateSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Apply to Selected ({agreementExpirySelected.length})
+                            </button>
+                            <button type="button" onClick={() => { setBulkRateEditOpen(false); setBulkRateValue(''); }} disabled={agreementRateSaving}
+                              style={{ padding: '0.45rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button type="button" onClick={() => setBulkRateEditOpen(true)} disabled={agreementExpirySelected.length === 0}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.95rem', borderRadius: 8, cursor: agreementExpirySelected.length === 0 ? 'not-allowed' : 'pointer', fontSize: '0.78rem', fontWeight: 600, background: agreementExpirySelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: agreementExpirySelected.length === 0 ? 'var(--text-muted)' : '#3b82f6', opacity: agreementExpirySelected.length === 0 ? 0.6 : 1 }}>
+                            <Pencil size={13} /> Bulk Edit Unit Rate
+                          </button>
+                        )}
+                        <button type="button" onClick={() => handleApproveAgreements(agreementExpirySelected)}
+                          disabled={agreementExpirySelected.length === 0}
+                          style={{
+                            background: agreementExpirySelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                            color: agreementExpirySelected.length === 0 ? 'var(--text-muted)' : 'white',
+                            fontWeight: 600, padding: '0.5rem 1.15rem', borderRadius: 10, border: 'none',
+                            cursor: agreementExpirySelected.length === 0 ? 'not-allowed' : 'pointer',
+                            display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem',
+                            opacity: agreementExpirySelected.length === 0 ? 0.6 : 1
+                          }}>
+                          <CheckCircle size={14} /> Bulk Approve ({agreementExpirySelected.length})
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1rem' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
+                              <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                            </th>
+                            {sortableCols.map(col => (
+                              <th key={col.key} onClick={() => toggleSort(col.key)} title="Click to sort"
+                                style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: agreementExpirySort.key === col.key ? 'white' : 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap', cursor: 'pointer', userSelect: 'none' }}>
+                                {col.label} {agreementExpirySort.key === col.key ? (agreementExpirySort.dir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.35 }}>⇅</span>}
+                              </th>
+                            ))}
+                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sorted.map((row, i) => {
+                            const acc = row.accountNo != null ? String(row.accountNo) : '';
+                            const meta = statusMeta[row.agreementStatus];
+                            const checked = acc !== '' && agreementExpirySelected.includes(acc);
+                            const approved = acc !== '' ? agreementApproved[acc] : null;
+                            const isEditing = editingAgreementRate === acc && acc !== '';
+                            return (
+                              <tr key={row.rowNum ?? acc ?? i}
+                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', borderLeft: `3px solid ${row.agreementStatus === 'UNKNOWN' ? 'transparent' : meta.color}`, background: checked ? 'rgba(255,255,255,0.05)' : meta.rowBg }}>
+                                <td style={{ padding: '0.5rem 0.75rem' }}>
+                                  <input type="checkbox" checked={checked} disabled={acc === ''} onChange={() => toggleOne(acc)} style={{ cursor: acc === '' ? 'not-allowed' : 'pointer', width: 15, height: 15 }} />
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.agreementDate || '—'}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontWeight: 600, color: meta.color }}>{fmtDate(row.agreementExpiryDate)}</td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>
+                                  {isEditing ? (
+                                    <input type="number" step="any" min="0" value={agreementRateValue} autoFocus onChange={e => setAgreementRateValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleSaveAgreementRateInline(row); if (e.key === 'Escape') { setEditingAgreementRate(null); setAgreementRateValue(''); } }}
+                                      style={{ width: 110, padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(59,130,246,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                                  ) : (row.currentUnitRate ?? '—')}
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: meta.bg, color: meta.color }}>{meta.label}</span>
+                                  {approved && (
+                                    <div style={{ fontSize: '0.62rem', color: '#10b981', marginTop: '0.2rem' }} title={`Approved by ${approved.approvedBy} on ${new Date(approved.approvedAt).toLocaleString()}`}>
+                                      ✓ Reviewed by {approved.approvedBy}
+                                    </div>
+                                  )}
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                  {isEditing ? (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" onClick={() => handleSaveAgreementRateInline(row)} disabled={agreementRateSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: agreementRateSaving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: agreementRateSaving ? 0.6 : 1 }}>
+                                        {agreementRateSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
+                                      </button>
+                                      <button type="button" onClick={() => { setEditingAgreementRate(null); setAgreementRateValue(''); }} disabled={agreementRateSaving}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                      <button type="button" disabled={acc === '' || agreementRateSaving}
+                                        onClick={() => { setEditingAgreementRate(acc); setAgreementRateValue(row.currentUnitRate ?? ''); }}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: acc === '' ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', opacity: acc === '' ? 0.5 : 1 }}>
+                                        <Pencil size={12} /> Edit Unit Rate
+                                      </button>
+                                      {!approved && (
+                                        <button type="button" disabled={acc === ''} onClick={() => handleApproveAgreements([acc])}
+                                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: acc === '' ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: acc === '' ? 0.5 : 1 }}>
+                                          <CheckCircle size={12} /> Approve
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                {/* Unit Rate edit audit log (old value, new value, edited by, edited time) */}
+                <div style={{ marginBottom: '1.5rem' }}>
+                  <button type="button" onClick={() => setShowAgreementAudit(!showAgreementAudit)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(59,130,246,0.06)', border: '1px solid rgba(59,130,246,0.18)', borderRadius: 10, padding: '0.7rem 1.2rem', cursor: 'pointer', color: '#3b82f6', fontWeight: 600, fontSize: '0.84rem', width: '100%', justifyContent: 'space-between' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Clock size={15} /> Unit Rate Edit Audit Log ({agreementRateAudit.length})
+                    </span>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{showAgreementAudit ? '▲ Hide' : '▼ Show'}</span>
+                  </button>
+                  {showAgreementAudit && (
+                    <div style={{ border: '1px solid rgba(59,130,246,0.12)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', background: 'rgba(20,20,25,0.4)' }}>
+                      {agreementRateAudit.length === 0 ? (
+                        <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>No Unit Rate edits recorded in this session yet.</div>
+                      ) : (
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
+                          <thead>
+                            <tr style={{ background: 'rgba(59,130,246,0.05)', borderBottom: '1px solid rgba(59,130,246,0.1)' }}>
+                              {['Ref No', 'Account No', 'Customer Name', 'Old Unit Rate', 'New Unit Rate', 'Edited By', 'Edited Time'].map(h => (
+                                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#3b82f6', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {agreementRateAudit.map((entry, i) => (
+                              <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{entry.refNo}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{entry.accountNo}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>{entry.customerName}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#f87171' }}>{entry.oldValue ?? '—'}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#34d399', fontWeight: 700 }}>{entry.newValue}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>{entry.editedBy}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{new Date(entry.editedAt).toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()

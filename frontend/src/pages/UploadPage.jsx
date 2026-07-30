@@ -1385,8 +1385,6 @@ const UploadPage = () => {
   const [masterComparisonLoading, setMasterComparisonLoading] = useState(false);
   const [mainCorrections, setMainCorrections] = useState({});
   const [mainExpandedRow, setMainExpandedRow] = useState(null);
-  // ── Step 5: grouped Duplicate review UI (display-only enhancement) ──
-  const [dupExpandedGroups, setDupExpandedGroups] = useState(() => new Set()); // Account Nos expanded in the grouped duplicate view
   const [comparisonExpandedRow, setComparisonExpandedRow] = useState(null);
   const [editingMainRow, setEditingMainRow] = useState(null);
   const [editingMainFields, setEditingMainFields] = useState({});
@@ -2769,13 +2767,6 @@ const UploadPage = () => {
     await revalidateWithCorrections(next, 'Kept the preferred record; other duplicate occurrences removed.');
   };
 
-  const toggleDupGroup = (acc) => setDupExpandedGroups(prev => {
-    const next = new Set(prev);
-    if (next.has(acc)) next.delete(acc); else next.add(acc);
-    return next;
-  });
-
-
   // ── Step 6: Master Data Comparison ──────────────────────────────────────
   const loadMasterComparison = async (sid) => {
     const sessionId = sid || session?.sessionId;
@@ -3626,15 +3617,35 @@ const UploadPage = () => {
         </div>
       );
     }
-    const { rows, totalRecords, errorCount, warningCount, validCount, duplicateCount, rejectedCount } = mainDataset;
+    const { rows, errorCount, warningCount, validCount, rejectedCount } = mainDataset;
     // Only real ERRORS block approval; duplicates, warnings and auto-rejected records do not.
     const hasErrors = (errorCount || 0) > 0;
-    const filteredRows = (rows || []).filter(r => {
+
+    // ── Duplicate folding (display-only) ──────────────────────────────────────
+    // Every duplicate source record (isDuplicateEntry) is grouped under its single merged "main"
+    // record by Account No, so the Main Dataset shows exactly ONE row per account. Duplicates are
+    // valid records — they are surfaced on demand inside the main row's expandable "Duplicate
+    // Details" panel and never block approval. No merge/validation/approval logic is changed.
+    const dupEntriesByAcc = {};
+    (rows || []).forEach(r => {
+      if (r.isDuplicateEntry) {
+        const acc = String(r.accountNo ?? '—');
+        (dupEntriesByAcc[acc] = dupEntriesByAcc[acc] || []).push(r);
+      }
+    });
+    const dupCountFor = (row) => (dupEntriesByAcc[String(row.accountNo ?? '—')] || []).length;
+    const rowHasDuplicates = (row) => !row.isDuplicateEntry && dupCountFor(row) > 0;
+    // Main records = merged primary + rejected rows only (never the review-only duplicate entries).
+    const mainRecords = (rows || []).filter(r => !r.isDuplicateEntry);
+    const mainRecordCount = mainRecords.length;
+    const duplicateAccountCount = mainRecords.filter(rowHasDuplicates).length;
+
+    const filteredRows = mainRecords.filter(r => {
       if (mainDatasetFilter === 'ALL') return true;
       if (mainDatasetFilter === 'VALID') return r.status === 'VALID';
       if (mainDatasetFilter === 'ERROR') return r.status === 'ERROR';
       if (mainDatasetFilter === 'WARNING') return r.status === 'WARNING';
-      if (mainDatasetFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
+      if (mainDatasetFilter === 'DUPLICATE') return rowHasDuplicates(r);
       if (mainDatasetFilter === 'REJECTED') return r.status === 'REJECTED';
       return true;
     });
@@ -3666,6 +3677,112 @@ const UploadPage = () => {
       return <span>{val}{srcTag(m.source === 'BOTH' ? 'NGEN / NPAY' : m.source)}</span>;
     };
     const renderPlain = (v) => (v == null || String(v).trim() === '' ? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span> : v);
+
+    // ── Duplicate Details panel (display-only) ────────────────────────────────
+    // Rendered inside a main record's expanded row. Lists the account's duplicate source records,
+    // hiding fields identical across them and surfacing only the differing ones, with Edit /
+    // Delete / Keep-Preferred actions. If every occurrence is identical it collapses to a single
+    // summarized view. Reuses existing correction/revalidate handlers only.
+    const dupNorm = (v) => (v == null || String(v).trim() === '') ? '∅' : String(v).trim();
+    const dupMergedRaw = (m) => {
+      if (!m || m.source === 'NONE') return null;
+      if (m.mismatch) return `NGEN:${m.ngen}|NPAY:${m.npay}`;
+      return String(m.display != null ? m.display : (m.ngen != null ? m.ngen : m.npay));
+    };
+    const dupFieldDefs = [
+      { key: 'sourceFile',     label: 'Source',          raw: r => dupNorm(r.sourceFile) + (r.sourceRowNum != null ? `#${r.sourceRowNum}` : ''),
+        render: r => r.sourceFile ? <span>{r.sourceFile}{r.sourceRowNum != null ? ` · row ${r.sourceRowNum}` : ''}</span> : '—' },
+      { key: 'prevReadingDate', label: 'Prev Reading',    raw: r => dupNorm(r.prevReadingDate), render: r => renderPlain(r.prevReadingDate) },
+      { key: 'currReadingDate', label: 'Curr Reading',    raw: r => dupNorm(r.currReadingDate), render: r => renderPlain(r.currReadingDate) },
+      { key: 'netType',         label: 'Net Type',        raw: r => dupNorm(r.ngenNetType ?? r.npayNetType ?? (r.mergedNetType && r.mergedNetType.display)), render: r => renderMergedType(r.mergedNetType) },
+      { key: 'kwhImport',       label: 'kWh Import',      raw: r => dupNorm(r.kwhImport), render: r => r.kwhImport ?? '—' },
+      { key: 'kwhExport',       label: 'kWh Export',      raw: r => dupNorm(r.kwhExport), render: r => r.kwhExport ?? '—' },
+      { key: 'kwhSales',        label: 'kWh Sales',       raw: r => dupNorm(r.kwhSales), render: r => r.kwhSales ?? '—' },
+      { key: 'unitRate',        label: 'Unit Rate',       raw: r => dupNorm(r.ngenUnitRate ?? r.unitRate), render: r => r.ngenUnitRate ?? r.unitRate ?? '—' },
+      { key: 'energyPurchase',  label: 'Energy Purchase', raw: r => dupNorm(dupMergedRaw(r.mergedEnergyPurchase)), render: r => renderMergedNum(r.mergedEnergyPurchase) },
+      { key: 'billSetOff',      label: 'Bill Set Off',    raw: r => dupNorm(dupMergedRaw(r.mergedBillSetOff)), render: r => renderMergedNum(r.mergedBillSetOff) },
+      { key: 'retentionMoney',  label: 'Retention',       raw: r => dupNorm(dupMergedRaw(r.mergedRetentionMoney)), render: r => renderMergedNum(r.mergedRetentionMoney) },
+      { key: 'payment',         label: 'Payment',         raw: r => dupNorm(dupMergedRaw(r.mergedPayment)), render: r => renderMergedNum(r.mergedPayment) },
+    ];
+    const dupTh = { padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+    const dupThDiff = { ...dupTh, color: '#f59e0b' };
+    const dupBtn = (bg, bd, col) => ({ padding: '0.22rem 0.5rem', background: bg, border: `1px solid ${bd}`, color: col, borderRadius: 5, fontSize: '0.68rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem', opacity: mainRevalidating ? 0.6 : 1 });
+    const renderDuplicateDetails = (primaryRow, members) => {
+      const differing = dupFieldDefs.filter(f => new Set(members.map(f.raw)).size > 1);
+      const identical = dupFieldDefs.filter(f => new Set(members.map(f.raw)).size === 1);
+      const allIdentical = differing.length === 0;
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginTop: '0.25rem', paddingTop: '0.6rem', borderTop: '1px dashed rgba(236,72,153,0.3)' }}>
+          <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#ec4899', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+            <AlertTriangle size={13} /> Duplicate Details — {members.length} source record(s) for Account No {primaryRow.accountNo}
+          </div>
+          {allIdentical ? (
+            <>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                <Info size={13} color="#ec4899" /> All {members.length} duplicate records are identical (aside from repeated monthly/payment entries). One summarized record is kept in the Main Dataset.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.6rem' }}>
+                {dupFieldDefs.map(f => (
+                  <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                    <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
+                    <span style={{ fontSize: '0.78rem' }}>{f.render(members[0])}</span>
+                  </div>
+                ))}
+              </div>
+              <div>
+                <button onClick={() => handleKeepPreferredDuplicate(members, members[0])} disabled={mainRevalidating}
+                  style={dupBtn('rgba(16,185,129,0.15)', 'rgba(16,185,129,0.3)', '#10b981')}>
+                  <Check size={12} /> Keep One & Remove {members.length - 1} Duplicate(s)
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              {identical.length > 0 && (
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  <strong style={{ color: 'var(--text-secondary)' }}>Identical across all records (hidden):</strong> {identical.map(f => f.label).join(', ')}
+                </div>
+              )}
+              <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                      <th style={dupTh}>Record</th>
+                      {differing.map(f => (<th key={f.key} style={dupThDiff}>{f.label}</th>))}
+                      <th style={dupTh}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {members.map((m, mi) => (
+                      <tr key={m.rowNum ?? mi} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: mi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{mi + 1}{m.sourceFile ? ` · ${m.sourceFile}` : ''}</td>
+                        {differing.map(f => (<td key={f.key} style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap' }}>{f.render(m)}</td>))}
+                        <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            <button onClick={() => handleMainEditRow(m)} disabled={mainRevalidating} title="Edit this duplicate source record"
+                              style={dupBtn('rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)', '#818cf8')}>
+                              <Pencil size={11} /> Edit
+                            </button>
+                            <button onClick={() => handleKeepPreferredDuplicate(members, m)} disabled={mainRevalidating} title="Keep this record, remove the other duplicates"
+                              style={dupBtn('rgba(16,185,129,0.15)', 'rgba(16,185,129,0.3)', '#10b981')}>
+                              <Check size={11} /> Keep
+                            </button>
+                            <button onClick={() => handleMainDeleteRow(m)} disabled={mainRevalidating} title="Delete this duplicate record"
+                              style={dupBtn('rgba(239,68,68,0.12)', 'rgba(239,68,68,0.3)', '#f87171')}>
+                              <Trash2 size={11} /> Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    };
     return (
       <div>
         <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
@@ -3700,10 +3817,10 @@ const UploadPage = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <StatCard label="Total Records" value={totalRecords} color="white" icon={<FileText size={18} />} />
+          <StatCard label="Total Records" value={mainRecordCount} color="white" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-          <StatCard label="Duplicates" value={duplicateCount || 0} color={(duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Duplicate Accounts" value={duplicateAccountCount || 0} color="#ec4899" icon={<Layers size={18} />} />
           <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           <StatCard label="Rejected" value={rejectedCount || 0} color={(rejectedCount || 0) > 0 ? '#f43f5e' : '#10b981'} icon={<XCircle size={18} />} />
         </div>
@@ -3718,11 +3835,11 @@ const UploadPage = () => {
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
           {[
-            { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
+            { key: 'ALL', label: 'All Records', count: mainRecordCount || 0, color: 'var(--text-secondary)' },
             { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
             { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
             { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
-            { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#ec4899' },
+            { key: 'DUPLICATE', label: 'Duplicate Accounts', count: duplicateAccountCount || 0, color: '#ec4899' },
             { key: 'REJECTED', label: 'Rejected', count: rejectedCount || 0, color: '#f43f5e' },
           ].map(tab => (
             <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
@@ -3749,168 +3866,6 @@ const UploadPage = () => {
             <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
             <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
           </div>
-        ) : mainDatasetFilter === 'DUPLICATE' ? (
-          (() => {
-            // ── Grouped Duplicate review (display-only) ───────────────────────
-            // Groups every duplicate occurrence by Account No so each account shows as a single
-            // summary row (Name = NPAY Name, count, sources, status). Expanding a group reveals
-            // only the fields that differ between the occurrences; identical fields are hidden,
-            // and fully-identical groups collapse to one summarized row. Uses existing data only.
-            const norm = (v) => (v == null || String(v).trim() === '') ? '∅' : String(v).trim();
-            const mergedRaw = (m) => {
-              if (!m || m.source === 'NONE') return null;
-              if (m.mismatch) return `NGEN:${m.ngen}|NPAY:${m.npay}`;
-              return String(m.display != null ? m.display : (m.ngen != null ? m.ngen : m.npay));
-            };
-            const dupFields = [
-              { key: 'sourceFile',     label: 'Source',          raw: r => norm(r.sourceFile) + (r.sourceRowNum != null ? `#${r.sourceRowNum}` : ''),
-                render: r => r.sourceFile ? <span>{r.sourceFile}{r.sourceRowNum != null ? ` · row ${r.sourceRowNum}` : ''}</span> : '—' },
-              { key: 'prevReadingDate', label: 'Prev Reading',    raw: r => norm(r.prevReadingDate), render: r => renderPlain(r.prevReadingDate) },
-              { key: 'currReadingDate', label: 'Curr Reading',    raw: r => norm(r.currReadingDate), render: r => renderPlain(r.currReadingDate) },
-              { key: 'netType',         label: 'Net Type',        raw: r => norm(r.ngenNetType ?? r.npayNetType ?? (r.mergedNetType && r.mergedNetType.display)), render: r => renderMergedType(r.mergedNetType) },
-              { key: 'kwhImport',       label: 'kWh Import',      raw: r => norm(r.kwhImport), render: r => r.kwhImport ?? '—' },
-              { key: 'kwhExport',       label: 'kWh Export',      raw: r => norm(r.kwhExport), render: r => r.kwhExport ?? '—' },
-              { key: 'kwhSales',        label: 'kWh Sales',       raw: r => norm(r.kwhSales), render: r => r.kwhSales ?? '—' },
-              { key: 'unitRate',        label: 'Unit Rate',       raw: r => norm(r.ngenUnitRate ?? r.unitRate), render: r => r.ngenUnitRate ?? r.unitRate ?? '—' },
-              { key: 'energyPurchase',  label: 'Energy Purchase', raw: r => norm(mergedRaw(r.mergedEnergyPurchase)), render: r => renderMergedNum(r.mergedEnergyPurchase) },
-              { key: 'billSetOff',      label: 'Bill Set Off',    raw: r => norm(mergedRaw(r.mergedBillSetOff)), render: r => renderMergedNum(r.mergedBillSetOff) },
-              { key: 'retentionMoney',  label: 'Retention',       raw: r => norm(mergedRaw(r.mergedRetentionMoney)), render: r => renderMergedNum(r.mergedRetentionMoney) },
-              { key: 'payment',         label: 'Payment',         raw: r => norm(mergedRaw(r.mergedPayment)), render: r => renderMergedNum(r.mergedPayment) },
-            ];
-            // Group duplicate occurrences by Account No (preserving first-seen order).
-            const order = [];
-            const groups = {};
-            filteredRows.forEach(r => {
-              const acc = String(r.accountNo ?? '—');
-              if (!groups[acc]) { groups[acc] = []; order.push(acc); }
-              groups[acc].push(r);
-            });
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1.5rem' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <AlertTriangle size={13} color="#ec4899" />
-                  {order.length} duplicate Account No group(s) · {filteredRows.length} total occurrence(s). Click a group to review differing fields.
-                </div>
-                {order.map(acc => {
-                  const members = groups[acc];
-                  const expanded = dupExpandedGroups.has(acc);
-                  const name = (members.find(m => m.npayName && String(m.npayName).trim() !== '') || {}).npayName || '—';
-                  const sources = [...new Set(members.map(m => m.sourceFile).filter(Boolean))];
-                  const differing = dupFields.filter(f => new Set(members.map(f.raw)).size > 1);
-                  const allIdentical = differing.length === 0;
-                  return (
-                    <div key={acc} style={{ border: '1px solid rgba(236,72,153,0.25)', borderRadius: 12, overflow: 'hidden', background: 'rgba(236,72,153,0.03)' }}>
-                      {/* Group summary row */}
-                      <div onClick={() => toggleDupGroup(acc)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '1rem', padding: '0.75rem 1rem', cursor: 'pointer', flexWrap: 'wrap', background: expanded ? 'rgba(236,72,153,0.08)' : 'transparent' }}>
-                        <span style={{ color: '#ec4899', fontWeight: 700, fontSize: '0.8rem', width: 14 }}>{expanded ? '▼' : '▶'}</span>
-                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 130 }}>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Account No</span>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{acc}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 150, flex: 1 }}>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Name (NPAY)</span>
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderPlain(name)}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Duplicates</span>
-                          <span style={{ fontWeight: 700, color: '#ec4899' }}>{members.length}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 110 }}>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Sources</span>
-                          <span style={{ fontSize: '0.76rem', fontWeight: 600 }}>{sources.length ? sources.join(' / ') : '—'}</span>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>Status</span>
-                          <span style={{ padding: '0.1rem 0.5rem', borderRadius: 20, fontSize: '0.66rem', fontWeight: 700, background: 'rgba(236,72,153,0.15)', color: '#ec4899', alignSelf: 'flex-start' }}>
-                            {allIdentical ? 'DUPLICATE · Identical' : 'DUPLICATE · Differs'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Expanded body */}
-                      {expanded && (
-                        <div style={{ borderTop: '1px solid rgba(236,72,153,0.2)', padding: '0.85rem 1rem', background: 'rgba(0,0,0,0.15)' }}>
-                          {allIdentical ? (
-                            <div>
-                              <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginBottom: '0.6rem', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                                <Info size={13} color="#ec4899" />
-                                All {members.length} occurrences are identical (aside from repeated monthly/payment entries). Showing one summarized record.
-                              </div>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.6rem', marginBottom: '0.75rem' }}>
-                                {dupFields.map(f => (
-                                  <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                                    <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
-                                    <span style={{ fontSize: '0.78rem' }}>{f.render(members[0])}</span>
-                                  </div>
-                                ))}
-                              </div>
-                              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                                <button onClick={() => handleKeepPreferredDuplicate(members, members[0])} disabled={mainRevalidating}
-                                  style={{ padding: '0.3rem 0.7rem', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: 6, fontSize: '0.72rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', opacity: mainRevalidating ? 0.6 : 1 }}>
-                                  <Check size={12} /> Keep One & Remove {members.length - 1} Duplicate(s)
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              {/* Identical (hidden) fields summary */}
-                              {(() => {
-                                const identical = dupFields.filter(f => new Set(members.map(f.raw)).size === 1);
-                                if (identical.length === 0) return null;
-                                return (
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
-                                    <strong style={{ color: 'var(--text-secondary)' }}>Identical across all records (hidden):</strong> {identical.map(f => f.label).join(', ')}
-                                  </div>
-                                );
-                              })()}
-                              <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
-                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem' }}>
-                                  <thead>
-                                    <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                                      <th style={{ padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Record</th>
-                                      {differing.map(f => (
-                                        <th key={f.key} style={{ padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: '#f59e0b', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{f.label}</th>
-                                      ))}
-                                      <th style={{ padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Actions</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {members.map((m, mi) => (
-                                      <tr key={m.rowNum ?? mi} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: mi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                                        <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                                          #{mi + 1}{m.sourceFile ? ` · ${m.sourceFile}` : ''}
-                                        </td>
-                                        {differing.map(f => (
-                                          <td key={f.key} style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap' }}>{f.render(m)}</td>
-                                        ))}
-                                        <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap' }}>
-                                          <div style={{ display: 'flex', gap: '0.35rem' }}>
-                                            <button onClick={() => handleKeepPreferredDuplicate(members, m)} disabled={mainRevalidating} title="Keep this record, remove the other duplicates"
-                                              style={{ padding: '0.22rem 0.5rem', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: 5, fontSize: '0.68rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem', opacity: mainRevalidating ? 0.6 : 1 }}>
-                                              <Check size={11} /> Keep
-                                            </button>
-                                            <button onClick={() => handleMainDeleteRow(m)} disabled={mainRevalidating} title="Delete this duplicate record"
-                                              style={{ padding: '0.22rem 0.5rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: 5, fontSize: '0.68rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem', opacity: mainRevalidating ? 0.6 : 1 }}>
-                                              <Trash2 size={11} /> Delete
-                                            </button>
-                                          </div>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()
         ) : (
         <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
@@ -3925,7 +3880,8 @@ const UploadPage = () => {
               {filteredRows.map((row, i) => {
                 const rowKey = row.rowNum ?? row.accountNo ?? i;
                 const expanded = mainExpandedRow === rowKey;
-                const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.rejectionReason;
+                const dupMembers = rowHasDuplicates(row) ? dupEntriesByAcc[String(row.accountNo ?? '—')] : null;
+                const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.rejectionReason || !!dupMembers;
                 return (
                 <React.Fragment key={rowKey}>
                 <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
@@ -3957,6 +3913,12 @@ const UploadPage = () => {
                       background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
                       color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
                     }}>{row.status}</span>
+                    {dupMembers && (
+                      <span style={{
+                        marginLeft: '0.35rem', padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
+                        background: 'rgba(236,72,153,0.15)', color: '#ec4899', display: 'inline-flex', alignItems: 'center', gap: '0.25rem'
+                      }}><Layers size={11} /> Duplicate (x{dupCountFor(row)})</span>
+                    )}
                   </td>
                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
                     <div style={{ display: 'flex', gap: '0.35rem' }}>
@@ -4010,6 +3972,7 @@ const UploadPage = () => {
                             ))}
                           </div>
                         )}
+                        {dupMembers && renderDuplicateDetails(row, dupMembers)}
                       </div>
                     </td>
                   </tr>

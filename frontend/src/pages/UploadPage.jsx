@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
@@ -1381,6 +1381,7 @@ const UploadPage = () => {
   // Bound to the import session at Step 1 approval so the final dataset is saved only to
   // that Month + Division slot; restored from the active session after a page refresh.
   const location = useLocation();
+  const navigate = useNavigate();
   const [billingContext, setBillingContext] = useState(() => {
     const p = new URLSearchParams(location.search);
     return { month: p.get('month') || '', division: p.get('division') || '' };
@@ -5447,6 +5448,13 @@ const UploadPage = () => {
           )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <button onClick={() => navigate('/monthly-directory')} title="Back to the Monthly Customer Directory" style={{
+            padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+            background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)',
+            color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem'
+          }}>
+            <ArrowLeft size={14} /> Customer Directory
+          </button>
           <button onClick={() => { setActiveView('wizard'); }} style={{
             padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
             background: activeView === 'wizard' ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',

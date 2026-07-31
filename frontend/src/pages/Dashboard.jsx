@@ -709,7 +709,7 @@ const Dashboard = () => {
           <div className="card">
             <div className="panel-header">
               <h2 className="panel-title">Recent Billing Imports</h2>
-              <Link to="/upload" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: '600' }}>Manage Uploads</Link>
+              <Link to="/monthly-directory" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: '600' }}>Customer Directory</Link>
             </div>
 
             <div className="table-container">
@@ -756,12 +756,12 @@ const Dashboard = () => {
           <div className="card">
             <div className="panel-header">
               <h2 className="panel-title">Operations Control</h2>
-              <Link to="/upload" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>New Ingestion</Link>
+              <Link to="/monthly-directory" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>New Ingestion</Link>
             </div>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Upload energy billing sheets. Ensure files contain correct divisional segments.
+                Upload energy billing sheets from the Monthly Customer Directory — pick a Billing Month, then a division, and start the upload there.
               </p>
               
               {stats?.pendingApprovalsCount > 0 && (

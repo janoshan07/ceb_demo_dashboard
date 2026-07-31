@@ -3,7 +3,6 @@ import { NavLink } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
-  FileSpreadsheet, 
   TrendingUp, 
   ShieldAlert, 
   LogOut, 
@@ -74,20 +73,8 @@ const Sidebar = () => {
             </>
           )}
 
-          {/* Billing Officer & Admin can Upload Excel */}
-          {(user.role === 'ADMIN' || user.role === 'OFFICER') && (
-            <li>
-              <NavLink 
-                to="/upload" 
-                className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-              >
-                <FileSpreadsheet size={20} />
-                <span>Upload Billing</span>
-              </NavLink>
-            </li>
-          )}
-
-          {/* Billing Officer & Admin — archived monthly directories */}
+          {/* Billing Officer & Admin — single entry point for all billing uploads:
+              Monthly Directory → Billing Month → Division → Upload Billing */}
           {(user.role === 'ADMIN' || user.role === 'OFFICER') && (
             <li>
               <NavLink 

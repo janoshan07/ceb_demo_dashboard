@@ -138,6 +138,7 @@ const STATUS_FILTERS = [
   { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185' },
   { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24' },
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa' },
+  { key: 'CORRECTED', label: 'Corrections', cardLabel: 'Corrections', color: '#2dd4bf' },
   { key: 'REJECTED', label: 'Rejected', cardLabel: 'Rejected', color: '#f87171', card: false },
   { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired Agreements', color: '#ef4444' },
   { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316' },
@@ -578,6 +579,7 @@ const MonthlyCustomerDirectory = () => {
       case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH';
       case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH';
       case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH';
+      case 'CORRECTED': return row.step6Corrected === true || row.correctedInDirectory === true;
       case 'EXPIRED': return rowExpiry(row) === 'EXPIRED';
       case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON';
       default: return String(row.status || '').toUpperCase() === key;

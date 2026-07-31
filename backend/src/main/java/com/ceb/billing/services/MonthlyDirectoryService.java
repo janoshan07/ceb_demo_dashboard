@@ -67,7 +67,9 @@ public class MonthlyDirectoryService {
      * COMPLETE Step 6 dataset exactly as displayed — including master-only rows, error/warning/
      * duplicate/mismatch records and every merged field — with any Step 6 corrections overlaid
      * (only rows the user explicitly deleted in Step 6 are skipped, as they are no longer shown).
-     * Records are stored sorted by Account No ascending. Finalize logic is not changed.
+     * Validation results are carried over as-is and never recalculated. Rows changed in Step 6 are
+     * flagged {@code step6Corrected} and logged in the snapshot's audit history so corrections stay
+     * visible in the directory. Records are stored sorted by Account No ascending.
      */
     @Transactional
     public Map<String, Object> createSnapshot(Long sessionId, String username, String datasetName,
@@ -80,6 +82,7 @@ public class MonthlyDirectoryService {
         }
 
         List<Map<String, Object>> finalData = new ArrayList<>();
+        Map<Map<String, Object>, Object[]> correctionInfo = new IdentityHashMap<>(); // finalRow -> {corr, statusBefore}
         for (Map<String, Object> row : mainDataset) {
             String accountNo = row.get("accountNo") != null ? String.valueOf(row.get("accountNo")) : null;
             String rowNumStr = String.valueOf(row.get("rowNum"));
@@ -94,7 +97,11 @@ public class MonthlyDirectoryService {
             }
 
             Map<String, Object> finalRow = new LinkedHashMap<>(row);
-            if (corr != null) finalRow.putAll(corr);
+            if (corr != null) {
+                finalRow.putAll(corr);
+                finalRow.put("step6Corrected", true);
+                correctionInfo.put(finalRow, new Object[]{corr, strVal(row.get("status"))});
+            }
             finalData.add(finalRow);
         }
 
@@ -114,9 +121,23 @@ public class MonthlyDirectoryService {
         snap.setStatus(isAdmin ? "APPROVED" : "PENDING_APPROVAL");
         snap.setSessionId(sessionId);
         snap.setFinalDataJson(mapper.writeValueAsString(finalData));
+        // Prefer the Step 6-provided summary (exact saved results); fall back to counting the stored rows.
         snap.setValidationSummary(validationSummaryJson != null && !validationSummaryJson.trim().isEmpty()
                 ? validationSummaryJson
                 : mapper.writeValueAsString(computeSummary(finalData)));
+
+        // Step 6 corrections become the snapshot's initial audit history entries, so the
+        // "Edit / Approval History" view shows what was corrected before approval.
+        for (int i = 0; i < finalData.size(); i++) {
+            Map<String, Object> rec = finalData.get(i);
+            Object[] info = correctionInfo.get(rec);
+            if (info == null) continue;
+            @SuppressWarnings("unchecked")
+            Map<String, Object> changes = new LinkedHashMap<>((Map<String, Object>) info[0]);
+            changes.remove("deleted");
+            appendAudit(snap, username, "STEP6_CORRECTION", rec, i, changes,
+                    (String) info[1], strVal(rec.get("status")));
+        }
 
         snap = snapshotRepository.save(snap);
         return toMetadata(snap);
@@ -187,6 +208,8 @@ public class MonthlyDirectoryService {
         }
 
         String action = changes.isEmpty() ? "VIEW" : "EDIT";
+        // Flag edited records so the directory's "Corrections" card can filter them.
+        if (!changes.isEmpty()) record.put("correctedInDirectory", true);
         if (revalidate) {
             multiFileImportService.revalidateDirectoryRecord(record);
             action = "REVALIDATE";

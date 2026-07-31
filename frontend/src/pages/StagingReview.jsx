@@ -239,13 +239,15 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
           console.error("Failed to parse row validation_errors", e);
         }
         
+        // Spread rawData FIRST: staged row JSON may itself carry officer-side `errors`/`warnings`
+        // keys (raw string lists) which must not clobber the structured validation fields below.
         return {
+          ...rawData,
           stagingId: row.stagingId,
           validationStatus: row.validationStatus,
           rowType: row.rowType,
           errors: errorsList,
-          index: index + 1,
-          ...rawData
+          index: index + 1
         };
       });
       
@@ -394,6 +396,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
     if (rowFilter === 'VALID') return row.validationStatus === 'VALID';
     if (rowFilter === 'INVALID') return row.validationStatus === 'INVALID';
     if (rowFilter === 'WARNING') return row.validationStatus === 'WARNING';
+    if (rowFilter === 'DUPLICATE') return row.validationStatus === 'DUPLICATE';
     if (rowFilter === 'CORRECTED') {
       return groupIsCorrected(row);
     }
@@ -738,6 +741,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                   { key: 'VALID', label: 'Valid Only', count: validRows },
                   { key: 'INVALID', label: 'Errors Only', count: invalidRows },
                   { key: 'WARNING', label: 'Warnings Only', count: warningRows },
+                  { key: 'DUPLICATE', label: 'Duplicates Only', count: duplicateRows },
                   { key: 'CORRECTED', label: 'Corrected Only', count: groupedRows.filter(groupIsCorrected).length }
                 ].map(f => (
                   <button

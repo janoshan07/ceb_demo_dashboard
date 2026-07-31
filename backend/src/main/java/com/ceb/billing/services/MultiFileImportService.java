@@ -3681,6 +3681,89 @@ public class MultiFileImportService {
         return combined;
     }
 
+    /**
+     * Converts a reviewed row's Officer-side validation state (status, errors, warnings and
+     * unresolved name/unit-rate/net-type mismatches) into the staging format the Admin review
+     * reads: [0] = validationStatus (VALID / INVALID / DUPLICATE / WARNING) and [1] = a JSON
+     * array of structured {field, errorMessage, warning} messages. Pure carry-over — it never
+     * re-validates or alters the row.
+     */
+    private String[] stagedValidation(Map<String, Object> row, ObjectMapper mapper) {
+        List<Map<String, Object>> messages = new ArrayList<>();
+        boolean hasError = false, hasWarning = false;
+
+        if (row.get("errors") instanceof List) {
+            for (Object e : (List<?>) row.get("errors")) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                if (e instanceof Map) {
+                    Map<?, ?> em = (Map<?, ?>) e;
+                    m.put("field", em.get("field") != null ? em.get("field") : "general");
+                    m.put("errorMessage", em.get("errorMessage") != null ? em.get("errorMessage") : String.valueOf(e));
+                    m.put("warning", Boolean.TRUE.equals(em.get("warning")));
+                    if (!Boolean.TRUE.equals(em.get("warning"))) hasError = true; else hasWarning = true;
+                } else {
+                    m.put("field", "general");
+                    m.put("errorMessage", String.valueOf(e));
+                    m.put("warning", false);
+                    hasError = true;
+                }
+                messages.add(m);
+            }
+        }
+        if (row.get("warnings") instanceof List) {
+            for (Object w : (List<?>) row.get("warnings")) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("field", "general");
+                m.put("errorMessage", String.valueOf(w));
+                m.put("warning", true);
+                messages.add(m);
+                hasWarning = true;
+            }
+        }
+        // Unresolved Step 6 mismatches are preserved as warning messages (approved mismatches no
+        // longer carry the MISMATCH flag, so they are not re-reported).
+        if ("MISMATCH".equals(row.get("nameMatch"))) {
+            messages.add(mismatchMessage("customerName", "Name mismatch between Master Data and NPAY."));
+            hasWarning = true;
+        }
+        if ("MISMATCH".equals(row.get("unitRateMatch"))) {
+            messages.add(mismatchMessage("unitRate", "Unit Rate mismatch between Master Data and NGEN."));
+            hasWarning = true;
+        }
+        if ("MISMATCH".equals(row.get("netTypeMatch"))) {
+            messages.add(mismatchMessage("netType", "Net Type mismatch between Master Data and NGEN."));
+            hasWarning = true;
+        }
+
+        String rowStatus = row.get("status") != null ? String.valueOf(row.get("status")).trim().toUpperCase() : "";
+        String validationStatus;
+        if ("DUPLICATE".equals(rowStatus)) {
+            validationStatus = "DUPLICATE";
+        } else if (hasError || "ERROR".equals(rowStatus) || "INVALID".equals(rowStatus)) {
+            validationStatus = "INVALID";
+        } else if (hasWarning || "WARNING".equals(rowStatus)) {
+            validationStatus = "WARNING";
+        } else {
+            validationStatus = "VALID";
+        }
+
+        String errorsJson;
+        try {
+            errorsJson = mapper.writeValueAsString(messages);
+        } catch (Exception e) {
+            errorsJson = "[]";
+        }
+        return new String[]{validationStatus, errorsJson};
+    }
+
+    private Map<String, Object> mismatchMessage(String field, String message) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("field", field);
+        m.put("errorMessage", message);
+        m.put("warning", true);
+        return m;
+    }
+
     @Transactional
     public Map<String, Object> finalizeImport(Long sessionId, String username,
                                               Map<String, Map<String, Object>> corrections, boolean isAdmin) throws Exception {
@@ -3701,6 +3784,9 @@ public class MultiFileImportService {
 
         // Apply corrections overlay to main dataset rows
         List<Map<String, Object>> correctedDataset = new ArrayList<>();
+        // Original (pre-correction) row for every corrected row, so Officer corrections can be
+        // logged into the Admin Correction History when staging.
+        Map<Map<String, Object>, Map<String, Object>> correctionOriginals = new IdentityHashMap<>();
         int skippedCount = 0;
 
         for (Map<String, Object> row : mainDataset) {
@@ -3728,6 +3814,7 @@ public class MultiFileImportService {
             Map<String, Object> finalRow = new LinkedHashMap<>(row);
             if (corr != null) {
                 finalRow.putAll(corr);
+                correctionOriginals.put(finalRow, row);
             }
             correctedDataset.add(finalRow);
         }
@@ -3745,8 +3832,11 @@ public class MultiFileImportService {
             final Long uploadId = uploadHistory.getId();
 
             ObjectMapper mapper = new ObjectMapper();
+            int stagedErrorRows = 0;
 
-            // Stage customer profiles
+            // Stage customer profiles — carrying over each row's Officer-review validation result
+            // (status + structured messages) instead of hardcoding VALID, so the Admin review shows
+            // exactly what the Officer saw.
             for (Map<String, Object> mc : masterStaged) {
                 String acc = (String) mc.get("accountNo");
                 boolean isDeleted = false;
@@ -3757,27 +3847,57 @@ public class MultiFileImportService {
                 }
                 if (isDeleted) continue;
 
+                String[] validation = stagedValidation(mc, mapper);
+                if ("INVALID".equals(validation[0])) stagedErrorRows++;
+
                 BillingUploadStaging staging = new BillingUploadStaging(
                         uploadId,
                         mapper.writeValueAsString(mc),
-                        "VALID",
-                        "[]",
+                        validation[0],
+                        validation[1],
                         "CUSTOMER_PROFILE"
                 );
                 billingUploadStagingRepository.save(staging);
             }
 
-            // Stage billing records
+            // Stage billing records with their Officer-review validation preserved; Step 6
+            // corrections are logged as APPROVED change entries so the Admin Correction History
+            // shows what the Officer changed.
             for (Map<String, Object> row : correctedDataset) {
+                String[] validation = stagedValidation(row, mapper);
+                if ("INVALID".equals(validation[0])) stagedErrorRows++;
+
                 BillingUploadStaging staging = new BillingUploadStaging(
                         uploadId,
                         mapper.writeValueAsString(row),
-                        "VALID",
-                        "[]",
+                        validation[0],
+                        validation[1],
                         "BILLING"
                 );
                 billingUploadStagingRepository.save(staging);
+
+                Map<String, Object> original = correctionOriginals.get(row);
+                if (original != null) {
+                    try {
+                        StagingChangeLog changeLog = new StagingChangeLog(
+                                uploadId,
+                                staging.getStagingId(),
+                                "BILLING",
+                                "EDIT",
+                                mapper.writeValueAsString(original),
+                                mapper.writeValueAsString(row),
+                                username
+                        );
+                        changeLog.setStatus("APPROVED");
+                        stagingChangeLogRepository.save(changeLog);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
             }
+
+            uploadHistory.setErrorsCount(stagedErrorRows);
+            uploadHistoryRepository.save(uploadHistory);
 
             session.setStage("COMPLETED");
             sessionRepository.save(session);

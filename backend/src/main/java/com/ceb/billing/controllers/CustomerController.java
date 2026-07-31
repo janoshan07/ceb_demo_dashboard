@@ -64,6 +64,14 @@ public class CustomerController {
     @Autowired
     private com.ceb.billing.services.ExcelValidationService excelValidationService;
 
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    /** Customer list fields that may be used to sort the Customer Directory (whitelist). */
+    private static final java.util.Set<String> SORTABLE_FIELDS = java.util.Set.of(
+            "accountNo", "customerName", "agreementDate", "panelCapacity",
+            "branchCode", "division", "solarType", "unitRate", "createdAt", "validationStatus");
+
     /**
      * Converts a Customer JPA entity to a plain Map of scalar values.
      * This avoids Hibernate lazy-load proxy serialization issues that cause
@@ -92,6 +100,19 @@ public class CustomerController {
             try { dto.put("expenseCode",  c.getExpenseCode()  != null ? c.getExpenseCode().getExpCode() : null); } catch (Exception e) { dto.put("expenseCode",  null); }
             dto.put("validationStatus", c.getValidationStatus());
             dto.put("validationErrors", c.getValidationErrors());
+            dto.put("division",        c.getDivision());
+            // Full merged Monthly Directory record so the Customer 360 view can show the same
+            // Master / CEB Assist / NGEN / NPAY detail. Returned as a parsed object (or null).
+            Object directory = null;
+            if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                try {
+                    directory = objectMapper.readValue(c.getDirectoryJson(),
+                            new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    directory = null;
+                }
+            }
+            dto.put("directory", directory);
         } catch (Exception ex) {
             log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
         }
@@ -105,27 +126,28 @@ public class CustomerController {
     public ResponseEntity<?> getOfficerCustomers(
             @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "validationStatus", required = false) String validationStatus,
+            @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "sortBy", required = false) String sortBy,
+            @RequestParam(value = "direction", required = false) String direction,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
 
         try {
-            Pageable pageable = PageRequest.of(page, size, Sort.by("accountNo").ascending());
-            Page<Customer> customerPage;
+            // Resolve a safe sort: whitelist the property, default to Account No ascending.
+            String sortProp = (sortBy != null && SORTABLE_FIELDS.contains(sortBy.trim())) ? sortBy.trim() : "accountNo";
+            Sort.Direction dir = "desc".equalsIgnoreCase(direction != null ? direction.trim() : "")
+                    ? Sort.Direction.DESC : Sort.Direction.ASC;
+            Pageable pageable = PageRequest.of(page, size, Sort.by(dir, sortProp));
 
             String q = (query != null) ? query.trim() : "";
             String status = (validationStatus != null) ? validationStatus.trim() : "";
-            boolean hasStatus = !status.isEmpty();
-            boolean hasQuery = !q.isEmpty();
+            String loc = (location != null) ? location.trim() : "";
 
-            if (hasStatus && hasQuery) {
-                customerPage = customerRepository.searchCustomersWithStatus(q, status, pageable);
-            } else if (hasStatus) {
-                customerPage = customerRepository.findByValidationStatus(status, pageable);
-            } else if (hasQuery) {
-                customerPage = customerRepository.searchCustomers(q, pageable);
-            } else {
-                customerPage = customerRepository.findAll(pageable);
-            }
+            Page<Customer> customerPage = customerRepository.searchCustomersFiltered(
+                    q.isEmpty() ? null : q,
+                    status.isEmpty() ? null : status,
+                    loc.isEmpty() ? null : loc,
+                    pageable);
 
             // Map each Customer entity to a safe DTO to avoid Hibernate lazy-proxy serialization errors
             List<Map<String, Object>> dtoList = new ArrayList<>();

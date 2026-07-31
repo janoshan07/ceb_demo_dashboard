@@ -29,6 +29,23 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
            "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%')))")
     Page<Customer> searchCustomersWithStatus(@Param("query") String query, @Param("validationStatus") String validationStatus, Pageable pageable);
 
+    /**
+     * Unified, null-safe customer search used by the Customer Directory. Any of the three filters
+     * may be null to be ignored: free-text query (account no / name), validation status, and
+     * location (matched against either the synced division or the auto-derived branch code, so
+     * the 5 Eastern Province divisions can be viewed independently). Sorting is supplied via the
+     * Pageable.
+     */
+    @Query("SELECT c FROM Customer c WHERE " +
+           "(:query IS NULL OR LOWER(c.accountNo) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%'))) AND " +
+           "(:status IS NULL OR c.validationStatus = :status) AND " +
+           "(:location IS NULL OR c.division = :location OR c.branchCode = :location)")
+    Page<Customer> searchCustomersFiltered(@Param("query") String query,
+                                           @Param("status") String status,
+                                           @Param("location") String location,
+                                           Pageable pageable);
+
     @Query("SELECT c.solarType, COUNT(c) FROM Customer c GROUP BY c.solarType")
     List<Object[]> getSolarTypeDistribution();
 

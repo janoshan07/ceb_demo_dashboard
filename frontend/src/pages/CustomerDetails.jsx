@@ -20,9 +20,94 @@ import {
   Sun,
   Zap,
   Calendar,
-  DollarSign
+  DollarSign,
+  MapPin,
+  ArrowUpDown,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
+
+// The 5 fixed Eastern Province divisions/branches the Customer Directory can be filtered by.
+const DIRECTORY_DIVISIONS = ['Ampara', 'Batticaloa', 'Trincomalee', 'Valaichenai', 'Kalmunai'];
+
+// Sort options for the Customer Directory list (value maps to the backend `sortBy` param).
+const SORT_OPTIONS = [
+  { value: 'accountNo', label: 'Account No' },
+  { value: 'customerName', label: 'Customer Name' },
+  { value: 'agreementDate', label: 'Agreement Date' },
+  { value: 'panelCapacity', label: 'Panel Capacity' },
+  { value: 'division', label: 'Location' },
+  { value: 'createdAt', label: 'Date Added' },
+];
+
+// Detail-view sections mirroring the Monthly Directory record modal (Master / CEB Assist / NGEN /
+// NPAY). Rendered from the synced `directory` record so the Customer 360 view shows the same detail.
+const DETAIL_SECTIONS = [
+  {
+    title: 'Master Data', color: '#38bdf8',
+    fields: [
+      { label: 'Address', keys: ['customerAddress'] },
+      { label: 'Mobile Number', keys: ['mobileNo'] },
+      { label: 'Agreement Date', keys: ['agreementDate'] },
+      { label: 'Net Type', keys: ['masterNetType', 'solarType'] },
+      { label: 'Unit Rate', keys: ['masterUnitRate', 'unitRate'] },
+      { label: 'Bank Details', bank: true },
+      { label: 'Panel Capacity', keys: ['panelCapacity'] },
+    ],
+  },
+  {
+    title: 'CEB Assist', color: '#f59e0b',
+    fields: [
+      { label: 'Previous Reading Date', keys: ['prevReadingDate'] },
+      { label: 'Current Reading Date', keys: ['currReadingDate'] },
+    ],
+  },
+  {
+    title: 'NGEN', color: '#818cf8',
+    fields: [
+      { label: 'kWh Import', keys: ['kwhImport'] },
+      { label: 'kWh Export', keys: ['kwhExport'] },
+      { label: 'kWh Unit Sales', keys: ['kwhSales'] },
+      { label: 'kWh Sales Amount', keys: ['salesAmount'] },
+      { label: 'Bill Outstanding Set Off', keys: ['ngenBillSetOff'] },
+      { label: 'Retention Money', keys: ['ngenRetentionMoney'] },
+      { label: 'Payment Settled', keys: ['paymentSettled'] },
+      { label: 'Outstanding Balance', keys: ['outstandingBalance'] },
+    ],
+  },
+  {
+    title: 'NPAY', color: '#c084fc',
+    fields: [
+      { label: 'Energy Purchase', keys: ['npayEnergyPurchase'] },
+      { label: 'Bill Set Off', keys: ['npayBillSetOff'] },
+      { label: 'Retention Money', keys: ['npayRetentionMoney'] },
+      { label: 'Payment', keys: ['npayPayment'] },
+    ],
+  },
+];
+
+// Unwraps a directory cell value ({value:...} or scalar) to a display string, or '—'.
+const dirCell = (val) => {
+  if (val === null || val === undefined) return '—';
+  if (typeof val === 'object') return ('value' in val && val.value != null) ? String(val.value) : '—';
+  const s = String(val);
+  return s.trim() === '' ? '—' : s;
+};
+
+// Resolves one detail-section field from a directory record, walking fallback keys (or joining bank).
+const dirFieldValue = (rec, f) => {
+  if (!rec) return '—';
+  if (f.bank) {
+    const parts = ['bankCode', 'branchCode', 'bankAccountNo'].map(k => dirCell(rec[k])).filter(v => v && v !== '—');
+    return parts.length ? parts.join(' / ') : '—';
+  }
+  for (const k of f.keys) {
+    const v = dirCell(rec[k]);
+    if (v !== '—' && v.trim() !== '') return v;
+  }
+  return '—';
+};
 
 // Helper to automatically derive L-Code based on solarType and tariffType
 const deriveLCode = (solarType, tariffType) => {
@@ -73,6 +158,9 @@ const CustomerDetails = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, VALID, ERROR
+  const [locationFilter, setLocationFilter] = useState('ALL'); // ALL or one of the 5 divisions
+  const [sortBy, setSortBy] = useState('accountNo');
+  const [sortDir, setSortDir] = useState('asc'); // asc | desc
 
   // Selected Customer Details State
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -196,6 +284,12 @@ const CustomerDetails = () => {
       if (statusFilter !== 'ALL') {
         url += `&validationStatus=${statusFilter}`;
       }
+      if (locationFilter !== 'ALL') {
+        url += `&location=${encodeURIComponent(locationFilter)}`;
+      }
+      if (sortBy) {
+        url += `&sortBy=${encodeURIComponent(sortBy)}&direction=${sortDir}`;
+      }
       if (query.trim()) {
         url += `&query=${encodeURIComponent(query.trim())}`;
       }
@@ -232,7 +326,7 @@ const CustomerDetails = () => {
   useEffect(() => {
     fetchCustomers(currentPage, appliedQuery);
     fetchLookups();
-  }, [currentPage, appliedQuery, statusFilter]);
+  }, [currentPage, appliedQuery, statusFilter, locationFilter, sortBy, sortDir]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -858,6 +952,64 @@ const CustomerDetails = () => {
             </button>
           )}
         </div>
+
+        {/* Location filter (5 divisions) + sorting controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, marginRight: '0.15rem' }}>
+              <MapPin size={14} /> Location
+            </span>
+            {['ALL', ...DIRECTORY_DIVISIONS].map((loc) => {
+              const active = locationFilter === loc;
+              return (
+                <button
+                  key={loc}
+                  type="button"
+                  onClick={() => { setLocationFilter(loc); setCurrentPage(0); }}
+                  style={{
+                    padding: '0.35rem 0.85rem',
+                    fontSize: '0.78rem',
+                    fontWeight: 600,
+                    borderRadius: '999px',
+                    cursor: 'pointer',
+                    border: `1px solid ${active ? '#6366f1' : 'var(--border-color)'}`,
+                    background: active ? 'rgba(99,102,241,0.15)' : 'transparent',
+                    color: active ? '#818cf8' : 'var(--text-secondary)',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {loc === 'ALL' ? 'All Locations' : loc}
+                </button>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600 }}>
+              <ArrowUpDown size={14} /> Sort
+            </span>
+            <select
+              value={sortBy}
+              onChange={(e) => { setSortBy(e.target.value); setCurrentPage(0); }}
+              className="form-input"
+              style={{ appearance: 'auto', padding: '0.4rem 0.6rem', fontSize: '0.8rem', width: 'auto', minWidth: '150px' }}
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+              onClick={() => { setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(0); }}
+              style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+            >
+              {sortDir === 'asc' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+              {sortDir === 'asc' ? 'Asc' : 'Desc'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Customer List Table */}
@@ -949,7 +1101,13 @@ const CustomerDetails = () => {
                     <td>{cust.agreementDate || '—'}</td>
                     <td>{cust.refNo || '—'}</td>
                     <td>{cust.costCode || '—'}</td>
-                    <td>{cust.customerAddress || '—'}</td>
+                    <td>
+                      {(cust.division || cust.branchCode) ? (
+                        <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                          <MapPin size={11} /> {cust.division || cust.branchCode}
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td style={{ textAlign: 'right' }}>
                       <button 
                         className="btn btn-secondary" 
@@ -1392,6 +1550,21 @@ const CustomerDetails = () => {
                           <div style={{ fontWeight: 500 }}>{selectedCustomer.expenseCode || '—'}</div>
                         </div>
                       </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Location / Division</span>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#38bdf8' }}>
+                            <MapPin size={13} /> {selectedCustomer.division || selectedCustomer.branchCode || '—'}
+                          </div>
+                        </div>
+                        <div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Validation Status</span>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: selectedCustomer.validationStatus === 'ERROR' ? '#f87171' : 'var(--success)' }}>
+                            {selectedCustomer.validationStatus || 'VALID'}
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1472,6 +1645,77 @@ const CustomerDetails = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Full Monthly Directory record — Master / CEB Assist / NGEN / NPAY / Validation,
+                  synced from the approved Monthly Directory so both views show the same detail */}
+              {(() => {
+                const rec = selectedCustomer.directory || selectedCustomer;
+                const fromDirectory = !!selectedCustomer.directory;
+                const errors = (fromDirectory && Array.isArray(rec.errors)) ? rec.errors : [];
+                const warnings = (fromDirectory && Array.isArray(rec.warnings)) ? rec.warnings : [];
+                return (
+                  <div className="card" style={{ marginTop: '1.25rem', backgroundColor: 'var(--bg-primary)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
+                      <div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ref No: {dirCell(rec.refNo ?? selectedCustomer.refNo)}</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem', margin: '0.15rem 0', color: 'white' }}>{selectedCustomer.accountNo}</div>
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                          {dirCell(rec.npayName) !== '—' ? dirCell(rec.npayName) : (selectedCustomer.customerName || '—')}
+                        </div>
+                      </div>
+                      <span className={`badge ${selectedCustomer.validationStatus === 'ERROR' ? 'danger' : 'success'}`} style={{ padding: '0.25rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, background: selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: selectedCustomer.validationStatus === 'ERROR' ? '#f87171' : '#10b981', border: `1px solid ${selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
+                        {selectedCustomer.validationStatus === 'ERROR' ? 'Error' : 'Valid'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+                      {DETAIL_SECTIONS.map(sec => (
+                        <div key={sec.title} style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
+                          <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: sec.color, marginBottom: '0.5rem' }}>{sec.title}</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                            {sec.fields.map(f => (
+                              <div key={f.label} style={{ fontSize: '0.76rem', display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                                <span style={{ color: 'var(--text-muted)' }}>{f.label}</span>
+                                <span style={{ color: 'white', fontWeight: 600, textAlign: 'right' }}>{dirFieldValue(rec, f)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Validation — preserved exactly as approved in the Monthly Directory */}
+                    <div style={{ marginTop: '1rem', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
+                      <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#f87171', marginBottom: '0.5rem' }}>Validation</div>
+                      {errors.map((e, i) => (
+                        <div key={`e${i}`} style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{e}</div>
+                      ))}
+                      {warnings.map((w, i) => (
+                        <div key={`w${i}`} style={{ fontSize: '0.75rem', color: '#f59e0b', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{w}</div>
+                      ))}
+                      {errors.length === 0 && warnings.length === 0 && (
+                        <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}><CheckCircle size={12} /> No errors or warnings</div>
+                      )}
+                      {fromDirectory && (
+                        <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          {[['Name Match', 'nameMatch'], ['Unit Rate Match', 'unitRateMatch'], ['Net Type Match', 'netTypeMatch']].map(([lbl, mk]) => (
+                            rec[mk] ? (
+                              <div key={mk} style={{ fontSize: '0.73rem', color: 'var(--text-secondary)' }}>
+                                {lbl}: <strong style={{ color: rec[mk] === 'MISMATCH' ? '#f87171' : '#10b981' }}>{dirCell(rec[mk])}</strong>
+                              </div>
+                            ) : null
+                          ))}
+                        </div>
+                      )}
+                      {!fromDirectory && (
+                        <div style={{ marginTop: '0.4rem', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                          No Monthly Directory billing record synced for this customer yet — showing profile data only.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
 

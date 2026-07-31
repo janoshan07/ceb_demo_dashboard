@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "customers", indexes = {
     @Index(name = "idx_customer_branch_code", columnList = "branch_code"),
+    @Index(name = "idx_customer_division", columnList = "division"),
     @Index(name = "idx_customer_solar_type", columnList = "solar_type")
 })
 public class Customer {
@@ -74,6 +75,16 @@ public class Customer {
 
     @Column(name = "validation_errors", columnDefinition = "TEXT")
     private String validationErrors;
+
+    // Eastern Province division this customer's billing was uploaded under (one of the fixed 5:
+    // Ampara, Batticaloa, Trincomalee, Valaichenai, Kalmunai). Synced from the Monthly Directory.
+    @Column(name = "division", length = 50)
+    private String division;
+
+    // Full merged Monthly Directory record (Master/CEB Assist/NGEN/NPAY + validation) as JSON,
+    // synced from the approved snapshot so the Customer 360 view can show the complete record.
+    @Column(name = "directory_json", columnDefinition = "LONGTEXT")
+    private String directoryJson;
 
     @PrePersist
     protected void onCreate() {
@@ -276,5 +287,21 @@ public class Customer {
 
     public void setValidationErrors(String validationErrors) {
         this.validationErrors = validationErrors;
+    }
+
+    public String getDivision() {
+        return division;
+    }
+
+    public void setDivision(String division) {
+        this.division = division;
+    }
+
+    public String getDirectoryJson() {
+        return directoryJson;
+    }
+
+    public void setDirectoryJson(String directoryJson) {
+        this.directoryJson = directoryJson;
     }
 }

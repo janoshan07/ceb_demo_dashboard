@@ -59,6 +59,9 @@ public class StagingMigrationService {
     @Autowired
     private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository monthlyDirectorySnapshotRepository;
 
+    @Autowired
+    private CustomerDirectorySyncService customerDirectorySyncService;
+
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
@@ -380,6 +383,16 @@ public class StagingMigrationService {
                     snap.setApprovalDate(java.time.LocalDateTime.now());
                 }
                 monthlyDirectorySnapshotRepository.save(snap);
+                // On final approval, sync the approved records into the Customer Directory so
+                // both directories carry the same customer information.
+                if ("APPROVED".equals(newStatus)) {
+                    try {
+                        customerDirectorySyncService.syncSnapshot(snap);
+                    } catch (Exception e) {
+                        System.err.println("Customer Directory sync failed for snapshot "
+                                + snap.getId() + ": " + e.getMessage());
+                    }
+                }
             }
             if (!pending.isEmpty()) {
                 auditLogService.log("DIRECTORY_SNAPSHOT_" + newStatus, String.format(

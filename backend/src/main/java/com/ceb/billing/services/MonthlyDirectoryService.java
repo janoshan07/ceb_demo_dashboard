@@ -38,6 +38,9 @@ public class MonthlyDirectoryService {
     @Autowired
     private MultiFileImportService multiFileImportService;
 
+    @Autowired
+    private CustomerDirectorySyncService customerDirectorySyncService;
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -168,6 +171,15 @@ public class MonthlyDirectoryService {
         }
 
         snap = snapshotRepository.save(snap);
+        // If this snapshot is immediately approved (Admin save), push its records into the
+        // permanent Customer Directory right away so both directories stay in sync.
+        if ("APPROVED".equals(snap.getStatus())) {
+            try {
+                customerDirectorySyncService.syncSnapshot(snap);
+            } catch (Exception e) {
+                System.err.println("Customer Directory sync failed for snapshot " + snap.getId() + ": " + e.getMessage());
+            }
+        }
         return toMetadata(snap);
     }
 
@@ -364,6 +376,16 @@ public class MonthlyDirectoryService {
         s.setValidationSummary(mapper.writeValueAsString(computeSummary(records)));
         appendAudit(s, username, action, record, recordIndex, changes, statusBefore, statusAfter);
         snapshotRepository.save(s);
+
+        // Keep the Customer Directory in step with edits made to an already-approved month.
+        if ("APPROVED".equals(s.getStatus()) && !changes.isEmpty()) {
+            try {
+                customerDirectorySyncService.upsertCustomer(record, s.getDivision());
+            } catch (Exception e) {
+                System.err.println("Customer Directory sync failed for edited record in snapshot "
+                        + s.getId() + ": " + e.getMessage());
+            }
+        }
 
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("recordIndex", recordIndex);

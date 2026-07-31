@@ -1,6 +1,8 @@
 package com.ceb.billing.services;
 
+import com.ceb.billing.entities.ImportSession;
 import com.ceb.billing.entities.MonthlyDirectorySnapshot;
+import com.ceb.billing.repositories.ImportSessionRepository;
 import com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,11 +33,18 @@ public class MonthlyDirectoryService {
     private MonthlyDirectorySnapshotRepository snapshotRepository;
 
     @Autowired
+    private ImportSessionRepository sessionRepository;
+
+    @Autowired
     private MultiFileImportService multiFileImportService;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+    /** The 5 fixed Eastern Province divisions every Billing Month is organized into. */
+    public static final List<String> DIVISIONS =
+            List.of("Ampara", "Batticaloa", "Trincomalee", "Valaichenai", "Kalmunai");
 
     // Curated, human-readable column set for the archived dataset / Excel export.
     private static final String[][] EXPORT_COLUMNS = {
@@ -73,13 +82,24 @@ public class MonthlyDirectoryService {
      */
     @Transactional
     public Map<String, Object> createSnapshot(Long sessionId, String username, String datasetName,
-                                              String billingMonth, String validationSummaryJson,
+                                              String billingMonth, String division, String validationSummaryJson,
                                               Map<String, Map<String, Object>> corrections,
                                               boolean isAdmin) throws Exception {
         List<Map<String, Object>> mainDataset = multiFileImportService.getMainDataset(sessionId);
         if (mainDataset == null || mainDataset.isEmpty()) {
             throw new IllegalStateException("No approved dataset found for this session. Approve Step 6 before saving the directory.");
         }
+
+        // Resolve the Month + Division slot: request params first, then the values the import
+        // session was bound to when the upload started from the Customer Directory.
+        String month = billingMonth != null ? billingMonth.trim() : "";
+        String div = division != null ? division.trim() : "";
+        ImportSession session = sessionRepository.findById(sessionId).orElse(null);
+        if (session != null) {
+            if (month.isEmpty() && session.getBillingMonth() != null) month = session.getBillingMonth().trim();
+            if (div.isEmpty() && session.getDivision() != null) div = session.getDivision().trim();
+        }
+        div = canonicalDivision(div);
 
         List<Map<String, Object>> finalData = new ArrayList<>();
         Map<Map<String, Object>, Object[]> correctionInfo = new IdentityHashMap<>(); // finalRow -> {corr, statusBefore}
@@ -110,12 +130,20 @@ public class MonthlyDirectoryService {
 
         String name = datasetName != null ? datasetName.trim() : "";
         if (name.isEmpty()) {
-            name = defaultName(billingMonth);
+            name = defaultName(month, div);
+        }
+
+        // Each Month + Division slot holds exactly one dataset: re-uploading a division replaces
+        // its previous snapshot, while every other month/division stays untouched.
+        if (!month.isEmpty() && !div.isEmpty()) {
+            snapshotRepository.deleteAll(
+                    snapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(month, div));
         }
 
         MonthlyDirectorySnapshot snap = new MonthlyDirectorySnapshot();
         snap.setDatasetName(name);
-        snap.setBillingMonth(billingMonth != null && !billingMonth.trim().isEmpty() ? billingMonth.trim() : null);
+        snap.setBillingMonth(!month.isEmpty() ? month : null);
+        snap.setDivision(!div.isEmpty() ? div : null);
         snap.setApprovedBy(username);
         snap.setTotalRecords(finalData.size());
         snap.setStatus(isAdmin ? "APPROVED" : "PENDING_APPROVAL");
@@ -150,6 +178,115 @@ public class MonthlyDirectoryService {
             out.add(toMetadata(s));
         }
         return out;
+    }
+
+    /**
+     * Billing-month overview for the Division-based Customer Directory. Groups every snapshot by
+     * Billing Month and reports the 5 fixed Eastern Province divisions per month with their status
+     * (NOT_UPLOADED / PENDING / APPROVED), record counts, last-updated time and overall monthly
+     * progress. A month is automatically marked completed once all 5 divisions are APPROVED.
+     * Snapshots saved before the division redesign (no month/division) are returned separately so
+     * nothing archived is ever hidden.
+     */
+    public Map<String, Object> listMonths() {
+        Map<String, List<MonthlyDirectorySnapshot>> byMonth = new LinkedHashMap<>();
+        List<Map<String, Object>> unassigned = new ArrayList<>();
+
+        for (MonthlyDirectorySnapshot s : snapshotRepository.findAllByOrderByCreatedDateDesc()) {
+            String month = s.getBillingMonth() != null ? s.getBillingMonth().trim() : "";
+            if (month.isEmpty()) {
+                unassigned.add(toMetadata(s));
+                continue;
+            }
+            byMonth.computeIfAbsent(monthKey(month), k -> new ArrayList<>()).add(s);
+        }
+
+        List<Map<String, Object>> months = new ArrayList<>();
+        for (List<MonthlyDirectorySnapshot> snaps : byMonth.values()) {
+            String label = snaps.get(0).getBillingMonth().trim();
+
+            // One slot per fixed division; snapshots with an unknown division stay visible too.
+            Map<String, MonthlyDirectorySnapshot> byDivision = new LinkedHashMap<>();
+            List<Map<String, Object>> otherDatasets = new ArrayList<>();
+            for (MonthlyDirectorySnapshot s : snaps) {
+                String div = canonicalDivision(s.getDivision());
+                if (DIVISIONS.contains(div)) {
+                    // Newest snapshot wins the slot (list is already newest-first).
+                    byDivision.putIfAbsent(div, s);
+                } else {
+                    otherDatasets.add(toMetadata(s));
+                }
+            }
+
+            List<Map<String, Object>> divisions = new ArrayList<>();
+            int approvedCount = 0, uploadedCount = 0, totalRecords = 0;
+            java.time.LocalDateTime lastUpdated = null;
+            for (String div : DIVISIONS) {
+                MonthlyDirectorySnapshot s = byDivision.get(div);
+                Map<String, Object> d = new LinkedHashMap<>();
+                d.put("division", div);
+                if (s == null) {
+                    d.put("status", "NOT_UPLOADED");
+                    d.put("totalRecords", 0);
+                    d.put("lastUpdated", null);
+                    d.put("snapshotId", null);
+                    d.put("datasetName", null);
+                } else {
+                    boolean approved = "APPROVED".equals(s.getStatus());
+                    if (approved) approvedCount++;
+                    uploadedCount++;
+                    totalRecords += s.getTotalRecords() != null ? s.getTotalRecords() : 0;
+                    java.time.LocalDateTime updated = s.getApprovalDate() != null ? s.getApprovalDate() : s.getCreatedDate();
+                    if (updated != null && (lastUpdated == null || updated.isAfter(lastUpdated))) lastUpdated = updated;
+                    d.put("status", approved ? "APPROVED" : "PENDING");
+                    d.put("totalRecords", s.getTotalRecords() != null ? s.getTotalRecords() : 0);
+                    d.put("lastUpdated", updated != null ? updated.format(TS) : null);
+                    d.put("snapshotId", s.getId());
+                    d.put("datasetName", s.getDatasetName());
+                    d.put("approvedBy", s.getApprovedBy());
+                }
+                divisions.add(d);
+            }
+
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("billingMonth", label);
+            m.put("divisions", divisions);
+            m.put("divisionCount", DIVISIONS.size());
+            m.put("uploadedCount", uploadedCount);
+            m.put("approvedCount", approvedCount);
+            m.put("totalRecords", totalRecords);
+            m.put("lastUpdated", lastUpdated != null ? lastUpdated.format(TS) : null);
+            m.put("completed", approvedCount == DIVISIONS.size());
+            m.put("otherDatasets", otherDatasets);
+            months.add(m);
+        }
+
+        // Newest billing month first (unparseable labels sink to the bottom, keeping insert order).
+        months.sort(Comparator.comparing(
+                (Map<String, Object> m) -> parseMonthLabel((String) m.get("billingMonth")),
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("divisions", DIVISIONS);
+        out.put("months", months);
+        out.put("unassigned", unassigned);
+        return out;
+    }
+
+    /** Case-insensitive grouping key so "july 2026" and "July 2026" land in the same month. */
+    private String monthKey(String label) {
+        return label.trim().toLowerCase(Locale.ENGLISH);
+    }
+
+    /** Parses labels like "July 2026" for sorting; returns null when the label is free-form. */
+    private java.time.YearMonth parseMonthLabel(String label) {
+        if (label == null) return null;
+        try {
+            return java.time.YearMonth.parse(label.trim(),
+                    DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH));
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     /** Returns one snapshot including the parsed final dataset and validation summary. */
@@ -307,11 +444,26 @@ public class MonthlyDirectoryService {
         return s;
     }
 
-    private String defaultName(String billingMonth) {
-        if (billingMonth != null && !billingMonth.trim().isEmpty()) {
-            return billingMonth.trim() + " Billing";
+    private String defaultName(String billingMonth, String division) {
+        String month = billingMonth != null ? billingMonth.trim() : "";
+        String div = division != null ? division.trim() : "";
+        if (!month.isEmpty() && !div.isEmpty()) {
+            return month + " \u2013 " + div + " Billing";
+        }
+        if (!month.isEmpty()) {
+            return month + " Billing";
         }
         return "Customer Directory " + java.time.LocalDate.now();
+    }
+
+    /** Folds free-typed division names onto the fixed 5-division list (case-insensitive). */
+    private String canonicalDivision(String division) {
+        if (division == null) return "";
+        String d = division.trim();
+        for (String known : DIVISIONS) {
+            if (known.equalsIgnoreCase(d)) return known;
+        }
+        return d;
     }
 
     private Map<String, Object> toMetadata(MonthlyDirectorySnapshot s) {
@@ -319,6 +471,7 @@ public class MonthlyDirectoryService {
         m.put("id", s.getId());
         m.put("datasetName", s.getDatasetName());
         m.put("billingMonth", s.getBillingMonth());
+        m.put("division", s.getDivision());
         m.put("approvalDate", s.getApprovalDate() != null ? s.getApprovalDate().format(TS) : null);
         m.put("createdDate", s.getCreatedDate() != null ? s.getCreatedDate().format(TS) : null);
         m.put("approvedBy", s.getApprovedBy());

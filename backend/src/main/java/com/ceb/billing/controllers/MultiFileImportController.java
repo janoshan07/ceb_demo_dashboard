@@ -93,7 +93,9 @@ public class MultiFileImportController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> approveMasterData(
             @RequestParam(value = "file", required = false) MultipartFile file,
-            @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
+            @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson,
+            @RequestParam(value = "billingMonth", required = false, defaultValue = "") String billingMonth,
+            @RequestParam(value = "division", required = false, defaultValue = "") String division) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
             byte[] fileBytes;
@@ -113,7 +115,7 @@ public class MultiFileImportController {
                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Map<String, Object>>>() {})
                     : null;
 
-            Map<String, Object> result = multiFileImportService.approveMasterData(fileBytes, "Master_Data.xlsx", username, corrections);
+            Map<String, Object> result = multiFileImportService.approveMasterData(fileBytes, "Master_Data.xlsx", username, corrections, billingMonth, division);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             e.printStackTrace();

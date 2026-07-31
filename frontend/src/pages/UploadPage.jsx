@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import {
   Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle,
   FileText, Loader, Trash2, Eye,
   Check, RefreshCw, Layers, Zap, User, Info,
-  Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft, Archive
+  Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft, Archive,
+  Calendar, MapPin
 } from 'lucide-react';
 
 // Helper to automatically derive L-Code based on solarType and tariffType
@@ -1374,6 +1376,15 @@ const UploadPage = () => {
   const { authFetch, user } = useAuth();
   const { showToast, showConfirm } = useToast();
 
+  // ── Billing Month + Division context ──────────────────────────────────
+  // Arrives via /upload?month=...&division=... from the Customer Directory division cards.
+  // Bound to the import session at Step 1 approval so the final dataset is saved only to
+  // that Month + Division slot; restored from the active session after a page refresh.
+  const location = useLocation();
+  const [billingContext, setBillingContext] = useState(() => {
+    const p = new URLSearchParams(location.search);
+    return { month: p.get('month') || '', division: p.get('division') || '' };
+  });
   // ── Wizard state ──────────────────────────────────────────────────────
   const [activeView, setActiveView] = useState('wizard'); // 'wizard' | 'history'
   const [wizardStep, setWizardStep] = useState(1); // 1, 2, 3, 4, 5, 6
@@ -1706,6 +1717,11 @@ const UploadPage = () => {
         if (data.hasActiveSession) {
           setSession(data);
           setWizardStep(stageToStep(data.stage));
+          // Restore the Month + Division this session was bound to (URL params win if present).
+          setBillingContext(prev => ({
+            month: prev.month || data.billingMonth || '',
+            division: prev.division || data.division || '',
+          }));
         } else {
           setSession(null);
         }
@@ -2415,6 +2431,9 @@ const UploadPage = () => {
       const fd = new FormData();
       // File is cached server-side during upload/preview step
       fd.append('correctionsJson', JSON.stringify(rowCorrections));
+      // Bind the Billing Month + Division selected in the Customer Directory to this session.
+      if (billingContext.month) fd.append('billingMonth', billingContext.month);
+      if (billingContext.division) fd.append('division', billingContext.division);
       const res = await authFetch('/api/officer/import/master-data/approve', { method: 'POST', body: fd });
       let data;
       try {
@@ -3198,9 +3217,11 @@ const UploadPage = () => {
   };
 
   const openDirectoryNaming = () => {
-    const label = computeBillingMonthLabel(masterComparison?.rows);
+    // Prefer the Month + Division the session was started for; fall back to deriving the
+    // month from reading dates exactly as before for imports without directory context.
+    const label = billingContext.month || computeBillingMonthLabel(masterComparison?.rows);
     setDirectoryBillingMonth(label);
-    setDirectoryName(`${label} Billing`);
+    setDirectoryName(billingContext.division ? `${label} – ${billingContext.division} Billing` : `${label} Billing`);
     setShowDirectoryNaming(true);
   };
 
@@ -3223,6 +3244,7 @@ const UploadPage = () => {
       const fd = new FormData();
       fd.append('datasetName', directoryName || '');
       fd.append('billingMonth', directoryBillingMonth || '');
+      fd.append('division', billingContext.division || '');
       fd.append('validationSummaryJson', JSON.stringify(summary));
       fd.append('correctionsJson', JSON.stringify(mainCorrections));
       const res = await authFetch(`/api/officer/import/${sid}/save-directory`, { method: 'POST', body: fd });
@@ -5412,6 +5434,17 @@ const UploadPage = () => {
           <p style={{ margin: '0.35rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
             6-step sequential data import: Master Data → CEB Assist → NGEN → NPAY → Main Dataset → Finalize
           </p>
+          {(billingContext.month || billingContext.division) && (
+            <div style={{ marginTop: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.4rem 0.85rem', borderRadius: 999, background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.35)', fontSize: '0.76rem', fontWeight: 700, color: '#a5b4fc' }}>
+              <Calendar size={13} /> {billingContext.month || 'Billing month from readings'}
+              {billingContext.division && (
+                <>
+                  <span style={{ opacity: 0.5 }}>·</span>
+                  <MapPin size={13} /> {billingContext.division} Division
+                </>
+              )}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <button onClick={() => { setActiveView('wizard'); }} style={{
@@ -5513,7 +5546,7 @@ const UploadPage = () => {
               <button type="button" onClick={() => { if (!savingDirectory) setShowDirectoryNaming(false); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              The approved dataset for <strong style={{ color: 'white' }}>{directoryBillingMonth}</strong> will be archived permanently as a separate monthly snapshot. Enter or edit a name below.
+              The approved dataset for <strong style={{ color: 'white' }}>{directoryBillingMonth}</strong>{billingContext.division && <> — <strong style={{ color: 'white' }}>{billingContext.division} Division</strong></>} will be archived permanently as a separate monthly snapshot. Enter or edit a name below.
             </p>
             <div style={{ marginBottom: '1.25rem' }}>
               <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 600 }}>Dataset Name</label>

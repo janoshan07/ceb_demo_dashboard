@@ -14,4 +14,7 @@ public interface MonthlyDirectorySnapshotRepository extends JpaRepository<Monthl
 
     /** Snapshots created from one import session in a given status (e.g. PENDING_APPROVAL). */
     List<MonthlyDirectorySnapshot> findBySessionIdAndStatus(Long sessionId, String status);
+
+    /** Existing snapshot(s) already saved to one Billing Month + Division slot. */
+    List<MonthlyDirectorySnapshot> findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(String billingMonth, String division);
 }

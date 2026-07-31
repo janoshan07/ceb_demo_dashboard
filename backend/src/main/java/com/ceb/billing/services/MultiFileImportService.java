@@ -148,7 +148,8 @@ public class MultiFileImportService {
 
     @Transactional
     public Map<String, Object> approveMasterData(byte[] fileBytes, String filename, String username,
-                                                  Map<String, Map<String, Object>> corrections) throws Exception {
+                                                  Map<String, Map<String, Object>> corrections,
+                                                  String billingMonth, String division) throws Exception {
         List<Map<String, Object>> cachedRows = new ArrayList<>();
         int skippedRows = 0;
 
@@ -277,6 +278,14 @@ public class MultiFileImportService {
         }
 
         ImportSession session = findOrCreateSession(username);
+        // Bind this import session to the Billing Month + Division selected in the Customer
+        // Directory, so the final dataset is saved only to that Month + Division slot.
+        if (billingMonth != null && !billingMonth.trim().isEmpty()) {
+            session.setBillingMonth(billingMonth.trim());
+        }
+        if (division != null && !division.trim().isEmpty()) {
+            session.setDivision(division.trim());
+        }
         saveMasterDataToStaging(session.getId(), cachedRows);
 
         session.setStage("MASTER_APPROVED");
@@ -1168,6 +1177,8 @@ public class MultiFileImportService {
         result.put("npayCount", session.getNpayCount());
         result.put("mainDatasetApproved", session.getMainDatasetApproved());
         result.put("masterComparisonApproved", session.getMasterComparisonApproved());
+        result.put("billingMonth", session.getBillingMonth());
+        result.put("division", session.getDivision());
         result.put("createdAt", session.getCreatedAt());
         return result;
     }

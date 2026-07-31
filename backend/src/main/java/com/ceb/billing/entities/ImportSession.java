@@ -57,6 +57,14 @@ public class ImportSession {
     @Column(name = "npay_count")
     private Integer npayCount = 0;
 
+    /** Billing month label this import belongs to (e.g. "July 2026"), chosen from the Customer Directory. */
+    @Column(name = "billing_month", length = 60)
+    private String billingMonth;
+
+    /** Eastern Province division this import belongs to (e.g. "Ampara"), chosen from the Customer Directory. */
+    @Column(name = "division", length = 60)
+    private String division;
+
     @Column(name = "ceb_approved")
     private Boolean cebApproved = false;
 
@@ -258,5 +266,21 @@ public class ImportSession {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    public String getBillingMonth() {
+        return billingMonth;
+    }
+
+    public void setBillingMonth(String billingMonth) {
+        this.billingMonth = billingMonth;
+    }
+
+    public String getDivision() {
+        return division;
+    }
+
+    public void setDivision(String division) {
+        this.division = division;
     }
 }

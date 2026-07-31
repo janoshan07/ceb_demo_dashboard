@@ -35,6 +35,7 @@ public class MonthlyDirectoryController {
             @PathVariable Long sessionId,
             @RequestParam(value = "datasetName", required = false, defaultValue = "") String datasetName,
             @RequestParam(value = "billingMonth", required = false, defaultValue = "") String billingMonth,
+            @RequestParam(value = "division", required = false, defaultValue = "") String division,
             @RequestParam(value = "validationSummaryJson", required = false, defaultValue = "") String validationSummaryJson,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
@@ -48,7 +49,7 @@ public class MonthlyDirectoryController {
                     .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
 
             Map<String, Object> result = monthlyDirectoryService.createSnapshot(
-                    sessionId, username, datasetName, billingMonth, validationSummaryJson, corrections, isAdmin);
+                    sessionId, username, datasetName, billingMonth, division, validationSummaryJson, corrections, isAdmin);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             e.printStackTrace();
@@ -64,6 +65,20 @@ public class MonthlyDirectoryController {
             return ResponseEntity.ok(monthlyDirectoryService.listSnapshots());
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load directories: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Billing-month overview: every archived month with its 5 fixed Eastern Province division
+     * slots, per-division status/records/last-updated and overall monthly progress.
+     */
+    @GetMapping({"/admin/monthly-directory/months", "/officer/monthly-directory/months"})
+    @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    public ResponseEntity<?> months() {
+        try {
+            return ResponseEntity.ok(monthlyDirectoryService.listMonths());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load billing months: " + e.getMessage()));
         }
     }
 

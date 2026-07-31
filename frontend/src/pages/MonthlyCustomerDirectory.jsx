@@ -1,15 +1,30 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Archive, FolderOpen, Pencil, Trash2, Download, X, Loader,
-  Calendar, Users, CheckCircle, Clock, RefreshCw, FileSpreadsheet, User,
+  Calendar, Users, CheckCircle, Clock, RefreshCw, FileSpreadsheet,
   Edit3, History, AlertTriangle, ShieldCheck, RotateCcw, Save, Search, Eye,
-  ChevronDown, Check
+  ChevronDown, Check, MapPin, ArrowLeft, Plus, CloudUpload
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 // Same agreement-expiry rules as Step 6 (Agreement Date + 7 years, categorized against the
 // billing month window) — reused so the directory never invents its own expiry semantics.
 import { computeAgreementExpiry, agreementExpiryStatus } from './UploadPage';
+
+// The 5 fixed Eastern Province divisions every Billing Month is organized into (mirrors the
+// backend's MonthlyDirectoryService.DIVISIONS — the server list wins when provided).
+const EASTERN_DIVISIONS = ['Ampara', 'Batticaloa', 'Trincomalee', 'Valaichenai', 'Kalmunai'];
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+
+// Per-division upload/approval status shown on the modern division cards.
+const DIVISION_STATUS = {
+  NOT_UPLOADED: { label: 'Not Uploaded', color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.3)', progress: 0 },
+  PENDING: { label: 'Pending', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)', border: 'rgba(245,158,11,0.35)', progress: 60 },
+  APPROVED: { label: 'Approved', color: '#10b981', bg: 'rgba(16,185,129,0.15)', border: 'rgba(16,185,129,0.35)', progress: 100 },
+};
 
 // Field groups shown on every Customer Card / detail view — grouped by merged source file,
 // exactly as saved from Step 6 (the snapshot is only loaded, never rebuilt or recompared).
@@ -358,8 +373,17 @@ const MonthlyCustomerDirectory = () => {
   const { authFetch } = useAuth();
   const { showToast, showConfirm } = useToast();
 
-  const [items, setItems] = useState([]);
+  const navigate = useNavigate();
+
+  // Month → Division organization from GET /monthly-directory/months:
+  // { divisions: [5 names], months: [{ billingMonth, divisions[5], ... }], unassigned: [...] }
+  const [monthsData, setMonthsData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedMonth, setSelectedMonth] = useState(null); // billing month label being viewed, null = overview
+
+  // "Start New Billing Month" picker
+  const [newMonthOpen, setNewMonthOpen] = useState(false);
+  const [pickYear, setPickYear] = useState(new Date().getFullYear());
 
   // Open/View modal
   const [viewing, setViewing] = useState(null);      // full snapshot { ...meta, records, validationSummary }
@@ -389,12 +413,12 @@ const MonthlyCustomerDirectory = () => {
   const loadList = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await authFetch('/api/officer/monthly-directory');
+      const res = await authFetch('/api/officer/monthly-directory/months');
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Failed to load directories.', 'error'); return; }
-      setItems(Array.isArray(data) ? data : []);
+      if (!res.ok) { showToast(data.message || 'Failed to load billing months.', 'error'); return; }
+      setMonthsData(data);
     } catch (e) {
-      showToast('Failed to load directories: ' + e.message, 'error');
+      showToast('Failed to load billing months: ' + e.message, 'error');
     } finally {
       setLoading(false);
     }
@@ -439,8 +463,8 @@ const MonthlyCustomerDirectory = () => {
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Rename failed.', 'error'); return; }
       showToast('Dataset renamed.', 'success');
-      setItems(prev => prev.map(it => it.id === renaming.id ? { ...it, datasetName: data.datasetName } : it));
       setRenaming(null);
+      loadList();
     } catch (e) {
       showToast('Rename failed: ' + e.message, 'error');
     } finally {
@@ -462,8 +486,8 @@ const MonthlyCustomerDirectory = () => {
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Delete failed.', 'error'); return; }
       showToast('Directory deleted.', 'success');
-      setItems(prev => prev.filter(it => it.id !== item.id));
       if (viewing && viewing.id === item.id) setViewing(null);
+      loadList();
     } catch (e) {
       showToast('Delete failed: ' + e.message, 'error');
     }
@@ -636,8 +660,21 @@ const MonthlyCustomerDirectory = () => {
 
   const detailRecord = (detailsIdx !== null && viewing) ? (viewing.records || [])[detailsIdx] : null;
 
-  const th = { padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' };
-  const td = { padding: '0.75rem 0.9rem', fontSize: '0.85rem', verticalAlign: 'middle' };
+  // ── Month → Division derived views ────────────────────────────────────────
+  const months = monthsData?.months || [];
+  const divisionNames = (monthsData?.divisions?.length > 0) ? monthsData.divisions : EASTERN_DIVISIONS;
+  const unassigned = monthsData?.unassigned || [];
+  const monthObj = selectedMonth
+    ? months.find(m => (m.billingMonth || '').toLowerCase() === selectedMonth.toLowerCase())
+    : null;
+  // A freshly started month has no snapshots yet — synthesize an empty 5-division view for it.
+  const monthView = selectedMonth ? (monthObj || {
+    billingMonth: selectedMonth,
+    divisions: divisionNames.map(d => ({ division: d, status: 'NOT_UPLOADED', totalRecords: 0, lastUpdated: null, snapshotId: null, datasetName: null })),
+    divisionCount: divisionNames.length, uploadedCount: 0, approvedCount: 0,
+    totalRecords: 0, lastUpdated: null, completed: false, otherDatasets: [],
+  }) : null;
+
   const actionBtn = (color, bg, border) => ({
     padding: '0.35rem 0.6rem', background: bg, border: `1px solid ${border}`, color, borderRadius: 7,
     fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.3rem'
@@ -655,90 +692,287 @@ const MonthlyCustomerDirectory = () => {
             Monthly Customer Directory
           </h1>
           <p style={{ margin: '0.35rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-            Permanent per-month snapshots of approved final Customer Directory datasets. Kept until deleted manually.
+            Billing organized by month — each Billing Month holds one approved dataset per Eastern Province division.
           </p>
         </div>
-        <button onClick={loadList} style={{ padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+          {!selectedMonth && (
+            <button onClick={() => { setPickYear(new Date().getFullYear()); setNewMonthOpen(true); }}
+              style={{ padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', background: 'linear-gradient(135deg,#6366f1,#4f46e5)', border: 'none', color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <Plus size={14} /> Start New Billing Month
+            </button>
+          )}
+          <button onClick={loadList} style={{ padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: '1.5rem', borderRadius: 16 }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-            <Loader size={28} className="animate-spin" />
-            <div style={{ marginTop: '0.75rem' }}>Loading archived directories…</div>
-          </div>
-        ) : items.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-            <Archive size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#10b981' }} />
-            <div style={{ fontWeight: 600 }}>No monthly directories yet.</div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
-              Approve a Step 6 import in the Excel Import Wizard to create the first snapshot.
+      {loading ? (
+        <div className="card" style={{ padding: '3rem', borderRadius: 16, textAlign: 'center', color: 'var(--text-muted)' }}>
+          <Loader size={28} className="animate-spin" />
+          <div style={{ marginTop: '0.75rem' }}>Loading billing months…</div>
+        </div>
+      ) : !selectedMonth ? (
+        <>
+          {/* ── Billing Months overview ── */}
+          {months.length === 0 ? (
+            <div className="card" style={{ padding: '3rem', borderRadius: 16, textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <Calendar size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#10b981' }} />
+              <div style={{ fontWeight: 600 }}>No billing months yet.</div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                Click “Start New Billing Month”, pick a month, then upload billing for each division.
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))', gap: '1rem' }}>
+              {months.map(m => {
+                const total = m.divisionCount || divisionNames.length;
+                const pct = total > 0 ? Math.round((m.approvedCount / total) * 100) : 0;
+                return (
+                  <button key={m.billingMonth} onClick={() => setSelectedMonth(m.billingMonth)}
+                    style={{
+                      textAlign: 'left', cursor: 'pointer', padding: '1.2rem 1.3rem', borderRadius: 16,
+                      background: m.completed ? 'linear-gradient(160deg, rgba(16,185,129,0.10), rgba(255,255,255,0.02))' : 'rgba(255,255,255,0.02)',
+                      border: `1px solid ${m.completed ? 'rgba(16,185,129,0.45)' : 'var(--border-color)'}`,
+                      display: 'flex', flexDirection: 'column', gap: '0.85rem', color: 'inherit'
+                    }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.6rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Calendar size={17} color="#818cf8" />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '1.02rem', color: 'white' }}>{m.billingMonth}</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>{m.uploadedCount}/{total} divisions uploaded</div>
+                        </div>
+                      </div>
+                      {m.completed && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.22rem 0.6rem', borderRadius: 999, fontSize: '0.66rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)', whiteSpace: 'nowrap' }}>
+                          <CheckCircle size={11} /> Completed
+                        </span>
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', marginBottom: '0.3rem' }}>
+                        <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{m.approvedCount}/{total} divisions completed</span>
+                        <span style={{ color: m.completed ? '#10b981' : 'var(--text-muted)', fontWeight: 700, fontFamily: 'monospace' }}>{pct}%</span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 999, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                        <div style={{ width: `${pct}%`, height: '100%', borderRadius: 999, background: m.completed ? 'linear-gradient(90deg,#10b981,#059669)' : 'linear-gradient(90deg,#6366f1,#818cf8)', transition: 'width 0.3s' }} />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-secondary)' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Users size={12} color="#818cf8" /> {m.totalRecords} records</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={12} /> {m.lastUpdated || '—'}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Datasets saved before the division redesign (no billing month) — never hidden */}
+          {unassigned.length > 0 && (
+            <div className="card" style={{ marginTop: '1.5rem', padding: '1.25rem 1.5rem', borderRadius: 16 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.9rem' }}>
+                Datasets without a Billing Month
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {unassigned.map(item => (
+                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0.85rem', borderRadius: 10, border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                      <FolderOpen size={15} color="#10b981" />
+                      <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{item.datasetName}</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{item.totalRecords ?? 0} records</span>
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <div style={{ display: 'inline-flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      <button onClick={() => handleOpen(item)} title="Open / View" style={actionBtn('#818cf8', 'rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)')}><FolderOpen size={12} /> Open</button>
+                      <button onClick={() => openRename(item)} title="Rename Dataset" style={actionBtn('#f59e0b', 'rgba(245,158,11,0.12)', 'rgba(245,158,11,0.3)')}><Pencil size={12} /> Rename</button>
+                      <button onClick={() => handleDownload(item)} disabled={downloadingId === item.id} title="Download Excel" style={actionBtn('#10b981', 'rgba(16,185,129,0.12)', 'rgba(16,185,129,0.3)')}>
+                        {downloadingId === item.id ? <Loader size={12} className="animate-spin" /> : <Download size={12} />} Excel
+                      </button>
+                      <button onClick={() => handleDelete(item)} title="Delete Dataset" style={actionBtn('#f87171', 'rgba(239,68,68,0.12)', 'rgba(239,68,68,0.3)')}><Trash2 size={12} /> Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        /* ── Division view for the selected Billing Month ── */
+        <>
+          <button onClick={() => setSelectedMonth(null)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.45rem 0.9rem', marginBottom: '1rem', borderRadius: 9, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+            <ArrowLeft size={14} /> All Billing Months
+          </button>
+
+          {/* Month header with overall progress */}
+          <div className="card" style={{ padding: '1.25rem 1.5rem', borderRadius: 16, marginBottom: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                <Calendar size={20} color="#818cf8" />
+                <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'white' }}>{monthView.billingMonth}</span>
+                {monthView.completed && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.25rem 0.7rem', borderRadius: 999, fontSize: '0.7rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.35)' }}>
+                    <CheckCircle size={12} /> Month Completed
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                {monthView.approvedCount}/{monthView.divisionCount || divisionNames.length} divisions completed · {monthView.totalRecords} total records
+              </div>
+            </div>
+            <div style={{ minWidth: 230, flex: '0 1 260px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', marginBottom: '0.3rem' }}>
+                <span style={{ color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Monthly Progress</span>
+                <span style={{ color: monthView.completed ? '#10b981' : 'var(--text-secondary)', fontWeight: 700, fontFamily: 'monospace' }}>
+                  {Math.round((monthView.approvedCount / (monthView.divisionCount || divisionNames.length || 5)) * 100)}%
+                </span>
+              </div>
+              <div style={{ height: 8, borderRadius: 999, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                <div style={{ width: `${(monthView.approvedCount / (monthView.divisionCount || divisionNames.length || 5)) * 100}%`, height: '100%', borderRadius: 999, background: monthView.completed ? 'linear-gradient(90deg,#10b981,#059669)' : 'linear-gradient(90deg,#6366f1,#818cf8)', transition: 'width 0.3s' }} />
+              </div>
             </div>
           </div>
-        ) : (
-          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={th}>Dataset Name</th>
-                  <th style={th}>Billing Month</th>
-                  <th style={th}>Total Records</th>
-                  <th style={th}>Created Date</th>
-                  <th style={th}>Approved By</th>
-                  <th style={th}>Status</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => (
-                  <tr key={item.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                    <td style={{ ...td, fontWeight: 600 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                        <FolderOpen size={15} color="#10b981" /> {item.datasetName}
+
+          {/* 5 fixed Eastern Province division cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1rem' }}>
+            {(monthView.divisions || []).map(d => {
+              const st = DIVISION_STATUS[d.status] || DIVISION_STATUS.NOT_UPLOADED;
+              const hasData = d.snapshotId !== null && d.snapshotId !== undefined;
+              const uploadUrl = `/upload?month=${encodeURIComponent(monthView.billingMonth)}&division=${encodeURIComponent(d.division)}`;
+              const item = { id: d.snapshotId, datasetName: d.datasetName || `${monthView.billingMonth} – ${d.division} Billing`, billingMonth: monthView.billingMonth, division: d.division };
+              return (
+                <div key={d.division} style={{ border: `1px solid ${st.border}`, borderRadius: 16, background: 'rgba(255,255,255,0.02)', padding: '1.15rem 1.25rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.6rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 9, background: st.bg, border: `1px solid ${st.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <MapPin size={16} color={st.color} />
                       </div>
-                    </td>
-                    <td style={td}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)' }}>
-                        <Calendar size={13} /> {item.billingMonth || '—'}
-                      </span>
-                    </td>
-                    <td style={{ ...td, fontFamily: 'monospace' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-                        <Users size={13} color="#818cf8" /> {item.totalRecords ?? 0}
-                      </span>
-                    </td>
-                    <td style={{ ...td, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{item.createdDate || '—'}</td>
-                    <td style={td}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)' }}>
-                        <User size={13} /> {item.approvedBy || '—'}
-                      </span>
-                    </td>
-                    <td style={td}><StatusBadge status={item.status} /></td>
-                    <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                      <div style={{ display: 'inline-flex', gap: '0.35rem' }}>
-                        <button onClick={() => handleOpen(item)} title="Open / View" style={actionBtn('#818cf8', 'rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)')}>
-                          <FolderOpen size={12} /> Open
-                        </button>
-                        <button onClick={() => openRename(item)} title="Rename Dataset" style={actionBtn('#f59e0b', 'rgba(245,158,11,0.12)', 'rgba(245,158,11,0.3)')}>
-                          <Pencil size={12} /> Rename
-                        </button>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.98rem', color: 'white' }}>{d.division}</div>
+                        <div style={{ fontSize: '0.64rem', color: 'var(--text-muted)', fontWeight: 600 }}>Eastern Province Division</div>
+                      </div>
+                    </div>
+                    <span style={{ padding: '0.22rem 0.6rem', borderRadius: 999, fontSize: '0.64rem', fontWeight: 800, color: st.color, background: st.bg, border: `1px solid ${st.border}`, whiteSpace: 'nowrap' }}>{st.label}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.74rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Total Records</span>
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 700, fontFamily: 'monospace' }}>{d.totalRecords ?? 0}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Last Updated</span>
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{d.lastUpdated || '—'}</span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.66rem', marginBottom: '0.3rem' }}>
+                      <span style={{ color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Progress</span>
+                      <span style={{ color: st.color, fontWeight: 700, fontFamily: 'monospace' }}>{st.progress}%</span>
+                    </div>
+                    <div style={{ height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                      <div style={{ width: `${st.progress}%`, height: '100%', borderRadius: 999, background: st.color, transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap', marginTop: 'auto' }}>
+                    {!hasData ? (
+                      <button onClick={() => navigate(uploadUrl)} title={`Upload billing for ${d.division}`} style={actionBtn('#38bdf8', 'rgba(56,189,248,0.12)', 'rgba(56,189,248,0.3)')}>
+                        <CloudUpload size={12} /> Upload Billing
+                      </button>
+                    ) : (
+                      <>
+                        <button onClick={() => handleOpen(item)} title="Open / View" style={actionBtn('#818cf8', 'rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)')}><FolderOpen size={12} /> Open</button>
                         <button onClick={() => handleDownload(item)} disabled={downloadingId === item.id} title="Download Excel" style={actionBtn('#10b981', 'rgba(16,185,129,0.12)', 'rgba(16,185,129,0.3)')}>
                           {downloadingId === item.id ? <Loader size={12} className="animate-spin" /> : <Download size={12} />} Excel
                         </button>
-                        <button onClick={() => handleDelete(item)} title="Delete Dataset" style={actionBtn('#f87171', 'rgba(239,68,68,0.12)', 'rgba(239,68,68,0.3)')}>
-                          <Trash2 size={12} /> Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                        <button onClick={() => openRename(item)} title="Rename Dataset" style={actionBtn('#f59e0b', 'rgba(245,158,11,0.12)', 'rgba(245,158,11,0.3)')}><Pencil size={12} /> Rename</button>
+                        <button onClick={() => navigate(uploadUrl)} title="Re-upload (replaces this division's dataset)" style={actionBtn('#38bdf8', 'rgba(56,189,248,0.12)', 'rgba(56,189,248,0.3)')}><CloudUpload size={12} /> Re-upload</button>
+                        <button onClick={() => handleDelete(item)} title="Delete Dataset" style={actionBtn('#f87171', 'rgba(239,68,68,0.12)', 'rgba(239,68,68,0.3)')}><Trash2 size={12} /> Delete</button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
+
+          {/* Datasets in this month whose division isn't one of the 5 fixed slots */}
+          {(monthView.otherDatasets || []).length > 0 && (
+            <div className="card" style={{ marginTop: '1.25rem', padding: '1.25rem 1.5rem', borderRadius: 16 }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.9rem' }}>
+                Other Datasets in {monthView.billingMonth}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {monthView.otherDatasets.map(item => (
+                  <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', padding: '0.65rem 0.85rem', borderRadius: 10, border: '1px solid var(--border-color)', background: 'rgba(255,255,255,0.02)', flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+                      <FolderOpen size={15} color="#10b981" />
+                      <span style={{ fontWeight: 600, fontSize: '0.82rem' }}>{item.datasetName}</span>
+                      <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{item.totalRecords ?? 0} records</span>
+                      <StatusBadge status={item.status} />
+                    </div>
+                    <div style={{ display: 'inline-flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      <button onClick={() => handleOpen(item)} title="Open / View" style={actionBtn('#818cf8', 'rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)')}><FolderOpen size={12} /> Open</button>
+                      <button onClick={() => handleDownload(item)} disabled={downloadingId === item.id} title="Download Excel" style={actionBtn('#10b981', 'rgba(16,185,129,0.12)', 'rgba(16,185,129,0.3)')}>
+                        {downloadingId === item.id ? <Loader size={12} className="animate-spin" /> : <Download size={12} />} Excel
+                      </button>
+                      <button onClick={() => handleDelete(item)} title="Delete Dataset" style={actionBtn('#f87171', 'rgba(239,68,68,0.12)', 'rgba(239,68,68,0.3)')}><Trash2 size={12} /> Delete</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* "Start New Billing Month" picker — pick a month + year, then upload per division */}
+      {newMonthOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: 430, padding: '1.75rem', boxShadow: 'var(--shadow)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Plus size={17} color="#818cf8" /> Start New Billing Month
+              </h3>
+              <button onClick={() => setNewMonthOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+            </div>
+            <p style={{ margin: '0 0 1rem 0', fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Pick the billing month to open. Each month keeps its own independent datasets for all 5 divisions.
+            </p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1.25rem', marginBottom: '1rem' }}>
+              <button onClick={() => setPickYear(y => y - 1)} style={actionBtn('var(--text-secondary)', 'rgba(255,255,255,0.04)', 'var(--border-color)')}>‹</button>
+              <span style={{ fontWeight: 800, fontSize: '1.05rem', fontFamily: 'monospace', color: 'white' }}>{pickYear}</span>
+              <button onClick={() => setPickYear(y => y + 1)} style={actionBtn('var(--text-secondary)', 'rgba(255,255,255,0.04)', 'var(--border-color)')}>›</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+              {MONTH_NAMES.map(name => {
+                const label = `${name} ${pickYear}`;
+                const exists = months.some(m => (m.billingMonth || '').toLowerCase() === label.toLowerCase());
+                return (
+                  <button key={name}
+                    onClick={() => { setNewMonthOpen(false); setSelectedMonth(label); }}
+                    title={exists ? `${label} already has uploads — opens the existing month` : `Open ${label}`}
+                    style={{
+                      padding: '0.55rem 0.4rem', borderRadius: 9, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 700,
+                      background: exists ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${exists ? 'rgba(99,102,241,0.45)' : 'var(--border-color)'}`,
+                      color: exists ? 'white' : 'var(--text-secondary)'
+                    }}>
+                    {name.slice(0, 3)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Open / View modal */}
       {viewing && (
@@ -751,6 +985,7 @@ const MonthlyCustomerDirectory = () => {
                 </h3>
                 <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
                   <span><strong style={{ color: 'white' }}>Billing Month:</strong> {viewing.billingMonth || '—'}</span>
+                  <span><strong style={{ color: 'white' }}>Division:</strong> {viewing.division || '—'}</span>
                   <span><strong style={{ color: 'white' }}>Total Records:</strong> {viewing.totalRecords ?? 0}</span>
                   <span><strong style={{ color: 'white' }}>Approved By:</strong> {viewing.approvedBy || '—'}</span>
                   <span><strong style={{ color: 'white' }}>Approval Date:</strong> {viewing.approvalDate || '—'}</span>

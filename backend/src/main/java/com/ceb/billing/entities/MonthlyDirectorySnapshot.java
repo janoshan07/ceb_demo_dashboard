@@ -29,6 +29,10 @@ public class MonthlyDirectorySnapshot {
     @Column(name = "billing_month", length = 60)
     private String billingMonth;
 
+    /** Eastern Province division the snapshot belongs to (e.g. "Ampara"). */
+    @Column(name = "division", length = 60)
+    private String division;
+
     /** When the Step 6 dataset was approved / archived. */
     @Column(name = "approval_date")
     private LocalDateTime approvalDate;
@@ -91,6 +95,9 @@ public class MonthlyDirectorySnapshot {
 
     public String getBillingMonth() { return billingMonth; }
     public void setBillingMonth(String billingMonth) { this.billingMonth = billingMonth; }
+
+    public String getDivision() { return division; }
+    public void setDivision(String division) { this.division = division; }
 
     public LocalDateTime getApprovalDate() { return approvalDate; }
     public void setApprovalDate(LocalDateTime approvalDate) { this.approvalDate = approvalDate; }

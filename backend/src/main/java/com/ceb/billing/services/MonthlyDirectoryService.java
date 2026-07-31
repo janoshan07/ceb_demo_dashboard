@@ -27,6 +27,7 @@ import java.util.*;
  * validation, merge, comparison, duplicate handling or approval logic.
  */
 @Service
+@SuppressWarnings({"null", "unchecked"})
 public class MonthlyDirectoryService {
 
     @Autowired
@@ -163,7 +164,6 @@ public class MonthlyDirectoryService {
             Map<String, Object> rec = finalData.get(i);
             Object[] info = correctionInfo.get(rec);
             if (info == null) continue;
-            @SuppressWarnings("unchecked")
             Map<String, Object> changes = new LinkedHashMap<>((Map<String, Object>) info[0]);
             changes.remove("deleted");
             appendAudit(snap, username, "STEP6_CORRECTION", rec, i, changes,

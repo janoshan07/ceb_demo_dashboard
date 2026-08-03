@@ -113,6 +113,26 @@ public class CustomerController {
                 }
             }
             dto.put("directory", directory);
+
+            // Compute Completeness (Complete Details vs Missing Details)
+            List<String> missingFields = new ArrayList<>();
+            if (c.getCustomerName() == null || c.getCustomerName().trim().isEmpty()) missingFields.add("Customer Name");
+            if (c.getCustomerAddress() == null || c.getCustomerAddress().trim().isEmpty()) missingFields.add("Customer Address");
+            if (c.getMobileNo() == null || c.getMobileNo().trim().isEmpty()) missingFields.add("Mobile Number");
+            if (c.getAgreementDate() == null) missingFields.add("Agreement Date");
+            if (c.getPanelCapacity() == null || c.getPanelCapacity() <= 0) missingFields.add("Panel Capacity");
+            if (c.getBankCode() == null || c.getBankCode().trim().isEmpty()) missingFields.add("Bank Code");
+            if (c.getBankAccountNo() == null || c.getBankAccountNo().trim().isEmpty()) missingFields.add("Bank Account No");
+            String solar = c.getSolarType() != null ? c.getSolarType().trim() : "";
+            if (solar.isEmpty() && c.getNetType() != null && c.getNetType().getName() != null) {
+                solar = c.getNetType().getName().trim();
+            }
+            if (solar.isEmpty()) missingFields.add("Solar / Net Type");
+            if (c.getUnitRate() == null) missingFields.add("Unit Rate");
+            if (c.getTariffType() == null || c.getTariffType().trim().isEmpty()) missingFields.add("Tariff Type");
+
+            dto.put("isComplete", missingFields.isEmpty());
+            dto.put("missingFields", missingFields);
         } catch (Exception ex) {
             log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
         }
@@ -127,6 +147,7 @@ public class CustomerController {
             @RequestParam(value = "query", required = false) String query,
             @RequestParam(value = "validationStatus", required = false) String validationStatus,
             @RequestParam(value = "location", required = false) String location,
+            @RequestParam(value = "completeness", required = false) String completeness,
             @RequestParam(value = "sortBy", required = false) String sortBy,
             @RequestParam(value = "direction", required = false) String direction,
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -153,7 +174,14 @@ public class CustomerController {
             List<Map<String, Object>> dtoList = new ArrayList<>();
             for (Customer c : customerPage.getContent()) {
                 try {
-                    dtoList.add(toSafeDto(c));
+                    Map<String, Object> dto = toSafeDto(c);
+                    if ("COMPLETE".equalsIgnoreCase(completeness) && !Boolean.TRUE.equals(dto.get("isComplete"))) {
+                        continue;
+                    }
+                    if (("MISSING".equalsIgnoreCase(completeness) || "INCOMPLETE".equalsIgnoreCase(completeness)) && Boolean.TRUE.equals(dto.get("isComplete"))) {
+                        continue;
+                    }
+                    dtoList.add(dto);
                 } catch (Exception ex) {
                     log.warning("Skipping customer " + c.getAccountNo() + " due to mapping error: " + ex.getMessage());
                 }

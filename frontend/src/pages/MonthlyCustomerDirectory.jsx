@@ -595,10 +595,28 @@ const MonthlyCustomerDirectory = () => {
     agreementExpiryStatus(computeAgreementExpiry(row.agreementDate), billingWindow.start, billingWindow.end),
   [billingWindow]);
 
+  const isRecordComplete = useCallback((row) => {
+    if (!row) return false;
+    const name = row.customerName || row.masterName || row.npayName;
+    if (!name || !String(name).trim() || name === '—') return false;
+    if (!row.customerAddress || !String(row.customerAddress).trim() || row.customerAddress === '—') return false;
+    if (!row.mobileNo || !String(row.mobileNo).trim() || row.mobileNo === '—') return false;
+    if (!row.agreementDate || row.agreementDate === '—') return false;
+    if (row.panelCapacity === null || row.panelCapacity === undefined || row.panelCapacity === '' || row.panelCapacity === '—') return false;
+    if (!row.bankCode || !String(row.bankCode).trim() || row.bankCode === '—') return false;
+    if (!row.bankAccountNo || !String(row.bankAccountNo).trim() || row.bankAccountNo === '—') return false;
+    const solar = row.solarType || row.masterNetType || row.netType;
+    if (!solar || !String(solar).trim() || solar === '—') return false;
+    if (row.unitRate === null || row.unitRate === undefined || row.unitRate === '' || row.unitRate === '—') return false;
+    return true;
+  }, []);
+
   // One predicate shared by the clickable summary cards and the Status dropdown.
   const matchesFilter = useCallback((row, key) => {
     switch (key) {
       case 'ALL': return true;
+      case 'COMPLETE': return isRecordComplete(row);
+      case 'MISSING': return !isRecordComplete(row);
       case 'DUPLICATE': return isDuplicateRecord(row);
       case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH';
       case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH';
@@ -608,7 +626,7 @@ const MonthlyCustomerDirectory = () => {
       case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON';
       default: return String(row.status || '').toUpperCase() === key;
     }
-  }, [rowExpiry]);
+  }, [rowExpiry, isRecordComplete]);
 
   // Live count per filter, shown on the summary cards and beside each dropdown option.
   const filterCounts = useMemo(() => {

@@ -159,8 +159,32 @@ const CustomerDetails = () => {
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, VALID, ERROR
   const [locationFilter, setLocationFilter] = useState('ALL'); // ALL or one of the 5 divisions
+  const [completenessFilter, setCompletenessFilter] = useState('ALL'); // ALL, COMPLETE, MISSING
+  const [viewMode, setViewMode] = useState('SINGLE'); // SINGLE, GROUPED
   const [sortBy, setSortBy] = useState('accountNo');
   const [sortDir, setSortDir] = useState('asc'); // asc | desc
+
+  // Helper to evaluate completeness of customer details
+  const getCustomerCompleteness = (cust) => {
+    if (!cust) return { isComplete: false, missingFields: [] };
+    if (cust.isComplete !== undefined && cust.missingFields !== undefined) {
+      return { isComplete: cust.isComplete, missingFields: cust.missingFields || [] };
+    }
+    const missing = [];
+    if (!cust.customerName || !String(cust.customerName).trim() || cust.customerName === '—') missing.push('Customer Name');
+    if (!cust.customerAddress || !String(cust.customerAddress).trim() || cust.customerAddress === '—') missing.push('Customer Address');
+    if (!cust.mobileNo || !String(cust.mobileNo).trim() || cust.mobileNo === '—') missing.push('Mobile Number');
+    if (!cust.agreementDate || cust.agreementDate === '—') missing.push('Agreement Date');
+    if (cust.panelCapacity === null || cust.panelCapacity === undefined || cust.panelCapacity === '' || cust.panelCapacity === '—') missing.push('Panel Capacity');
+    if (!cust.bankCode || !String(cust.bankCode).trim() || cust.bankCode === '—') missing.push('Bank Code');
+    if (!cust.bankAccountNo || !String(cust.bankAccountNo).trim() || cust.bankAccountNo === '—') missing.push('Bank Account No');
+    const solar = cust.solarType || cust.netTypeName;
+    if (!solar || !String(solar).trim() || solar === '—') missing.push('Solar / Net Type');
+    if (cust.unitRate === null || cust.unitRate === undefined || cust.unitRate === '' || cust.unitRate === '—') missing.push('Unit Rate');
+    if (!cust.tariffType || !String(cust.tariffType).trim() || cust.tariffType === '—') missing.push('Tariff Type');
+
+    return { isComplete: missing.length === 0, missingFields: missing };
+  };
 
   // Selected Customer Details State
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -287,6 +311,9 @@ const CustomerDetails = () => {
       if (locationFilter !== 'ALL') {
         url += `&location=${encodeURIComponent(locationFilter)}`;
       }
+      if (completenessFilter !== 'ALL') {
+        url += `&completeness=${completenessFilter}`;
+      }
       if (sortBy) {
         url += `&sortBy=${encodeURIComponent(sortBy)}&direction=${sortDir}`;
       }
@@ -326,7 +353,7 @@ const CustomerDetails = () => {
   useEffect(() => {
     fetchCustomers(currentPage, appliedQuery);
     fetchLookups();
-  }, [currentPage, appliedQuery, statusFilter, locationFilter, sortBy, sortDir]);
+  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, sortBy, sortDir]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -853,62 +880,169 @@ const CustomerDetails = () => {
         </div>
       </div>
 
-      {/* Directory tabs (All / Valid / Error Records) */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-        <button
-          onClick={() => { setStatusFilter('ALL'); setCurrentPage(0); }}
-          className={`tab-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
-          style={{
-            padding: '0.5rem 1.25rem',
-            background: statusFilter === 'ALL' ? 'rgba(99,102,241,0.12)' : 'transparent',
-            border: 'none',
-            color: statusFilter === 'ALL' ? '#818cf8' : 'var(--text-secondary)',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            borderBottom: statusFilter === 'ALL' ? '2.5px solid #6366f1' : 'none',
-            transition: 'all 0.2s ease'
-          }}
+      {/* Completeness Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+        <div className="card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #6366f1', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Loaded Customers</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'white', marginTop: '0.2rem' }}>{customers.length}</div>
+          </div>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <User size={20} color="#818cf8" />
+          </div>
+        </div>
+
+        <div 
+          className="card" 
+          onClick={() => { setCompletenessFilter('COMPLETE'); setCurrentPage(0); }}
+          style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: completenessFilter === 'COMPLETE' ? 'rgba(16,185,129,0.08)' : 'var(--bg-secondary)', transition: 'all 0.2s ease' }}
         >
-          All Customers
-        </button>
-        <button
-          onClick={() => { setStatusFilter('VALID'); setCurrentPage(0); }}
-          className={`tab-btn ${statusFilter === 'VALID' ? 'active' : ''}`}
-          style={{
-            padding: '0.5rem 1.25rem',
-            background: statusFilter === 'VALID' ? 'rgba(16,185,129,0.12)' : 'transparent',
-            border: 'none',
-            color: statusFilter === 'VALID' ? '#10b981' : 'var(--text-secondary)',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            borderBottom: statusFilter === 'VALID' ? '2.5px solid #10b981' : 'none',
-            transition: 'all 0.2s ease'
-          }}
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Complete Details</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {customers.filter(c => getCustomerCompleteness(c).isComplete).length}
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                ({customers.length > 0 ? Math.round((customers.filter(c => getCustomerCompleteness(c).isComplete).length / customers.length) * 100) : 0}%)
+              </span>
+            </div>
+          </div>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CheckCircle size={20} color="#10b981" />
+          </div>
+        </div>
+
+        <div 
+          className="card" 
+          onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }}
+          style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: completenessFilter === 'MISSING' ? 'rgba(245,158,11,0.08)' : 'var(--bg-secondary)', transition: 'all 0.2s ease' }}
         >
-          Valid Records
-        </button>
-        <button
-          onClick={() => { setStatusFilter('ERROR'); setCurrentPage(0); }}
-          className={`tab-btn ${statusFilter === 'ERROR' ? 'active' : ''}`}
-          style={{
-            padding: '0.5rem 1.25rem',
-            background: statusFilter === 'ERROR' ? 'rgba(239,68,68,0.12)' : 'transparent',
-            border: 'none',
-            color: statusFilter === 'ERROR' ? '#ef4444' : 'var(--text-secondary)',
-            fontWeight: 600,
-            fontSize: '0.85rem',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            borderBottom: statusFilter === 'ERROR' ? '2.5px solid #ef4444' : 'none',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          Error Records
-        </button>
+          <div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {customers.filter(c => !getCustomerCompleteness(c).isComplete).length}
+              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                ({customers.length > 0 ? Math.round((customers.filter(c => !getCustomerCompleteness(c).isComplete).length / customers.length) * 100) : 0}%)
+              </span>
+            </div>
+          </div>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertTriangle size={20} color="#f59e0b" />
+          </div>
+        </div>
+      </div>
+
+      {/* Directory tabs (All / Complete Details / Missing Details / Valid / Error) + View Mode Toggle */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => { setCompletenessFilter('ALL'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1rem',
+              background: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? 'rgba(99,102,241,0.15)' : 'transparent',
+              border: '1px solid ' + ((completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#6366f1' : 'transparent'),
+              color: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#818cf8' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            All Customers
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('COMPLETE'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1rem',
+              background: completenessFilter === 'COMPLETE' ? 'rgba(16,185,129,0.15)' : 'transparent',
+              border: '1px solid ' + (completenessFilter === 'COMPLETE' ? '#10b981' : 'transparent'),
+              color: completenessFilter === 'COMPLETE' ? '#10b981' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <CheckCircle size={14} /> Complete Details
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('MISSING'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1rem',
+              background: completenessFilter === 'MISSING' ? 'rgba(245,158,11,0.15)' : 'transparent',
+              border: '1px solid ' + (completenessFilter === 'MISSING' ? '#f59e0b' : 'transparent'),
+              color: completenessFilter === 'MISSING' ? '#f59e0b' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <AlertTriangle size={14} /> Missing Details
+          </button>
+
+          <button
+            onClick={() => { setStatusFilter('ERROR'); setCompletenessFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1rem',
+              background: statusFilter === 'ERROR' ? 'rgba(239,68,68,0.15)' : 'transparent',
+              border: '1px solid ' + (statusFilter === 'ERROR' ? '#ef4444' : 'transparent'),
+              color: statusFilter === 'ERROR' ? '#ef4444' : 'var(--text-secondary)',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Validation Errors
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+          <button
+            onClick={() => setViewMode('SINGLE')}
+            style={{
+              padding: '0.35rem 0.75rem',
+              borderRadius: '6px',
+              border: 'none',
+              background: viewMode === 'SINGLE' ? 'var(--primary)' : 'transparent',
+              color: viewMode === 'SINGLE' ? 'white' : 'var(--text-secondary)',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Unified Table
+          </button>
+          <button
+            onClick={() => setViewMode('GROUPED')}
+            style={{
+              padding: '0.35rem 0.75rem',
+              borderRadius: '6px',
+              border: 'none',
+              background: viewMode === 'GROUPED' ? 'var(--primary)' : 'transparent',
+              color: viewMode === 'GROUPED' ? 'white' : 'var(--text-secondary)',
+              fontSize: '0.78rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Grouped View
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -1012,117 +1146,268 @@ const CustomerDetails = () => {
         </div>
       </div>
 
-      {/* Customer List Table */}
-      <div className="card">
-        <div className="table-container">
-          {loading ? (
-            <table className="custom-table" style={{ opacity: 0.8 }}>
-              <thead>
-                <tr>
-                  <th style={{ width: '60px' }}>#</th>
-                  <th>Account No</th>
-                  <th>Customer Name</th>
-                  <th>Solar Type</th>
-                  <th>Panel Cap</th>
-                  <th>Agreement Date</th>
-                  <th>Ref No</th>
-                  <th>Cost Code</th>
-                  <th>Location</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {[...Array(8)].map((_, i) => (
-                  <tr key={i}>
-                    <td><div className="skeleton" style={{ height: '16px', width: '20px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '150px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                    <td><div className="skeleton" style={{ height: '16px', width: '180px' }}></div></td>
-                    <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '90px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
+      {/* Customer List Display: Unified vs Grouped View */}
+      {viewMode === 'SINGLE' ? (
+        <div className="card">
+          <div className="table-container">
+            {loading ? (
+              <table className="custom-table" style={{ opacity: 0.8 }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '60px' }}>#</th>
+                    <th>Account No</th>
+                    <th>Customer Name</th>
+                    <th>Completeness</th>
+                    <th>Solar Type</th>
+                    <th>Panel Cap</th>
+                    <th>Agreement Date</th>
+                    <th>Location</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : customers.length === 0 ? (
-            <div style={{ padding: '3rem 0', textAlignment: 'center', color: 'var(--text-muted)' }}>
-              No customers found. Try a different search query or import a billing file.
-            </div>
-          ) : (
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '60px' }}>#</th>
-                  <th>Account No</th>
-                  <th>Customer Name</th>
-                  <th>Solar Type</th>
-                  <th>Panel Cap</th>
-                  <th>Agreement Date</th>
-                  <th>Ref No</th>
-                  <th>Cost Code</th>
-                  <th>Location</th>
-                  <th style={{ textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customers.map((cust, idx) => (
-                  <tr key={cust.accountNo}>
-                    <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
-                      {currentPage * 8 + idx + 1}
-                    </td>
-                    <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
-                    <td style={{ fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.5rem', height: '100%', minHeight: '38px' }}>
-                      {cust.customerName}
-                      {cust.validationStatus === 'ERROR' && (
-                        <span 
-                          className="badge danger" 
-                          style={{ 
-                            padding: '0.15rem 0.45rem', 
-                            borderRadius: '4px', 
-                            fontSize: '0.68rem', 
-                            fontWeight: 700, 
-                            background: 'rgba(239, 68, 68, 0.18)', 
-                            color: '#f87171', 
-                            border: '1px solid rgba(239, 68, 68, 0.3)',
-                            cursor: 'help'
-                          }}
-                          title={cust.validationErrors ? parseErrors(cust.validationErrors).join('; ') : 'Validation errors present'}
-                        >
-                          Error
-                        </span>
-                      )}
-                    </td>
-                    <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
-                    <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
-                    <td>{cust.agreementDate || '—'}</td>
-                    <td>{cust.refNo || '—'}</td>
-                    <td>{cust.costCode || '—'}</td>
-                    <td>
-                      {(cust.division || cust.branchCode) ? (
-                        <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
-                          <MapPin size={11} /> {cust.division || cust.branchCode}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <button 
-                        className="btn btn-secondary" 
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                        onClick={() => handleViewDetails(cust)}
-                      >
-                        View Profile
-                      </button>
-                    </td>
+                </thead>
+                <tbody>
+                  {[...Array(8)].map((_, i) => (
+                    <tr key={i}>
+                      <td><div className="skeleton" style={{ height: '16px', width: '20px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '150px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '24px', width: '90px', borderRadius: '4px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
+                      <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '90px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : customers.length === 0 ? (
+              <div style={{ padding: '3rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+                No customers found. Try a different search query or filter.
+              </div>
+            ) : (
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '60px' }}>#</th>
+                    <th>Account No</th>
+                    <th>Customer Name</th>
+                    <th>Completeness</th>
+                    <th>Solar Type</th>
+                    <th>Panel Cap</th>
+                    <th>Agreement Date</th>
+                    <th>Location</th>
+                    <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {customers.map((cust, idx) => {
+                    const comp = getCustomerCompleteness(cust);
+                    return (
+                      <tr key={cust.accountNo}>
+                        <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+                          {currentPage * 8 + idx + 1}
+                        </td>
+                        <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
+                        <td style={{ fontWeight: 500 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <span>{cust.customerName}</span>
+                            {cust.validationStatus === 'ERROR' && (
+                              <span 
+                                className="badge danger" 
+                                style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: 'rgba(239, 68, 68, 0.18)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', cursor: 'help' }}
+                                title={cust.validationErrors ? parseErrors(cust.validationErrors).join('; ') : 'Validation errors present'}
+                              >
+                                Error
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          {comp.isComplete ? (
+                            <span className="badge success" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <CheckCircle size={12} /> Complete
+                            </span>
+                          ) : (
+                            <span className="badge warning" title={`Missing: ${comp.missingFields.join(', ')}`} style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'help' }}>
+                              <AlertTriangle size={12} /> Missing ({comp.missingFields.length})
+                            </span>
+                          )}
+                        </td>
+                        <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
+                        <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
+                        <td>{cust.agreementDate || '—'}</td>
+                        <td>
+                          {(cust.division || cust.branchCode) ? (
+                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <MapPin size={11} /> {cust.division || cust.branchCode}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button 
+                            className="btn btn-secondary" 
+                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
+                            onClick={() => handleViewDetails(cust)}
+                          >
+                            View Profile
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
+      ) : (
+        /* Grouped View: 2 Distinct Groups */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {/* Group 1: Complete Details */}
+          <div className="card" style={{ borderLeft: '4px solid #10b981', padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CheckCircle size={18} color="#10b981" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#10b981' }}>Complete Customer Details</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>All required customer profile fields are fully filled.</p>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '999px', background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+                {customers.filter(c => getCustomerCompleteness(c).isComplete).length} Customers
+              </span>
+            </div>
+
+            <div className="table-container">
+              {customers.filter(c => getCustomerCompleteness(c).isComplete).length === 0 ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                  No customers with complete details in this page view.
+                </div>
+              ) : (
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '60px' }}>#</th>
+                      <th>Account No</th>
+                      <th>Customer Name</th>
+                      <th>Solar Type</th>
+                      <th>Panel Cap</th>
+                      <th>Location</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customers.filter(c => getCustomerCompleteness(c).isComplete).map((cust, idx) => (
+                      <tr key={cust.accountNo}>
+                        <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{idx + 1}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
+                        <td style={{ fontWeight: 500 }}>{cust.customerName}</td>
+                        <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
+                        <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
+                        <td>
+                          {(cust.division || cust.branchCode) ? (
+                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <MapPin size={11} /> {cust.division || cust.branchCode}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button 
+                            className="btn btn-secondary" 
+                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
+                            onClick={() => handleViewDetails(cust)}
+                          >
+                            View Profile
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+
+          {/* Group 2: Missing Details */}
+          <div className="card" style={{ borderLeft: '4px solid #f59e0b', padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <AlertTriangle size={18} color="#f59e0b" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#f59e0b' }}>Missing Customer Details</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Customers with one or more missing information fields.</p>
+                </div>
+              </div>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '999px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+                {customers.filter(c => !getCustomerCompleteness(c).isComplete).length} Customers
+              </span>
+            </div>
+
+            <div className="table-container">
+              {customers.filter(c => !getCustomerCompleteness(c).isComplete).length === 0 ? (
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                  All loaded customers in this view have complete details! 🎉
+                </div>
+              ) : (
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '60px' }}>#</th>
+                      <th>Account No</th>
+                      <th>Customer Name</th>
+                      <th>Missing Fields</th>
+                      <th>Location</th>
+                      <th style={{ textAlign: 'right' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {customers.filter(c => !getCustomerCompleteness(c).isComplete).map((cust, idx) => {
+                      const comp = getCustomerCompleteness(cust);
+                      return (
+                        <tr key={cust.accountNo}>
+                          <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{idx + 1}</td>
+                          <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
+                          <td style={{ fontWeight: 500 }}>{cust.customerName}</td>
+                          <td>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                              {comp.missingFields.map(f => (
+                                <span key={f} style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 600, background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.25)' }}>
+                                  {f}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td>
+                            {(cust.division || cust.branchCode) ? (
+                              <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                                <MapPin size={11} /> {cust.division || cust.branchCode}
+                              </span>
+                            ) : '—'}
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button 
+                              className="btn btn-primary" 
+                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: '#f59e0b', borderColor: '#f59e0b' }}
+                              onClick={() => { handleViewDetails(cust); setIsEditing(true); }}
+                            >
+                              Fill Details
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
         {/* Pagination controls */}
         {totalPages > 1 && (
@@ -1175,7 +1460,6 @@ const CustomerDetails = () => {
             </button>
           </div>
         )}
-      </div>
 
       {/* Details Slide-out Drawer */}
       <div className={`slide-drawer ${drawerOpen ? 'open' : ''}`} style={{ width: '850px', maxWidth: '95%' }}>

@@ -232,6 +232,17 @@ public class CustomerController {
                 return ResponseEntity.notFound().build();
             }
             List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
+            List<BillingRecord> ngenHistory = new ArrayList<>();
+            for (BillingRecord br : history) {
+                if (br.getUploadHistoryId() == null || 
+                    br.getKwhImport() != null || 
+                    br.getKwhExport() != null || 
+                    br.getKwhSales() != null) {
+                    ngenHistory.add(br);
+                }
+            }
+            history = ngenHistory;
+            history = deduplicateTechnicalDuplicates(history);
             List<Map<String, Object>> dtoList = new ArrayList<>();
             for (BillingRecord br : history) {
                 dtoList.add(toBillingDto(br));
@@ -375,6 +386,17 @@ public class CustomerController {
             return ResponseEntity.notFound().build();
         }
         List<BillingRecord> history = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
+        List<BillingRecord> ngenHistory = new ArrayList<>();
+        for (BillingRecord br : history) {
+            if (br.getUploadHistoryId() == null || 
+                br.getKwhImport() != null || 
+                br.getKwhExport() != null || 
+                br.getKwhSales() != null) {
+                ngenHistory.add(br);
+            }
+        }
+        history = ngenHistory;
+        history = deduplicateTechnicalDuplicates(history);
         return ResponseEntity.ok(history);
     }
 
@@ -404,6 +426,7 @@ public class CustomerController {
             dto.put("kwhExport",        br.getKwhExport());
             dto.put("kwhSales",         br.getKwhSales());
             dto.put("paymentSettled",   br.getPaymentSettled());
+            dto.put("outstandingBalance", br.getOutstandingBalance());
             dto.put("uploadHistoryId",  br.getUploadHistoryId());
             dto.put("createdAt",        br.getCreatedAt() != null ? br.getCreatedAt().toString() : null);
         } catch (Exception ex) {
@@ -619,5 +642,61 @@ public class CustomerController {
         } else {
             customer.setExpenseCode(null);
         }
+    }
+
+    private List<BillingRecord> deduplicateTechnicalDuplicates(List<BillingRecord> history) {
+        if (history == null || history.isEmpty()) {
+            return history;
+        }
+        List<BillingRecord> uniqueRecords = new ArrayList<>();
+        for (BillingRecord record : history) {
+            boolean isTechnicalDuplicate = false;
+            for (BillingRecord existing : uniqueRecords) {
+                if (isSameTechnicalRecord(record, existing)) {
+                    isTechnicalDuplicate = true;
+                    break;
+                }
+            }
+            if (!isTechnicalDuplicate) {
+                uniqueRecords.add(record);
+            }
+        }
+        return uniqueRecords;
+    }
+
+    private boolean isSameTechnicalRecord(BillingRecord r1, BillingRecord r2) {
+        if (r1 == null || r2 == null) return false;
+
+        String acc1 = r1.getCustomer() != null ? r1.getCustomer().getAccountNo() : null;
+        String acc2 = r2.getCustomer() != null ? r2.getCustomer().getAccountNo() : null;
+        if (!Objects.equals(acc1, acc2)) return false;
+
+        if (!Objects.equals(r1.getRefNo(), r2.getRefNo())) return false;
+        if (!Objects.equals(r1.getFromDate(), r2.getFromDate())) return false;
+        if (!Objects.equals(r1.getToDate(), r2.getToDate())) return false;
+
+        if (!Objects.equals(r1.getPrevReadingDate(), r2.getPrevReadingDate())) return false;
+        if (!Objects.equals(r1.getCurrReadingDate(), r2.getCurrReadingDate())) return false;
+
+        if (!Objects.equals(r1.getImportUnits(), r2.getImportUnits())) return false;
+        if (!Objects.equals(r1.getExportUnits(), r2.getExportUnits())) return false;
+        if (!Objects.equals(r1.getNetUnit(), r2.getNetUnit())) return false;
+        if (!Objects.equals(r1.getUnitCost(), r2.getUnitCost())) return false;
+        if (!Objects.equals(r1.getTotalAmount(), r2.getTotalAmount())) return false;
+        if (!Objects.equals(r1.getBillingMode(), r2.getBillingMode())) return false;
+
+        if (!Objects.equals(r1.getBillCycle(), r2.getBillCycle())) return false;
+        if (!Objects.equals(r1.getBillSetOff(), r2.getBillSetOff())) return false;
+        if (!Objects.equals(r1.getRetentionMoney(), r2.getRetentionMoney())) return false;
+        if (!Objects.equals(r1.getPayment(), r2.getPayment())) return false;
+        if (!Objects.equals(r1.getEnergyPurchase(), r2.getEnergyPurchase())) return false;
+
+        if (!Objects.equals(r1.getKwhImport(), r2.getKwhImport())) return false;
+        if (!Objects.equals(r1.getKwhExport(), r2.getKwhExport())) return false;
+        if (!Objects.equals(r1.getKwhSales(), r2.getKwhSales())) return false;
+        if (!Objects.equals(r1.getPaymentSettled(), r2.getPaymentSettled())) return false;
+        if (!Objects.equals(r1.getUploadHistoryId(), r2.getUploadHistoryId())) return false;
+
+        return true;
     }
 }

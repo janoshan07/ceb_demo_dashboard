@@ -2071,14 +2071,18 @@ const CustomerDetails = () => {
                     <table className="custom-table" style={{ opacity: 0.8 }}>
                       <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
                         <tr>
-                          <th>Period</th>
+                          <th>Prev Reading</th>
+                          <th>Curr Reading</th>
                           <th>Ref No</th>
                           <th>Yield Perf</th>
-                          <th>Imports</th>
-                          <th>Exports</th>
-                          <th>Net (kWh)</th>
-                          <th>Total Amount</th>
-                          <th>Payment</th>
+                          <th>kWh Import</th>
+                          <th>kWh Export</th>
+                          <th>kWh Unit Sales</th>
+                          <th>kWh Sales Amt</th>
+                          <th>Set Off</th>
+                          <th>Retention</th>
+                          <th>Settled</th>
+                          <th>Outstanding</th>
                           <th>Mode</th>
                           <th style={{ textAlign: 'right' }}>Action</th>
                         </tr>
@@ -2087,13 +2091,17 @@ const CustomerDetails = () => {
                         {[...Array(5)].map((_, i) => (
                           <tr key={i}>
                             <td><div className="skeleton" style={{ height: '16px', width: '70px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '70px' }}></div></td>
                             <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
                             <td><div className="skeleton" style={{ height: '22px', width: '60px', borderRadius: '4px' }}></div></td>
                             <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
                             <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
                             <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
+                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
                             <td><div className="skeleton" style={{ height: '22px', width: '50px', borderRadius: '4px' }}></div></td>
                             <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '50px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
                           </tr>
@@ -2108,28 +2116,32 @@ const CustomerDetails = () => {
                     <table className="custom-table" style={{ fontSize: '0.85rem' }}>
                       <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
                         <tr>
-                          <th>Period</th>
+                          <th>Prev Reading</th>
+                          <th>Curr Reading</th>
                           <th>Ref No</th>
                           <th>Yield Perf</th>
-                          <th>Imports</th>
-                          <th>Exports</th>
-                          <th>Net (kWh)</th>
-                          <th>Total Amount</th>
-                          <th>Payment</th>
+                          <th>kWh Import</th>
+                          <th>kWh Export</th>
+                          <th>kWh Unit Sales</th>
+                          <th>kWh Sales Amt</th>
+                          <th>Set Off</th>
+                          <th>Retention</th>
+                          <th>Settled</th>
+                          <th>Outstanding</th>
                           <th>Mode</th>
                           <th style={{ textAlign: 'right' }}>Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {billingHistory.map((bill) => {
-                          const perf = calculatePerformanceScore(bill.exportUnits, selectedCustomer.panelCapacity);
+                          const perf = calculatePerformanceScore(
+                            bill.kwhExport != null ? bill.kwhExport : bill.exportUnits,
+                            selectedCustomer.panelCapacity
+                          );
                           return (
                             <tr key={bill.billingId}>
-                              <td>
-                                {bill.prevReadingDate && bill.currReadingDate 
-                                  ? `${bill.prevReadingDate} to ${bill.currReadingDate}` 
-                                  : (bill.prevReadingDate || bill.currReadingDate || '—')}
-                              </td>
+                              <td>{bill.prevReadingDate || '—'}</td>
+                              <td>{bill.currReadingDate || '—'}</td>
                               <td style={{ fontWeight: 500 }}>{bill.refNo}</td>
                               <td>
                                 <span className={`badge ${perf.class}`} style={{ textTransform: 'capitalize', fontSize: '0.72rem', fontWeight: 600 }}>
@@ -2139,23 +2151,34 @@ const CustomerDetails = () => {
                               <td>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--warning)' }}>
                                   <TrendingDown size={12} />
-                                  {bill.importUnits.toLocaleString()}
+                                  {(bill.kwhImport != null ? bill.kwhImport : bill.importUnits).toLocaleString()}
                                 </span>
                               </td>
                               <td>
                                 <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--success)' }}>
                                   <TrendingUp size={12} />
-                                  {bill.exportUnits.toLocaleString()}
+                                  {(bill.kwhExport != null ? bill.kwhExport : bill.exportUnits).toLocaleString()}
                                 </span>
                               </td>
-                              <td style={{ fontWeight: 600, color: bill.netUnit >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                                {bill.netUnit > 0 ? `+${bill.netUnit.toLocaleString()}` : bill.netUnit.toLocaleString()}
+                              <td style={{ fontWeight: 600, color: (bill.kwhSales != null ? bill.kwhSales : bill.netUnit) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                                {(bill.kwhSales != null ? bill.kwhSales : bill.netUnit) > 0 
+                                  ? `+${(bill.kwhSales != null ? bill.kwhSales : bill.netUnit).toLocaleString()}` 
+                                  : (bill.kwhSales != null ? bill.kwhSales : bill.netUnit).toLocaleString()}
                               </td>
                               <td style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                                {formatLKR(bill.totalAmount)}
+                                {bill.energyPurchase != null ? formatLKR(bill.energyPurchase) : '—'}
+                              </td>
+                              <td>
+                                {bill.billSetOff != null ? formatLKR(bill.billSetOff) : '—'}
+                              </td>
+                              <td>
+                                {bill.retentionMoney != null ? formatLKR(bill.retentionMoney) : '—'}
                               </td>
                               <td style={{ color: 'var(--success)', fontWeight: 700 }}>
-                                {bill.payment != null ? formatLKR(bill.payment) : '—'}
+                                {bill.paymentSettled != null ? formatLKR(bill.paymentSettled) : '—'}
+                              </td>
+                              <td style={{ color: 'var(--warning)', fontWeight: 700 }}>
+                                {bill.outstandingBalance != null ? formatLKR(bill.outstandingBalance) : '—'}
                               </td>
                               <td><span className="badge success" style={{ fontSize: '0.65rem' }}>{bill.billingMode || 'Fixed'}</span></td>
                               <td style={{ textAlign: 'right' }}>

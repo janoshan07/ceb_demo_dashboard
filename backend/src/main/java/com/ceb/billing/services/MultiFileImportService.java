@@ -4109,7 +4109,10 @@ public class MultiFileImportService {
             br.setBillSetOff(billSetOff != null ? billSetOff : 0.0);
             br.setRetentionMoney(retentionMoney != null ? retentionMoney : 0.0);
             br.setPayment(payment != null ? payment : 0.0);
-            br.setPaymentSettled(payment != null ? payment : 0.0);
+            Double paymentSettledVal = row.get("paymentSettled") != null ? ((Number) row.get("paymentSettled")).doubleValue() : 0.0;
+            br.setPaymentSettled(paymentSettledVal);
+            Double outstandingBalance = row.get("outstandingBalance") != null ? ((Number) row.get("outstandingBalance")).doubleValue() : 0.0;
+            br.setOutstandingBalance(outstandingBalance);
 
             billingRecordRepository.save(br);
             createdBilling++;
@@ -4176,7 +4179,10 @@ public class MultiFileImportService {
             br.setBillSetOff(billSetOff != null ? billSetOff : 0.0);
             br.setRetentionMoney(retentionMoney != null ? retentionMoney : 0.0);
             br.setPayment(payment != null ? payment : 0.0);
-            br.setPaymentSettled(payment != null ? payment : 0.0);
+            Double paymentSettledVal = row.get("paymentSettled") != null ? ((Number) row.get("paymentSettled")).doubleValue() : 0.0;
+            br.setPaymentSettled(paymentSettledVal);
+            Double outstandingBalance = row.get("outstandingBalance") != null ? ((Number) row.get("outstandingBalance")).doubleValue() : 0.0;
+            br.setOutstandingBalance(outstandingBalance);
 
             billingRecordRepository.save(br);
             createdBilling++;

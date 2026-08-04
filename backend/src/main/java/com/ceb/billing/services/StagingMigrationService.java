@@ -274,17 +274,20 @@ public class StagingMigrationService {
             BillingRecord billingRecord = new BillingRecord(customer, refNo, fromDate, toDate,
                     importUnits, exportUnits, unitCost, billingMode, batchId);
 
-            // NPAY fields mapping
+            // NPAY/NGEN fields mapping
             Double energyPurchase = data.get("energyPurchase") != null ? Double.valueOf(data.get("energyPurchase").toString()) : 0.0;
             Double billSetOff = data.get("billSetOff") != null ? Double.valueOf(data.get("billSetOff").toString()) : 0.0;
             Double retentionMoney = data.get("retentionMoney") != null ? Double.valueOf(data.get("retentionMoney").toString()) : 0.0;
             Double payment = data.get("payment") != null ? Double.valueOf(data.get("payment").toString()) : 0.0;
+            Double paymentSettled = data.get("paymentSettled") != null ? Double.valueOf(data.get("paymentSettled").toString()) : 0.0;
+            Double outstandingBalance = data.get("outstandingBalance") != null ? Double.valueOf(data.get("outstandingBalance").toString()) : 0.0;
 
             billingRecord.setEnergyPurchase(energyPurchase);
             billingRecord.setBillSetOff(billSetOff);
             billingRecord.setRetentionMoney(retentionMoney);
             billingRecord.setPayment(payment);
-            billingRecord.setPaymentSettled(payment);
+            billingRecord.setPaymentSettled(paymentSettled);
+            billingRecord.setOutstandingBalance(outstandingBalance);
 
             Double kwhImport = data.get("kwhImport") != null ? Double.valueOf(data.get("kwhImport").toString()) : null;
             Double kwhExport = data.get("kwhExport") != null ? Double.valueOf(data.get("kwhExport").toString()) : null;

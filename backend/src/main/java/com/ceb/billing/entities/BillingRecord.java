@@ -83,6 +83,9 @@ public class BillingRecord {
     @Column(name = "payment_settled")
     private Double paymentSettled;  // kWh Sales × Unit Rate
 
+    @Column(name = "outstanding_balance")
+    private Double outstandingBalance;
+
     @Column(name = "upload_history_id")
     private Long uploadHistoryId;
 
@@ -281,4 +284,7 @@ public class BillingRecord {
 
     public Double getEnergyPurchase() { return energyPurchase; }
     public void setEnergyPurchase(Double energyPurchase) { this.energyPurchase = energyPurchase; }
+
+    public Double getOutstandingBalance() { return outstandingBalance; }
+    public void setOutstandingBalance(Double outstandingBalance) { this.outstandingBalance = outstandingBalance; }
 }

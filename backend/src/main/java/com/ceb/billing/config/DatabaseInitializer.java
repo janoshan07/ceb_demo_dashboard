@@ -46,40 +46,12 @@ public class DatabaseInitializer implements CommandLineRunner {
             auditLogService.log("DATABASE_INIT", "Default users seeded (admin/admin123, officer/officer123, viewer/viewer123, 3202345091/customer123)");
         }
 
-        // 2. Seed Customers & Bills if empty
-        if (customerRepository.count() == 0) {
-            Customer c1 = new Customer("3202345091", "Sun Industrial Pvt Ltd", "123 Industrial Zone, Colombo", "0771234567", LocalDate.of(2025, 1, 15), 150.0, "BOC", "Batticaloa", "7045920", "Net Plus");
-            Customer c2 = new Customer("2408761230", "Dilmah Tea Factory", "Peliyagoda, Kandy Road", "0719876543", LocalDate.of(2024, 6, 20), 300.0, "COM", "Ampara", "1209384", "Net Plus Plus");
-            Customer c3 = new Customer("3404561001", "Lanka Hospitals Corp", "578 Elvitigala Mawatha, Colombo 5", "0725544332", LocalDate.of(2023, 10, 5), 450.0, "HNB", "Trincomalee", "4592810", "Net Metering");
-            Customer c4 = new Customer("6901204092", "Keells Supermarket Col 3", "45 Galle Road, Colombo 3", "0766543210", LocalDate.of(2025, 3, 10), 80.0, "SAMP", "Kalmunai", "8876529", "Net Accounting");
-
-            customerRepository.save(c1);
-            customerRepository.save(c2);
-            customerRepository.save(c3);
-            customerRepository.save(c4);
-
-            // April Bills
-            billingRecordRepository.save(new BillingRecord(c1, "REF-202604-01", LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30), 1200.0, 5600.0, 48.0, "Fixed", null));
-            billingRecordRepository.save(new BillingRecord(c2, "REF-202604-02", LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30), 800.0, 4200.0, 48.0, "Fixed", null));
-            billingRecordRepository.save(new BillingRecord(c3, "REF-202604-03", LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30), 4500.0, 3100.0, 52.0, "Variable", null));
-            billingRecordRepository.save(new BillingRecord(c4, "REF-202604-04", LocalDate.of(2026, 4, 1), LocalDate.of(2026, 4, 30), 1500.0, 2900.0, 48.0, "Fixed", null));
-
-            // May Bills
-            billingRecordRepository.save(new BillingRecord(c1, "REF-202605-01", LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), 1150.0, 6100.0, 48.0, "Fixed", null));
-            billingRecordRepository.save(new BillingRecord(c2, "REF-202605-02", LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), 900.0, 4800.0, 48.0, "Fixed", null));
-            billingRecordRepository.save(new BillingRecord(c3, "REF-202605-03", LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), 4800.0, 3400.0, 52.0, "Variable", null));
-            billingRecordRepository.save(new BillingRecord(c4, "REF-202605-04", LocalDate.of(2026, 5, 1), LocalDate.of(2026, 5, 31), 1600.0, 3200.0, 48.0, "Fixed", null));
-
-            auditLogService.log("DATABASE_INIT", "Demo customers and billing records seeded");
-        }
-
-        // 3. Alignment Migration: Correct branch codes of all existing customers in the DB
-        for (Customer c : customerRepository.findAll()) {
-            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(c.getAccountNo());
-            if (detected != null && !detected.equals(c.getBranchCode())) {
-                c.setBranchCode(detected);
-                customerRepository.save(c);
-            }
+        // 2. Clear pre-existing demo/sample customers & billing records so Customer Directory starts clean.
+        // Records will populate automatically when new data is uploaded and approved by Admin.
+        if (customerRepository.count() > 0) {
+            billingRecordRepository.deleteAll();
+            customerRepository.deleteAll();
+            auditLogService.log("DATABASE_INIT", "Cleared pre-existing customers and billing records for clean Customer Directory.");
         }
     }
 }

@@ -291,6 +291,23 @@ public class CustomerController {
 
     // --- Admin Customer Endpoints ---
 
+    @DeleteMapping("/api/admin/customers/clear-all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> clearAllCustomers() {
+        try {
+            long count = customerRepository.count();
+            billingRecordRepository.deleteAll();
+            customerRepository.deleteAll();
+            String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+            auditLogService.log("CUSTOMER_DIRECTORY_CLEAR",
+                    String.format("Admin %s cleared all %d customer records from Customer Directory", adminUsername, count));
+            return ResponseEntity.ok(Map.of("message", "Successfully cleared " + count + " customer records."));
+        } catch (Exception ex) {
+            log.severe("DELETE /api/admin/customers/clear-all failed: " + ex.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to clear customers: " + ex.getMessage()));
+        }
+    }
+
     @PutMapping("/api/admin/customers/{accountNo}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> adminUpdateCustomer(@PathVariable String accountNo,

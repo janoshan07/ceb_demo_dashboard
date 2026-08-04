@@ -367,6 +367,32 @@ const CustomerDetails = () => {
     setCurrentPage(0);
   };
 
+  const handleClearAllCustomers = async () => {
+    const ok = await showConfirm({
+      title: 'Clear Customer Directory',
+      message: 'Are you sure you want to remove ALL customer records from the Customer Directory? Customer details will be re-populated automatically when new billing sheets are uploaded and approved.',
+      confirmText: 'Clear All Customers',
+      cancelText: 'Cancel',
+      type: 'danger'
+    });
+    if (!ok) return;
+
+    try {
+      setLoading(true);
+      const res = await authFetch('/api/admin/customers/clear-all', { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to clear customer directory.');
+      }
+      showToast(data.message || 'All customers removed successfully.', 'success');
+      fetchCustomers(0, appliedQuery);
+    } catch (err) {
+      showToast(err.message || 'Error clearing customers.', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Helper to generate professional pagination pages layout
   const getPageNumbers = () => {
     const pageNumbers = [];
@@ -1076,14 +1102,26 @@ const CustomerDetails = () => {
             )}
           </form>
           {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--success)', borderColor: 'var(--success)' }}
-              onClick={openAddCustomerModal}
-            >
-              Add Customer
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {user?.role === 'ADMIN' && customers.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: 'var(--danger)', color: 'var(--danger)' }}
+                  onClick={handleClearAllCustomers}
+                >
+                  <Trash2 size={16} /> Clear Directory
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--success)', borderColor: 'var(--success)' }}
+                onClick={openAddCustomerModal}
+              >
+                Add Customer
+              </button>
+            </div>
           )}
         </div>
 
@@ -1182,8 +1220,12 @@ const CustomerDetails = () => {
                 </tbody>
               </table>
             ) : customers.length === 0 ? (
-              <div style={{ padding: '3rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No customers found. Try a different search query or filter.
+              <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                <User size={42} style={{ opacity: 0.35, marginBottom: '0.75rem', color: '#818cf8' }} />
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white' }}>No Customer Records Found</div>
+                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
+                  The Customer Directory is empty. Records will automatically populate here when new billing data is uploaded and approved by an Admin.
+                </div>
               </div>
             ) : (
               <table className="custom-table">

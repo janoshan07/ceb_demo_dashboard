@@ -370,7 +370,7 @@ const FilterDropdown = ({ value, options, onChange, minWidth = 190, placeholderC
 };
 
 const MonthlyCustomerDirectory = () => {
-  const { authFetch } = useAuth();
+  const { authFetch, user } = useAuth();
   const { showToast, showConfirm } = useToast();
 
   const navigate = useNavigate();
@@ -425,6 +425,18 @@ const MonthlyCustomerDirectory = () => {
   }, [authFetch, showToast]);
 
   useEffect(() => { loadList(); }, [loadList]);
+
+  const handleApproveSnapshot = async (item) => {
+    try {
+      const res = await authFetch(`/api/admin/monthly-directory/${item.id}/approve`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
+      showToast(`✅ "${item.datasetName}" approved & customer details synced to directory.`, 'success');
+      loadList();
+    } catch (e) {
+      showToast('Approval failed: ' + e.message, 'error');
+    }
+  };
 
   const handleOpen = async (item) => {
     try {
@@ -906,6 +918,11 @@ const MonthlyCustomerDirectory = () => {
                       </button>
                     ) : (
                       <>
+                        {user?.role === 'ADMIN' && d.status === 'PENDING_APPROVAL' && (
+                          <button onClick={() => handleApproveSnapshot(item)} title="Approve dataset & sync customers to Customer Directory" style={actionBtn('#10b981', 'rgba(16,185,129,0.18)', 'rgba(16,185,129,0.4)')}>
+                            <Check size={12} /> Approve
+                          </button>
+                        )}
                         <button onClick={() => handleOpen(item)} title="Open / View" style={actionBtn('#818cf8', 'rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)')}><FolderOpen size={12} /> Open</button>
                         <button onClick={() => handleDownload(item)} disabled={downloadingId === item.id} title="Download Excel" style={actionBtn('#10b981', 'rgba(16,185,129,0.12)', 'rgba(16,185,129,0.3)')}>
                           {downloadingId === item.id ? <Loader size={12} className="animate-spin" /> : <Download size={12} />} Excel

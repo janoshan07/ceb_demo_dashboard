@@ -183,6 +183,29 @@ public class MonthlyDirectoryService {
         return toMetadata(snap);
     }
 
+    /**
+     * Approves a monthly directory snapshot (Admin action).
+     * Marks the snapshot as APPROVED, sets approvedBy to the Admin's username, and automatically
+     * syncs all customer details contained in the dataset into the permanent Customer Directory.
+     */
+    @Transactional
+    public Map<String, Object> approveSnapshot(Long id, String adminUsername) {
+        MonthlyDirectorySnapshot s = snapshotRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
+        s.setStatus("APPROVED");
+        s.setApprovedBy(adminUsername);
+        s.setApprovalDate(java.time.LocalDateTime.now());
+        s = snapshotRepository.save(s);
+
+        try {
+            customerDirectorySyncService.syncSnapshot(s);
+        } catch (Exception e) {
+            System.err.println("Customer Directory sync failed for approved snapshot " + s.getId() + ": " + e.getMessage());
+        }
+
+        return toMetadata(s);
+    }
+
     /** Lists all archived months (metadata only — the heavy dataset JSON is not included). */
     public List<Map<String, Object>> listSnapshots() {
         List<Map<String, Object>> out = new ArrayList<>();

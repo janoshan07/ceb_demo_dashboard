@@ -93,6 +93,18 @@ public class MonthlyDirectoryController {
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to open directory: " + e.getMessage()));
         }
+    /** Approves a monthly directory snapshot (Admin only). Syncs customer details to Customer Directory. */
+    @PostMapping("/admin/monthly-directory/{id}/approve")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> approve(@PathVariable Long id) {
+        String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            return ResponseEntity.ok(monthlyDirectoryService.approveSnapshot(id, adminUsername));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of("message", "Approval failed: " + e.getMessage()));
+        }
     }
 
     /** Renames a dataset. Updates ONLY the dataset name — customer records are untouched. */

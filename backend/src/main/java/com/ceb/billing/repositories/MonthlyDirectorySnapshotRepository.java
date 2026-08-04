@@ -17,4 +17,6 @@ public interface MonthlyDirectorySnapshotRepository extends JpaRepository<Monthl
 
     /** Existing snapshot(s) already saved to one Billing Month + Division slot. */
     List<MonthlyDirectorySnapshot> findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(String billingMonth, String division);
+
+    List<MonthlyDirectorySnapshot> findByStatusOrderByCreatedDateDesc(String status);
 }

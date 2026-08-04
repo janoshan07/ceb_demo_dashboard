@@ -12,6 +12,7 @@ import com.ceb.billing.repositories.NetTypeRepository;
 import com.ceb.billing.repositories.ExpenseCodeRepository;
 import com.ceb.billing.services.ExcelValidationService;
 import com.ceb.billing.services.AuditLogService;
+import com.ceb.billing.services.MonthlyDirectoryService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -55,6 +56,9 @@ public class ApprovalController {
     @Autowired
     private com.ceb.billing.services.ExcelValidationService excelValidationService;
 
+    @Autowired
+    private MonthlyDirectoryService monthlyDirectoryService;
+
     @GetMapping
     public ResponseEntity<List<ApprovalRequest>> getPendingApprovals() {
         List<ApprovalRequest> pending = approvalRequestRepository.findByStatusOrderByCreatedAtDesc("PENDING");
@@ -86,7 +90,16 @@ public class ApprovalController {
             String eType = request.getEntityType() != null ? request.getEntityType() : (request.getBillingId() == null ? "CUSTOMER" : "BILLING");
             String aType = request.getActionType() != null ? request.getActionType() : "UPDATE";
 
-            if ("CUSTOMER".equals(eType)) {
+            if ("MONTHLY_DIRECTORY".equals(eType)) {
+                if ("DELETE".equals(aType)) {
+                    monthlyDirectoryService.deleteSnapshotAndSync(request.getBillingId());
+                    auditLogService.log("MONTHLY_DIRECTORY_DELETE_APPROVED",
+                            String.format("Admin %s approved monthly directory deletion for Snapshot ID %d requested by %s", adminUsername,
+                                    request.getBillingId(), request.getChangedBy()));
+                } else {
+                    return ResponseEntity.badRequest().body(new MessageResponse("Unsupported action on monthly directory."));
+                }
+            } else if ("CUSTOMER".equals(eType)) {
                 if ("CREATE".equals(aType)) {
                     Customer customer = new Customer();
                     customer.setAccountNo(request.getAccountNo());
@@ -185,11 +198,15 @@ public class ApprovalController {
         request.setStatus("REJECTED");
         approvalRequestRepository.save(Objects.requireNonNull(request));
 
+        String targetDetail;
+        if ("MONTHLY_DIRECTORY".equals(request.getEntityType())) {
+            targetDetail = "Monthly Directory Snapshot ID " + request.getBillingId();
+        } else {
+            targetDetail = request.getBillingId() != null ? "Bill ID " + request.getBillingId() : "Customer " + request.getAccountNo();
+        }
         auditLogService.log("EDIT_REJECTED",
                 String.format("Admin %s rejected changes from %s for target %s",
-                        adminUsername, request.getChangedBy(),
-                        request.getBillingId() != null ? "Bill ID " + request.getBillingId()
-                                : "Customer " + request.getAccountNo()));
+                        adminUsername, request.getChangedBy(), targetDetail));
 
         return ResponseEntity.ok(new MessageResponse("Approval request rejected successfully."));
     }

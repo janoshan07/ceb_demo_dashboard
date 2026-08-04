@@ -8,6 +8,9 @@ import com.ceb.billing.repositories.BillingUploadStagingRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.ImportSessionRepository;
 import com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository;
+import com.ceb.billing.repositories.BillingRecordRepository;
+import com.ceb.billing.repositories.UploadHistoryRepository;
+import com.ceb.billing.entities.UploadHistory;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
@@ -51,6 +54,12 @@ public class MonthlyDirectoryService {
 
     @Autowired
     private CustomerRepository customerRepository;
+
+    @Autowired
+    private BillingRecordRepository billingRecordRepository;
+
+    @Autowired
+    private UploadHistoryRepository uploadHistoryRepository;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -537,6 +546,84 @@ public class MonthlyDirectoryService {
             throw new IllegalArgumentException("Directory snapshot not found: " + id);
         }
         snapshotRepository.deleteById(id);
+    }
+
+    @Transactional
+    public void deleteSnapshotAndSync(Long id) throws Exception {
+        MonthlyDirectorySnapshot snap = snapshotRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
+
+        // 1. Parse JSON to get all customer account numbers
+        List<Map<String, Object>> records = parseJsonArray(snap.getFinalDataJson());
+        Set<String> accountNumbers = new HashSet<>();
+        for (Map<String, Object> r : records) {
+            String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : null;
+            if (acc != null && !acc.isEmpty()) {
+                accountNumbers.add(acc);
+            }
+        }
+
+        // 2. Find and delete associated BillingRecords and UploadHistory
+        UploadHistory history = findUploadHistoryForSnapshot(snap);
+        if (history != null) {
+            billingRecordRepository.deleteByUploadHistoryId(history.getId());
+            uploadHistoryRepository.delete(history);
+        }
+
+        // 3. Delete the snapshot
+        snapshotRepository.delete(snap);
+
+        // 4. Update or delete Customer profiles in Customer Directory
+        for (String accNo : accountNumbers) {
+            // Find all OTHER approved snapshots that contain this customer
+            List<MonthlyDirectorySnapshot> otherApprovedSnaps = snapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
+            MonthlyDirectorySnapshot latestOtherSnap = null;
+            Map<String, Object> latestOtherRecord = null;
+
+            outerLoop:
+            for (MonthlyDirectorySnapshot otherSnap : otherApprovedSnaps) {
+                if (otherSnap.getId().equals(id)) continue;
+                List<Map<String, Object>> otherRecords = parseJsonArray(otherSnap.getFinalDataJson());
+                for (Map<String, Object> or : otherRecords) {
+                    String oAcc = or.get("accountNo") != null ? String.valueOf(or.get("accountNo")).trim() : null;
+                    if (accNo.equals(oAcc)) {
+                        latestOtherSnap = otherSnap;
+                        latestOtherRecord = or;
+                        break outerLoop;
+                    }
+                }
+            }
+
+            if (latestOtherRecord != null) {
+                customerDirectorySyncService.upsertCustomer(latestOtherRecord, latestOtherSnap.getDivision());
+            } else {
+                long remainingBills = billingRecordRepository.countByCustomerAccountNo(accNo);
+                if (remainingBills == 0) {
+                    customerRepository.findById(accNo).ifPresent(customerRepository::delete);
+                } else {
+                    customerRepository.findById(accNo).ifPresent(c -> {
+                        c.setDirectoryJson(null);
+                        customerRepository.save(c);
+                    });
+                }
+            }
+        }
+    }
+
+    private UploadHistory findUploadHistoryForSnapshot(MonthlyDirectorySnapshot snap) {
+        if (snap.getSessionId() == null) return null;
+        String sessionStr = "Session " + snap.getSessionId();
+        List<UploadHistory> histories = uploadHistoryRepository.findAll();
+        for (UploadHistory h : histories) {
+            if (h.getFilename() != null && h.getFilename().contains(sessionStr)) {
+                return h;
+            }
+        }
+        return null;
+    }
+
+    public MonthlyDirectorySnapshot getSnapshotEntity(Long id) {
+        return snapshotRepository.findById(id).orElse(null);
     }
 
     /** Builds an .xlsx export of the archived final Customer Directory data. */

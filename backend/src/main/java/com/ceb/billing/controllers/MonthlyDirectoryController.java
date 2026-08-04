@@ -1,6 +1,10 @@
 package com.ceb.billing.controllers;
 
 import com.ceb.billing.services.MonthlyDirectoryService;
+import com.ceb.billing.entities.MonthlyDirectorySnapshot;
+import com.ceb.billing.entities.ApprovalRequest;
+import com.ceb.billing.repositories.ApprovalRequestRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -24,6 +28,9 @@ public class MonthlyDirectoryController {
 
     @Autowired
     private MonthlyDirectoryService monthlyDirectoryService;
+
+    @Autowired
+    private ApprovalRequestRepository approvalRequestRepository;
 
     /**
      * Saves the approved Step 6 dataset as a new permanent monthly snapshot. Called after the Step 6
@@ -171,11 +178,58 @@ public class MonthlyDirectoryController {
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         try {
-            monthlyDirectoryService.delete(id);
-            return ResponseEntity.ok(Map.of("message", "Directory deleted."));
+            boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+
+            if (isAdmin) {
+                monthlyDirectoryService.deleteSnapshotAndSync(id);
+                return ResponseEntity.ok(Map.of("message", "Directory and corresponding customer directory records deleted."));
+            } else {
+                MonthlyDirectorySnapshot snap = monthlyDirectoryService.getSnapshotEntity(id);
+                if (snap == null) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "Directory snapshot not found: " + id));
+                }
+
+                boolean alreadyPending = approvalRequestRepository.existsByBillingIdAndEntityTypeAndActionTypeAndStatus(
+                        id, "MONTHLY_DIRECTORY", "DELETE", "PENDING"
+                );
+                if (alreadyPending) {
+                    return ResponseEntity.badRequest().body(Map.of("message", "A deletion request for this snapshot is already pending Admin approval."));
+                }
+
+                ObjectMapper objectMapper = new ObjectMapper();
+                objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+                Map<String, Object> oldMap = Map.of(
+                        "id", snap.getId(),
+                        "datasetName", snap.getDatasetName(),
+                        "billingMonth", snap.getBillingMonth() != null ? snap.getBillingMonth() : "",
+                        "division", snap.getDivision() != null ? snap.getDivision() : ""
+                );
+                String oldJson = objectMapper.writeValueAsString(oldMap);
+
+                ApprovalRequest request = new ApprovalRequest(
+                        id,
+                        snap.getDatasetName(),
+                        username,
+                        oldJson,
+                        "{}",
+                        "PENDING",
+                        "DELETE",
+                        "MONTHLY_DIRECTORY"
+                );
+                approvalRequestRepository.save(request);
+
+                return ResponseEntity.ok(Map.of(
+                        "status", "PENDING",
+                        "message", "Deletion request queued for Admin approval."
+                ));
+            }
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("message", "Delete failed: " + e.getMessage()));
         }
     }

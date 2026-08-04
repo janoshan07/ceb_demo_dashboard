@@ -275,9 +275,52 @@ const Admin = () => {
     });
   };
 
-  const renderCompareValues = (oldJson, newJson) => {
+  const renderCompareValues = (oldJson, newJson, actionType, entityType) => {
     try {
       const oldVals = JSON.parse(oldJson);
+      
+      if (actionType === 'DELETE') {
+        if (entityType === 'MONTHLY_DIRECTORY') {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: '0.85rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+              <div style={{ color: 'var(--danger)', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
+                Pending Permanent Deletion
+              </div>
+              <div style={{ fontSize: '0.82rem' }}>
+                <strong>Dataset:</strong> {oldVals.datasetName}
+              </div>
+              <div style={{ fontSize: '0.82rem' }}>
+                <strong>Billing Month:</strong> {oldVals.billingMonth || '—'}
+              </div>
+              <div style={{ fontSize: '0.82rem' }}>
+                <strong>Division/Location:</strong> {oldVals.division || '—'}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.35rem', fontStyle: 'italic' }}>
+                Approving this will delete the snapshot, associated billing records, and automatically delete or update corresponding customer profiles in the Customer Directory.
+              </div>
+            </div>
+          );
+        } else {
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: '0.85rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+              <div style={{ color: 'var(--danger)', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
+                Pending Deletion
+              </div>
+              {Object.entries(oldVals).map(([key, val]) => {
+                if (val === null || val === '') return null;
+                const formattedKey = key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                return (
+                  <div key={key} style={{ fontSize: '0.8rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>{formattedKey}:</span>
+                    <span style={{ fontWeight: 500 }}>{String(val)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        }
+      }
+
       const newVals = JSON.parse(newJson);
       const keys = Object.keys(newVals);
       
@@ -536,15 +579,24 @@ const Admin = () => {
                       </td>
                       <td style={{ fontWeight: 600 }}>{req.changedBy}</td>
                       <td>
-                        <span className={`badge ${req.billingId === null ? 'info' : 'warning'}`}>
-                          {req.billingId === null ? 'Customer Profile' : 'Billing Record'}
+                        <span className={`badge ${
+                          req.entityType === 'MONTHLY_DIRECTORY' ? 'danger' :
+                          req.entityType === 'CUSTOMER' ? 'info' : 'warning'
+                        }`}>
+                          {
+                            req.entityType === 'MONTHLY_DIRECTORY' ? 'Monthly Directory' :
+                            req.entityType === 'CUSTOMER' ? 'Customer Profile' : 'Billing Record'
+                          }
                         </span>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.25rem', textTransform: 'uppercase', fontWeight: 'bold' }}>
+                          {req.actionType || 'UPDATE'}
+                        </div>
                       </td>
                       <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
                         {req.accountNo}
                       </td>
                       <td style={{ width: '40%' }}>
-                        {renderCompareValues(req.oldValues, req.newValues)}
+                        {renderCompareValues(req.oldValues, req.newValues, req.actionType, req.entityType)}
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>

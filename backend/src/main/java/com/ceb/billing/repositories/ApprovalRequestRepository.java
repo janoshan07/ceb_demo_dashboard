@@ -9,4 +9,5 @@ import java.util.List;
 public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest, Long> {
     List<ApprovalRequest> findByStatusOrderByCreatedAtDesc(String status);
     long countByStatus(String status);
+    boolean existsByBillingIdAndEntityTypeAndActionTypeAndStatus(Long billingId, String entityType, String actionType, String status);
 }

@@ -491,19 +491,29 @@ const MonthlyCustomerDirectory = () => {
   };
 
   const handleDelete = async (item) => {
+    const isAdmin = user?.role === 'ADMIN';
     const ok = await showConfirm({
-      title: 'Delete Dataset',
-      message: `Permanently delete "${item.datasetName}"? This removes the archived monthly directory. Customer records are not affected.`,
-      confirmText: 'Delete',
+      title: isAdmin ? 'Delete Dataset' : 'Submit Deletion Request',
+      message: isAdmin 
+        ? `Permanently delete "${item.datasetName}"? This will delete the monthly snapshot, associated billing records, and automatically delete or update corresponding customer profiles in the Customer Directory.`
+        : `Submit deletion request for "${item.datasetName}"? As a Billing Officer, this deletion request will be sent to the Administrator for approval before any data is removed.`,
+      confirmText: isAdmin ? 'Delete' : 'Submit Request',
       cancelText: 'Cancel',
       type: 'danger'
     });
     if (!ok) return;
     try {
-      const res = await authFetch(`/api/officer/monthly-directory/${item.id}`, { method: 'DELETE' });
+      const rolePath = isAdmin ? 'admin' : 'officer';
+      const res = await authFetch(`/api/${rolePath}/monthly-directory/${item.id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Delete failed.', 'error'); return; }
-      showToast('Directory deleted.', 'success');
+      
+      if (data.status === 'PENDING') {
+        showToast(data.message || 'Deletion request queued for Admin approval.', 'warning');
+      } else {
+        showToast(data.message || 'Directory deleted successfully.', 'success');
+      }
+      
       if (viewing && viewing.id === item.id) setViewing(null);
       loadList();
     } catch (e) {

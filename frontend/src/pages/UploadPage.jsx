@@ -745,7 +745,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [activeFilter, setActiveFilter] = useState('ALL');
 
   const allCount = rows.length;
-  const validCount = rows.filter(r => r.status === 'VALID').length;
+  const validCount = rows.filter(r => r.status === 'VALID' || r.status === 'DUPLICATE').length;
   const errorCount = rows.filter(r => r.status === 'ERROR').length;
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
@@ -754,7 +754,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
-    if (activeFilter === 'VALID') return r.status === 'VALID';
+    if (activeFilter === 'VALID') return r.status === 'VALID' || r.status === 'DUPLICATE';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
     if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
@@ -1049,7 +1049,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [activeFilter, setActiveFilter] = useState('ALL');
 
   const allCount = rows.length;
-  const validCount = rows.filter(r => r.status === 'VALID').length;
+  const validCount = rows.filter(r => r.status === 'VALID' || r.status === 'DUPLICATE').length;
   const errorCount = rows.filter(r => r.status === 'ERROR').length;
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
@@ -1058,7 +1058,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
-    if (activeFilter === 'VALID') return r.status === 'VALID';
+    if (activeFilter === 'VALID') return r.status === 'VALID' || r.status === 'DUPLICATE';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
     if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';

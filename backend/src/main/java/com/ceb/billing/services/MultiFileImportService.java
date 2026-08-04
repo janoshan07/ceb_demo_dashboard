@@ -2404,9 +2404,7 @@ public class MultiFileImportService {
 
         MAIN_DATA_CACHE.put(sessionId, correctedDataset);
 
-        // Duplicate source rows and rejected (incomplete merge) rows are review-only for Step 5
-        // and are not carried downstream.
-        MAIN_DUP_CACHE.remove(sessionId);
+        // Rejected (incomplete merge) rows are review-only for Step 5 and not carried downstream
         MAIN_REJECTED_CACHE.remove(sessionId);
 
         session.setStage("MAIN_DATASET_APPROVED");
@@ -3907,6 +3905,34 @@ public class MultiFileImportService {
                 }
             }
 
+            List<Map<String, Object>> duplicateDataset = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+            for (Map<String, Object> row : duplicateDataset) {
+                String acc = (String) row.get("accountNo");
+                String prevReadingDateStr = (String) row.get("prevReadingDate");
+                String currReadingDateStr = (String) row.get("currReadingDate");
+                if (prevReadingDateStr == null || prevReadingDateStr.isEmpty() || "—".equals(prevReadingDateStr)) {
+                    for (Map<String, Object> primaryRow : correctedDataset) {
+                        if (acc != null && acc.equals(primaryRow.get("accountNo"))) {
+                            row.put("prevReadingDate", primaryRow.get("prevReadingDate"));
+                            row.put("currReadingDate", primaryRow.get("currReadingDate"));
+                            break;
+                        }
+                    }
+                }
+
+                String[] validation = stagedValidation(row, mapper);
+                if ("INVALID".equals(validation[0])) stagedErrorRows++;
+
+                BillingUploadStaging staging = new BillingUploadStaging(
+                        uploadId,
+                        mapper.writeValueAsString(row),
+                        "DUPLICATE",
+                        validation[1],
+                        "BILLING"
+                );
+                billingUploadStagingRepository.save(staging);
+            }
+
             uploadHistory.setErrorsCount(stagedErrorRows);
             uploadHistoryRepository.save(uploadHistory);
 
@@ -3918,6 +3944,7 @@ public class MultiFileImportService {
             cleanupNgenStaging(sessionId);
             cleanupNpayStaging(sessionId);
             MAIN_DATA_CACHE.remove(sessionId);
+            MAIN_DUP_CACHE.remove(sessionId);
 
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("sessionId", sessionId);
@@ -4088,6 +4115,73 @@ public class MultiFileImportService {
             createdBilling++;
         }
 
+        // Save Billing Records for duplicates
+        List<Map<String, Object>> duplicateDataset = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        for (Map<String, Object> row : duplicateDataset) {
+            String accountNo = (String) row.get("accountNo");
+            Double energyPurchase = row.get("energyPurchase") != null ? ((Number) row.get("energyPurchase")).doubleValue() : 0.0;
+            Double billSetOff = row.get("billSetOff") != null ? ((Number) row.get("billSetOff")).doubleValue() : 0.0;
+            Double retentionMoney = row.get("retentionMoney") != null ? ((Number) row.get("retentionMoney")).doubleValue() : 0.0;
+            Double payment = row.get("payment") != null ? ((Number) row.get("payment")).doubleValue() : 0.0;
+
+            Optional<Customer> custOpt = customerRepository.findById(accountNo);
+            if (custOpt.isEmpty()) {
+                continue;
+            }
+            Customer cust = custOpt.get();
+
+            String prevReadingDateStr = (String) row.get("prevReadingDate");
+            String currReadingDateStr = (String) row.get("currReadingDate");
+            if (prevReadingDateStr == null || prevReadingDateStr.isEmpty() || "—".equals(prevReadingDateStr)) {
+                for (Map<String, Object> primaryRow : correctedDataset) {
+                    if (accountNo != null && accountNo.equals(primaryRow.get("accountNo"))) {
+                        prevReadingDateStr = (String) primaryRow.get("prevReadingDate");
+                        currReadingDateStr = (String) primaryRow.get("currReadingDate");
+                        break;
+                    }
+                }
+            }
+            LocalDate prevDate = safeParseDate(prevReadingDateStr);
+            LocalDate currDate = safeParseDate(currReadingDateStr);
+
+            LocalDate fromDate = prevDate != null ? prevDate : LocalDate.now().withDayOfMonth(1);
+            LocalDate toDate = currDate != null ? currDate : LocalDate.now();
+
+            Double kwhImport = row.get("kwhImport") != null ? ((Number) row.get("kwhImport")).doubleValue() : null;
+            Double kwhExport = row.get("kwhExport") != null ? ((Number) row.get("kwhExport")).doubleValue() : null;
+            Double kwhSales = row.get("kwhSales") != null ? ((Number) row.get("kwhSales")).doubleValue() : null;
+
+            String refNoStr = isNotBlank(cust.getRefNo()) ? cust.getRefNo()
+                    : "REF-" + accountNo + "-" + toDate.toString().replace("-", "");
+
+            BillingRecord br = new BillingRecord();
+            br.setCustomer(cust);
+            br.setRefNo(refNoStr);
+            br.setFromDate(fromDate);
+            br.setToDate(toDate);
+            br.setPrevReadingDate(prevDate);
+            br.setCurrReadingDate(currDate);
+            br.setKwhImport(kwhImport);
+            br.setKwhExport(kwhExport);
+            br.setKwhSales(kwhSales);
+            br.setImportUnits(kwhImport != null ? kwhImport : 0.0);
+            br.setExportUnits(kwhExport != null ? kwhExport : 0.0);
+            br.setNetUnit(kwhSales != null ? kwhSales : 0.0);
+            br.setUnitCost(cust.getUnitRate() != null ? cust.getUnitRate() : 0.0);
+            br.setTotalAmount(energyPurchase != null ? energyPurchase : 0.0);
+            br.setBillingMode(cust.getExpenseCode() != null ? cust.getExpenseCode().getExpCode() : null);
+            br.setUploadHistoryId(uploadId);
+
+            br.setEnergyPurchase(energyPurchase != null ? energyPurchase : 0.0);
+            br.setBillSetOff(billSetOff != null ? billSetOff : 0.0);
+            br.setRetentionMoney(retentionMoney != null ? retentionMoney : 0.0);
+            br.setPayment(payment != null ? payment : 0.0);
+            br.setPaymentSettled(payment != null ? payment : 0.0);
+
+            billingRecordRepository.save(br);
+            createdBilling++;
+        }
+
         uploadHistory.setBillingInserted(createdBilling);
         uploadHistory.setNewCustomers(newCustCount);
         uploadHistoryRepository.save(uploadHistory);
@@ -4100,6 +4194,7 @@ public class MultiFileImportService {
         cleanupNgenStaging(sessionId);
         cleanupNpayStaging(sessionId);
         MAIN_DATA_CACHE.remove(sessionId);
+        MAIN_DUP_CACHE.remove(sessionId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);

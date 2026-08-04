@@ -2126,7 +2126,9 @@ const CustomerDetails = () => {
                           return (
                             <tr key={bill.billingId}>
                               <td>
-                                {parseDateLabel(bill.fromDate)}
+                                {bill.prevReadingDate && bill.currReadingDate 
+                                  ? `${bill.prevReadingDate} to ${bill.currReadingDate}` 
+                                  : (bill.prevReadingDate || bill.currReadingDate || '—')}
                               </td>
                               <td style={{ fontWeight: 500 }}>{bill.refNo}</td>
                               <td>

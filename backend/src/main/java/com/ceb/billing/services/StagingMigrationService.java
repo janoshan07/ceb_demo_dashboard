@@ -97,8 +97,10 @@ public class StagingMigrationService {
                 continue;
             }
             if ("DUPLICATE".equals(status)) {
-                duplicateCount++;
-                continue;
+                if (!"BILLING".equals(record.getRowType())) {
+                    duplicateCount++;
+                    continue;
+                }
             }
 
             // Parse shared fields
@@ -256,13 +258,12 @@ public class StagingMigrationService {
                 continue;
             }
 
-            // Guard: skip if a billing record already exists for this account + period (unless forceImport is true)
+            // Guard: skip if a billing record already exists for this account + period + refNo (unless forceImport is true)
             Boolean forceImport = data.get("forceImport") instanceof Boolean ? (Boolean) data.get("forceImport") : false;
             if (!forceImport) {
-                boolean alreadyExists = !billingRecordRepository
-                        .findByCustomerAccountNoAndFromDateYearAndMonth(accountNo,
-                                fromDate.getYear(), fromDate.getMonthValue())
-                        .isEmpty();
+                boolean alreadyExists = billingRecordRepository
+                        .findByCustomerAccountNoAndRefNoAndFromDateAndToDate(accountNo, refNo, fromDate, toDate)
+                        .isPresent();
                 if (alreadyExists) {
                     duplicateCount++;
                     continue;

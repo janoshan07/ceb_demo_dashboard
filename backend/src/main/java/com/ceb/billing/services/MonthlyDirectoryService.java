@@ -1,7 +1,11 @@
 package com.ceb.billing.services;
 
+import com.ceb.billing.entities.BillingUploadStaging;
+import com.ceb.billing.entities.Customer;
 import com.ceb.billing.entities.ImportSession;
 import com.ceb.billing.entities.MonthlyDirectorySnapshot;
+import com.ceb.billing.repositories.BillingUploadStagingRepository;
+import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.ImportSessionRepository;
 import com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -41,6 +45,12 @@ public class MonthlyDirectoryService {
 
     @Autowired
     private CustomerDirectorySyncService customerDirectorySyncService;
+
+    @Autowired
+    private BillingUploadStagingRepository stagingRepository;
+
+    @Autowired
+    private CustomerRepository customerRepository;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -329,10 +339,99 @@ public class MonthlyDirectoryService {
         MonthlyDirectorySnapshot s = snapshotRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
         Map<String, Object> out = toMetadata(s);
-        out.put("validationSummary", parseJsonObject(s.getValidationSummary()));
-        out.put("records", parseJsonArray(s.getFinalDataJson()));
+
+        List<Map<String, Object>> records = parseJsonArray(s.getFinalDataJson());
+        if (records.isEmpty()) {
+            records = fetchFallbackRecords(s);
+            if (!records.isEmpty()) {
+                try {
+                    s.setFinalDataJson(mapper.writeValueAsString(records));
+                    s.setTotalRecords(records.size());
+                    s.setValidationSummary(mapper.writeValueAsString(computeSummary(records)));
+                    snapshotRepository.save(s);
+                } catch (Exception e) {
+                    System.err.println("MonthlyDirectoryService: failed to persist fallback records: " + e.getMessage());
+                }
+            }
+        }
+
+        Map<String, Object> summary = parseJsonObject(s.getValidationSummary());
+        if ((summary == null || summary.isEmpty()) && !records.isEmpty()) {
+            summary = computeSummary(records);
+        }
+
+        out.put("validationSummary", summary);
+        out.put("records", records);
         out.put("auditLog", parseJsonArray(s.getAuditLogJson()));
         return out;
+    }
+
+    private List<Map<String, Object>> fetchFallbackRecords(MonthlyDirectorySnapshot s) {
+        List<Map<String, Object>> records = new ArrayList<>();
+        // 1. Try fetching main dataset from session if sessionId is present
+        if (s.getSessionId() != null) {
+            try {
+                List<Map<String, Object>> mainDataset = multiFileImportService.getMainDataset(s.getSessionId());
+                if (mainDataset != null && !mainDataset.isEmpty()) {
+                    return mainDataset;
+                }
+            } catch (Exception e) {
+                System.err.println("MonthlyDirectoryService: multiFileImportService lookup failed: " + e.getMessage());
+            }
+
+            // 2. Try fetching staging rows by uploadBatchId
+            try {
+                List<BillingUploadStaging> stagingRows = stagingRepository.findByUploadBatchId(s.getSessionId());
+                if (stagingRows != null && !stagingRows.isEmpty()) {
+                    Map<String, Map<String, Object>> grouped = new LinkedHashMap<>();
+                    for (BillingUploadStaging row : stagingRows) {
+                        Map<String, Object> data = parseJsonObject(row.getRawJson());
+                        if (data == null || data.isEmpty()) continue;
+                        String acc = data.get("accountNo") != null ? String.valueOf(data.get("accountNo")).trim()
+                                : ("__row_" + row.getStagingId());
+                        Map<String, Object> map = grouped.computeIfAbsent(acc, k -> new LinkedHashMap<>());
+                        map.putAll(data);
+                        if (row.getValidationStatus() != null) map.put("status", row.getValidationStatus());
+                    }
+                    records.addAll(grouped.values());
+                    if (!records.isEmpty()) return records;
+                }
+            } catch (Exception e) {
+                System.err.println("MonthlyDirectoryService: staging lookup failed: " + e.getMessage());
+            }
+        }
+
+        // 3. Try fetching from Customer table by division
+        try {
+            List<Customer> customers = customerRepository.findAll();
+            if (customers != null && !customers.isEmpty()) {
+                String targetDiv = canonicalDivision(s.getDivision());
+                for (Customer c : customers) {
+                    if (targetDiv == null || targetDiv.isEmpty() || targetDiv.equalsIgnoreCase(c.getDivision()) || targetDiv.equalsIgnoreCase(c.getBranchCode())) {
+                        Map<String, Object> map = new LinkedHashMap<>();
+                        map.put("accountNo", c.getAccountNo());
+                        map.put("customerName", c.getCustomerName());
+                        map.put("npayName", c.getCustomerName());
+                        map.put("customerAddress", c.getCustomerAddress());
+                        map.put("refNo", c.getRefNo());
+                        map.put("mobileNo", c.getMobileNo());
+                        map.put("solarType", c.getSolarType());
+                        map.put("panelCapacity", c.getPanelCapacity());
+                        map.put("agreementDate", c.getAgreementDate());
+                        map.put("bankCode", c.getBankCode());
+                        map.put("branchCode", c.getBranchCode());
+                        map.put("bankAccountNo", c.getBankAccountNo());
+                        map.put("unitRate", c.getUnitRate());
+                        map.put("status", c.getValidationStatus() != null ? c.getValidationStatus() : "APPROVED");
+                        records.add(map);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("MonthlyDirectoryService: customer repository fallback failed: " + e.getMessage());
+        }
+
+        return records;
     }
 
     /** Returns just the audit history (newest first) for one snapshot. */
@@ -548,14 +647,42 @@ public class MonthlyDirectoryService {
         return m;
     }
 
-    private List<Map<String, Object>> parseJsonArray(String json) throws Exception {
+    private List<Map<String, Object>> parseJsonArray(String json) {
         if (json == null || json.trim().isEmpty()) return new ArrayList<>();
-        return mapper.readValue(json, new TypeReference<List<Map<String, Object>>>() {});
+        try {
+            String trimmed = json.trim();
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() > 2) {
+                try {
+                    Object unwrapped = mapper.readValue(trimmed, Object.class);
+                    if (unwrapped instanceof String) {
+                        trimmed = (String) unwrapped;
+                    }
+                } catch (Exception ignored) {}
+            }
+            return mapper.readValue(trimmed, new TypeReference<List<Map<String, Object>>>() {});
+        } catch (Exception e) {
+            System.err.println("MonthlyDirectoryService: failed to parse JSON array: " + e.getMessage());
+            return new ArrayList<>();
+        }
     }
 
-    private Map<String, Object> parseJsonObject(String json) throws Exception {
+    private Map<String, Object> parseJsonObject(String json) {
         if (json == null || json.trim().isEmpty()) return new LinkedHashMap<>();
-        return mapper.readValue(json, new TypeReference<Map<String, Object>>() {});
+        try {
+            String trimmed = json.trim();
+            if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() > 2) {
+                try {
+                    Object unwrapped = mapper.readValue(trimmed, Object.class);
+                    if (unwrapped instanceof String) {
+                        trimmed = (String) unwrapped;
+                    }
+                } catch (Exception ignored) {}
+            }
+            return mapper.readValue(trimmed, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            System.err.println("MonthlyDirectoryService: failed to parse JSON object: " + e.getMessage());
+            return new LinkedHashMap<>();
+        }
     }
 
     private String cellString(Object val) {

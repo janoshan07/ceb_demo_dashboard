@@ -91,8 +91,11 @@ public class MonthlyDirectoryController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
+            e.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to open directory: " + e.getMessage()));
         }
+    }
+
     /** Approves a monthly directory snapshot (Admin only). Syncs customer details to Customer Directory. */
     @PostMapping("/admin/monthly-directory/{id}/approve")
     @PreAuthorize("hasRole('ADMIN')")

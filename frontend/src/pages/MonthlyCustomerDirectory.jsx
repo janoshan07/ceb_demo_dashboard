@@ -28,7 +28,7 @@ const DIVISION_STATUS = {
 
 // Field groups shown on every Customer Card / detail view — grouped by merged source file,
 // exactly as saved from Step 6 (the snapshot is only loaded, never rebuilt or recompared).
-const CARD_SECTIONS = [
+export const CARD_SECTIONS = [
   {
     title: 'Master Data', color: '#38bdf8',
     fields: [
@@ -74,7 +74,7 @@ const CARD_SECTIONS = [
 
 // Fields a user may edit in the post-Step-6 working area. Editing these and revalidating re-runs
 // the exact same validation rules server-side (nothing is auto-corrected).
-const EDIT_FIELDS = [
+export const EDIT_FIELDS = [
   { key: 'npayName', label: 'Name' },
   { key: 'customerAddress', label: 'Address' },
   { key: 'refNo', label: 'Ref No' },
@@ -91,7 +91,7 @@ const EDIT_FIELDS = [
   { key: 'npayEnergyPurchase', label: 'Energy Purchase', type: 'number' },
 ];
 
-const cellText = (val) => {
+export const cellText = (val) => {
   if (val === null || val === undefined) return '—';
   if (typeof val === 'object') {
     if ('value' in val) return val.value ?? '—';
@@ -101,7 +101,7 @@ const cellText = (val) => {
 };
 
 // Resolves one card field from the record, walking fallback keys (or joining bank details).
-const fieldValue = (row, f) => {
+export const fieldValue = (row, f) => {
   if (f.bank) {
     const parts = ['bankCode', 'branchCode', 'bankAccountNo'].map(k => cellText(row[k])).filter(v => v && v !== '—');
     return parts.length ? parts.join(' / ') : '—';
@@ -114,7 +114,7 @@ const fieldValue = (row, f) => {
 };
 
 // Display net type of a record: NGEN first, then NPAY, then Master Data.
-const recordNetType = (row) => {
+export const recordNetType = (row) => {
   for (const k of ['ngenNetType', 'npayNetType', 'masterNetType', 'solarType']) {
     const v = cellText(row[k]);
     if (v !== '—' && v.trim() !== '') return v;
@@ -123,15 +123,15 @@ const recordNetType = (row) => {
 };
 
 // Duplicate flags preserved from Step 5/6 — detection only, never resolved here.
-const isDuplicateRecord = (row) =>
-  String(row.status || '').toUpperCase() === 'DUPLICATE'
+export const isDuplicateRecord = (row) =>
+  String(row.status || row.validationStatus || '').toUpperCase() === 'DUPLICATE'
   || row.hasDuplicateSources === true
   || Number(row.ngenSourceCount) > 1
   || Number(row.npaySourceCount) > 1;
 
 // Folds raw net type variants ("NET PLUS", "net-plus", …) into one clear display name so the
 // Net Type dropdown never shows duplicate options.
-const normalizeNetType = (raw) => {
+export const normalizeNetType = (raw) => {
   if (raw === null || raw === undefined) return null;
   const c = String(raw).trim().toLowerCase().replace(/[\s\-_]+/g, ' ');
   if (!c) return null;
@@ -144,7 +144,7 @@ const normalizeNetType = (raw) => {
 
 // Every filter the summary cards / Status dropdown can apply. Filtering is display-only —
 // records themselves are never changed. `card: false` keeps an option dropdown-only.
-const STATUS_FILTERS = [
+export const STATUS_FILTERS = [
   { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: '#38bdf8' },
   { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981' },
   { key: 'ERROR', label: 'Errors', cardLabel: 'Errors', color: '#f87171' },
@@ -159,7 +159,7 @@ const STATUS_FILTERS = [
   { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316' },
 ];
 
-const StatusBadge = ({ status }) => {
+export const StatusBadge = ({ status }) => {
   const s = status || 'APPROVED';
   const isApproved = s === 'APPROVED';
   return (
@@ -176,7 +176,7 @@ const StatusBadge = ({ status }) => {
 };
 
 // Per-record validation status styling (preserved exactly as saved from Step 6).
-const RECORD_STATUS_STYLE = {
+export const RECORD_STATUS_STYLE = {
   VALID: { bg: 'rgba(16,185,129,0.15)', color: '#10b981', label: 'Valid' },
   WARNING: { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b', label: 'Warning' },
   ERROR: { bg: 'rgba(239,68,68,0.15)', color: '#f87171', label: 'Error' },
@@ -184,14 +184,14 @@ const RECORD_STATUS_STYLE = {
   DUPLICATE: { bg: 'rgba(168,85,247,0.15)', color: '#c084fc', label: 'Duplicate' },
 };
 
-const MismatchChip = ({ label, color = '#f87171', bg = 'rgba(239,68,68,0.12)', border = 'rgba(239,68,68,0.3)' }) => (
+export const MismatchChip = ({ label, color = '#f87171', bg = 'rgba(239,68,68,0.12)', border = 'rgba(239,68,68,0.3)' }) => (
   <span style={{ padding: '0.1rem 0.4rem', borderRadius: 6, fontSize: '0.6rem', fontWeight: 700, background: bg, color, border: `1px solid ${border}` }}>
     {label}
   </span>
 );
 
-const RecordStatusBadge = ({ row }) => {
-  const st = String(row.status || 'VALID').toUpperCase();
+export const RecordStatusBadge = ({ row }) => {
+  const st = String(row.status || row.validationStatus || 'VALID').toUpperCase();
   const cfg = RECORD_STATUS_STYLE[st] || RECORD_STATUS_STYLE.VALID;
   const dup = isDuplicateRecord(row) && st !== 'DUPLICATE';
   return (
@@ -213,7 +213,7 @@ const RecordStatusBadge = ({ row }) => {
 };
 
 // Builds an editable form object from a record using the EDIT_FIELDS whitelist.
-const pickEditable = (row) => {
+export const pickEditable = (row) => {
   const f = {};
   EDIT_FIELDS.forEach(({ key }) => {
     const v = row[key];
@@ -229,9 +229,11 @@ const cardBtn = (color, bg, border) => ({
 
 // One Customer Card — displays every merged Step 6 field for a record, its preserved
 // validation state, and the per-record actions of the post-approval working area.
-const CustomerCard = ({ row, onView, onEdit, onHistory }) => {
-  const errors = row.errors || [];
-  const warnings = row.warnings || [];
+export const CustomerCard = ({ row, onView, onEdit, onHistory }) => {
+  const rawErrors = row.errors || [];
+  const errors = rawErrors.map(e => typeof e === 'object' ? (e.errorMessage || e.field) : e);
+  const rawWarnings = row.warnings || [];
+  const warnings = rawWarnings.map(w => typeof w === 'object' ? (w.warning || w.field) : w);
   const name = cellText(row.npayName) !== '—' ? cellText(row.npayName) : cellText(row.customerName);
   return (
     <div style={{ border: '1px solid var(--border-color)', borderRadius: 14, background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column' }}>
@@ -269,10 +271,10 @@ const CustomerCard = ({ row, onView, onEdit, onHistory }) => {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.18rem' }}>
               {errors.slice(0, 2).map((e, i) => (
-                <div key={`e${i}`} style={{ fontSize: '0.68rem', color: '#f87171', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}><AlertTriangle size={10} style={{ marginTop: 2, flexShrink: 0 }} />{e}</div>
+                <div key={`e${i}`} style={{ fontSize: '0.68rem', color: '#f87171', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}><AlertTriangle size={10} style={{ marginTop: 2, flexShrink: 0 }} />{String(e)}</div>
               ))}
               {warnings.slice(0, 2).map((w, i) => (
-                <div key={`w${i}`} style={{ fontSize: '0.68rem', color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}><AlertTriangle size={10} style={{ marginTop: 2, flexShrink: 0 }} />{w}</div>
+                <div key={`w${i}`} style={{ fontSize: '0.68rem', color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}><AlertTriangle size={10} style={{ marginTop: 2, flexShrink: 0 }} />{String(w)}</div>
               ))}
               {(errors.length + warnings.length) > 4 && (
                 <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>+{errors.length + warnings.length - 4} more — open View Details</div>
@@ -295,7 +297,7 @@ const CustomerCard = ({ row, onView, onEdit, onHistory }) => {
 // Custom dark-theme dropdown replacing native <select>, whose option popup rendered with
 // unreadable browser-default styling. Each option shows a color dot, its label and live count;
 // the active option is highlighted, and the panel closes on outside-click or selection.
-const FilterDropdown = ({ value, options, onChange, minWidth = 190, placeholderColor }) => {
+export const FilterDropdown = ({ value, options, onChange, minWidth = 190, placeholderColor }) => {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const selected = options.find(o => o.value === value) || options[0];
@@ -439,6 +441,10 @@ const MonthlyCustomerDirectory = () => {
   };
 
   const handleOpen = async (item) => {
+    if (!item || !item.id) {
+      showToast('No directory dataset exists for this slot yet. Please upload billing first.', 'warning');
+      return;
+    }
     try {
       setViewLoading(true);
       // Fresh working area each time a snapshot is opened.
@@ -1015,8 +1021,9 @@ const MonthlyCustomerDirectory = () => {
           <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '1250px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.5rem 1.75rem', borderBottom: '1px solid var(--border-color)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
                   <FileSpreadsheet size={19} color="#10b981" /> {viewing.datasetName}
+                  <StatusBadge status={viewing.status} />
                 </h3>
                 <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
                   <span><strong style={{ color: 'white' }}>Billing Month:</strong> {viewing.billingMonth || '—'}</span>
@@ -1026,7 +1033,30 @@ const MonthlyCustomerDirectory = () => {
                   <span><strong style={{ color: 'white' }}>Approval Date:</strong> {viewing.approvalDate || '—'}</span>
                 </div>
               </div>
-              <button onClick={() => setViewing(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={20} /></button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {user?.role === 'ADMIN' && viewing.status === 'PENDING_APPROVAL' && (
+                  <button
+                    onClick={() => handleApproveSnapshot(viewing)}
+                    style={{
+                      padding: '0.55rem 1.1rem',
+                      background: 'linear-gradient(135deg,#10b981,#059669)',
+                      border: 'none',
+                      color: 'white',
+                      borderRadius: 10,
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: '0.82rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                    }}
+                  >
+                    <Check size={16} /> Approve &amp; Commit Dataset
+                  </button>
+                )}
+                <button onClick={() => setViewing(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={20} /></button>
+              </div>
             </div>
 
             {/* Validation summary — clickable cards; clicking filters the customer list instantly,

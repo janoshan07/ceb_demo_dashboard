@@ -24,7 +24,8 @@ import {
   MapPin,
   ArrowUpDown,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Trash2
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 

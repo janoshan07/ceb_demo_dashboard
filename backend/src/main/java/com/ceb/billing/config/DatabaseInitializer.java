@@ -1,7 +1,5 @@
 package com.ceb.billing.config;
 
-import com.ceb.billing.entities.BillingRecord;
-import com.ceb.billing.entities.Customer;
 import com.ceb.billing.entities.User;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
@@ -11,8 +9,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-
-import java.time.LocalDate;
 
 @Component
 public class DatabaseInitializer implements CommandLineRunner {

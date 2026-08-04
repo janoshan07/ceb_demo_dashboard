@@ -165,13 +165,23 @@ public class AdminUserController {
     }
 
     @GetMapping("/staging/pending")
-    public ResponseEntity<List<UploadHistory>> getPendingStagingBatches() {
-        return ResponseEntity.ok(uploadHistoryRepository.findByStatusOrderByUploadTimeDesc("PENDING_APPROVAL"));
+    public ResponseEntity<?> getPendingStagingBatches() {
+        try {
+            return ResponseEntity.ok(uploadHistoryRepository.findByStatusOrderByUploadTimeDesc("PENDING_APPROVAL"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to load pending staging batches: " + e.getMessage()));
+        }
     }
 
     @GetMapping("/staging/batch/{batchId}")
-    public ResponseEntity<List<BillingUploadStaging>> getStagingBatchDetails(@PathVariable long batchId) {
-        return ResponseEntity.ok(stagingRepository.findByUploadBatchId(batchId));
+    public ResponseEntity<?> getStagingBatchDetails(@PathVariable long batchId) {
+        try {
+            return ResponseEntity.ok(stagingRepository.findByUploadBatchId(batchId));
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to load batch details: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/staging/batch/{batchId}/approve")

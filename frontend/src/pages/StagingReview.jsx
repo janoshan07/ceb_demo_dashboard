@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useToast } from '../context/ToastContext';
 import { 
   FileSpreadsheet, 
@@ -11,8 +11,31 @@ import {
   ArrowLeft, 
   FileText,
   BadgeAlert,
-  Edit2
+  Edit2,
+  Search,
+  Eye,
+  Edit3,
+  History,
+  ShieldCheck,
+  Check,
+  LayoutGrid,
+  List
 } from 'lucide-react';
+import {
+  CARD_SECTIONS,
+  EDIT_FIELDS,
+  STATUS_FILTERS,
+  cellText,
+  fieldValue,
+  recordNetType,
+  isDuplicateRecord,
+  normalizeNetType,
+  RecordStatusBadge,
+  pickEditable,
+  CustomerCard,
+  FilterDropdown
+} from './MonthlyCustomerDirectory';
+import { computeAgreementExpiry, agreementExpiryStatus } from './UploadPage';
 
 // Helper to automatically derive L-Code based on solarType and tariffType
 const deriveLCode = (solarType, tariffType) => {
@@ -62,6 +85,13 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const [detailsError, setDetailsError] = useState(null);
   const [proposals, setProposals] = useState([]);
   const [activeTab, setActiveTab] = useState('records'); // 'records' | 'proposals' | 'corrections'
+
+  // Monthly Directory View layout states
+  const [viewMode, setViewMode] = useState('CARDS'); // 'CARDS' | 'TABLE'
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+  const [netTypeFilter, setNetTypeFilter] = useState('ALL');
+  const [detailsRecord, setDetailsRecord] = useState(null);
 
   // Operation action states
   const [actionProcessing, setActionProcessing] = useState(false);
@@ -388,8 +418,90 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   const hasBillingData = groupedRows.some(r => r.billings.length > 0);
   const [rowFilter, setRowFilter] = useState('ALL');
 
-  const groupIsCorrected = (group) =>
-    group.sources.some(s => proposals.some(p => p.stagingId === s.stagingId && p.status === 'APPROVED'));
+  const groupIsCorrected = useCallback((group) =>
+    group.sources.some(s => proposals.some(p => p.stagingId === s.stagingId && p.status === 'APPROVED')),
+  [proposals]);
+
+  const billingWindow = useMemo(() => {
+    const now = new Date();
+    return {
+      start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)),
+      end: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 0)),
+    };
+  }, []);
+
+  const rowExpiry = useCallback((row) =>
+    agreementExpiryStatus(computeAgreementExpiry(row.agreementDate), billingWindow.start, billingWindow.end),
+  [billingWindow]);
+
+  const isRecordComplete = useCallback((row) => {
+    if (!row) return false;
+    const name = row.customerName || row.masterName || row.npayName;
+    if (!name || !String(name).trim() || name === '—') return false;
+    if (!row.customerAddress || !String(row.customerAddress).trim() || row.customerAddress === '—') return false;
+    if (!row.mobileNo || !String(row.mobileNo).trim() || row.mobileNo === '—') return false;
+    if (!row.agreementDate || row.agreementDate === '—') return false;
+    if (row.panelCapacity === null || row.panelCapacity === undefined || row.panelCapacity === '' || row.panelCapacity === '—') return false;
+    if (!row.bankCode || !String(row.bankCode).trim() || row.bankCode === '—') return false;
+    if (!row.bankAccountNo || !String(row.bankAccountNo).trim() || row.bankAccountNo === '—') return false;
+    const solar = row.solarType || row.masterNetType || row.netType;
+    if (!solar || !String(solar).trim() || solar === '—') return false;
+    if (row.unitRate === null || row.unitRate === undefined || row.unitRate === '' || row.unitRate === '—') return false;
+    return true;
+  }, []);
+
+  const matchesFilter = useCallback((row, key) => {
+    switch (key) {
+      case 'ALL': return true;
+      case 'COMPLETE': return isRecordComplete(row);
+      case 'MISSING': return !isRecordComplete(row);
+      case 'DUPLICATE': return isDuplicateRecord(row);
+      case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH';
+      case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH';
+      case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH';
+      case 'CORRECTED': return groupIsCorrected(row);
+      case 'EXPIRED': return rowExpiry(row) === 'EXPIRED';
+      case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON';
+      default: return String(row.status || row.validationStatus || '').toUpperCase() === key;
+    }
+  }, [rowExpiry, isRecordComplete, groupIsCorrected]);
+
+  const filterCounts = useMemo(() => {
+    const recs = groupedRows || [];
+    const counts = { ALL: recs.length };
+    STATUS_FILTERS.forEach(f => {
+      if (f.key !== 'ALL') counts[f.key] = recs.filter(r => matchesFilter(r, f.key)).length;
+    });
+    return counts;
+  }, [groupedRows, matchesFilter]);
+
+  const displayRecords = useMemo(() => {
+    const recs = (groupedRows || []).map((row, idx) => ({ row, idx }));
+    const term = searchTerm.trim().toLowerCase();
+    let list = recs;
+    if (term) {
+      list = list.filter(({ row }) =>
+        [row.accountNo, row.refNo, row.npayName, row.customerName]
+          .some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(term)));
+    }
+    if (statusFilter !== 'ALL') {
+      list = list.filter(({ row }) => matchesFilter(row, statusFilter));
+    }
+    if (netTypeFilter !== 'ALL') {
+      list = list.filter(({ row }) => normalizeNetType(recordNetType(row)) === netTypeFilter);
+    }
+    return [...list].sort((a, b) =>
+      String(a.row.accountNo ?? '').localeCompare(String(b.row.accountNo ?? ''), undefined, { numeric: true }));
+  }, [groupedRows, searchTerm, statusFilter, netTypeFilter, matchesFilter]);
+
+  const netTypeOptions = useMemo(() => {
+    const counts = new Map();
+    (groupedRows || []).forEach(r => {
+      const nt = normalizeNetType(recordNetType(r));
+      if (nt) counts.set(nt, (counts.get(nt) || 0) + 1);
+    });
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [groupedRows]);
 
   const filteredRows = groupedRows.filter(row => {
     if (rowFilter === 'ALL') return true;
@@ -709,73 +821,112 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
 
               {activeTab === 'proposals' ? renderProposalsTab() : activeTab === 'corrections' ? renderCorrectionsTab() : (
                 <>
-                  {/* Summary Cards */}
-              {/* Summary Cards */}
-              <div className="upload-summary-grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '2rem' }}>
-                <div className="summary-tile">
-                  <div className="summary-tile-val">{totalRows}</div>
-                  <div className="summary-tile-label">Total Staged</div>
-                </div>
-                <div className="summary-tile" style={{ borderLeft: '2px solid var(--success)' }}>
-                  <div className="summary-tile-val" style={{ color: 'var(--success)' }}>{validRows}</div>
-                  <div className="summary-tile-label">Valid Rows</div>
-                </div>
-                <div className="summary-tile" style={{ borderLeft: '2px solid var(--danger)' }}>
-                  <div className="summary-tile-val" style={{ color: 'var(--danger)' }}>{invalidRows}</div>
-                  <div className="summary-tile-label">Invalid (Skipped)</div>
-                </div>
-                <div className="summary-tile" style={{ borderLeft: '2px solid #a855f7' }}>
-                  <div className="summary-tile-val" style={{ color: '#a855f7' }}>{duplicateRows}</div>
-                  <div className="summary-tile-label">Duplicate (Skipped)</div>
-                </div>
-                <div className="summary-tile" style={{ borderLeft: '2px solid #eab308' }}>
-                  <div className="summary-tile-val" style={{ color: '#eab308' }}>{warningRows}</div>
-                  <div className="summary-tile-label">Warnings</div>
-                </div>
-              </div>
+                  {/* Clickable Summary Cards (matches Officer Monthly Directory view) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(122px, 1fr))', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                    {STATUS_FILTERS.filter(f => f.card !== false).map(f => {
+                      const active = statusFilter === f.key;
+                      return (
+                        <button
+                          key={f.key}
+                          onClick={() => setStatusFilter(f.key)}
+                          title={f.key === 'ALL' ? 'Show all records (clear filter)' : `Show only: ${f.cardLabel}`}
+                          style={{
+                            textAlign: 'left', cursor: 'pointer', padding: '0.55rem 0.7rem', borderRadius: 10,
+                            background: active ? `${f.color}22` : 'rgba(255,255,255,0.03)',
+                            border: `1px solid ${active ? f.color : 'var(--border-color)'}`,
+                            borderLeft: `3px solid ${f.color}`,
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div style={{ fontSize: '1.05rem', fontWeight: 800, color: f.color, fontFamily: 'monospace' }}>{filterCounts[f.key] ?? 0}</div>
+                          <div style={{ fontSize: '0.62rem', fontWeight: 700, color: active ? 'white' : 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.cardLabel}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
 
-              {/* Row Filters */}
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
-                {[
-                  { key: 'ALL', label: 'All Records', count: totalRows },
-                  { key: 'VALID', label: 'Valid Only', count: validRows },
-                  { key: 'INVALID', label: 'Errors Only', count: invalidRows },
-                  { key: 'WARNING', label: 'Warnings Only', count: warningRows },
-                  { key: 'DUPLICATE', label: 'Duplicates Only', count: duplicateRows },
-                  { key: 'CORRECTED', label: 'Corrected Only', count: groupedRows.filter(groupIsCorrected).length }
-                ].map(f => (
-                  <button
-                    key={f.key}
-                    onClick={() => setRowFilter(f.key)}
-                    style={{
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '20px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: rowFilter === f.key ? 'var(--primary)' : 'transparent',
-                      color: rowFilter === f.key ? 'white' : 'var(--text-secondary)',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.35rem',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {f.label}
-                    <span style={{ 
-                      backgroundColor: rowFilter === f.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.06)', 
-                      padding: '0.05rem 0.35rem', 
-                      borderRadius: '10px',
-                      fontSize: '0.7rem'
-                    }}>
-                      {f.count}
+                  {/* Search and Filters Bar */}
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1.25rem', padding: '0.75rem 1rem', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px solid var(--border-color)' }}>
+                    <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: 340 }}>
+                      <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                        placeholder="Search Account No, Ref No or Name…"
+                        style={{ width: '100%', padding: '0.5rem 0.7rem 0.5rem 2rem', borderRadius: 9, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.78rem' }}
+                      />
+                    </div>
+
+                    <FilterDropdown
+                      value={statusFilter}
+                      onChange={setStatusFilter}
+                      minWidth={210}
+                      options={STATUS_FILTERS.map(f => ({ value: f.key, label: f.label, count: filterCounts[f.key] ?? 0, color: f.color }))}
+                    />
+
+                    <FilterDropdown
+                      value={netTypeFilter}
+                      onChange={setNetTypeFilter}
+                      minWidth={200}
+                      placeholderColor="#818cf8"
+                      options={[
+                        { value: 'ALL', label: 'All Net Types', count: groupedRows.length, color: '#818cf8' },
+                        ...netTypeOptions.map(([nt, count]) => ({ value: nt, label: nt, count, color: '#818cf8' })),
+                      ]}
+                    />
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: 8, border: '1px solid var(--border-color)', marginLeft: 'auto' }}>
+                      <button
+                        onClick={() => setViewMode('CARDS')}
+                        title="Customer Cards View"
+                        style={{
+                          padding: '0.35rem 0.65rem', borderRadius: 6, border: 'none',
+                          background: viewMode === 'CARDS' ? 'var(--primary)' : 'transparent',
+                          color: viewMode === 'CARDS' ? 'white' : 'var(--text-secondary)',
+                          fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem'
+                        }}
+                      >
+                        <LayoutGrid size={13} /> Cards
+                      </button>
+                      <button
+                        onClick={() => setViewMode('TABLE')}
+                        title="Tabular View"
+                        style={{
+                          padding: '0.35rem 0.65rem', borderRadius: 6, border: 'none',
+                          background: viewMode === 'TABLE' ? 'var(--primary)' : 'transparent',
+                          color: viewMode === 'TABLE' ? 'white' : 'var(--text-secondary)',
+                          fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.3rem'
+                        }}
+                      >
+                        <List size={13} /> Table
+                      </button>
+                    </div>
+
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      Showing <strong style={{ color: 'white' }}>{displayRecords.length}</strong> of {groupedRows.length} records · sorted by Account No
                     </span>
-                  </button>
-                ))}
-              </div>
+                  </div>
 
-              {/* Data Table */}
+                  {/* Customer Cards Grid View */}
+                  {viewMode === 'CARDS' ? (
+                    displayRecords.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                        No customer records match the selected search or filter criteria.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                        {displayRecords.map(({ row, idx }) => (
+                          <CustomerCard
+                            key={idx}
+                            row={row}
+                            onView={() => setDetailsRecord(row)}
+                            onEdit={() => handleOpenEditModal(row.sources?.[0] || row)}
+                            onHistory={() => setActiveTab('corrections')}
+                          />
+                        ))}
+                      </div>
+                    )
+                  ) : (
+                    /* Tabular View (fallback) */
               <div className="table-container" style={{ overflowX: 'auto', maxWidth: '100%' }}>
                 <table className="custom-table" style={{ fontSize: '0.85rem', width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
@@ -1006,10 +1157,82 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                   </tbody>
                 </table>
               </div>
-            </>
-          )}
-        </>
+            )}
+          </>
+        )}
+      </>
+    )}
+
+      {/* Detail Record Modal (Full 360 Customer Profile Breakdown) */}
+      {detailsRecord && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000000, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
+          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '860px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
+              <div>
+                <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ref No: {cellText(detailsRecord.refNo)}</div>
+                <h3 style={{ margin: '0.15rem 0', fontSize: '1.15rem', fontWeight: 700, fontFamily: 'monospace' }}>{cellText(detailsRecord.accountNo)}</h3>
+                <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                  {cellText(detailsRecord.npayName) !== '—' ? cellText(detailsRecord.npayName) : cellText(detailsRecord.customerName)}
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <RecordStatusBadge row={detailsRecord} />
+                <button onClick={() => setDetailsRecord(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><XCircle size={18} /></button>
+              </div>
+            </div>
+
+            <div style={{ padding: '1.25rem 1.5rem', overflow: 'auto', flex: 1 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1rem' }}>
+                {CARD_SECTIONS.map(sec => (
+                  <div key={sec.title} style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: sec.color, marginBottom: '0.5rem' }}>{sec.title}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      {sec.fields.map(f => (
+                        <div key={f.label} style={{ fontSize: '0.76rem', display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{f.label}</span>
+                          <span style={{ color: 'white', fontWeight: 600, textAlign: 'right' }}>{fieldValue(detailsRecord, f)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Validation & Errors */}
+              <div style={{ marginTop: '1rem', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
+                <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#f87171', marginBottom: '0.5rem' }}>Validation Status &amp; Errors</div>
+                {(detailsRecord.errors || []).map((e, i) => (
+                  <div key={`e${i}`} style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
+                    <AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />
+                    {typeof e === 'object' ? (e.errorMessage || e.field) : String(e)}
+                  </div>
+                ))}
+                {(detailsRecord.warnings || []).map((w, i) => (
+                  <div key={`w${i}`} style={{ fontSize: '0.75rem', color: '#f59e0b', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}>
+                    <AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />
+                    {typeof w === 'object' ? (w.warning || w.field) : String(w)}
+                  </div>
+                ))}
+                {(detailsRecord.errors || []).length === 0 && (detailsRecord.warnings || []).length === 0 && (
+                  <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                    <CheckCircle2 size={12} /> No validation errors or warnings
+                  </div>
+                )}
+                {isDuplicateRecord(detailsRecord) && (
+                  <div style={{ fontSize: '0.73rem', color: '#c084fc', marginTop: '0.4rem' }}>
+                    Duplicate source records detected across files
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: '0.6rem' }}>
+              <button onClick={() => setDetailsRecord(null)} className="btn btn-secondary" style={{ padding: '0.55rem 1.25rem' }}>Close</button>
+            </div>
+          </div>
+        </div>
       )}
+
           <EditStagingRowModal
             isOpen={!!editingStagingRow}
             onClose={handleCloseEditModal}

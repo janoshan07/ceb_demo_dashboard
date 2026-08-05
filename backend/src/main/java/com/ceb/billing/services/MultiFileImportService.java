@@ -2693,9 +2693,11 @@ public class MultiFileImportService {
                     enriched.put("billingMode", c.getExpenseCode() != null ? c.getExpenseCode().getExpCode() : null);
                     enriched.put("unitRate", c.getUnitRate());
                     enriched.put("masterDataFound", true);
+                    enriched.put("isNewCustomer", false);
                     matchCount++;
                 } else {
                     enriched.put("masterDataFound", false);
+                    enriched.put("isNewCustomer", true);
                     errors.add("Account No not found in Master Data or customer database");
                     notFoundCount++;
                 }
@@ -2732,6 +2734,7 @@ public class MultiFileImportService {
             // Display-only in Step 6: this Master Data account has no billing to import, so it is
             // excluded from the final billing insertion (its customer profile is still saved).
             enriched.put("masterOnly", true);
+            enriched.put("noBillingData", true);
 
             // Imported Main Data Set fields have no matching account — mark them as missing.
             enriched.put("prevReadingDate", "—");

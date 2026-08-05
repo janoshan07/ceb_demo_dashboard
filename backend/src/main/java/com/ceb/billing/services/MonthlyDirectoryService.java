@@ -714,18 +714,35 @@ public class MonthlyDirectoryService {
 
     private Map<String, Object> computeSummary(List<Map<String, Object>> rows) {
         int valid = 0, warnings = 0, errors = 0, nameMismatch = 0, unitRateMismatch = 0, netTypeMismatch = 0;
+        int newCustomers = 0, noBillingData = 0, duplicates = 0;
         for (Map<String, Object> row : rows) {
             String status = row.get("status") != null ? String.valueOf(row.get("status")) : "";
-            if ("VALID".equals(status)) valid++;
-            else if ("WARNING".equals(status)) warnings++;
-            else if ("ERROR".equals(status)) errors++;
-            if ("MISMATCH".equals(row.get("nameMatch"))) nameMismatch++;
-            if ("MISMATCH".equals(row.get("unitRateMatch"))) unitRateMismatch++;
-            if ("MISMATCH".equals(row.get("netTypeMatch"))) netTypeMismatch++;
+            boolean isNew = Boolean.FALSE.equals(row.get("masterDataFound")) || Boolean.TRUE.equals(row.get("isNewCustomer"));
+            boolean isNoBilling = Boolean.TRUE.equals(row.get("masterOnly")) || Boolean.TRUE.equals(row.get("noBillingData"));
+            boolean isDup = "DUPLICATE".equalsIgnoreCase(status) || Boolean.TRUE.equals(row.get("hasDuplicateSources")) || Boolean.TRUE.equals(row.get("isDuplicateEntry"));
+            boolean isNameMismatch = "MISMATCH".equals(row.get("nameMatch"));
+            boolean isUnitRateMismatch = "MISMATCH".equals(row.get("unitRateMatch"));
+            boolean isNetTypeMismatch = "MISMATCH".equals(row.get("netTypeMatch"));
+
+            if (isNew) newCustomers++;
+            if (isNoBilling) noBillingData++;
+            if (isDup) duplicates++;
+            if (isNameMismatch) nameMismatch++;
+            if (isUnitRateMismatch) unitRateMismatch++;
+            if (isNetTypeMismatch) netTypeMismatch++;
+
+            if ("VALID".equalsIgnoreCase(status) && !isNew && !isNoBilling && !isDup && !isNameMismatch && !isUnitRateMismatch && !isNetTypeMismatch) {
+                valid++;
+            }
+            if ("WARNING".equalsIgnoreCase(status)) warnings++;
+            if ("ERROR".equalsIgnoreCase(status)) errors++;
         }
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("totalRecords", rows.size());
         m.put("validCount", valid);
+        m.put("newCustomersCount", newCustomers);
+        m.put("noBillingDataCount", noBillingData);
+        m.put("duplicateCount", duplicates);
         m.put("warningCount", warnings);
         m.put("errorCount", errors);
         m.put("nameMismatchCount", nameMismatch);

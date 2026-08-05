@@ -2804,19 +2804,22 @@ const UploadPage = () => {
       const rows = data.rows || [];
       const errorCount = rows.filter(r => r.status === 'ERROR').length;
       const warningCount = rows.filter(r => r.status === 'WARNING').length;
-      // Name-mismatch records are surfaced through the dedicated "Name Mismatch Review"
-      // workflow, not the normal Errors/Valid lists. They are excluded from the Valid
-      // count until a reviewer approves them (which flips nameMatch to 'MATCH').
+      const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
+      const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
+      const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true || Number(r.ngenSourceCount) > 1 || Number(r.npaySourceCount) > 1;
+      
+      const newCustomersCount = rows.filter(isNewCust).length;
+      const noBillingDataCount = rows.filter(isNoBill).length;
+      const duplicateCount = rows.filter(isDup).length;
       const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
-      // Unit Rate mismatches are likewise surfaced through the dedicated "Unit Rate Mismatch
-      // Review" workflow and excluded from Valid until a reviewer approves them.
       const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
-      // Net Type mismatches are likewise surfaced through the dedicated "Net Type Mismatch
-      // Review" workflow and excluded from Valid until a reviewer approves them.
       const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
-      const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+      const validCount = rows.filter(r => r.status === 'VALID' && !isNewCust(r) && !isNoBill(r) && !isDup(r) && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+
       setMasterComparison({
-        rows, totalRecords: rows.length, errorCount, warningCount, validCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount,
+        rows, totalRecords: rows.length, errorCount, warningCount, validCount,
+        newCustomersCount, noBillingDataCount, duplicateCount,
+        nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount,
         matchedCount: data.matchedCount, mismatchCount: data.mismatchCount, notFoundCount: data.notFoundCount
       });
       setNameMismatchSelected([]);
@@ -4180,8 +4183,12 @@ const UploadPage = () => {
         </div>
       );
     }
-    const { rows, totalRecords, errorCount, warningCount, validCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
+    const { rows, totalRecords, errorCount, warningCount, validCount, newCustomersCount, noBillingDataCount, duplicateCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
     const hasErrors = (errorCount || 0) > 0;
+    const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
+    const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
+    const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true || Number(r.ngenSourceCount) > 1 || Number(r.npaySourceCount) > 1;
+
     const nameMismatchRows = (rows || []).filter(r => r.nameMatch === 'MISMATCH');
     const unitRateMismatchRows = (rows || []).filter(r => r.unitRateMatch === 'MISMATCH');
     const netTypeMismatchRows = (rows || []).filter(r => r.netTypeMatch === 'MISMATCH');
@@ -4217,7 +4224,13 @@ const UploadPage = () => {
     const agreementActiveCount = agreementRows.filter(r => r.agreementStatus === 'ACTIVE').length;
     const filteredRows = (rows || []).filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
-      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH';
+      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && !isNewCust(r) && !isNoBill(r) && !isDup(r) && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH';
+      if (masterComparisonFilter === 'NEW_CUSTOMERS') return isNewCust(r);
+      if (masterComparisonFilter === 'NO_BILLING_DATA') return isNoBill(r);
+      if (masterComparisonFilter === 'DUPLICATE') return isDup(r);
+      if (masterComparisonFilter === 'NAME_MISMATCH') return r.nameMatch === 'MISMATCH';
+      if (masterComparisonFilter === 'UNIT_RATE_MISMATCH') return r.unitRateMatch === 'MISMATCH';
+      if (masterComparisonFilter === 'NET_TYPE_MISMATCH') return r.netTypeMatch === 'MISMATCH';
       if (masterComparisonFilter === 'ERROR') return r.status === 'ERROR';
       if (masterComparisonFilter === 'WARNING') return r.status === 'WARNING';
       return true;
@@ -4254,11 +4267,12 @@ const UploadPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
           <StatCard label="Total Records" value={totalRecords} color="white" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
-          <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-          <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
-          <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<User size={18} />} />
-          <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
-          <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="New Customers" value={newCustomersCount || 0} color="#38bdf8" icon={<User size={18} />} />
+          <StatCard label="No Billing Data / Payment Hold" value={noBillingDataCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Duplicates" value={duplicateCount || 0} color="#c084fc" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
+          <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#fbbf24' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#a78bfa' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Agreement Expired" value={agreementExpiredCount} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
           <StatCard label="Agreement Expiring Soon" value={agreementExpiringCount} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
         </div>
@@ -4268,11 +4282,12 @@ const UploadPage = () => {
           {[
             { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
             { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
-            { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
-            { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
-            { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#f59e0b' },
-            { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#f59e0b' },
-            { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#f59e0b' },
+            { key: 'NEW_CUSTOMERS', label: 'New Customers', count: newCustomersCount || 0, color: '#38bdf8' },
+            { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', count: noBillingDataCount || 0, color: '#f59e0b' },
+            { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
+            { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
+            { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
+            { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#a78bfa' },
             { key: 'AGREEMENT_EXPIRY', label: 'Agreement Expiry Review', count: agreementExpiredCount + agreementExpiringCount, color: agreementExpiredCount > 0 ? '#ef4444' : agreementExpiringCount > 0 ? '#f97316' : '#10b981' },
           ].map(tab => (
             <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}

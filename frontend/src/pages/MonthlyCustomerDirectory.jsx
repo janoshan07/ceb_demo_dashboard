@@ -144,18 +144,18 @@ export const normalizeNetType = (raw) => {
 
 // Every filter the summary cards / Status dropdown can apply. Filtering is display-only —
 // records themselves are never changed. `card: false` keeps an option dropdown-only.
+// Every filter the summary cards / Status dropdown can apply. Filtering is display-only —
+// records themselves are never changed. `card: false` keeps an option dropdown-only.
 export const STATUS_FILTERS = [
-  { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: '#38bdf8' },
+  { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: 'white' },
   { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981' },
-  { key: 'ERROR', label: 'Errors', cardLabel: 'Errors', color: '#f87171' },
-  { key: 'WARNING', label: 'Warnings', cardLabel: 'Warnings', color: '#f59e0b' },
+  { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8' },
+  { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', cardLabel: 'No Billing / Hold', color: '#f59e0b' },
   { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc' },
   { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185' },
   { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24' },
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa' },
-  { key: 'CORRECTED', label: 'Corrections', cardLabel: 'Corrections', color: '#2dd4bf' },
-  { key: 'REJECTED', label: 'Rejected', cardLabel: 'Rejected', color: '#f87171', card: false },
-  { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired Agreements', color: '#ef4444' },
+  { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444' },
   { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316' },
 ];
 
@@ -191,21 +191,26 @@ export const MismatchChip = ({ label, color = '#f87171', bg = 'rgba(239,68,68,0.
 );
 
 export const RecordStatusBadge = ({ row }) => {
+  const isNew = row.masterDataFound === false || row.isNewCustomer === true;
+  const isNoBill = row.masterOnly === true || row.noBillingData === true || row.paymentHold === true;
+  const dup = isDuplicateRecord(row);
   const st = String(row.status || row.validationStatus || 'VALID').toUpperCase();
   const cfg = RECORD_STATUS_STYLE[st] || RECORD_STATUS_STYLE.VALID;
-  const dup = isDuplicateRecord(row) && st !== 'DUPLICATE';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
       <span style={{ padding: '0.2rem 0.55rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
       {row.recordApproved === true && (
         <span style={{ fontSize: '0.62rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircle size={10} /> Approved</span>
       )}
-      {(row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH' || dup) && (
+      {(row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH' || dup || isNew || isNoBill) && (
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-          {row.nameMatch === 'MISMATCH' && <MismatchChip label="Name" />}
-          {row.unitRateMatch === 'MISMATCH' && <MismatchChip label="Rate" />}
-          {row.netTypeMatch === 'MISMATCH' && <MismatchChip label="Net" />}
-          {dup && <MismatchChip label="Duplicate" color="#c084fc" bg="rgba(168,85,247,0.12)" border="rgba(168,85,247,0.3)" />}
+          {isNew && <MismatchChip label="New Customer" color="#38bdf8" bg="rgba(56,189,248,0.15)" border="rgba(56,189,248,0.3)" />}
+          {isNoBill && <MismatchChip label="No Billing Data" color="#f59e0b" bg="rgba(245,158,11,0.15)" border="rgba(245,158,11,0.3)" />}
+          {dup && <MismatchChip label="Duplicate" color="#c084fc" bg="rgba(168,85,247,0.15)" border="rgba(168,85,247,0.3)" />}
+          {row.nameMatch === 'MISMATCH' && <MismatchChip label="Name Mismatch" color="#fb7185" bg="rgba(251,113,133,0.15)" border="rgba(251,113,133,0.3)" />}
+          {row.unitRateMatch === 'MISMATCH' && <MismatchChip label="Rate Mismatch" color="#fbbf24" bg="rgba(251,191,36,0.15)" border="rgba(251,191,36,0.3)" />}
+          {row.netTypeMatch === 'MISMATCH' && <MismatchChip label="Net Mismatch" color="#a78bfa" bg="rgba(167,139,250,0.15)" border="rgba(167,139,250,0.3)" />}
         </div>
       )}
     </div>
@@ -641,14 +646,21 @@ const MonthlyCustomerDirectory = () => {
 
   // One predicate shared by the clickable summary cards and the Status dropdown.
   const matchesFilter = useCallback((row, key) => {
+    const isNew = row.masterDataFound === false || row.isNewCustomer === true;
+    const isNoBill = row.masterOnly === true || row.noBillingData === true || row.paymentHold === true;
+    const dup = isDuplicateRecord(row);
+
     switch (key) {
       case 'ALL': return true;
-      case 'COMPLETE': return isRecordComplete(row);
-      case 'MISSING': return !isRecordComplete(row);
-      case 'DUPLICATE': return isDuplicateRecord(row);
+      case 'VALID': return String(row.status || '').toUpperCase() === 'VALID' && !isNew && !isNoBill && !dup && row.nameMatch !== 'MISMATCH' && row.unitRateMatch !== 'MISMATCH' && row.netTypeMatch !== 'MISMATCH';
+      case 'NEW_CUSTOMERS': return isNew;
+      case 'NO_BILLING_DATA': return isNoBill;
+      case 'DUPLICATE': return dup;
       case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH';
       case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH';
       case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH';
+      case 'COMPLETE': return isRecordComplete(row);
+      case 'MISSING': return !isRecordComplete(row);
       case 'CORRECTED': return row.step6Corrected === true || row.correctedInDirectory === true;
       case 'EXPIRED': return rowExpiry(row) === 'EXPIRED';
       case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON';

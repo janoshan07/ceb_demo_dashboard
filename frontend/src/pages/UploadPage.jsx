@@ -4261,9 +4261,6 @@ const UploadPage = () => {
           <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Agreement Expired" value={agreementExpiredCount} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
           <StatCard label="Agreement Expiring Soon" value={agreementExpiringCount} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
-          <StatCard label="Matched" value={matchedCount || 0} color="#10b981" icon={<CheckCircle size={18} />} />
-          <StatCard label="Mismatched" value={mismatchCount || 0} color={mismatchCount > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
-          <StatCard label="Not Found" value={notFoundCount || 0} color={notFoundCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
         </div>
 
         {/* Filter tabs */}

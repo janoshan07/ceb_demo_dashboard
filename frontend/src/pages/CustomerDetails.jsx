@@ -25,7 +25,16 @@ import {
   ArrowUpDown,
   CheckCircle,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Download,
+  ChevronDown,
+  Plus,
+  Eye,
+  FileText,
+  MoreVertical,
+  Filter,
+  Layers,
+  Phone
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 
@@ -156,6 +165,15 @@ const CustomerDetails = () => {
   const [appliedQuery, setAppliedQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalElements, setTotalElements] = useState(0);
+  const [summaryStats, setSummaryStats] = useState({
+    totalCustomers: 0,
+    completeCustomers: 0,
+    missingCustomers: 0,
+    validationErrorsCount: 0,
+    locationsCount: 5
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('ALL'); // ALL, VALID, ERROR
@@ -173,18 +191,34 @@ const CustomerDetails = () => {
     }
     const missing = [];
     if (!cust.customerName || !String(cust.customerName).trim() || cust.customerName === '—') missing.push('Customer Name');
-    if (!cust.customerAddress || !String(cust.customerAddress).trim() || cust.customerAddress === '—') missing.push('Customer Address');
-    if (!cust.mobileNo || !String(cust.mobileNo).trim() || cust.mobileNo === '—') missing.push('Mobile Number');
-    if (!cust.agreementDate || cust.agreementDate === '—') missing.push('Agreement Date');
-    if (cust.panelCapacity === null || cust.panelCapacity === undefined || cust.panelCapacity === '' || cust.panelCapacity === '—') missing.push('Panel Capacity');
-    if (!cust.bankCode || !String(cust.bankCode).trim() || cust.bankCode === '—') missing.push('Bank Code');
-    if (!cust.bankAccountNo || !String(cust.bankAccountNo).trim() || cust.bankAccountNo === '—') missing.push('Bank Account No');
+    
     const solar = cust.solarType || cust.netTypeName;
-    if (!solar || !String(solar).trim() || solar === '—') missing.push('Solar / Net Type');
+    if (!solar || !String(solar).trim() || solar === '—') missing.push('Solar System Type');
+    
+    if (!cust.customerAddress || !String(cust.customerAddress).trim() || cust.customerAddress === '—') missing.push('Customer Address');
+    if (!cust.mobileNo || !String(cust.mobileNo).trim() || cust.mobileNo === '—') missing.push('Mobile No');
+    if (cust.panelCapacity === null || cust.panelCapacity === undefined || cust.panelCapacity === '' || cust.panelCapacity === '—') missing.push('Panel Capacity');
+    if (!cust.agreementDate || cust.agreementDate === '—') missing.push('Agreement Date');
+    if (!cust.bankCode || !String(cust.bankCode).trim() || cust.bankCode === '—') missing.push('Bank Code');
+    if (!cust.branchCode || !String(cust.branchCode).trim() || cust.branchCode === '—') missing.push('Branch Code');
+    if (!cust.bankAccountNo || !String(cust.bankAccountNo).trim() || cust.bankAccountNo === '—') missing.push('Bank Account No');
+    if (!cust.refNo || !String(cust.refNo).trim() || cust.refNo === '—') missing.push('Ref No');
     if (cust.unitRate === null || cust.unitRate === undefined || cust.unitRate === '' || cust.unitRate === '—') missing.push('Unit Rate');
     if (!cust.tariffType || !String(cust.tariffType).trim() || cust.tariffType === '—') missing.push('Tariff Type');
+    if (!cust.costCode || !String(cust.costCode).trim() || cust.costCode === '—') missing.push('Cost Code');
+    if (!cust.expenseCode || !String(cust.expenseCode).trim() || cust.expenseCode === '—') missing.push('L-Code');
+    
+    const loc = cust.division || cust.branchCode;
+    if (!loc || !String(loc).trim() || loc === '—') missing.push('Location / Division');
 
     return { isComplete: missing.length === 0, missingFields: missing };
+  };
+
+  const renderValOrMissing = (val, formatter) => {
+    if (val === null || val === undefined || String(val).trim() === '' || String(val).trim() === '—') {
+      return <span style={{ color: '#ef4444', fontWeight: 600 }}>Missing</span>;
+    }
+    return formatter ? formatter(val) : val;
   };
 
   // Selected Customer Details State
@@ -299,13 +333,52 @@ const CustomerDetails = () => {
   const [billEditError, setBillEditError] = useState(null);
   const [billEditSuccess, setBillEditSuccess] = useState(null);
 
+  const fetchSummaryStats = async () => {
+    try {
+      const [totalRes, completeRes, missingRes, errorRes] = await Promise.all([
+        authFetch('/api/officer/customers?page=0&size=1'),
+        authFetch('/api/officer/customers?page=0&size=1&completeness=COMPLETE'),
+        authFetch('/api/officer/customers?page=0&size=1&completeness=MISSING'),
+        authFetch('/api/officer/customers?page=0&size=1&validationStatus=ERROR')
+      ]);
+      
+      let total = 0, complete = 0, missing = 0, errors = 0;
+      if (totalRes.ok) {
+        const d = await totalRes.json();
+        total = d.totalElements || 0;
+      }
+      if (completeRes.ok) {
+        const d = await completeRes.json();
+        complete = d.totalElements || 0;
+      }
+      if (missingRes.ok) {
+        const d = await missingRes.json();
+        missing = d.totalElements || 0;
+      }
+      if (errorRes.ok) {
+        const d = await errorRes.json();
+        errors = d.totalElements || 0;
+      }
+      
+      setSummaryStats({
+        totalCustomers: total,
+        completeCustomers: complete,
+        missingCustomers: missing,
+        validationErrorsCount: errors,
+        locationsCount: DIRECTORY_DIVISIONS.length
+      });
+    } catch (e) {
+      console.error('Failed to load summary stats:', e);
+    }
+  };
+
   // Load Customers list (officer customer search endpoint)
   const fetchCustomers = async (page = 0, query = '') => {
     try {
       setLoading(true);
       setError(null);
       
-      let url = `/api/officer/customers?page=${page}&size=8`;
+      let url = `/api/officer/customers?page=${page}&size=${pageSize}`;
       if (statusFilter !== 'ALL') {
         url += `&validationStatus=${statusFilter}`;
       }
@@ -329,6 +402,8 @@ const CustomerDetails = () => {
       const data = await res.json();
       setCustomers(data.content || []);
       setTotalPages(data.totalPages || 0);
+      setTotalElements(data.totalElements || 0);
+      fetchSummaryStats();
     } catch (err) {
       setError(err.message || 'Error occurred while loading customers.');
     } finally {
@@ -354,7 +429,8 @@ const CustomerDetails = () => {
   useEffect(() => {
     fetchCustomers(currentPage, appliedQuery);
     fetchLookups();
-  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, sortBy, sortDir]);
+    fetchSummaryStats();
+  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, sortBy, sortDir, pageSize]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -896,97 +972,135 @@ const CustomerDetails = () => {
 
   return (
     <div className="page-wrapper animate-fade-in">
-      <button onClick={() => navigate('/')} className="back-btn">
-        <ArrowLeft size={16} />
-        Back to Dashboard
+      <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem', marginBottom: '0.75rem', fontWeight: 500, padding: 0 }}>
+        <ArrowLeft size={14} /> Back to Dashboard
       </button>
-      <div className="page-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="page-title">Customer Directory</h1>
-          <p className="page-subtitle">Search customer electricity accounts, edit profiles, and view ledger details.</p>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'white', margin: 0 }}>Customer Directory</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.25rem', margin: 0 }}>Search customer electricity accounts, edit profiles, and view ledger details.</p>
         </div>
+        {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#1e293b', border: '1px solid var(--border-color)', fontWeight: 500, color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <Download size={15} /> Export <ChevronDown size={14} />
+            </button>
+            <button className="btn btn-primary" onClick={openAddCustomerModal} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600, color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <Plus size={16} /> Add Customer
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Completeness Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-        <div className="card" style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #6366f1', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Loaded Customers</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'white', marginTop: '0.2rem' }}>{customers.length}</div>
-          </div>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <User size={20} color="#818cf8" />
-          </div>
-        </div>
-
-        <div 
-          className="card" 
-          onClick={() => { setCompletenessFilter('COMPLETE'); setCurrentPage(0); }}
-          style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #10b981', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: completenessFilter === 'COMPLETE' ? 'rgba(16,185,129,0.08)' : 'var(--bg-secondary)', transition: 'all 0.2s ease' }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Complete Details</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {customers.filter(c => getCustomerCompleteness(c).isComplete).length}
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                ({customers.length > 0 ? Math.round((customers.filter(c => getCustomerCompleteness(c).isComplete).length / customers.length) * 100) : 0}%)
-              </span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+        {/* Total Customers */}
+        <div className="card" style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <User size={24} color="#818cf8" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Customers</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.totalCustomers.toLocaleString()}</div>
+              <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                <span>↑ 12.5% from last month</span>
+              </div>
             </div>
           </div>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CheckCircle size={20} color="#10b981" />
-          </div>
+          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <MoreVertical size={16} />
+          </button>
         </div>
 
-        <div 
-          className="card" 
-          onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }}
-          style={{ padding: '1rem 1.25rem', borderLeft: '4px solid #f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', background: completenessFilter === 'MISSING' ? 'rgba(245,158,11,0.08)' : 'var(--bg-secondary)', transition: 'all 0.2s ease' }}
-        >
-          <div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f59e0b', marginTop: '0.2rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              {customers.filter(c => !getCustomerCompleteness(c).isComplete).length}
-              <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                ({customers.length > 0 ? Math.round((customers.filter(c => !getCustomerCompleteness(c).isComplete).length / customers.length) * 100) : 0}%)
-              </span>
+        {/* Complete Details */}
+        <div className="card" onClick={() => { setCompletenessFilter('COMPLETE'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer', borderLeft: completenessFilter === 'COMPLETE' ? '3px solid #10b981' : '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle size={24} color="#10b981" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Complete Details</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.completeCustomers.toLocaleString()}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                {summaryStats.totalCustomers > 0 ? (summaryStats.completeCustomers / summaryStats.totalCustomers * 100).toFixed(2) : 0}% complete
+              </div>
             </div>
           </div>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <AlertTriangle size={20} color="#f59e0b" />
+          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <MoreVertical size={16} />
+          </button>
+        </div>
+
+        {/* Missing Details */}
+        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer', borderLeft: completenessFilter === 'MISSING' ? '3px solid #f59e0b' : '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <AlertTriangle size={24} color="#f59e0b" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.missingCustomers.toLocaleString()}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                {summaryStats.totalCustomers > 0 ? (summaryStats.missingCustomers / summaryStats.totalCustomers * 100).toFixed(2) : 0}% missing info
+              </div>
+            </div>
           </div>
+          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <MoreVertical size={16} />
+          </button>
+        </div>
+
+        {/* Locations */}
+        <div className="card" style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <MapPin size={24} color="#38bdf8" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Locations</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.locationsCount}</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Eastern Province</div>
+            </div>
+          </div>
+          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <MoreVertical size={16} />
+          </button>
         </div>
       </div>
 
       {/* Directory tabs (All / Complete Details / Missing Details / Valid / Error) + View Mode Toggle */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             onClick={() => { setCompletenessFilter('ALL'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
-              padding: '0.5rem 1rem',
-              background: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? 'rgba(99,102,241,0.15)' : 'transparent',
-              border: '1px solid ' + ((completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#6366f1' : 'transparent'),
-              color: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#818cf8' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.82rem',
+              padding: '0.5rem 1.1rem',
+              background: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? 'rgba(59,130,246,0.12)' : '#111827',
+              border: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '1px solid #3b82f6' : '1px solid var(--border-color)',
+              color: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#60a5fa' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
               borderRadius: '8px',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
               transition: 'all 0.2s ease'
             }}
           >
-            All Customers
+            <User size={14} /> All Customers
           </button>
 
           <button
             onClick={() => { setCompletenessFilter('COMPLETE'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
-              padding: '0.5rem 1rem',
-              background: completenessFilter === 'COMPLETE' ? 'rgba(16,185,129,0.15)' : 'transparent',
-              border: '1px solid ' + (completenessFilter === 'COMPLETE' ? '#10b981' : 'transparent'),
-              color: completenessFilter === 'COMPLETE' ? '#10b981' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.82rem',
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'COMPLETE' ? 'rgba(16,185,129,0.12)' : '#111827',
+              border: completenessFilter === 'COMPLETE' ? '1px solid #10b981' : '1px solid var(--border-color)',
+              color: completenessFilter === 'COMPLETE' ? '#34d399' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
               borderRadius: '8px',
               cursor: 'pointer',
               display: 'flex',
@@ -1001,12 +1115,12 @@ const CustomerDetails = () => {
           <button
             onClick={() => { setCompletenessFilter('MISSING'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
-              padding: '0.5rem 1rem',
-              background: completenessFilter === 'MISSING' ? 'rgba(245,158,11,0.15)' : 'transparent',
-              border: '1px solid ' + (completenessFilter === 'MISSING' ? '#f59e0b' : 'transparent'),
-              color: completenessFilter === 'MISSING' ? '#f59e0b' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.82rem',
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'MISSING' ? 'rgba(245,158,11,0.12)' : '#111827',
+              border: completenessFilter === 'MISSING' ? '1px solid #f59e0b' : '1px solid var(--border-color)',
+              color: completenessFilter === 'MISSING' ? '#fbbf24' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
               borderRadius: '8px',
               cursor: 'pointer',
               display: 'flex',
@@ -1021,53 +1135,68 @@ const CustomerDetails = () => {
           <button
             onClick={() => { setStatusFilter('ERROR'); setCompletenessFilter('ALL'); setCurrentPage(0); }}
             style={{
-              padding: '0.5rem 1rem',
-              background: statusFilter === 'ERROR' ? 'rgba(239,68,68,0.15)' : 'transparent',
-              border: '1px solid ' + (statusFilter === 'ERROR' ? '#ef4444' : 'transparent'),
-              color: statusFilter === 'ERROR' ? '#ef4444' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.82rem',
+              padding: '0.5rem 1.1rem',
+              background: statusFilter === 'ERROR' ? 'rgba(239,68,68,0.12)' : '#111827',
+              border: statusFilter === 'ERROR' ? '1px solid #ef4444' : '1px solid var(--border-color)',
+              color: statusFilter === 'ERROR' ? '#f87171' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
               borderRadius: '8px',
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
               transition: 'all 0.2s ease'
             }}
           >
-            Validation Errors
+            <AlertCircle size={14} /> Validation Errors
+            {summaryStats.validationErrorsCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.validationErrorsCount}
+              </span>
+            )}
           </button>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: 'rgba(255,255,255,0.03)', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+        {/* View Mode Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#111827', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
           <button
             onClick={() => setViewMode('SINGLE')}
             style={{
-              padding: '0.35rem 0.75rem',
+              padding: '0.4rem 0.85rem',
               borderRadius: '6px',
               border: 'none',
-              background: viewMode === 'SINGLE' ? 'var(--primary)' : 'transparent',
+              background: viewMode === 'SINGLE' ? '#3b82f6' : 'transparent',
               color: viewMode === 'SINGLE' ? 'white' : 'var(--text-secondary)',
               fontSize: '0.78rem',
               fontWeight: 600,
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
               transition: 'all 0.2s ease'
             }}
           >
-            Unified Table
+            <Layers size={13} /> Unified Table
           </button>
           <button
             onClick={() => setViewMode('GROUPED')}
             style={{
-              padding: '0.35rem 0.75rem',
+              padding: '0.4rem 0.85rem',
               borderRadius: '6px',
               border: 'none',
-              background: viewMode === 'GROUPED' ? 'var(--primary)' : 'transparent',
+              background: viewMode === 'GROUPED' ? '#3b82f6' : 'transparent',
               color: viewMode === 'GROUPED' ? 'white' : 'var(--text-secondary)',
               fontSize: '0.78rem',
               fontWeight: 600,
               cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.3rem',
               transition: 'all 0.2s ease'
             }}
           >
-            Grouped View
+            <Layers size={13} /> Grouped View
           </button>
         </div>
       </div>
@@ -1080,57 +1209,55 @@ const CustomerDetails = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', width: '100%', flexWrap: 'wrap' }}>
-          <form onSubmit={handleSearchSubmit} className="search-filter-bar" style={{ flex: 1, margin: 0 }}>
-            <div className="input-group">
-              <Search className="input-icon" size={18} />
+      <div className="card" style={{ marginBottom: '1.5rem', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(30,41,59,0.15)' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%', marginBottom: '1rem', flexWrap: 'wrap' }}>
+          <form onSubmit={handleSearchSubmit} style={{ flex: 1, display: 'flex', gap: '0.5rem', margin: 0 }}>
+            <div className="input-group" style={{ flex: 1, position: 'relative' }}>
+              <Search size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 className="form-input"
-                placeholder="Search by Account Number or Customer Name..."
+                style={{ paddingLeft: '2.5rem', height: '42px', borderRadius: '8px', background: '#0b0f19', border: '1px solid var(--border-color)', color: 'white', width: '100%', fontSize: '0.85rem' }}
+                placeholder="Search by Account No, Customer Name, or Mobile..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn btn-primary">
-              Search
+            <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 1.5rem', borderRadius: '8px', background: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+              <Search size={14} /> Search
             </button>
-            {searchQuery && (
-              <button type="button" className="btn btn-secondary" onClick={handleSearchClear}>
-                Clear
-              </button>
-            )}
           </form>
-          {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              {user?.role === 'ADMIN' && customers.length > 0 && (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                  onClick={handleClearAllCustomers}
-                >
-                  <Trash2 size={16} /> Clear Directory
-                </button>
-              )}
-              <button
-                type="button"
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--success)', borderColor: 'var(--success)' }}
-                onClick={openAddCustomerModal}
-              >
-                Add Customer
-              </button>
-            </div>
-          )}
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              setLocationFilter('ALL');
+              setStatusFilter('ALL');
+              setCompletenessFilter('ALL');
+              setSearchQuery('');
+              setAppliedQuery('');
+              setCurrentPage(0);
+            }}
+            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(239,68,68,0.15)', background: 'rgba(239,68,68,0.04)', color: '#f87171', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem' }}
+          >
+            <Trash2 size={14} /> Clear Filters
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid var(--border-color)', background: '#111827', color: 'var(--text-secondary)', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem' }}
+          >
+            <Filter size={14} /> Filter <ChevronDown size={14} />
+          </button>
         </div>
 
-        {/* Location filter (5 divisions) + sorting controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginTop: '1rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+        {/* Location tags + Sorting controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', paddingTop: '0.85rem', borderTop: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, marginRight: '0.15rem' }}>
-              <MapPin size={14} /> Location
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginRight: '0.35rem' }}>
+              Locations:
             </span>
             {['ALL', ...DIRECTORY_DIVISIONS].map((loc) => {
               const active = locationFilter === loc;
@@ -1140,14 +1267,14 @@ const CustomerDetails = () => {
                   type="button"
                   onClick={() => { setLocationFilter(loc); setCurrentPage(0); }}
                   style={{
-                    padding: '0.35rem 0.85rem',
+                    padding: '0.35rem 0.95rem',
                     fontSize: '0.78rem',
                     fontWeight: 600,
-                    borderRadius: '999px',
+                    borderRadius: '6px',
                     cursor: 'pointer',
-                    border: `1px solid ${active ? '#6366f1' : 'var(--border-color)'}`,
-                    background: active ? 'rgba(99,102,241,0.15)' : 'transparent',
-                    color: active ? '#818cf8' : 'var(--text-secondary)',
+                    border: active ? '1px solid #3b82f6' : '1px solid var(--border-color)',
+                    background: active ? 'rgba(59,130,246,0.12)' : '#111827',
+                    color: active ? '#60a5fa' : 'var(--text-secondary)',
                     transition: 'all 0.2s ease',
                   }}
                 >
@@ -1155,17 +1282,30 @@ const CustomerDetails = () => {
                 </button>
               );
             })}
+            <button
+              type="button"
+              style={{
+                padding: '0.35rem 0.65rem',
+                fontSize: '0.78rem',
+                fontWeight: 600,
+                borderRadius: '6px',
+                border: '1px solid var(--border-color)',
+                background: '#111827',
+                color: '#60a5fa',
+                cursor: 'pointer'
+              }}
+            >
+              +2
+            </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600 }}>
-              <ArrowUpDown size={14} /> Sort
-            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>Sort by:</span>
             <select
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value); setCurrentPage(0); }}
               className="form-input"
-              style={{ appearance: 'auto', padding: '0.4rem 0.6rem', fontSize: '0.8rem', width: 'auto', minWidth: '150px' }}
+              style={{ appearance: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.78rem', background: '#111827', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: 'auto', minWidth: '130px', height: '36px' }}
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -1176,10 +1316,9 @@ const CustomerDetails = () => {
               className="btn btn-secondary"
               title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
               onClick={() => { setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(0); }}
-              style={{ padding: '0.4rem 0.7rem', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
+              style={{ padding: '0 0.75rem', height: '36px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', border: '1px solid var(--border-color)', background: '#111827', color: 'white', borderRadius: '8px' }}
             >
-              {sortDir === 'asc' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-              {sortDir === 'asc' ? 'Asc' : 'Desc'}
+              <ArrowUpDown size={13} /> {sortDir === 'asc' ? 'A-Z' : 'Z-A'}
             </button>
           </div>
         </div>
@@ -1187,32 +1326,32 @@ const CustomerDetails = () => {
 
       {/* Customer List Display: Unified vs Grouped View */}
       {viewMode === 'SINGLE' ? (
-        <div className="card">
+        <div className="card" style={{ borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(30,41,59,0.2)', overflow: 'hidden' }}>
           <div className="table-container">
             {loading ? (
               <table className="custom-table" style={{ opacity: 0.8 }}>
                 <thead>
                   <tr>
                     <th style={{ width: '60px' }}>#</th>
-                    <th>Account No</th>
-                    <th>Customer Name</th>
-                    <th>Completeness</th>
-                    <th>Solar Type</th>
-                    <th>Panel Cap</th>
-                    <th>Agreement Date</th>
-                    <th>Location</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>ACCOUNT NO</th>
+                    <th>CUSTOMER NAME</th>
+                    <th>MOBILE</th>
+                    <th>SOLAR TYPE</th>
+                    <th>COMPLETENESS</th>
+                    <th>AGREEMENT DATE</th>
+                    <th>LOCATION</th>
+                    <th style={{ textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...Array(8)].map((_, i) => (
+                  {[...Array(pageSize)].map((_, i) => (
                     <tr key={i}>
                       <td><div className="skeleton" style={{ height: '16px', width: '20px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '150px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '24px', width: '90px', borderRadius: '4px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
-                      <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
                       <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '90px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
@@ -1233,14 +1372,14 @@ const CustomerDetails = () => {
                 <thead>
                   <tr>
                     <th style={{ width: '60px' }}>#</th>
-                    <th>Account No</th>
-                    <th>Customer Name</th>
-                    <th>Completeness</th>
-                    <th>Solar Type</th>
-                    <th>Panel Cap</th>
-                    <th>Agreement Date</th>
-                    <th>Location</th>
-                    <th style={{ textAlign: 'right' }}>Actions</th>
+                    <th>ACCOUNT NO</th>
+                    <th>CUSTOMER NAME</th>
+                    <th>MOBILE</th>
+                    <th>SOLAR TYPE</th>
+                    <th>COMPLETENESS</th>
+                    <th>AGREEMENT DATE</th>
+                    <th>LOCATION</th>
+                    <th style={{ textAlign: 'right' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1249,9 +1388,13 @@ const CustomerDetails = () => {
                     return (
                       <tr key={cust.accountNo}>
                         <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
-                          {currentPage * 8 + idx + 1}
+                          {currentPage * pageSize + idx + 1}
                         </td>
-                        <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          <span style={{ color: '#60a5fa', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                            {cust.accountNo}
+                          </span>
+                        </td>
                         <td style={{ fontWeight: 500 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                             <span>{cust.customerName}</span>
@@ -1266,35 +1409,85 @@ const CustomerDetails = () => {
                             )}
                           </div>
                         </td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                          {cust.mobileNo ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                              <Phone size={12} style={{ opacity: 0.6 }} />
+                              <span>{cust.mobileNo}</span>
+                            </div>
+                          ) : '—'}
+                        </td>
+                        <td>
+                          {(() => {
+                            const st = (cust.solarType || 'Net Plus').toUpperCase();
+                            let bg = 'rgba(139,92,246,0.12)';
+                            let color = '#a78bfa';
+                            let border = '1px solid rgba(139,92,246,0.2)';
+                            if (st.includes('ACCOUNTING')) {
+                              bg = 'rgba(59,130,246,0.12)';
+                              color = '#60a5fa';
+                              border = '1px solid rgba(59,130,246,0.2)';
+                            } else if (st.includes('METERING')) {
+                              bg = 'rgba(16,185,129,0.12)';
+                              color = '#34d399';
+                              border = '1px solid rgba(16,185,129,0.2)';
+                            } else if (st.includes('PLUS PLUS') || st.includes('++')) {
+                              bg = 'rgba(245,158,11,0.12)';
+                              color = '#fbbf24';
+                              border = '1px solid rgba(245,158,11,0.2)';
+                            }
+                            return (
+                              <span className="badge" style={{ background: bg, color: color, border: border, padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                                {st}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td>
                           {comp.isComplete ? (
-                            <span className="badge success" style={{ background: 'rgba(16,185,129,0.15)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <CheckCircle size={12} /> Complete
+                            <span className="badge success" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', border: '1px solid rgba(16,185,129,0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                              <CheckCircle size={12} /> COMPLETE
                             </span>
                           ) : (
-                            <span className="badge warning" title={`Missing: ${comp.missingFields.join(', ')}`} style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'help' }}>
-                              <AlertTriangle size={12} /> Missing ({comp.missingFields.length})
+                            <span className="badge warning" title={`Missing: ${comp.missingFields.join(', ')}`} style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'help' }}>
+                              <AlertTriangle size={12} /> MISSING ({comp.missingFields.length})
                             </span>
                           )}
                         </td>
-                        <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
-                        <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
-                        <td>{cust.agreementDate || '—'}</td>
+                        <td style={{ fontSize: '0.85rem' }}>{cust.agreementDate || '—'}</td>
                         <td>
                           {(cust.division || cust.branchCode) ? (
-                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.25)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
-                              <MapPin size={11} /> {cust.division || cust.branchCode}
+                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.2)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <MapPin size={11} /> {(cust.division || cust.branchCode).toUpperCase()}
                             </span>
                           ) : '—'}
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button 
-                            className="btn btn-secondary" 
-                            style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}
-                            onClick={() => handleViewDetails(cust)}
-                          >
-                            View Profile
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="View Profile"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}
+                              onClick={() => handleViewDetails(cust)}
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="Billing Ledger"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#34d399' }}
+                              onClick={() => handleViewDetails(cust)}
+                            >
+                              <FileText size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="More Options"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}
+                            >
+                              <MoreVertical size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1334,37 +1527,84 @@ const CustomerDetails = () => {
                   <thead>
                     <tr>
                       <th style={{ width: '60px' }}>#</th>
-                      <th>Account No</th>
-                      <th>Customer Name</th>
-                      <th>Solar Type</th>
-                      <th>Panel Cap</th>
-                      <th>Location</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
+                      <th>ACCOUNT NO</th>
+                      <th>CUSTOMER NAME</th>
+                      <th>SOLAR TYPE</th>
+                      <th>PANEL CAP</th>
+                      <th>LOCATION</th>
+                      <th style={{ textAlign: 'right' }}>ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>
                     {customers.filter(c => getCustomerCompleteness(c).isComplete).map((cust, idx) => (
                       <tr key={cust.accountNo}>
                         <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{idx + 1}</td>
-                        <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
+                        <td style={{ fontWeight: 600 }}>
+                          <span style={{ color: '#60a5fa', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                            {cust.accountNo}
+                          </span>
+                        </td>
                         <td style={{ fontWeight: 500 }}>{cust.customerName}</td>
-                        <td><span className="badge info">{cust.solarType || 'Net Plus'}</span></td>
+                        <td>
+                          {(() => {
+                            const st = (cust.solarType || 'Net Plus').toUpperCase();
+                            let bg = 'rgba(139,92,246,0.12)';
+                            let color = '#a78bfa';
+                            let border = '1px solid rgba(139,92,246,0.2)';
+                            if (st.includes('ACCOUNTING')) {
+                              bg = 'rgba(59,130,246,0.12)';
+                              color = '#60a5fa';
+                              border = '1px solid rgba(59,130,246,0.2)';
+                            } else if (st.includes('METERING')) {
+                              bg = 'rgba(16,185,129,0.12)';
+                              color = '#34d399';
+                              border = '1px solid rgba(16,185,129,0.2)';
+                            } else if (st.includes('PLUS PLUS') || st.includes('++')) {
+                              bg = 'rgba(245,158,11,0.12)';
+                              color = '#fbbf24';
+                              border = '1px solid rgba(245,158,11,0.2)';
+                            }
+                            return (
+                              <span className="badge" style={{ background: bg, color: color, border: border, padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                                {st}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td style={{ fontWeight: 600 }}>{cust.panelCapacity ? `${cust.panelCapacity} kW` : '—'}</td>
                         <td>
                           {(cust.division || cust.branchCode) ? (
-                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
-                              <MapPin size={11} /> {cust.division || cust.branchCode}
+                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.2)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <MapPin size={11} /> {(cust.division || cust.branchCode).toUpperCase()}
                             </span>
                           ) : '—'}
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button 
-                            className="btn btn-secondary" 
-                            style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem' }}
-                            onClick={() => handleViewDetails(cust)}
-                          >
-                            View Profile
-                          </button>
+                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="View Profile"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}
+                              onClick={() => handleViewDetails(cust)}
+                            >
+                              <Eye size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="Billing Ledger"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#34d399' }}
+                              onClick={() => handleViewDetails(cust)}
+                            >
+                              <FileText size={14} />
+                            </button>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="More Options"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}
+                            >
+                              <MoreVertical size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1401,11 +1641,11 @@ const CustomerDetails = () => {
                   <thead>
                     <tr>
                       <th style={{ width: '60px' }}>#</th>
-                      <th>Account No</th>
-                      <th>Customer Name</th>
-                      <th>Missing Fields</th>
-                      <th>Location</th>
-                      <th style={{ textAlign: 'right' }}>Actions</th>
+                      <th>ACCOUNT NO</th>
+                      <th>CUSTOMER NAME</th>
+                      <th>MISSING FIELDS</th>
+                      <th>LOCATION</th>
+                      <th style={{ textAlign: 'right' }}>ACTIONS</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1414,7 +1654,11 @@ const CustomerDetails = () => {
                       return (
                         <tr key={cust.accountNo}>
                           <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{idx + 1}</td>
-                          <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{cust.accountNo}</td>
+                          <td style={{ fontWeight: 600 }}>
+                            <span style={{ color: '#60a5fa', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                              {cust.accountNo}
+                            </span>
+                          </td>
                           <td style={{ fontWeight: 500 }}>{cust.customerName}</td>
                           <td>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
@@ -1427,19 +1671,30 @@ const CustomerDetails = () => {
                           </td>
                           <td>
                             {(cust.division || cust.branchCode) ? (
-                              <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
-                                <MapPin size={11} /> {cust.division || cust.branchCode}
+                              <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.2)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                                <MapPin size={11} /> {(cust.division || cust.branchCode).toUpperCase()}
                               </span>
                             ) : '—'}
                           </td>
                           <td style={{ textAlign: 'right' }}>
-                            <button 
-                              className="btn btn-primary" 
-                              style={{ padding: '0.35rem 0.75rem', fontSize: '0.78rem', background: '#f59e0b', borderColor: '#f59e0b' }}
-                              onClick={() => { handleViewDetails(cust); setIsEditing(true); }}
-                            >
-                              Fill Details
-                            </button>
+                            <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                              <button 
+                                className="btn btn-secondary" 
+                                title="View Profile"
+                                style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}
+                                onClick={() => handleViewDetails(cust)}
+                              >
+                                <Eye size={14} />
+                              </button>
+                              <button 
+                                className="btn btn-secondary" 
+                                title="Fill Details"
+                                style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24' }}
+                                onClick={() => { handleViewDetails(cust); setIsEditing(true); }}
+                              >
+                                <Edit size={14} />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1453,56 +1708,87 @@ const CustomerDetails = () => {
       )}
 
         {/* Pagination controls */}
-        {totalPages > 1 && (
-          <div className="pagination">
-            <button 
-              className="pagination-btn" 
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
-              disabled={currentPage === 0 || loading}
-            >
-              <ChevronLeft size={16} />
-            </button>
-            
-            {getPageNumbers().map((item, idx) => {
-              if (item === 'ellipsis-left' || item === 'ellipsis-right') {
-                return (
-                  <span 
-                    key={`ellipsis-${idx}`} 
-                    style={{ 
-                      display: 'inline-flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      padding: '0 0.5rem', 
-                      color: 'var(--text-secondary)',
-                      fontSize: '0.9rem',
-                      fontWeight: 600
-                    }}
-                  >
-                    ...
-                  </span>
-                );
-              }
-              return (
-                <button 
-                  key={item} 
-                  className={`pagination-btn ${currentPage === item ? 'active' : ''}`}
-                  onClick={() => setCurrentPage(item)}
-                  disabled={loading}
-                >
-                  {item + 1}
-                </button>
-              );
-            })}
-
-            <button 
-              className="pagination-btn" 
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
-              disabled={currentPage === totalPages - 1 || loading}
-            >
-              <ChevronRight size={16} />
-            </button>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements.toLocaleString()} customers
           </div>
-        )}
+          
+          {totalPages > 1 ? (
+            <div className="pagination" style={{ margin: 0 }}>
+              <button 
+                className="pagination-btn" 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
+                disabled={currentPage === 0 || loading}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              
+              {getPageNumbers().map((item, idx) => {
+                if (item === 'ellipsis-left' || item === 'ellipsis-right') {
+                  return (
+                    <span 
+                      key={`ellipsis-${idx}`} 
+                      style={{ 
+                        display: 'inline-flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        padding: '0 0.5rem', 
+                        color: 'var(--text-secondary)',
+                        fontSize: '0.9rem',
+                        fontWeight: 600
+                      }}
+                    >
+                      ...
+                    </span>
+                  );
+                }
+                return (
+                  <button 
+                    key={item} 
+                    className={`pagination-btn ${currentPage === item ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(item)}
+                    disabled={loading}
+                  >
+                    {item + 1}
+                  </button>
+                );
+              })}
+
+              <button 
+                className="pagination-btn" 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
+                disabled={currentPage === totalPages - 1 || loading}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          ) : <div />}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Rows per page:</span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(0);
+              }}
+              style={{
+                appearance: 'auto',
+                padding: '0.25rem 0.5rem',
+                fontSize: '0.8rem',
+                background: '#111827',
+                color: 'white',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+            >
+              {[5, 10, 20, 50].map((sz) => (
+                <option key={sz} value={sz}>{sz}</option>
+              ))}
+            </select>
+          </div>
+        </div>
 
       {/* Details Slide-out Drawer */}
       <div className={`slide-drawer ${drawerOpen ? 'open' : ''}`} style={{ width: '850px', maxWidth: '95%' }}>
@@ -1803,12 +2089,12 @@ const CustomerDetails = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Name</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>{selectedCustomer.customerName}</div>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>{renderValOrMissing(selectedCustomer.customerName)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Solar System Type</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: 'var(--success)' }}>
-                            {selectedCustomer.solarType || 'Net Plus'}
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: selectedCustomer.solarType ? 'var(--success)' : 'inherit' }}>
+                            {renderValOrMissing(selectedCustomer.solarType)}
                           </div>
                         </div>
                       </div>
@@ -1816,23 +2102,23 @@ const CustomerDetails = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Address</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.customerAddress || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.customerAddress)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Mobile No</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.mobileNo || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.mobileNo)}</div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
-                          <div style={{ fontWeight: 600 }}>{selectedCustomer.panelCapacity ? `${selectedCustomer.panelCapacity} kW` : '—'}</div>
+                          <div style={{ fontWeight: 600 }}>{renderValOrMissing(selectedCustomer.panelCapacity, (v) => `${v} kW`)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Agreement Date</span>
                           <div style={{ fontWeight: 600 }}>
-                            {selectedCustomer.agreementDate ? new Date(selectedCustomer.agreementDate).toLocaleDateString('en-LK') : '—'}
+                            {renderValOrMissing(selectedCustomer.agreementDate, (v) => new Date(v).toLocaleDateString('en-LK'))}
                           </div>
                         </div>
                       </div>
@@ -1840,49 +2126,49 @@ const CustomerDetails = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Code</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.bankCode || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.bankCode)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Branch Code</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.branchCode || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.branchCode)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Account No</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.bankAccountNo || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.bankAccountNo)}</div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Ref No</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.refNo || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.refNo)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Unit Rate</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.unitRate != null ? `${selectedCustomer.unitRate} LKR` : '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.unitRate, (v) => `${v} LKR`)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Tariff Type</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.tariffType || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.tariffType)}</div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Cost Code</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.costCode || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.costCode)}</div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>L-Code</span>
-                          <div style={{ fontWeight: 500 }}>{selectedCustomer.expenseCode || '—'}</div>
+                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.expenseCode)}</div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Location / Division</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: '#38bdf8' }}>
-                            <MapPin size={13} /> {selectedCustomer.division || selectedCustomer.branchCode || '—'}
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: (selectedCustomer.division || selectedCustomer.branchCode) ? '#38bdf8' : 'inherit' }}>
+                            <MapPin size={13} /> {renderValOrMissing(selectedCustomer.division || selectedCustomer.branchCode)}
                           </div>
                         </div>
                         <div>

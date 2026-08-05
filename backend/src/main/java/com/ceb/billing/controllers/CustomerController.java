@@ -118,18 +118,34 @@ public class CustomerController {
             List<String> missingFields = new ArrayList<>();
             if (c.getCustomerName() == null || c.getCustomerName().trim().isEmpty()) missingFields.add("Customer Name");
             if (c.getCustomerAddress() == null || c.getCustomerAddress().trim().isEmpty()) missingFields.add("Customer Address");
-            if (c.getMobileNo() == null || c.getMobileNo().trim().isEmpty()) missingFields.add("Mobile Number");
+            if (c.getMobileNo() == null || c.getMobileNo().trim().isEmpty()) missingFields.add("Mobile No");
             if (c.getAgreementDate() == null) missingFields.add("Agreement Date");
             if (c.getPanelCapacity() == null || c.getPanelCapacity() <= 0) missingFields.add("Panel Capacity");
             if (c.getBankCode() == null || c.getBankCode().trim().isEmpty()) missingFields.add("Bank Code");
+            if (c.getBranchCode() == null || c.getBranchCode().trim().isEmpty()) missingFields.add("Branch Code");
             if (c.getBankAccountNo() == null || c.getBankAccountNo().trim().isEmpty()) missingFields.add("Bank Account No");
+            
             String solar = c.getSolarType() != null ? c.getSolarType().trim() : "";
             if (solar.isEmpty() && c.getNetType() != null && c.getNetType().getName() != null) {
                 solar = c.getNetType().getName().trim();
             }
-            if (solar.isEmpty()) missingFields.add("Solar / Net Type");
+            if (solar.isEmpty()) missingFields.add("Solar System Type");
+            
+            if (c.getRefNo() == null || c.getRefNo().trim().isEmpty()) missingFields.add("Ref No");
             if (c.getUnitRate() == null) missingFields.add("Unit Rate");
             if (c.getTariffType() == null || c.getTariffType().trim().isEmpty()) missingFields.add("Tariff Type");
+            
+            String costCodeVal = c.getCostCode() != null ? c.getCostCode().getCostCode() : null;
+            if (costCodeVal == null || costCodeVal.trim().isEmpty()) missingFields.add("Cost Code");
+            
+            String expenseCodeVal = c.getExpenseCode() != null ? c.getExpenseCode().getExpCode() : null;
+            if (expenseCodeVal == null || expenseCodeVal.trim().isEmpty()) missingFields.add("L-Code");
+            
+            String divisionVal = c.getDivision() != null ? c.getDivision().trim() : "";
+            if (divisionVal.isEmpty() && c.getBranchCode() != null) {
+                divisionVal = c.getBranchCode().trim();
+            }
+            if (divisionVal.isEmpty()) missingFields.add("Location / Division");
 
             dto.put("isComplete", missingFields.isEmpty());
             dto.put("missingFields", missingFields);

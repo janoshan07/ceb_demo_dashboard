@@ -34,7 +34,13 @@ import {
   MoreVertical,
   Filter,
   Layers,
-  Phone
+  Phone,
+  UserPlus,
+  Shield,
+  Tag,
+  Code,
+  Landmark,
+  Building
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 
@@ -2760,207 +2766,385 @@ const CustomerDetails = () => {
       )}
 
       {addCustomerModalOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000 }}>
-          <div className="modal-content card animate-fade-in" style={{ maxWidth: 650, padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'white' }}>Add Customer Profile</h3>
-              <button onClick={() => setAddCustomerModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={20} />
+        <div className="modal-overlay animate-fade-in" style={{ zIndex: 10000, background: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)' }}>
+          <style>{`
+            .add-cust-input {
+              width: 100%;
+              height: 44px;
+              padding: 0 14px 0 44px;
+              background: rgba(15, 23, 42, 0.75);
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              border-radius: 12px;
+              color: #ffffff;
+              font-size: 0.88rem;
+              outline: none;
+              transition: all 0.2s ease;
+            }
+            .add-cust-input:focus {
+              border: 1.5px solid #22d3ee !important;
+              box-shadow: 0 0 16px rgba(34, 211, 238, 0.35) !important;
+              background: rgba(15, 23, 42, 0.95) !important;
+            }
+            .add-cust-input::placeholder {
+              color: #475569;
+            }
+            .add-cust-select {
+              appearance: none;
+              width: 100%;
+              height: 44px;
+              padding: 0 38px 0 44px;
+              background: rgba(15, 23, 42, 0.75);
+              border: 1px solid rgba(255, 255, 255, 0.12);
+              border-radius: 12px;
+              color: #ffffff;
+              font-size: 0.88rem;
+              outline: none;
+              cursor: pointer;
+              transition: all 0.2s ease;
+            }
+            .add-cust-select:focus {
+              border: 1.5px solid #22d3ee !important;
+              box-shadow: 0 0 16px rgba(34, 211, 238, 0.35) !important;
+              background: rgba(15, 23, 42, 0.95) !important;
+            }
+            .add-cust-select option {
+              background: #0f172a;
+              color: #ffffff;
+            }
+          `}</style>
+          <div className="modal-content animate-fade-in" style={{
+            maxWidth: 680,
+            width: '100%',
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            padding: '2.2rem 2.4rem',
+            background: 'linear-gradient(160deg, rgba(16, 26, 46, 0.96), rgba(9, 14, 26, 0.98))',
+            border: '1px solid rgba(34, 211, 238, 0.4)',
+            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8), 0 0 35px rgba(34, 211, 238, 0.2)',
+            borderRadius: '22px',
+            color: '#ffffff'
+          }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <UserPlus size={24} color="#22d3ee" style={{ filter: 'drop-shadow(0 0 8px rgba(34, 211, 238, 0.6))' }} />
+                <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 600, color: '#ffffff', letterSpacing: '-0.01em' }}>Add Customer Profile</h3>
+              </div>
+              <button 
+                onClick={() => setAddCustomerModalOpen(false)} 
+                style={{ 
+                  background: 'rgba(255, 255, 255, 0.05)', 
+                  border: '1px solid rgba(255, 255, 255, 0.1)', 
+                  width: 34, 
+                  height: 34, 
+                  borderRadius: 10, 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  color: '#94a3b8', 
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+              >
+                <X size={18} />
               </button>
             </div>
 
             {addCustError && (
-              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 8, color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 10, color: '#f87171', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
                 {addCustError}
               </div>
             )}
 
             <form onSubmit={handleAddCustomerSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Account Number (10 digits)*</label>
-                  <input
-                    type="text"
-                    maxLength={10}
-                    className="login-form-input"
-                    value={newCustAccNo}
-                    onChange={(e) => setNewCustAccNo(e.target.value)}
-                    required
-                  />
+              {/* Row 1: Account Number & Customer Name */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>
+                    Account Number (10 digits)<span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Shield size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      maxLength={10}
+                      className="add-cust-input"
+                      value={newCustAccNo}
+                      onChange={(e) => setNewCustAccNo(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Customer Name*</label>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>
+                    Customer Name<span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <User size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      className="add-cust-input"
+                      value={newCustName}
+                      onChange={(e) => setNewCustName(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 2: Customer Address */}
+              <div style={{ marginBottom: '1.1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Customer Address</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <MapPin size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
                   <input
                     type="text"
-                    className="login-form-input"
-                    value={newCustName}
-                    onChange={(e) => setNewCustName(e.target.value)}
-                    required
+                    className="add-cust-input"
+                    value={newCustAddress}
+                    onChange={(e) => setNewCustAddress(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label">Customer Address</label>
-                <input
-                  type="text"
-                  className="login-form-input"
-                  value={newCustAddress}
-                  onChange={(e) => setNewCustAddress(e.target.value)}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Mobile Number</label>
-                  <input
-                    type="text"
-                    className="login-form-input"
-                    value={newCustMobile}
-                    onChange={(e) => setNewCustMobile(e.target.value)}
-                  />
+              {/* Row 3: Mobile Number & Agreement Date */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Mobile Number</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Phone size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      className="add-cust-input"
+                      value={newCustMobile}
+                      onChange={(e) => setNewCustMobile(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Agreement Date</label>
-                  <input
-                    type="date"
-                    className="login-form-input"
-                    value={newCustAgreementDate}
-                    onChange={(e) => setNewCustAgreementDate(e.target.value)}
-                  />
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Agreement Date</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input
+                      type="date"
+                      className="add-cust-input"
+                      style={{ paddingLeft: 14, paddingRight: 40, colorScheme: 'dark' }}
+                      value={newCustAgreementDate}
+                      onChange={(e) => setNewCustAgreementDate(e.target.value)}
+                    />
+                    <Calendar size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Panel Capacity (kW)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    className="login-form-input"
-                    value={newCustCapacity}
-                    onChange={(e) => setNewCustCapacity(e.target.value)}
-                  />
+              {/* Row 4: Panel Capacity (kW) & Net Type */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Panel Capacity (kW)</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Sun size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="number"
+                      step="0.01"
+                      className="add-cust-input"
+                      value={newCustCapacity}
+                      onChange={(e) => setNewCustCapacity(e.target.value)}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Net Type (Solar Type)</label>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Net Type (Solar Type)</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <select
+                      className="add-cust-select"
+                      style={{ paddingLeft: 14 }}
+                      value={newCustNetTypeId}
+                      onChange={(e) => {
+                        setNewCustNetTypeId(e.target.value);
+                        const selected = netTypesList.find(n => n.id.toString() === e.target.value);
+                        if (selected) setNewCustSolarType(selected.name);
+                      }}
+                    >
+                      <option value="">Select Net Type</option>
+                      {netTypesList.map(n => (
+                        <option key={n.id} value={n.id}>{n.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 5: Reference No & Unit Rate */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Reference No (Ref No)</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Tag size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      className="add-cust-input"
+                      value={newCustRefNo}
+                      onChange={(e) => setNewCustRefNo(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Unit Rate</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <DollarSign size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="number"
+                      step="0.001"
+                      className="add-cust-input"
+                      value={newCustUnitRate}
+                      onChange={(e) => setNewCustUnitRate(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 6: Tariff Type & Cost Code */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Tariff Type</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Code size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      className="add-cust-input"
+                      value={newCustTariffType}
+                      onChange={(e) => setNewCustTariffType(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Cost Code</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <select
+                      className="add-cust-select"
+                      style={{ paddingLeft: 14 }}
+                      value={newCustCostCodeId}
+                      onChange={(e) => setNewCustCostCodeId(e.target.value)}
+                    >
+                      <option value="">Select Cost Code</option>
+                      {costCodesList.map(c => (
+                        <option key={c.id} value={c.id}>{c.costCode} - {c.areaName}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 7: L-Code */}
+              <div style={{ marginBottom: '1.25rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>L-Code</label>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <select
-                    className="login-form-input"
-                    value={newCustNetTypeId}
-                    onChange={(e) => {
-                      setNewCustNetTypeId(e.target.value);
-                      const selected = netTypesList.find(n => n.id.toString() === e.target.value);
-                      if (selected) setNewCustSolarType(selected.name);
-                    }}
-                    style={{ appearance: 'auto' }}
+                    className="add-cust-select"
+                    style={{ paddingLeft: 14, background: 'rgba(255,255,255,0.03)', cursor: 'not-allowed', opacity: 0.7 }}
+                    value={newCustExpenseCodeId}
+                    disabled
                   >
-                    <option value="">Select Net Type</option>
-                    {netTypesList.map(n => (
-                      <option key={n.id} value={n.id}>{n.name}</option>
+                    <option value="">Select L-Code</option>
+                    {expenseCodesList.map(e => (
+                      <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
                     ))}
                   </select>
+                  <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
                 </div>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Reference No (Ref No)</label>
-                  <input
-                    type="text"
-                    className="login-form-input"
-                    value={newCustRefNo}
-                    onChange={(e) => setNewCustRefNo(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Unit Rate</label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    className="login-form-input"
-                    value={newCustUnitRate}
-                    onChange={(e) => setNewCustUnitRate(e.target.value)}
-                  />
-                </div>
+              {/* Section Divider: Banking Details */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.35rem 0 1rem 0' }}>
+                <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Banking Details</span>
+                <div style={{ flex: 1, height: 1, background: 'rgba(255, 255, 255, 0.08)' }} />
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Tariff Type</label>
+              {/* Row 8: Banking Details (Bank Code, Branch Code, Bank Account No) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.1rem', marginBottom: '1.75rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Bank Code</label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <Landmark size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <input
+                      type="text"
+                      className="add-cust-input"
+                      value={newCustBankCode}
+                      onChange={(e) => setNewCustBankCode(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Branch Code</label>
                   <input
                     type="text"
-                    className="login-form-input"
-                    value={newCustTariffType}
-                    onChange={(e) => setNewCustTariffType(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Cost Code</label>
-                  <select
-                    className="login-form-input"
-                    value={newCustCostCodeId}
-                    onChange={(e) => setNewCustCostCodeId(e.target.value)}
-                    style={{ appearance: 'auto' }}
-                  >
-                    <option value="">Select Cost Code</option>
-                    {costCodesList.map(c => (
-                      <option key={c.id} value={c.id}>{c.costCode} - {c.areaName}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-               <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label">L-Code</label>
-                <select
-                  className="login-form-input"
-                  value={newCustExpenseCodeId}
-                  disabled
-                  style={{ appearance: 'auto', background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed' }}
-                >
-                  <option value="">Select L-Code</option>
-                  {expenseCodesList.map(e => (
-                    <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div className="form-group">
-                  <label className="form-label">Bank Code</label>
-                  <input
-                    type="text"
-                    className="login-form-input"
-                    value={newCustBankCode}
-                    onChange={(e) => setNewCustBankCode(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Branch Code</label>
-                  <input
-                    type="text"
-                    className="login-form-input"
+                    className="add-cust-input"
+                    style={{ paddingLeft: 14 }}
                     value={newCustBranchCode}
                     onChange={(e) => setNewCustBranchCode(e.target.value)}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Bank Account No</label>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Bank Account No</label>
                   <input
                     type="text"
-                    className="login-form-input"
+                    className="add-cust-input"
+                    style={{ paddingLeft: 14 }}
                     value={newCustBankAccountNo}
                     onChange={(e) => setNewCustBankAccountNo(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setAddCustomerModalOpen(false)} disabled={addCustLoading}>
+              {/* Footer Actions */}
+              <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                <button
+                  type="button"
+                  onClick={() => setAddCustomerModalOpen(false)}
+                  disabled={addCustLoading}
+                  style={{
+                    height: 44,
+                    padding: '0 1.6rem',
+                    borderRadius: 12,
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    color: '#e2e8f0',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    cursor: addCustLoading ? 'not-allowed' : 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={e => { if (!addCustLoading) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; }}
+                  onMouseLeave={e => { if (!addCustLoading) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={addCustLoading}>
-                  {addCustLoading ? 'Adding...' : 'Add Profile'}
+                <button
+                  type="submit"
+                  disabled={addCustLoading}
+                  style={{
+                    height: 44,
+                    padding: '0 1.8rem',
+                    borderRadius: 12,
+                    background: 'linear-gradient(135deg, #06b6d4, #0891b2, #22d3ee)',
+                    border: 'none',
+                    color: '#ffffff',
+                    fontSize: '0.88rem',
+                    fontWeight: 600,
+                    cursor: addCustLoading ? 'not-allowed' : 'pointer',
+                    boxShadow: '0 4px 20px rgba(34, 211, 238, 0.4)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.5rem',
+                    transition: 'all 0.2s',
+                    opacity: addCustLoading ? 0.7 : 1
+                  }}
+                  onMouseEnter={e => { if (!addCustLoading) { e.currentTarget.style.boxShadow = '0 6px 25px rgba(34, 211, 238, 0.55)'; e.currentTarget.style.filter = 'brightness(1.1)'; } }}
+                  onMouseLeave={e => { if (!addCustLoading) { e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.4)'; e.currentTarget.style.filter = 'none'; } }}
+                >
+                  {addCustLoading ? 'Adding...' : 'Add Profile +'}
                 </button>
               </div>
             </form>

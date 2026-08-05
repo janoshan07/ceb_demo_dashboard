@@ -4,7 +4,9 @@ import {
   Archive, FolderOpen, Pencil, Trash2, Download, X, Loader,
   Calendar, Users, CheckCircle, Clock, RefreshCw, FileSpreadsheet,
   Edit3, History, AlertTriangle, ShieldCheck, RotateCcw, Save, Search, Eye,
-  ChevronDown, Check, MapPin, ArrowLeft, Plus, CloudUpload
+  ChevronDown, Check, MapPin, ArrowLeft, Plus, CloudUpload,
+  Sun, TrendingUp, ZapOff, Layers, UserX, ArrowUpDown, AlertCircle, Phone,
+  Zap, DollarSign, Landmark, User, Copy, FileText
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -30,26 +32,26 @@ const DIVISION_STATUS = {
 // exactly as saved from Step 6 (the snapshot is only loaded, never rebuilt or recompared).
 export const CARD_SECTIONS = [
   {
-    title: 'Master Data', color: '#38bdf8',
+    title: 'Customer Data', color: '#38bdf8',
     fields: [
       { label: 'Address', keys: ['customerAddress'] },
-      { label: 'Mobile Number', keys: ['mobileNo'] },
+      { label: 'Mobile', keys: ['mobileNo'] },
       { label: 'Agreement Date', keys: ['agreementDate'] },
       { label: 'Net Type', keys: ['masterNetType', 'solarType'] },
       { label: 'Unit Rate', keys: ['masterUnitRate', 'unitRate'] },
-      { label: 'Bank Details', bank: true },
+      { label: 'Bank Code/Acct', bank: true },
       { label: 'Panel Capacity', keys: ['panelCapacity'] },
     ],
   },
   {
-    title: 'CEB Assist', color: '#f59e0b',
+    title: 'CEB Utility', color: '#f59e0b',
     fields: [
-      { label: 'Previous Reading Date', keys: ['prevReadingDate'] },
-      { label: 'Current Reading Date', keys: ['currReadingDate'] },
+      { label: 'Previous Reading', keys: ['prevReadingDate'] },
+      { label: 'Current Reading', keys: ['currReadingDate'] },
     ],
   },
   {
-    title: 'NGEN', color: '#818cf8',
+    title: 'NGEN Data', color: '#818cf8',
     fields: [
       { label: 'kWh Import', keys: ['kwhImport'] },
       { label: 'kWh Export', keys: ['kwhExport'] },
@@ -62,7 +64,7 @@ export const CARD_SECTIONS = [
     ],
   },
   {
-    title: 'NPAY', color: '#c084fc',
+    title: 'NPAY Data', color: '#c084fc',
     fields: [
       { label: 'Energy Purchase', keys: ['npayEnergyPurchase'] },
       { label: 'Bill Set Off', keys: ['npayBillSetOff'] },
@@ -71,6 +73,19 @@ export const CARD_SECTIONS = [
     ],
   },
 ];
+
+export const getFieldIcon = (label) => {
+  const l = (label || '').toLowerCase();
+  if (l.includes('address')) return MapPin;
+  if (l.includes('mobile') || l.includes('phone')) return Phone;
+  if (l.includes('date') || l.includes('agreement')) return Calendar;
+  if (l.includes('net') || l.includes('solar')) return Sun;
+  if (l.includes('rate') || l.includes('amount') || l.includes('purchase')) return DollarSign;
+  if (l.includes('bank')) return Landmark;
+  if (l.includes('panel') || l.includes('capacity') || l.includes('kwh') || l.includes('energy') || l.includes('sales')) return Zap;
+  if (l.includes('reading')) return Clock;
+  return FileText;
+};
 
 // Fields a user may edit in the post-Step-6 working area. Editing these and revalidating re-runs
 // the exact same validation rules server-side (nothing is auto-corrected).
@@ -144,19 +159,17 @@ export const normalizeNetType = (raw) => {
 
 // Every filter the summary cards / Status dropdown can apply. Filtering is display-only —
 // records themselves are never changed. `card: false` keeps an option dropdown-only.
-// Every filter the summary cards / Status dropdown can apply. Filtering is display-only —
-// records themselves are never changed. `card: false` keeps an option dropdown-only.
 export const STATUS_FILTERS = [
-  { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: 'white' },
-  { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981' },
-  { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8' },
-  { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', cardLabel: 'No Billing / Hold', color: '#f59e0b' },
-  { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc' },
-  { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185' },
-  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24' },
-  { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa' },
-  { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444' },
-  { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316' },
+  { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: '#38bdf8', icon: Sun },
+  { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981', icon: CheckCircle },
+  { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8', icon: TrendingUp },
+  { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', cardLabel: 'No Billing / Hold', color: '#f59e0b', icon: ZapOff },
+  { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
+  { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185', icon: UserX },
+  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24', icon: DollarSign },
+  { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
+  { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444', icon: AlertCircle },
+  { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316', icon: Clock },
 ];
 
 export const StatusBadge = ({ status }) => {
@@ -164,13 +177,14 @@ export const StatusBadge = ({ status }) => {
   const isApproved = s === 'APPROVED';
   return (
     <span style={{
-      padding: '0.2rem 0.6rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700,
-      background: isApproved ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+      padding: '0.25rem 0.75rem', borderRadius: 20, fontSize: '0.72rem', fontWeight: 800,
+      background: isApproved ? 'rgba(16,185,129,0.18)' : 'rgba(245,158,11,0.18)',
+      border: `1px solid ${isApproved ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}`,
       color: isApproved ? '#10b981' : '#f59e0b',
-      display: 'inline-flex', alignItems: 'center', gap: '0.3rem'
+      display: 'inline-flex', alignItems: 'center', gap: '0.35rem', letterSpacing: '0.04em'
     }}>
-      {isApproved ? <CheckCircle size={11} /> : <Clock size={11} />}
-      {isApproved ? 'Approved' : 'Pending Approval'}
+      {isApproved ? <CheckCircle size={12} /> : <Clock size={12} />}
+      {isApproved ? 'STATUS: APPROVED' : 'STATUS: PENDING'}
     </span>
   );
 };
@@ -198,19 +212,19 @@ export const RecordStatusBadge = ({ row }) => {
   const cfg = RECORD_STATUS_STYLE[st] || RECORD_STATUS_STYLE.VALID;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
-      <span style={{ padding: '0.2rem 0.55rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+      <span style={{ padding: '0.2rem 0.55rem', borderRadius: 6, fontSize: '0.66rem', fontWeight: 800, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}44` }}>{cfg.label}</span>
       {row.recordApproved === true && (
         <span style={{ fontSize: '0.62rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircle size={10} /> Approved</span>
       )}
       {(row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH' || dup || isNew || isNoBill) && (
-        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-          {isNew && <MismatchChip label="New Customer" color="#38bdf8" bg="rgba(56,189,248,0.15)" border="rgba(56,189,248,0.3)" />}
-          {isNoBill && <MismatchChip label="No Billing Data" color="#f59e0b" bg="rgba(245,158,11,0.15)" border="rgba(245,158,11,0.3)" />}
-          {dup && <MismatchChip label="Duplicate" color="#c084fc" bg="rgba(168,85,247,0.15)" border="rgba(168,85,247,0.3)" />}
-          {row.nameMatch === 'MISMATCH' && <MismatchChip label="Name Mismatch" color="#fb7185" bg="rgba(251,113,133,0.15)" border="rgba(251,113,133,0.3)" />}
-          {row.unitRateMatch === 'MISMATCH' && <MismatchChip label="Rate Mismatch" color="#fbbf24" bg="rgba(251,191,36,0.15)" border="rgba(251,191,36,0.3)" />}
-          {row.netTypeMatch === 'MISMATCH' && <MismatchChip label="Net Mismatch" color="#a78bfa" bg="rgba(167,139,250,0.15)" border="rgba(167,139,250,0.3)" />}
+        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {isNew && <MismatchChip label="/ New Customer" color="#38bdf8" bg="rgba(56,189,248,0.15)" border="rgba(56,189,248,0.3)" />}
+          {isNoBill && <MismatchChip label="/ No Billing" color="#f59e0b" bg="rgba(245,158,11,0.15)" border="rgba(245,158,11,0.3)" />}
+          {dup && <MismatchChip label="/ Duplicate" color="#c084fc" bg="rgba(168,85,247,0.15)" border="rgba(168,85,247,0.3)" />}
+          {row.nameMatch === 'MISMATCH' && <MismatchChip label="/ Name" color="#fb7185" bg="rgba(251,113,133,0.15)" border="rgba(251,113,133,0.3)" />}
+          {row.unitRateMatch === 'MISMATCH' && <MismatchChip label="/ Rate" color="#fbbf24" bg="rgba(251,191,36,0.15)" border="rgba(251,191,36,0.3)" />}
+          {row.netTypeMatch === 'MISMATCH' && <MismatchChip label="/ Net" color="#a78bfa" bg="rgba(167,139,250,0.15)" border="rgba(167,139,250,0.3)" />}
         </div>
       )}
     </div>
@@ -241,36 +255,46 @@ export const CustomerCard = ({ row, onView, onEdit, onHistory }) => {
   const warnings = rawWarnings.map(w => typeof w === 'object' ? (w.warning || w.field) : w);
   const name = cellText(row.npayName) !== '—' ? cellText(row.npayName) : cellText(row.customerName);
   return (
-    <div style={{ border: '1px solid var(--border-color)', borderRadius: 14, background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ border: '1px solid rgba(255,255,255,0.08)', borderRadius: 14, background: 'rgba(15,23,42,0.65)', display: 'flex', flexDirection: 'column', boxShadow: '0 8px 24px rgba(0,0,0,0.35)' }}>
       {/* Header: Ref No / Account No / Customer Name */}
-      <div style={{ padding: '0.85rem 1rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', gap: '0.6rem' }}>
+      <div style={{ padding: '0.85rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.06)', display: 'flex', justifyContent: 'space-between', gap: '0.6rem' }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: '0.64rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ref No: {cellText(row.refNo)}</div>
-          <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.95rem', margin: '0.15rem 0', color: 'white' }}>{cellText(row.accountNo)}</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: '0.64rem', color: '#94a3b8', fontWeight: 600 }}>Ref No: {cellText(row.refNo)}</div>
+          <div style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '1.02rem', margin: '0.12rem 0', color: '#ffffff' }}>{cellText(row.accountNo)}</div>
+          <div style={{ fontSize: '0.86rem', color: '#ffffff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
         </div>
         <RecordStatusBadge row={row} />
       </div>
 
       {/* Merged source sections */}
-      <div style={{ padding: '0.7rem 1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+      <div style={{ padding: '0.75rem 1rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         {CARD_SECTIONS.map(sec => (
           <div key={sec.title}>
-            <div style={{ fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: sec.color, marginBottom: '0.25rem' }}>{sec.title}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.12rem' }}>
-              {sec.fields.map(f => (
-                <div key={f.label} style={{ fontSize: '0.7rem', display: 'flex', justifyContent: 'space-between', gap: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{f.label}</span>
-                  <span style={{ color: 'var(--text-secondary)', fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '58%' }}>{fieldValue(row, f)}</span>
-                </div>
-              ))}
+            <div style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: sec.color, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              {sec.title}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.22rem' }}>
+              {sec.fields.map(f => {
+                const IconC = getFieldIcon(f.label);
+                return (
+                  <div key={f.label} style={{ fontSize: '0.72rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <IconC size={11} style={{ flexShrink: 0, opacity: 0.6 }} />
+                      {f.label}
+                    </span>
+                    <span style={{ color: '#ffffff', fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>
+                      {fieldValue(row, f)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
 
         {/* Validation issues (preserved exactly as approved in Step 6) */}
         <div>
-          <div style={{ fontSize: '0.6rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#f87171', marginBottom: '0.25rem' }}>Validation</div>
+          <div style={{ fontSize: '0.62rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#f87171', marginBottom: '0.35rem' }}>Validation</div>
           {errors.length === 0 && warnings.length === 0 ? (
             <div style={{ fontSize: '0.7rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><CheckCircle size={11} /> No validation issues</div>
           ) : (
@@ -290,7 +314,7 @@ export const CustomerCard = ({ row, onView, onEdit, onHistory }) => {
       </div>
 
       {/* Card actions */}
-      <div style={{ padding: '0.7rem 1rem', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+      <div style={{ padding: '0.75rem 1rem', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', gap: '0.4rem', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
         <button onClick={onView} title="View full record" style={cardBtn('#38bdf8', 'rgba(56,189,248,0.12)', 'rgba(56,189,248,0.3)')}><Eye size={12} /> View Details</button>
         <button onClick={onEdit} title="Edit / Revalidate / Approve" style={cardBtn('#818cf8', 'rgba(99,102,241,0.15)', 'rgba(99,102,241,0.3)')}><Edit3 size={12} /> Edit</button>
         <button onClick={onHistory} title="Audit history of this record" style={cardBtn('#f59e0b', 'rgba(245,158,11,0.12)', 'rgba(245,158,11,0.3)')}><History size={12} /> History</button>
@@ -1041,18 +1065,27 @@ const MonthlyCustomerDirectory = () => {
       {viewing && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
           <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '1250px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.5rem 1.75rem', borderBottom: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.4rem 1.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                  <FileSpreadsheet size={19} color="#10b981" /> {viewing.datasetName}
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '0.65rem', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Sun size={18} color="#f59e0b" />
+                  </div>
+                  {viewing.datasetName || `${viewing.billingMonth} - ${viewing.division} Division Billing`}
                   <StatusBadge status={viewing.status} />
                 </h3>
-                <div style={{ marginTop: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', gap: '1.25rem', flexWrap: 'wrap' }}>
+                <div style={{ marginTop: '0.45rem', fontSize: '0.78rem', color: '#94a3b8', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <span><strong style={{ color: 'white' }}>Billing Month:</strong> {viewing.billingMonth || '—'}</span>
                   <span><strong style={{ color: 'white' }}>Division:</strong> {viewing.division || '—'}</span>
                   <span><strong style={{ color: 'white' }}>Total Records:</strong> {viewing.totalRecords ?? 0}</span>
-                  <span><strong style={{ color: 'white' }}>Approved By:</strong> {viewing.approvedBy || '—'}</span>
-                  <span><strong style={{ color: 'white' }}>Approval Date:</strong> {viewing.approvalDate || '—'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                    <strong style={{ color: 'white' }}>Approved By:</strong>
+                    <User size={13} color="#38bdf8" /> {viewing.approvedBy || 'admin'}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <strong style={{ color: 'white' }}>Approval Date:</strong> {viewing.approvalDate || '—'}
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />
+                  </span>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -1077,30 +1110,35 @@ const MonthlyCustomerDirectory = () => {
                     <Check size={16} /> Approve &amp; Commit Dataset
                   </button>
                 )}
-                <button onClick={() => setViewing(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={20} /></button>
+                <button onClick={() => setViewing(null)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', cursor: 'pointer' }}><X size={18} /></button>
               </div>
             </div>
 
-            {/* Validation summary — clickable cards; clicking filters the customer list instantly,
-                "Total Customers" (ALL) clears the status filter. */}
+            {/* Validation summary — clickable cards matching Image 2 */}
             {!viewLoading && (viewing.records || []).length > 0 && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(122px, 1fr))', gap: '0.5rem', padding: '1rem 1.75rem 0' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(128px, 1fr))', gap: '0.55rem', padding: '1rem 1.75rem 0' }}>
                 {STATUS_FILTERS.filter(f => f.card !== false).map(f => {
                   const active = statusFilter === f.key;
+                  const IconComp = f.icon || Sun;
                   return (
                     <button
                       key={f.key}
                       onClick={() => setStatusFilter(f.key)}
                       title={f.key === 'ALL' ? 'Show all customers (clear filter)' : `Show only: ${f.cardLabel}`}
                       style={{
-                        textAlign: 'left', cursor: 'pointer', padding: '0.55rem 0.7rem', borderRadius: 10,
+                        textAlign: 'left', cursor: 'pointer', padding: '0.55rem 0.75rem', borderRadius: 10,
                         background: active ? `${f.color}22` : 'rgba(255,255,255,0.03)',
-                        border: `1px solid ${active ? f.color : 'var(--border-color)'}`,
-                        borderLeft: `3px solid ${f.color}`,
+                        border: `1px solid ${active ? f.color : 'rgba(255,255,255,0.08)'}`,
+                        borderLeft: `3.5px solid ${f.color}`,
+                        display: 'flex', flexDirection: 'column', justifyContent: 'space-between', minHeight: 54,
+                        transition: 'all 0.2s ease'
                       }}
                     >
-                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: f.color, fontFamily: 'monospace' }}>{filterCounts[f.key] ?? 0}</div>
-                      <div style={{ fontSize: '0.62rem', fontWeight: 700, color: active ? 'white' : 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{f.cardLabel}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                        <span style={{ fontSize: '1.15rem', fontWeight: 800, color: f.color, fontFamily: 'monospace' }}>{filterCounts[f.key] ?? 0}</span>
+                        <IconComp size={16} color={f.color} style={{ opacity: 0.9 }} />
+                      </div>
+                      <div style={{ fontSize: '0.62rem', fontWeight: 800, color: active ? 'white' : 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginTop: 3 }}>{f.cardLabel}</div>
                     </button>
                   );
                 })}

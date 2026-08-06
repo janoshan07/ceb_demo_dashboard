@@ -412,38 +412,38 @@ const Reports = () => {
         {/* Filters and View Grid */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Filters Card */}
-          <div className="card reports-filters-card no-print" style={{ padding: '1.25rem' }}>
+          <div className="neon-card no-print" style={{ padding: '1.25rem' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'flex-end' }}>
               <div style={{ flex: 1, minWidth: '150px' }}>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Start Cycle Date</label>
+                <label className="neon-label">Start Cycle Date</label>
                 <input 
                   type="date" 
                   value={startDate} 
                   onChange={(e) => setStartDate(e.target.value)} 
-                  className="form-input" 
-                  style={{ paddingLeft: '1rem' }} 
+                  className="neon-input" 
+                  style={{ width: '100%', height: 42, paddingLeft: '1rem' }} 
                 />
               </div>
 
               <div style={{ flex: 1, minWidth: '150px' }}>
-                <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>End Cycle Date</label>
+                <label className="neon-label">End Cycle Date</label>
                 <input 
                   type="date" 
                   value={endDate} 
                   onChange={(e) => setEndDate(e.target.value)} 
-                  className="form-input" 
-                  style={{ paddingLeft: '1rem' }} 
+                  className="neon-input" 
+                  style={{ width: '100%', height: 42, paddingLeft: '1rem' }} 
                 />
               </div>
 
               {reportType !== 'BRANCH_PERFORMANCE' && (
                 <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block', marginBottom: '0.5rem' }}>Divisional Branch</label>
+                  <label className="neon-label">Divisional Branch</label>
                   <select 
                     value={branchCode} 
                     onChange={(e) => setBranchCode(e.target.value)} 
-                    className="form-input"
-                    style={{ padding: '0.75rem 1rem' }}
+                    className="neon-input"
+                    style={{ width: '100%', height: 42, padding: '0 1rem' }}
                   >
                     <option value="">All Branches</option>
                     {branches.map(b => (
@@ -454,9 +454,9 @@ const Reports = () => {
               )}
 
               <button 
-                className="btn btn-primary" 
+                className="neon-btn-primary" 
                 onClick={fetchReport}
-                style={{ padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+                style={{ height: 42, padding: '0 1.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
               >
                 <RefreshCw size={15} />
                 Refresh

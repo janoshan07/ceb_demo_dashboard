@@ -2124,3 +2124,114 @@ select.form-input option {
 .animate-slide-in {
   animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* -------------------------------------------------------------
+   NEON FORM DESIGN SYSTEM (Standardized after Add Customer UI)
+   ------------------------------------------------------------- */
+
+/* Form Container / Modal Card with Cyan Neon Glow */
+.neon-form-card,
+.neon-card {
+  background: radial-gradient(circle at 50% 0%, rgba(16, 26, 46, 0.96) 0%, rgba(9, 14, 26, 0.98) 100%) !important;
+  border: 1.5px solid rgba(34, 211, 238, 0.4) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(34, 211, 238, 0.15) !important;
+  border-radius: 22px !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+}
+
+/* Neon Form Input Controls & Selects */
+.neon-input {
+  background: rgba(15, 23, 42, 0.75) !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 10px !important;
+  color: #ffffff !important;
+  font-size: 0.82rem !important;
+  font-weight: 500 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.neon-input:focus,
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+select:focus,
+textarea:focus {
+  border: 1.5px solid #22d3ee !important;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.35) !important;
+  outline: none !important;
+}
+
+/* Neon Form Section Header Divider */
+.neon-section-header {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+/* Neon Primary Action Button */
+.neon-btn-primary {
+  background: linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #22d3ee 100%) !important;
+  box-shadow: 0 4px 18px rgba(34, 211, 238, 0.4) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 10px !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.neon-btn-primary:hover {
+  box-shadow: 0 6px 24px rgba(34, 211, 238, 0.6) !important;
+  transform: translateY(-1px);
+}
+
+/* Neon Secondary / Cancel Action Button */
+.neon-btn-secondary {
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #94a3b8 !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+.neon-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* Neon Label Styling */
+.neon-label {
+  font-size: 0.74rem !important;
+  font-weight: 700 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  margin-bottom: 0.35rem !important;
+  display: block !important;
+}
+
+/* Error Field Pulse Blink Animation */
+@keyframes errorPulseBlink {
+  0% {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.9), inset 0 0 8px rgba(239, 68, 68, 0.25) !important;
+  }
+  50% {
+    border-color: #f87171 !important;
+    box-shadow: 0 0 4px rgba(239, 68, 68, 0.3) !important;
+  }
+  100% {
+    border-color: #ef4444 !important;
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.9), inset 0 0 8px rgba(239, 68, 68, 0.25) !important;
+  }
+}

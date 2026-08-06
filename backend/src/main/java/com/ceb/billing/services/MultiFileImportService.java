@@ -1332,8 +1332,24 @@ public class MultiFileImportService {
             }
         }
         
-        if (isBlank((String) row.get("mobileNo"))) {
+        String mobileNoStr = (String) row.get("mobileNo");
+        if (isBlank(mobileNoStr)) {
             errors.add("Mobile Number is missing");
+        } else {
+            String trimmedMob = mobileNoStr.trim();
+            if (!trimmedMob.matches("\\d+")) {
+                errors.add("Mobile Number must contain digits only");
+            } else if (trimmedMob.startsWith("0")) {
+                if (trimmedMob.length() != 10) {
+                    errors.add("Mobile Number starting with 0 must be exactly 10 digits");
+                }
+            } else {
+                if (trimmedMob.length() != 9) {
+                    errors.add("Mobile Number without leading 0 must be exactly 9 digits");
+                } else {
+                    row.put("mobileNo", "0" + trimmedMob);
+                }
+            }
         }
         
         Object panelCapacity = row.get("panelCapacity");

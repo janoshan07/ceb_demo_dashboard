@@ -1421,10 +1421,10 @@ const EditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) => {
   const isBilling = row.rowType !== 'CUSTOMER_PROFILE';
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-container" style={{ maxWidth: '650px', width: '90%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+    <div className="modal-overlay" style={{ background: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)' }}>
+      <div className="neon-card" style={{ maxWidth: '680px', width: '90%', padding: '1.75rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem' }}>
+          <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'white' }}>
             Correct Data (Row #{row.rowNum || row.index})
           </h3>
           <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>

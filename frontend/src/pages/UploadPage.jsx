@@ -11,6 +11,27 @@ import {
 } from 'lucide-react';
 
 // Helper to automatically derive L-Code based on solarType and tariffType
+export const validateAndFormatMobileNo = (raw) => {
+  if (!raw || !String(raw).trim()) {
+    return { valid: false, formatted: '', error: 'Mobile Number is missing' };
+  }
+  const str = String(raw).trim();
+  if (!/^\d+$/.test(str)) {
+    return { valid: false, formatted: str, error: 'Mobile Number must contain digits only' };
+  }
+  if (str.startsWith('0')) {
+    if (str.length !== 10) {
+      return { valid: false, formatted: str, error: 'Mobile Number starting with 0 must be exactly 10 digits' };
+    }
+    return { valid: true, formatted: str, error: null };
+  } else {
+    if (str.length !== 9) {
+      return { valid: false, formatted: str, error: 'Mobile Number without leading 0 must be exactly 9 digits' };
+    }
+    return { valid: true, formatted: '0' + str, error: null };
+  }
+};
+
 export const deriveLCode = (solarType, tariffType) => {
   if (!solarType || !tariffType) return '';
   
@@ -1757,6 +1778,58 @@ const UploadPage = () => {
   // ── Row Correction Modal State ─────────────────────────────────────────
   const [correctingRow, setCorrectingRow] = useState(null); 
   const [correctingFields, setCorrectingFields] = useState({}); 
+  const [highlightedFields, setHighlightedFields] = useState(new Set());
+
+  const getFieldErrorKeys = (errors) => {
+    if (!errors || !Array.isArray(errors)) return new Set();
+    const keys = new Set();
+    errors.forEach(err => {
+      const msg = typeof err === 'string' ? err.toLowerCase() : (err.errorMessage || err.message || '').toLowerCase();
+      if (msg.includes('account no') || msg.includes('account number')) keys.add('accountNo');
+      if (msg.includes('customer name') || msg.includes('name is missing')) keys.add('customerName');
+      if (msg.includes('address')) keys.add('customerAddress');
+      if (msg.includes('ref. no') || msg.includes('ref no')) keys.add('refNo');
+      if (msg.includes('cost code')) keys.add('costCode');
+      if (msg.includes('mobile')) keys.add('mobileNo');
+      if (msg.includes('panel capacity') || msg.includes('capacity')) keys.add('panelCapacity');
+      if (msg.includes('agreement date')) keys.add('agreementDate');
+      if (msg.includes('bank code')) keys.add('bankCode');
+      if (msg.includes('branch code')) keys.add('branchCode');
+      if (msg.includes('bank account')) keys.add('bankAccountNo');
+      if (msg.includes('solar type') || msg.includes('type (solar type)') || msg.includes('net type')) keys.add('solarType');
+      if (msg.includes('unit rate')) keys.add('unitRate');
+      if (msg.includes('fix/variable') || msg.includes('tariff')) keys.add('tariffType');
+      if (msg.includes('billing mode') || msg.includes('l-code') || msg.includes('exp (billing mode)')) keys.add('billingMode');
+    });
+    return keys;
+  };
+
+  useEffect(() => {
+    if (correctingRow && correctingRow.errors) {
+      setHighlightedFields(getFieldErrorKeys(correctingRow.errors));
+    } else {
+      setHighlightedFields(new Set());
+    }
+  }, [correctingRow]);
+
+  const clearFieldHighlight = (fieldKey) => {
+    setHighlightedFields(prev => {
+      if (!prev.has(fieldKey)) return prev;
+      const next = new Set(prev);
+      next.delete(fieldKey);
+      return next;
+    });
+  };
+
+  const getFieldInputStyle = (fieldKey, baseStyle = {}) => {
+    if (!highlightedFields.has(fieldKey)) return baseStyle;
+    return {
+      ...baseStyle,
+      border: '2px solid #ef4444',
+      boxShadow: '0 0 16px rgba(239, 68, 68, 0.85)',
+      animation: 'errorPulseBlink 1s infinite ease-in-out'
+    };
+  };
 
   // ── Deleted Rows Audit Log ─────────────────────────────────────────────
   const [showDeletedLog, setShowDeletedLog] = useState(false);
@@ -1786,7 +1859,12 @@ const UploadPage = () => {
         if (!(updated.customerAddress || '').trim()) newErrs.push("Address is missing");
         if (!(updated.refNo || '').trim()) newErrs.push("Ref. No. is missing");
         if (!(updated.costCode || '').trim()) newErrs.push("Cost Code is missing");
-        if (!(updated.mobileNo || '').trim()) newErrs.push("Mobile Number is missing");
+        const mobCheck = validateAndFormatMobileNo(updated.mobileNo);
+        if (!mobCheck.valid) {
+          newErrs.push(mobCheck.error);
+        } else {
+          updated.mobileNo = mobCheck.formatted;
+        }
         if (updated.panelCapacity === undefined || updated.panelCapacity === null || String(updated.panelCapacity).trim() === '') {
           newErrs.push("PANEL CAPACITY is missing");
         }
@@ -1794,11 +1872,21 @@ const UploadPage = () => {
         if (!(updated.bankCode || '').trim()) newErrs.push("Bank Code is missing");
         if (!(updated.branchCode || '').trim()) newErrs.push("Branch Code is missing");
         if (!(updated.bankAccountNo || '').trim()) newErrs.push("Bank Account No is missing");
-        if (!(updated.solarType || '').trim()) newErrs.push("TYPE (Solar Type) is missing");
+        const allowedSolarTypes = ['Net Metering', 'Net Accounting', 'Net Plus', 'Net Plus Plus'];
+        if (!(updated.solarType || '').trim()) {
+          newErrs.push("TYPE (Solar Type) is missing");
+        } else if (!allowedSolarTypes.includes((updated.solarType || '').trim())) {
+          newErrs.push("Invalid Solar Type selected");
+        }
         if (updated.unitRate === undefined || updated.unitRate === null || String(updated.unitRate).trim() === '') {
           newErrs.push("UNIT RATE is missing");
         }
-        if (!(updated.tariffType || '').trim()) newErrs.push("FIX/VARIABLE is missing");
+        const allowedTariffTypes = ['Fix', 'Variable'];
+        if (!(updated.tariffType || '').trim()) {
+          newErrs.push("FIX/VARIABLE is missing");
+        } else if (!allowedTariffTypes.includes((updated.tariffType || '').trim())) {
+          newErrs.push("Fix/Variable must be 'Fix' or 'Variable'");
+        }
         if (!(updated.billingMode || '').trim()) newErrs.push("Exp (Billing Mode) is missing");
       } else if (wizardStep === 2) {
         if (!acc.trim()) {
@@ -1937,8 +2025,11 @@ const UploadPage = () => {
             if (!(updated.costCode || '').trim()) {
               newErrs.push("Cost Code is missing");
             }
-            if (!(updated.mobileNo || '').trim()) {
-              newErrs.push("Mobile Number is missing");
+            const mobCheck = validateAndFormatMobileNo(updated.mobileNo);
+            if (!mobCheck.valid) {
+              newErrs.push(mobCheck.error);
+            } else {
+              updated.mobileNo = mobCheck.formatted;
             }
             if (updated.panelCapacity === undefined || updated.panelCapacity === null || String(updated.panelCapacity).trim() === '') {
               newErrs.push("PANEL CAPACITY is missing");
@@ -1955,14 +2046,20 @@ const UploadPage = () => {
             if (!(updated.bankAccountNo || '').trim()) {
               newErrs.push("Bank Account No is missing");
             }
+            const allowedSolarTypes = ['Net Metering', 'Net Accounting', 'Net Plus', 'Net Plus Plus'];
             if (!(updated.solarType || '').trim()) {
               newErrs.push("TYPE (Solar Type) is missing");
+            } else if (!allowedSolarTypes.includes((updated.solarType || '').trim())) {
+              newErrs.push("Invalid Solar Type selected");
             }
             if (updated.unitRate === undefined || updated.unitRate === null || String(updated.unitRate).trim() === '') {
               newErrs.push("UNIT RATE is missing");
             }
+            const allowedTariffTypes = ['Fix', 'Variable'];
             if (!(updated.tariffType || '').trim()) {
               newErrs.push("FIX/VARIABLE is missing");
+            } else if (!allowedTariffTypes.includes((updated.tariffType || '').trim())) {
+              newErrs.push("Fix/Variable must be 'Fix' or 'Variable'");
             }
             if (!(updated.billingMode || '').trim()) {
               newErrs.push("Exp (Billing Mode) is missing");
@@ -5597,59 +5694,153 @@ const UploadPage = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxHeight: '55vh', overflowY: 'auto', paddingRight: '0.25rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                    <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.accountNo || ''} 
+                      onChange={e => { clearFieldHighlight('accountNo'); setCorrectingFields(p => ({ ...p, accountNo: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('accountNo')}
+                      style={getFieldInputStyle('accountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
-                    <input type="text" value={correctingFields.customerName || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.customerName || ''} 
+                      onChange={e => { clearFieldHighlight('customerName'); setCorrectingFields(p => ({ ...p, customerName: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('customerName')}
+                      style={getFieldInputStyle('customerName', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Address</label>
-                    <input type="text" value={correctingFields.customerAddress || ''} onChange={e => setCorrectingFields(p => ({ ...p, customerAddress: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.customerAddress || ''} 
+                      onChange={e => { clearFieldHighlight('customerAddress'); setCorrectingFields(p => ({ ...p, customerAddress: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('customerAddress')}
+                      style={getFieldInputStyle('customerAddress', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Ref. No.</label>
-                    <input type="text" value={correctingFields.refNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, refNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.refNo || ''} 
+                      onChange={e => { clearFieldHighlight('refNo'); setCorrectingFields(p => ({ ...p, refNo: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('refNo')}
+                      style={getFieldInputStyle('refNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Cost Code</label>
-                    <input type="text" value={correctingFields.costCode || ''} onChange={e => setCorrectingFields(p => ({ ...p, costCode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.costCode || ''} 
+                      onChange={e => { clearFieldHighlight('costCode'); setCorrectingFields(p => ({ ...p, costCode: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('costCode')}
+                      style={getFieldInputStyle('costCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
-                    <input type="text" value={correctingFields.mobileNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, mobileNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.mobileNo || ''} 
+                      onChange={e => { clearFieldHighlight('mobileNo'); setCorrectingFields(p => ({ ...p, mobileNo: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('mobileNo')}
+                      style={getFieldInputStyle('mobileNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Panel Capacity (kW)</label>
-                    <input type="number" step="0.01" value={correctingFields.panelCapacity !== undefined && correctingFields.panelCapacity !== null ? correctingFields.panelCapacity : ''} onChange={e => setCorrectingFields(p => ({ ...p, panelCapacity: e.target.value === '' ? '' : parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      value={correctingFields.panelCapacity !== undefined && correctingFields.panelCapacity !== null ? correctingFields.panelCapacity : ''} 
+                      onChange={e => { clearFieldHighlight('panelCapacity'); setCorrectingFields(p => ({ ...p, panelCapacity: e.target.value === '' ? '' : parseFloat(e.target.value) })); }} 
+                      onFocus={() => clearFieldHighlight('panelCapacity')}
+                      style={getFieldInputStyle('panelCapacity', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Agreement Date (YYYY-MM-DD)</label>
-                    <input type="date" value={correctingFields.agreementDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, agreementDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="date" 
+                      value={correctingFields.agreementDate || ''} 
+                      onChange={e => { clearFieldHighlight('agreementDate'); setCorrectingFields(p => ({ ...p, agreementDate: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('agreementDate')}
+                      style={getFieldInputStyle('agreementDate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Code</label>
-                    <input type="text" value={correctingFields.bankCode || ''} onChange={e => setCorrectingFields(p => ({ ...p, bankCode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.bankCode || ''} 
+                      onChange={e => { clearFieldHighlight('bankCode'); setCorrectingFields(p => ({ ...p, bankCode: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('bankCode')}
+                      style={getFieldInputStyle('bankCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Branch Code</label>
-                    <input type="text" value={correctingFields.branchCode || ''} onChange={e => setCorrectingFields(p => ({ ...p, branchCode: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.branchCode || ''} 
+                      onChange={e => { clearFieldHighlight('branchCode'); setCorrectingFields(p => ({ ...p, branchCode: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('branchCode')}
+                      style={getFieldInputStyle('branchCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Account No</label>
-                    <input type="text" value={correctingFields.bankAccountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, bankAccountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="text" 
+                      value={correctingFields.bankAccountNo || ''} 
+                      onChange={e => { clearFieldHighlight('bankAccountNo'); setCorrectingFields(p => ({ ...p, bankAccountNo: e.target.value })); }} 
+                      onFocus={() => clearFieldHighlight('bankAccountNo')}
+                      style={getFieldInputStyle('bankAccountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
-                    <input type="text" value={correctingFields.solarType || ''} onChange={e => setCorrectingFields(p => { const next = { ...p, solarType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; })} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <select 
+                      value={correctingFields.solarType || ''} 
+                      onChange={e => { clearFieldHighlight('solarType'); setCorrectingFields(p => { const next = { ...p, solarType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }} 
+                      onFocus={() => clearFieldHighlight('solarType')}
+                      style={getFieldInputStyle('solarType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(15, 23, 42, 0.95)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', appearance: 'auto' })}
+                    >
+                      <option value="">Select Solar Type</option>
+                      <option value="Net Metering">Net Metering</option>
+                      <option value="Net Accounting">Net Accounting</option>
+                      <option value="Net Plus">Net Plus</option>
+                      <option value="Net Plus Plus">Net Plus Plus</option>
+                    </select>
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
-                    <input type="number" step="0.001" value={correctingFields.unitRate !== undefined && correctingFields.unitRate !== null ? correctingFields.unitRate : ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value === '' ? '' : parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <input 
+                      type="number" 
+                      step="0.001" 
+                      value={correctingFields.unitRate !== undefined && correctingFields.unitRate !== null ? correctingFields.unitRate : ''} 
+                      onChange={e => { clearFieldHighlight('unitRate'); setCorrectingFields(p => ({ ...p, unitRate: e.target.value === '' ? '' : parseFloat(e.target.value) })); }} 
+                      onFocus={() => clearFieldHighlight('unitRate')}
+                      style={getFieldInputStyle('unitRate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                    />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Fix/Variable</label>
-                    <input type="text" value={correctingFields.tariffType || ''} onChange={e => setCorrectingFields(p => { const next = { ...p, tariffType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; })} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <select 
+                      value={correctingFields.tariffType || ''} 
+                      onChange={e => { clearFieldHighlight('tariffType'); setCorrectingFields(p => { const next = { ...p, tariffType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }} 
+                      onFocus={() => clearFieldHighlight('tariffType')}
+                      style={getFieldInputStyle('tariffType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(15, 23, 42, 0.95)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', appearance: 'auto' })}
+                    >
+                      <option value="">Select Fix/Variable</option>
+                      <option value="Fix">Fix</option>
+                      <option value="Variable">Variable</option>
+                    </select>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>L-Code</label>

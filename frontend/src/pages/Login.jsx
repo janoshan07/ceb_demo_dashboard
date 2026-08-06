@@ -53,7 +53,7 @@ const Field = ({ id, icon: Icon, type, placeholder, value, onChange, disabled, r
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
       <span style={{
         position: 'absolute', left: '14px', display: 'flex', alignItems: 'center',
-        color: focused ? '#60a5fa' : '#475569', transition: 'color 0.2s', pointerEvents: 'none', zIndex: 1,
+        color: focused ? '#22d3ee' : 'rgba(34, 211, 238, 0.7)', transition: 'color 0.2s', pointerEvents: 'none', zIndex: 1,
       }}>
         <Icon />
       </span>
@@ -68,12 +68,12 @@ const Field = ({ id, icon: Icon, type, placeholder, value, onChange, disabled, r
         onBlur={() => setFocused(false)}
         autoComplete="off"
         style={{
-          width: '100%', height: '48px', background: focused ? 'rgba(15,23,42,0.9)' : 'rgba(15,23,42,0.6)',
-          border: `1px solid ${focused ? 'rgba(96,165,250,0.7)' : 'rgba(255,255,255,0.09)'}`,
-          borderRadius: '10px', color: '#f1f5f9', fontSize: '13.5px', outline: 'none',
+          width: '100%', height: '48px', background: focused ? 'rgba(15, 23, 42, 0.9)' : 'rgba(15, 23, 42, 0.75)',
+          border: `1px solid ${focused ? '#22d3ee' : 'rgba(255,255,255,0.12)'}`,
+          borderRadius: '10px', color: '#ffffff', fontSize: '13.5px', outline: 'none',
           paddingLeft: '42px', paddingRight: right ? '42px' : '14px',
-          boxSizing: 'border-box', transition: 'all 0.2s',
-          boxShadow: focused ? '0 0 0 3px rgba(96,165,250,0.15)' : 'none',
+          boxSizing: 'border-box', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: focused ? '0 0 16px rgba(34, 211, 238, 0.35)' : 'none',
         }}
       />
       {right && (
@@ -140,11 +140,11 @@ const Login = () => {
       {/* Main card */}
       <div style={{
         position: 'relative', zIndex: 10, width: '100%', maxWidth: '820px',
-        display: 'flex', borderRadius: '20px', overflow: 'hidden',
-        background: 'rgba(9,18,38,0.82)',
+        display: 'flex', borderRadius: '22px', overflow: 'hidden',
+        background: 'radial-gradient(circle at 50% 0%, rgba(16, 26, 46, 0.96) 0%, rgba(9, 14, 26, 0.98) 100%)',
         backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 40px 100px rgba(0,0,0,0.7), 0 0 0 1px rgba(96,165,250,0.04)',
+        border: '1.5px solid rgba(34, 211, 238, 0.4)',
+        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(34, 211, 238, 0.18)',
         margin: '0 24px',
       }}>
         {/* ── Left panel ── */}
@@ -276,14 +276,14 @@ const Login = () => {
               style={{
                 width: '100%', height: '50px', border: 'none', borderRadius: '11px',
                 cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
-                background: 'linear-gradient(135deg, #1d4ed8 0%, #0ea5e9 100%)',
+                background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #22d3ee 100%)',
                 color: '#fff', fontSize: '13px', fontWeight: '700', letterSpacing: '0.08em',
                 textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                boxShadow: '0 0 24px rgba(37,99,235,0.35), 0 8px 24px rgba(0,0,0,0.4)',
+                boxShadow: '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)',
                 transition: 'all 0.25s ease',
               }}
-              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = '0 0 40px rgba(37,99,235,0.55), 0 12px 32px rgba(0,0,0,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 0 24px rgba(37,99,235,0.35), 0 8px 24px rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'none'; }}
+              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 28px rgba(34, 211, 238, 0.6), 0 12px 32px rgba(0,0,0,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'none'; }}
             >
               {loading ? (
                 <><div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', borderRadius: '50%', animation: 'edl-spin 0.75s linear infinite' }} /><span>Authenticating…</span></>

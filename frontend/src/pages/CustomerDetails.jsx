@@ -2590,10 +2590,10 @@ const CustomerDetails = () => {
 
       {/* Bill Edit Modal */}
       {editingBill && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyRef: 'center', justifyContent: 'center', zIndex: 1200 }}>
-          <div className="card animate-fade-in" style={{ width: '500px', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
-            <div className="panel-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', marginBottom: '1.25rem' }}>
-              <h3 className="panel-title">Edit Billing Record ({editingBill.refNo})</h3>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
+          <div className="neon-card animate-fade-in" style={{ width: '540px', padding: '1.75rem' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
+              <h3 className="panel-title" style={{ color: 'white', fontWeight: 800, fontSize: '1.15rem' }}>Edit Billing Record ({editingBill.refNo})</h3>
               <button 
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
                 onClick={() => setEditingBill(null)}
@@ -3153,10 +3153,10 @@ const CustomerDetails = () => {
       )}
 
       {addBillModalOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000 }}>
-          <div className="modal-content card animate-fade-in" style={{ maxWidth: 650, padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'white' }}>Add Billing Ledger Entry</h3>
+        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000, background: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)' }}>
+          <div className="neon-card animate-fade-in" style={{ maxWidth: 650, width: '100%', padding: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem' }}>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'white', fontWeight: 800 }}>Add Billing Ledger Entry</h3>
               <button onClick={() => setAddBillModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
                 <X size={20} />
               </button>

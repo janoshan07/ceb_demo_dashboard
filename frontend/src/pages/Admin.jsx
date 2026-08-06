@@ -703,38 +703,39 @@ const Admin = () => {
           </div>
 
           {/* Create User Form */}
-          <div className="card">
-            <div className="panel-header">
-              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <UserPlus size={18} className="text-primary" />
+          <div className="neon-card" style={{ padding: '1.75rem' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
+              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'white', fontWeight: 800 }}>
+                <UserPlus size={20} color="#22d3ee" />
                 Add System User
               </h2>
             </div>
 
             <form onSubmit={handleAddUser} className="login-form">
-              <div className="form-group">
-                <label className="form-label">Username</label>
+              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="neon-label">Username</label>
                 <input 
                   type="text" 
-                  className="login-form-input" 
+                  className="neon-input" 
                   placeholder="Enter username (or account no for Customers)" 
                   value={newUsername}
                   onChange={(e) => setNewUsername(e.target.value)}
+                  style={{ width: '100%', height: 44, padding: '0 14px' }}
                   required 
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <div className="input-group">
-                  <Lock className="input-icon" size={18} />
+              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="neon-label">Password</label>
+                <div className="input-group" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <Lock className="input-icon" size={17} style={{ position: 'absolute', left: 14, color: 'rgba(34, 211, 238, 0.7)', pointerEvents: 'none' }} />
                   <input 
                     type={showNewPassword ? "text" : "password"} 
-                    className="form-input" 
+                    className="neon-input" 
                     placeholder="Enter password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    style={{ paddingRight: '2.75rem' }}
+                    style={{ width: '100%', height: 44, paddingLeft: 42, paddingRight: 44 }}
                     required 
                   />
                   <button
@@ -743,28 +744,35 @@ const Admin = () => {
                     onClick={() => setShowNewPassword(!showNewPassword)}
                     aria-label={showNewPassword ? "Hide password" : "Show password"}
                     tabIndex={-1}
+                    style={{ position: 'absolute', right: 12, background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
                   >
                     {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Assign Role</label>
+              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                <label className="neon-label">Assign Role</label>
                 <select 
-                  className="login-form-input" 
+                  className="neon-input" 
                   value={newRole}
                   onChange={(e) => setNewRole(e.target.value)}
-                  style={{ appearance: 'auto' }}
+                  style={{ width: '100%', height: 44, padding: '0 14px', appearance: 'auto' }}
                 >
                   <option value="USER">Customer (Self Service Portal)</option>
-                  <option value="OFFICER">Billing Officer (Upload & View)</option>
-                  <option value="ADMIN">Administrator (Full Access)</option>
+                  <option value="DATA_ENTRY_CLERK">Data Entry Clerk</option>
+                  <option value="COMMERCIAL_OFFICER">Commercial Officer</option>
+                  <option value="OFFICER">CEB Officer</option>
+                  <option value="ADMIN">System Administrator</option>
                 </select>
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
-                Create Account
+              <button 
+                type="submit" 
+                className="neon-btn-primary"
+                style={{ width: '100%', height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontSize: '0.88rem' }}
+              >
+                <UserPlus size={16} /> Register User Account
               </button>
             </form>
           </div>

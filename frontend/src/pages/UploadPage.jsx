@@ -7,7 +7,7 @@ import {
   FileText, Loader, Trash2, Eye,
   Check, RefreshCw, Layers, Zap, User, Info,
   Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft, Archive,
-  Calendar, MapPin
+  Calendar, MapPin, Download, Bell, Sun, Moon, ShieldCheck, ExternalLink
 } from 'lucide-react';
 
 // Helper to automatically derive L-Code based on solarType and tariffType
@@ -32,9 +32,27 @@ export const validateAndFormatMobileNo = (raw) => {
   }
 };
 
+export const normalizeTariffType = (val) => {
+  if (!val) return '';
+  const clean = String(val).trim().toUpperCase();
+  if (clean.includes('FIX')) return 'Fix';
+  if (clean.includes('VAR')) return 'Variable';
+  return String(val).trim();
+};
+
+export const normalizeSolarTypeOption = (val) => {
+  if (!val) return '';
+  const clean = String(val).trim().toLowerCase().replace(/[\s\-_]+/g, ' ');
+  if (clean.includes('metering') || clean === 'metering') return 'Net Metering';
+  if (clean.includes('plus plus') || clean === 'plus plus' || clean.includes('plusplus')) return 'Net Plus Plus';
+  if (clean.includes('plus') || clean === 'plus') return 'Net Plus';
+  if (clean.includes('accounting') || clean === 'accounting') return 'Net Accounting';
+  return String(val).trim();
+};
+
 export const deriveLCode = (solarType, tariffType) => {
   if (!solarType || !tariffType) return '';
-  
+
   const cleanSolar = solarType.trim().toLowerCase().replace(/[\s\-_]+/g, ' ');
   let normSolar = '';
   if (cleanSolar.includes('metering') || cleanSolar === 'metering') {
@@ -122,7 +140,7 @@ const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAc
   const completedUpTo = stageIdx <= 4 ? stageIdx : stageIdx === 5 ? 4 : stageIdx >= 6 ? 5 : 0;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '2rem', padding: '0 0.5rem' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '2.25rem', padding: '0 0.5rem' }}>
       {steps.map((step, i) => {
         const stepNum = i + 1;
         const isActive = currentStep === stepNum;
@@ -131,43 +149,43 @@ const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAc
 
         return (
           <React.Fragment key={i}>
-            <div 
+            <div
               onClick={() => isAccessible && onStepClick && onStepClick(stepNum)}
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                flex: 1, 
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                flex: 1,
                 cursor: isAccessible ? 'pointer' : 'not-allowed',
                 opacity: isAccessible ? 1 : 0.45,
                 transition: 'all 0.3s ease'
               }}
             >
               <div style={{
-                width: 44, height: 44, borderRadius: '50%',
+                width: 48, height: 48, borderRadius: '50%',
                 background: isDone ? 'linear-gradient(135deg,#10b981,#059669)'
-                  : isActive ? 'linear-gradient(135deg,#6366f1,#4f46e5)'
-                  : 'rgba(255,255,255,0.06)',
-                border: isActive ? '2.5px solid #818cf8' : isDone ? '2.5px solid #10b981' : '2px solid rgba(255,255,255,0.12)',
+                  : isActive ? 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)'
+                    : 'rgba(15, 23, 42, 0.8)',
+                border: isActive ? '3px solid #818cf8' : isDone ? '2.5px solid #10b981' : '1.5px solid rgba(255,255,255,0.12)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: isDone || isActive ? 'white' : 'var(--text-muted)',
-                fontWeight: 700, fontSize: '1rem',
-                boxShadow: isActive ? '0 0 20px rgba(99,102,241,0.4)' : isDone ? '0 0 12px rgba(16,185,129,0.3)' : 'none',
+                color: isDone || isActive ? 'white' : '#94a3b8',
+                fontWeight: 700, fontSize: '1.05rem',
+                boxShadow: isActive ? '0 0 22px rgba(99,102,241,0.55), inset 0 0 10px rgba(255,255,255,0.2)' : isDone ? '0 0 12px rgba(16,185,129,0.35)' : 'none',
                 transition: 'all 0.3s ease'
               }}>
-                {isDone ? <Check size={20} /> : stepNum}
+                {isDone ? <Check size={22} /> : stepNum}
               </div>
               <div style={{
-                marginTop: '0.5rem', fontSize: '0.72rem', fontWeight: 600, textAlign: 'center',
-                color: isActive ? '#818cf8' : isDone ? '#10b981' : 'var(--text-muted)',
-                maxWidth: 80
+                marginTop: '0.6rem', fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, textAlign: 'center',
+                color: isActive ? '#a5b4fc' : isDone ? '#34d399' : '#64748b',
+                maxWidth: 90, letterSpacing: '-0.1px'
               }}>{step.label}</div>
             </div>
             {i < steps.length - 1 && (
               <div style={{
-                height: 2, flex: 2, maxWidth: 80,
-                background: isDone ? 'linear-gradient(90deg,#10b981,#059669)' : 'rgba(255,255,255,0.08)',
-                marginTop: -20, transition: 'all 0.4s ease'
+                height: 2, flex: 2, maxWidth: 100,
+                background: isDone ? 'linear-gradient(90deg,#10b981,#059669)' : isActive ? 'linear-gradient(90deg, #6366f1, rgba(255,255,255,0.1))' : 'rgba(255,255,255,0.08)',
+                marginTop: -22, transition: 'all 0.4s ease'
               }} />
             )}
           </React.Fragment>
@@ -194,37 +212,153 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
   const handleDragLeave = () => setDragging(false);
 
   return (
-    <div
-      onClick={() => !disabled && inputRef.current?.click()}
-      onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
-      style={{
-        border: `2px dashed ${dragging ? '#6366f1' : file ? '#10b981' : 'rgba(255,255,255,0.15)'}`,
-        borderRadius: 14, padding: '2.5rem 2rem', textAlign: 'center',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        background: dragging ? 'rgba(99,102,241,0.06)' : file ? 'rgba(16,185,129,0.04)' : 'rgba(255,255,255,0.02)',
-        transition: 'all 0.25s ease', opacity: disabled ? 0.5 : 1
-      }}
-    >
-      <input ref={inputRef} type="file" accept={accept} style={{ display: 'none' }}
-        onChange={e => e.target.files[0] && onFileSelected(e.target.files[0])} />
-      {file ? (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
-          <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <FileSpreadsheet size={26} color="#10b981" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <div
+        onClick={() => !disabled && inputRef.current?.click()}
+        onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
+        style={{
+          border: `2px dashed ${dragging ? '#818cf8' : file ? '#10b981' : 'rgba(99, 102, 241, 0.3)'}`,
+          borderRadius: 16, padding: '3.2rem 2rem', textAlign: 'center',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          background: dragging
+            ? 'rgba(99,102,241,0.08)'
+            : file
+              ? 'rgba(16,185,129,0.04)'
+              : 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, rgba(10, 16, 30, 0.7) 100%)',
+          boxShadow: dragging ? '0 0 25px rgba(99,102,241,0.25)' : 'none',
+          transition: 'all 0.25s ease', opacity: disabled ? 0.5 : 1
+        }}
+      >
+        <input ref={inputRef} type="file" accept={accept} style={{ display: 'none' }}
+          onChange={e => e.target.files[0] && onFileSelected(e.target.files[0])} />
+        {file ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.6rem' }}>
+            <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', boxShadow: '0 0 20px rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <FileSpreadsheet size={30} color="#10b981" />
+            </div>
+            <div style={{ fontWeight: 700, color: 'white', fontSize: '1.05rem' }}>{file.name}</div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{(file.size / 1024).toFixed(1)} KB · Click to change file</div>
           </div>
-          <div style={{ fontWeight: 700, color: 'white', fontSize: '0.95rem' }}>{file.name}</div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{(file.size / 1024).toFixed(1)} KB · Click to change</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CloudUpload size={28} color="#6366f1" />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{
+              width: 60, height: 60, borderRadius: '50%',
+              background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+              boxShadow: '0 0 22px rgba(99, 102, 241, 0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: '0.25rem'
+            }}>
+              <CloudUpload size={28} color="white" />
+            </div>
+            <div style={{ fontWeight: 700, color: 'white', fontSize: '1.15rem', letterSpacing: '-0.3px' }}>
+              Drag & drop your Excel file here
+            </div>
+            <div style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
+              or click to <span style={{ color: '#818cf8', fontWeight: 600, textDecoration: 'underline' }}>browse</span>
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
+              Supports <strong style={{ color: '#cbd5e1' }}>.xlsx / .xls</strong>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem', fontSize: '0.76rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0.35rem 0.85rem', borderRadius: 20 }}>
+              <CheckCircle size={13} color="#10b981" />
+              <span>Your files are secure and encrypted</span>
+            </div>
           </div>
-          <div style={{ fontWeight: 700, color: 'white', fontSize: '1rem' }}>Drop your Excel file here</div>
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>or click to browse · .xlsx / .xls</div>
-          {hint && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', maxWidth: 380, lineHeight: 1.5, marginTop: '0.25rem' }}>{hint}</div>}
+        )}
+      </div>
+
+      {/* Feature info cards below dropzone */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <FileSpreadsheet size={20} color="#818cf8" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>15 Required Columns</div>
+            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Must be included</div>
+          </div>
         </div>
-      )}
+
+        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <ShieldCheck size={20} color="#10b981" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>Unique 10-digit Account No</div>
+            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>No duplicates allowed</div>
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <FileText size={20} color="#a855f7" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>Excel Format Only</div>
+            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>.xlsx or .xls files</div>
+          </div>
+        </div>
+
+        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Database size={20} color="#f59e0b" />
+          </div>
+          <div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>Maximum File Size</div>
+            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>50 MB per file</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  STAT CARD (Image 2 Modern Style)
+// ═══════════════════════════════════════════════════════════════════════════
+const StatCard = ({ label, value, color, icon, subtitle }) => {
+  const isEmerald = color === '#10b981' || color === 'emerald';
+  const isRed = color === '#ef4444' || color === 'red';
+  const isAmber = color === '#f59e0b' || color === 'amber';
+  const isIndigo = color === '#6366f1' || color === '#818cf8' || color === 'indigo';
+
+  const badgeColor = isEmerald ? '#10b981' : isRed ? '#ef4444' : isAmber ? '#f59e0b' : '#818cf8';
+  const badgeRgb = isEmerald ? '16, 185, 129' : isRed ? '239, 68, 68' : isAmber ? '245, 158, 11' : '99, 102, 241';
+
+  return (
+    <div style={{
+      background: 'rgba(15, 23, 42, 0.75)',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
+      borderRadius: 16,
+      padding: '1.1rem 1.25rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '1rem',
+      boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
+      transition: 'all 0.25s ease'
+    }}>
+      <div style={{
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        background: `rgba(${badgeRgb}, 0.12)`,
+        border: `1px solid rgba(${badgeRgb}, 0.28)`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: badgeColor,
+        flexShrink: 0
+      }}>
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</div>
+        <div style={{ fontSize: '1.45rem', fontWeight: 800, color: badgeColor || 'white', marginTop: '0.15rem', lineHeight: 1.1 }}>
+          {value !== undefined && value !== null ? value : 0}
+        </div>
+        {subtitle && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>{subtitle}</div>}
+      </div>
     </div>
   );
 };
@@ -234,8 +368,8 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
 // ═══════════════════════════════════════════════════════════════════════════
 const StatusBadge = ({ status }) => {
   const cfg = {
-    VALID:   { bg: 'rgba(16,185,129,0.15)', color: '#10b981', label: 'Valid' },
-    ERROR:   { bg: 'rgba(239,68,68,0.15)',  color: '#ef4444', label: 'Error' },
+    VALID: { bg: 'rgba(16,185,129,0.15)', color: '#10b981', label: 'Valid' },
+    ERROR: { bg: 'rgba(239,68,68,0.15)', color: '#ef4444', label: 'Error' },
     WARNING: { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b', label: 'Warning' },
   }[status] || { bg: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)', label: status };
   return (
@@ -294,44 +428,48 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
 
   function renderFilterTabs() {
     return (
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         {[
-          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'ALL', label: 'All Records', count: allCount, color: '#818cf8' },
           { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
           { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
           { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
           { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
-        ].map(tab => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveFilter(tab.key)}
-            style={{
-              padding: '0.45rem 0.9rem',
-              borderRadius: 8,
-              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
-              cursor: 'pointer',
-              fontSize: '0.78rem',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <span>{tab.label}</span>
-            <span style={{
-              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-              color: activeFilter === tab.key ? 'black' : tab.color,
-              padding: '0.05rem 0.35rem',
-              borderRadius: 20,
-              fontSize: '0.68rem',
-              fontWeight: 700
-            }}>{tab.count}</span>
-          </button>
-        ))}
+        ].map(tab => {
+          const isSelected = activeFilter === tab.key;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveFilter(tab.key)}
+              style={{
+                padding: '0.5rem 1rem',
+                borderRadius: 20,
+                background: isSelected ? 'rgba(99, 102, 241, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                border: `1px solid ${isSelected ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`,
+                color: isSelected ? 'white' : '#94a3b8',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                boxShadow: isSelected ? '0 0 15px rgba(99,102,241,0.2)' : 'none',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <span>{tab.label}</span>
+              <span style={{
+                background: isSelected ? tab.color : 'rgba(255,255,255,0.08)',
+                color: isSelected ? 'white' : tab.color,
+                padding: '0.1rem 0.45rem',
+                borderRadius: 12,
+                fontSize: '0.7rem',
+                fontWeight: 800
+              }}>{tab.count}</span>
+            </button>
+          );
+        })}
       </div>
     );
   }
@@ -339,9 +477,9 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
   if (!displayed.length) return (
     <div>
       {renderFilterTabs()}
-      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+      <div style={{ textAlign: 'center', padding: '3.5rem', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
+        <CheckCircle size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+        <div style={{ fontWeight: 600, color: 'white', fontSize: '0.95rem' }}>No visible records found for this filter.</div>
       </div>
     </div>
   );
@@ -353,7 +491,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
           border: '1px solid rgba(239, 68, 68, 0.2)',
-          borderRadius: 10,
+          borderRadius: 12,
           padding: '0.75rem 1.25rem',
           marginBottom: '1rem',
           display: 'flex',
@@ -390,12 +528,12 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
         </div>
       )}
 
-      <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
+      <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(15, 23, 42, 0.7)', maxWidth: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
-                <input 
+                <input
                   type="checkbox"
                   checked={isAllSelected}
                   ref={el => {
@@ -429,7 +567,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                     {row.status === 'ERROR' ? (
-                      <input 
+                      <input
                         type="checkbox"
                         checked={selectedKeys.has(row.rowNum || row.accountNo)}
                         onChange={(e) => {
@@ -449,10 +587,10 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                     ) : null}
                   </td>
                   <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                  <td style={{ 
-                    padding: '0.6rem 0.85rem', 
-                    fontFamily: 'monospace', 
-                    fontWeight: 600, 
+                  <td style={{
+                    padding: '0.6rem 0.85rem',
+                    fontFamily: 'monospace',
+                    fontWeight: 600,
                     whiteSpace: 'nowrap',
                     background: isAccountInvalid(row.accountNo) ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
                     color: isAccountInvalid(row.accountNo) ? '#f87171' : 'inherit'
@@ -606,7 +744,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
   return (
     <div>
       {renderFilterTabs()}
-      
+
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -653,7 +791,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
           <thead>
             <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
-                <input 
+                <input
                   type="checkbox"
                   checked={isAllSelected}
                   ref={el => {
@@ -669,7 +807,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
                   style={{ cursor: 'pointer', width: 14, height: 14 }}
                 />
               </th>
-              {['Row','Account No','Prv. Rdg. Date','Crnt. Rdg. Date','Status','Actions'].map(h => (
+              {['Row', 'Account No', 'Prv. Rdg. Date', 'Crnt. Rdg. Date', 'Status', 'Actions'].map(h => (
                 <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -677,13 +815,13 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
           <tbody>
             {displayed.map((row, i) => (
               <React.Fragment key={i}>
-                <tr 
+                <tr
                   onClick={() => setExpandedRow(expandedRow === i ? null : i)}
                   style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                     {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
-                      <input 
+                      <input
                         type="checkbox"
                         checked={selectedKeys.has(row.rowNum || row.accountNo)}
                         onChange={(e) => {
@@ -703,9 +841,9 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
                     ) : null}
                   </td>
                   <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                  <td style={{ 
-                    padding: '0.6rem 0.85rem', 
-                    fontFamily: 'monospace', 
+                  <td style={{
+                    padding: '0.6rem 0.85rem',
+                    fontFamily: 'monospace',
                     fontWeight: 600,
                     whiteSpace: 'nowrap',
                     background: isAccountInvalid(row.accountNo) ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
@@ -861,7 +999,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   return (
     <div>
       {renderFilterTabs()}
-      
+
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -908,7 +1046,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           <thead>
             <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
-                <input 
+                <input
                   type="checkbox"
                   checked={isAllSelected}
                   ref={el => {
@@ -939,13 +1077,13 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
             {displayed.map((row, i) => {
               return (
                 <React.Fragment key={i}>
-                  <tr 
+                  <tr
                     onClick={() => setExpandedRow(expandedRow === i ? null : i)}
                     style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
-                        <input 
+                        <input
                           type="checkbox"
                           checked={selectedKeys.has(row.rowNum || row.accountNo)}
                           onChange={(e) => {
@@ -965,9 +1103,9 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       ) : null}
                     </td>
                     <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                    <td style={{ 
-                      padding: '0.6rem 0.85rem', 
-                      fontFamily: 'monospace', 
+                    <td style={{
+                      padding: '0.6rem 0.85rem',
+                      fontFamily: 'monospace',
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       background: isAccountInvalid(row.accountNo) ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
@@ -976,7 +1114,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       {renderCell(row.accountNo)}
                       {isAccountInvalid(row.accountNo) && <span style={{ marginLeft: 6, fontSize: '0.7rem', padding: '1px 4px', borderRadius: 3, background: '#ef4444', color: 'white', fontWeight: 600 }}>Invalid</span>}
                     </td>
-                    
+
                     <td style={{ padding: '0.6rem 0.85rem', whiteSpace: 'nowrap' }}>{renderCell(row.ngenNetType)}</td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
@@ -1165,7 +1303,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   return (
     <div>
       {renderFilterTabs()}
-      
+
       {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
@@ -1212,7 +1350,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           <thead>
             <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
-                <input 
+                <input
                   type="checkbox"
                   checked={isAllSelected}
                   ref={el => { if (el) el.indeterminate = isSomeSelected; }}
@@ -1242,13 +1380,13 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 
               return (
                 <React.Fragment key={i}>
-                  <tr 
+                  <tr
                     onClick={() => setExpandedRow(expandedRow === i ? null : i)}
                     style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
-                        <input 
+                        <input
                           type="checkbox"
                           checked={selectedKeys.has(row.rowNum || row.accountNo)}
                           onChange={(e) => {
@@ -1265,10 +1403,10 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       ) : null}
                     </td>
                     <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
-                    
-                    <td style={{ 
-                      padding: '0.6rem 0.85rem', 
-                      fontFamily: 'monospace', 
+
+                    <td style={{
+                      padding: '0.6rem 0.85rem',
+                      fontFamily: 'monospace',
                       fontWeight: 600,
                       whiteSpace: 'nowrap',
                       background: accEmpty || accInvalid ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
@@ -1352,15 +1490,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   );
 };
 
-const StatCard = ({ label, value, color = 'var(--text-secondary)', icon }) => (
-  <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 10, padding: '1rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-    {icon && <div style={{ color }}>{icon}</div>}
-    <div>
-      <div style={{ fontSize: '1.4rem', fontWeight: 800, color }}>{value ?? '—'}</div>
-      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500 }}>{label}</div>
-    </div>
-  </div>
-);
+
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  SESSION BADGE (top of page when session is active)
@@ -1479,11 +1609,11 @@ const UploadPage = () => {
 
   const isolateInvalidAccountRows = (data) => {
     if (!data || !data.rows) return data;
-    
+
     const rawRows = data.rows;
     const validRows = [];
     const autoRejected = [];
-    
+
     rawRows.forEach(row => {
       if (isAccountEmpty(row.accountNo)) {
         // Empty / blank Account No
@@ -1526,7 +1656,7 @@ const UploadPage = () => {
         const filteredAutoRejected = autoRejected.filter(r => !existingRowNums.has(r.rowNum));
         return [...prev, ...filteredAutoRejected];
       });
-      
+
       setRowCorrections(prev => {
         const copy = { ...prev };
         autoRejected.forEach(row => {
@@ -1535,13 +1665,13 @@ const UploadPage = () => {
         });
         return copy;
       });
-      
+
       const totalRows = validRows.length;
       const errorCount = validRows.filter(r => r.status === 'ERROR').length;
       const warningCount = validRows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
       const matchedCount = validRows.filter(r => r.customerExists).length;
       const unmatchedCount = validRows.filter(r => !r.customerExists).length;
-      
+
       return {
         ...data,
         rows: validRows,
@@ -1552,7 +1682,7 @@ const UploadPage = () => {
         unmatchedCount: unmatchedCount || 0
       };
     }
-    
+
     return data;
   };
 
@@ -1573,6 +1703,8 @@ const UploadPage = () => {
   // ── Step 6: inline edit of a single mismatched field (name / unitRate / netType) ──
   const [editingMismatch, setEditingMismatch] = useState(null); // { field, accountNo } currently being edited
   const [editMismatchValue, setEditMismatchValue] = useState('');
+  const [editMasterRateValue, setEditMasterRateValue] = useState('');
+  const [editMainRateValue, setEditMainRateValue] = useState('');
   const [editMismatchSaving, setEditMismatchSaving] = useState(false);
   // ── Step 6: Agreement Expiry Review workflow (additional review section only) ──
   const [agreementExpiryFilter, setAgreementExpiryFilter] = useState('ALL'); // ALL | EXPIRED | EXPIRING_SOON | ACTIVE
@@ -1622,7 +1754,7 @@ const UploadPage = () => {
   const updatePreviewState = (newRows) => {
     const stepLabel = wizardStep === 1 ? 'Master Data' : wizardStep === 2 ? 'CEB Assist' : wizardStep === 3 ? 'NGEN' : 'NPAY';
     const reevaluated = reevaluateDuplicates(newRows, stepLabel);
-    
+
     const totalRows = reevaluated.length;
     const errorCount = reevaluated.filter(r => r.status === 'ERROR').length;
     const duplicateCount = reevaluated.filter(r => r.status === 'DUPLICATE').length;
@@ -1674,18 +1806,18 @@ const UploadPage = () => {
   const [reviewProposals, setReviewProposals] = useState([]);
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState(null);
-  
+
   // Staging row edit proposal modal state
   const [editingStagingRow, setEditingStagingRow] = useState(null);
   const [proposeEditStagingLoading, setProposeEditStagingLoading] = useState(false);
 
   const WIZARD_STEPS = [
-    { label: 'Master Data',  icon: <User size={16} /> },
-    { label: 'CEB Assist',   icon: <Database size={16} /> },
-    { label: 'NGEN Sheet',   icon: <Zap size={16} /> },
-    { label: 'NPAY Sheet',   icon: <FileText size={16} /> },
+    { label: 'Master Data', icon: <User size={16} /> },
+    { label: 'CEB Assist', icon: <Database size={16} /> },
+    { label: 'NGEN Sheet', icon: <Zap size={16} /> },
+    { label: 'NPAY Sheet', icon: <FileText size={16} /> },
     { label: 'Main Dataset', icon: <Layers size={16} /> },
-    { label: 'Finalize',     icon: <CheckCircle size={16} /> },
+    { label: 'Finalize', icon: <CheckCircle size={16} /> },
   ];
 
   // Stage → step mapping
@@ -1776,8 +1908,8 @@ const UploadPage = () => {
   const [batchDetails, setBatchDetails] = useState(null); // UploadHistory record for info modal
 
   // ── Row Correction Modal State ─────────────────────────────────────────
-  const [correctingRow, setCorrectingRow] = useState(null); 
-  const [correctingFields, setCorrectingFields] = useState({}); 
+  const [correctingRow, setCorrectingRow] = useState(null);
+  const [correctingFields, setCorrectingFields] = useState({});
   const [highlightedFields, setHighlightedFields] = useState(new Set());
 
   const getFieldErrorKeys = (errors) => {
@@ -1835,8 +1967,16 @@ const UploadPage = () => {
   const [showDeletedLog, setShowDeletedLog] = useState(false);
 
   const handleCorrectRow = (row, isFromDeletedLog = false) => {
-    setCorrectingRow({ ...row, isFromDeletedLog });
-    setCorrectingFields({ ...row });
+    const normTariff = normalizeTariffType(row.tariffType);
+    const normSolar = normalizeSolarTypeOption(row.solarType);
+    const normalizedRow = {
+      ...row,
+      tariffType: normTariff || row.tariffType || '',
+      solarType: normSolar || row.solarType || '',
+      billingMode: row.billingMode || deriveLCode(normSolar || row.solarType || '', normTariff || row.tariffType || '')
+    };
+    setCorrectingRow({ ...normalizedRow, isFromDeletedLog });
+    setCorrectingFields({ ...normalizedRow });
   };
 
   const handleSaveCorrection = () => {
@@ -1873,20 +2013,29 @@ const UploadPage = () => {
         if (!(updated.branchCode || '').trim()) newErrs.push("Branch Code is missing");
         if (!(updated.bankAccountNo || '').trim()) newErrs.push("Bank Account No is missing");
         const allowedSolarTypes = ['Net Metering', 'Net Accounting', 'Net Plus', 'Net Plus Plus'];
-        if (!(updated.solarType || '').trim()) {
+        const cleanSolar = (updated.solarType || '').trim();
+        const normSolar = normalizeSolarTypeOption(cleanSolar);
+        if (!cleanSolar) {
           newErrs.push("TYPE (Solar Type) is missing");
-        } else if (!allowedSolarTypes.includes((updated.solarType || '').trim())) {
+        } else if (!allowedSolarTypes.includes(normSolar)) {
           newErrs.push("Invalid Solar Type selected");
+        } else {
+          updated.solarType = normSolar;
         }
         if (updated.unitRate === undefined || updated.unitRate === null || String(updated.unitRate).trim() === '') {
           newErrs.push("UNIT RATE is missing");
         }
         const allowedTariffTypes = ['Fix', 'Variable'];
-        if (!(updated.tariffType || '').trim()) {
+        const cleanTariff = (updated.tariffType || '').trim();
+        const normTariff = normalizeTariffType(cleanTariff);
+        if (!cleanTariff) {
           newErrs.push("FIX/VARIABLE is missing");
-        } else if (!allowedTariffTypes.includes((updated.tariffType || '').trim())) {
+        } else if (!allowedTariffTypes.includes(normTariff)) {
           newErrs.push("Fix/Variable must be 'Fix' or 'Variable'");
+        } else {
+          updated.tariffType = normTariff;
         }
+        updated.billingMode = updated.billingMode || deriveLCode(updated.solarType || '', updated.tariffType || '');
         if (!(updated.billingMode || '').trim()) newErrs.push("Exp (Billing Mode) is missing");
       } else if (wizardStep === 2) {
         if (!acc.trim()) {
@@ -1927,7 +2076,7 @@ const UploadPage = () => {
           const copy = { ...prev };
           const oldKey = correctingRow.rowNum || correctingRow.accountNo;
           delete copy[oldKey];
-          
+
           const restoredKey = updated.rowNum || updated.accountNo;
           copy[restoredKey] = updated;
           return copy;
@@ -2047,20 +2196,29 @@ const UploadPage = () => {
               newErrs.push("Bank Account No is missing");
             }
             const allowedSolarTypes = ['Net Metering', 'Net Accounting', 'Net Plus', 'Net Plus Plus'];
-            if (!(updated.solarType || '').trim()) {
+            const cleanSolar = (updated.solarType || '').trim();
+            const normSolar = normalizeSolarTypeOption(cleanSolar);
+            if (!cleanSolar) {
               newErrs.push("TYPE (Solar Type) is missing");
-            } else if (!allowedSolarTypes.includes((updated.solarType || '').trim())) {
+            } else if (!allowedSolarTypes.includes(normSolar)) {
               newErrs.push("Invalid Solar Type selected");
+            } else {
+              updated.solarType = normSolar;
             }
             if (updated.unitRate === undefined || updated.unitRate === null || String(updated.unitRate).trim() === '') {
               newErrs.push("UNIT RATE is missing");
             }
             const allowedTariffTypes = ['Fix', 'Variable'];
-            if (!(updated.tariffType || '').trim()) {
+            const cleanTariff = (updated.tariffType || '').trim();
+            const normTariff = normalizeTariffType(cleanTariff);
+            if (!cleanTariff) {
               newErrs.push("FIX/VARIABLE is missing");
-            } else if (!allowedTariffTypes.includes((updated.tariffType || '').trim())) {
+            } else if (!allowedTariffTypes.includes(normTariff)) {
               newErrs.push("Fix/Variable must be 'Fix' or 'Variable'");
+            } else {
+              updated.tariffType = normTariff;
             }
+            updated.billingMode = updated.billingMode || deriveLCode(updated.solarType || '', updated.tariffType || '');
             if (!(updated.billingMode || '').trim()) {
               newErrs.push("Exp (Billing Mode) is missing");
             }
@@ -2138,33 +2296,33 @@ const UploadPage = () => {
 
   const handleRestoreRow = (deletedRow) => {
     setDeletedRows(prev => prev.filter(d => d.rowNum !== deletedRow.rowNum || d.accountNo !== deletedRow.accountNo));
-    
+
     setRowCorrections(prev => {
       const copy = { ...prev };
       const key = deletedRow.rowNum || deletedRow.accountNo;
       delete copy[key];
       return copy;
     });
-    
+
     setPreview(prev => {
       if (!prev) return prev;
       const rows = [...(prev.rows || [])];
-      
-      const restored = { 
+
+      const restored = {
         ...(deletedRow.rowData || {}),
         status: deletedRow.status || 'ERROR',
         errors: deletedRow.errors || []
       };
-      
+
       rows.push(restored);
       rows.sort((a, b) => (a.rowNum || 0) - (b.rowNum || 0));
-      
+
       const totalRows = rows.length;
       const errorCount = rows.filter(r => r.status === 'ERROR').length;
       const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
       const matchedCount = rows.filter(r => r.customerExists).length;
       const unmatchedCount = rows.filter(r => !r.customerExists).length;
-      
+
       return {
         ...prev,
         rows,
@@ -2175,7 +2333,7 @@ const UploadPage = () => {
         unmatchedCount: unmatchedCount || 0
       };
     });
-    
+
     showToast(`Record #${deletedRow.rowNum} restored to preview.`, 'info');
   };
 
@@ -2188,16 +2346,16 @@ const UploadPage = () => {
       type: 'danger'
     });
     if (!confirmed) return;
-    
+
     setDeletedRows(prev => prev.filter(d => d.rowNum !== row.rowNum || d.accountNo !== row.accountNo));
-    
+
     setRowCorrections(prev => {
       const copy = { ...prev };
       const key = row.rowNum || row.accountNo;
       copy[key] = { deleted: true };
       return copy;
     });
-    
+
     showToast(`Record #${row.rowNum} permanently deleted.`, 'success');
   };
 
@@ -2334,22 +2492,22 @@ const UploadPage = () => {
     setReviewProposals([]);
     setReviewError(null);
     setActiveView('staged-review');
-    
+
     try {
       setReviewLoading(true);
-      
+
       // 1. Fetch staging rows
       const rowsRes = await authFetch(`/api/officer/staging/batch/${batch.id}/rows`);
       if (!rowsRes.ok) throw new Error('Failed to load staging rows.');
       const rowsData = await rowsRes.json();
-      
+
       // 2. Fetch proposals
       const propRes = await authFetch(`/api/officer/staging/batch/${batch.id}/proposals`);
       if (!propRes.ok) throw new Error('Failed to load proposals.');
       const propData = await propRes.json();
-      
+
       setReviewProposals(propData);
-      
+
       const parsedRows = rowsData.map((row, index) => {
         let rawData = {};
         let errorsList = [];
@@ -2369,10 +2527,10 @@ const UploadPage = () => {
         } catch (e) {
           console.error("Failed to parse row validation_errors", e);
         }
-        
+
         // Find if there is any pending proposal for this row
         const pendingProp = propData.find(p => p.stagingId === row.stagingId && p.status === 'PENDING');
-        
+
         return {
           stagingId: row.stagingId,
           validationStatus: row.validationStatus,
@@ -2383,7 +2541,7 @@ const UploadPage = () => {
           ...rawData
         };
       });
-      
+
       setReviewStagingRows(parsedRows);
     } catch (err) {
       setReviewError(err.message || 'Error occurred while loading staging data.');
@@ -2401,7 +2559,7 @@ const UploadPage = () => {
       type: 'danger'
     });
     if (!confirmed) return;
-    
+
     try {
       const res = await authFetch(`/api/officer/staging/batch/${selectedReviewBatch.id}/row/${rowStagingId}/propose-delete`, {
         method: 'POST'
@@ -2426,12 +2584,12 @@ const UploadPage = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fields)
       });
-      
+
       if (!res.ok) {
         const body = await res.json();
         throw new Error(body.message || 'Failed to submit edit proposal.');
       }
-      
+
       showToast('Edit proposal submitted to Admin successfully!', 'success');
       setEditingStagingRow(null);
       handleSelectReviewBatch(selectedReviewBatch);
@@ -2904,7 +3062,7 @@ const UploadPage = () => {
       const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
       const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
       const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true || Number(r.ngenSourceCount) > 1 || Number(r.npaySourceCount) > 1;
-      
+
       const newCustomersCount = rows.filter(isNewCust).length;
       const noBillingDataCount = rows.filter(isNoBill).length;
       const duplicateCount = rows.filter(isDup).length;
@@ -3110,7 +3268,7 @@ const UploadPage = () => {
   const handleEditMismatch = async (field, accountNo, newValue) => {
     const sessionId = session?.sessionId;
     if (!sessionId) return;
-    const flagKeyByField = { name: 'nameMatch', unitRate: 'unitRateMatch', netType: 'netTypeMatch' };
+    const flagKeyByField = { name: 'nameMatch', unitRate: 'unitRateMatch', masterUnitRate: 'unitRateMatch', netType: 'netTypeMatch' };
     const flagKey = flagKeyByField[field];
     if (!flagKey) return;
     try {
@@ -3137,7 +3295,20 @@ const UploadPage = () => {
             patched.mainUnitRate = (n == null || isNaN(n)) ? null : n;
             patched.ngenUnitRate = patched.mainUnitRate;
           }
+          if (field === 'masterUnitRate') {
+            const n = (newValue === '' || newValue == null) ? null : Number(newValue);
+            patched.masterUnitRate = (n == null || isNaN(n)) ? null : n;
+            patched.unitRate = patched.masterUnitRate;
+          }
           if (field === 'netType') { patched.mainNetType = newValue; patched.ngenNetType = newValue; }
+          
+          if (patched.masterUnitRate != null && patched.mainUnitRate != null) {
+            const match = Math.abs(patched.masterUnitRate - patched.mainUnitRate) <= 1e-6;
+            patched.unitRateMatch = match ? 'MATCH' : 'MISMATCH';
+          } else {
+            patched.unitRateMatch = 'MATCH';
+          }
+
           return patched;
         });
         const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
@@ -3147,16 +3318,76 @@ const UploadPage = () => {
         return { ...prev, rows, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, validCount };
       });
       // If resolved, drop it from the relevant bulk-selection set.
-      if (data.resolved) {
+      if (data.resolved || newFlag === 'MATCH') {
         if (field === 'name') setNameMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
-        if (field === 'unitRate') setUnitRateMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
+        if (field === 'unitRate' || field === 'masterUnitRate') setUnitRateMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
         if (field === 'netType') setNetTypeMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
       }
       setEditingMismatch(null);
       setEditMismatchValue('');
       showToast(
-        data.resolved ? '✅ Mismatch resolved — record marked Valid.' : '✏️ Value updated — still a mismatch, kept in review.',
-        data.resolved ? 'success' : 'info'
+        (data.resolved || newFlag === 'MATCH') ? '✅ Mismatch resolved — record marked Valid.' : '✏️ Value updated — still a mismatch, kept in review.',
+        (data.resolved || newFlag === 'MATCH') ? 'success' : 'info'
+      );
+    } catch (e) {
+      showToast('Edit failed: ' + e.message, 'error');
+    } finally {
+      setEditMismatchSaving(false);
+    }
+  };
+
+  const handleEditBothUnitRates = async (accountNo, masterValue, mainValue) => {
+    const sessionId = session?.sessionId;
+    if (!sessionId) return;
+    try {
+      setEditMismatchSaving(true);
+      const fd = new FormData();
+      fd.append('accountNo', String(accountNo));
+      fd.append('field', 'bothUnitRates');
+      fd.append('newValue', `${masterValue ?? ''}|${mainValue ?? ''}`);
+      const res = await authFetch(`/api/officer/import/${sessionId}/edit-mismatch-field`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { showToast(data.message || 'Edit failed.', 'error'); return; }
+      const acc = String(accountNo).trim();
+      const newFlag = data.flag;
+
+      setMasterComparison(prev => {
+        if (!prev) return prev;
+        const rows = prev.rows.map(r => {
+          const a = r.accountNo != null ? String(r.accountNo).trim() : null;
+          if (a !== acc) return r;
+
+          const nMaster = (masterValue === '' || masterValue == null) ? null : Number(masterValue);
+          const nMain = (mainValue === '' || mainValue == null) ? null : Number(mainValue);
+
+          const patched = {
+            ...r,
+            masterUnitRate: (nMaster == null || isNaN(nMaster)) ? null : nMaster,
+            unitRate: (nMaster == null || isNaN(nMaster)) ? null : nMaster,
+            mainUnitRate: (nMain == null || isNaN(nMain)) ? null : nMain,
+            ngenUnitRate: (nMain == null || isNaN(nMain)) ? null : nMain,
+            unitRateMatch: newFlag
+          };
+
+          return patched;
+        });
+        const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
+        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
+        const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
+        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+        return { ...prev, rows, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, validCount };
+      });
+
+      if (data.resolved || newFlag === 'MATCH') {
+        setUnitRateMismatchSelected(prev => prev.filter(x => String(x).trim() !== acc));
+      }
+
+      setEditingMismatch(null);
+      setEditMasterRateValue('');
+      setEditMainRateValue('');
+      showToast(
+        (data.resolved || newFlag === 'MATCH') ? '✅ Unit Rate mismatch resolved — record marked Valid.' : '✏️ Unit Rates updated — still a mismatch, kept in review.',
+        (data.resolved || newFlag === 'MATCH') ? 'success' : 'info'
       );
     } catch (e) {
       showToast('Edit failed: ' + e.message, 'error');
@@ -3375,19 +3606,19 @@ const UploadPage = () => {
       <div style={{ marginTop: '1.25rem' }}>
         <button
           onClick={() => setShowDeletedLog(!showDeletedLog)}
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem', 
-            background: 'rgba(239,68,68,0.06)', 
-            border: '1px solid rgba(239,68,68,0.18)', 
-            borderRadius: 10, 
-            padding: '0.7rem 1.2rem', 
-            cursor: 'pointer', 
-            color: '#f87171', 
-            fontWeight: 600, 
-            fontSize: '0.84rem', 
-            width: '100%', 
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            background: 'rgba(239,68,68,0.06)',
+            border: '1px solid rgba(239,68,68,0.18)',
+            borderRadius: 10,
+            padding: '0.7rem 1.2rem',
+            cursor: 'pointer',
+            color: '#f87171',
+            fontWeight: 600,
+            fontSize: '0.84rem',
+            width: '100%',
             justifyContent: 'space-between',
             boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
             transition: 'all 0.2s ease'
@@ -3428,22 +3659,22 @@ const UploadPage = () => {
                     </td>
                     <td style={{ padding: '0.6rem 0.85rem' }}>
                       <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                        <button 
-                          onClick={() => handleRestoreRow(d)} 
+                        <button
+                          onClick={() => handleRestoreRow(d)}
                           title="Restore this record to the main list"
                           style={{ padding: '0.3rem 0.6rem', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
                         >
                           Restore
                         </button>
-                        <button 
-                          onClick={() => handleCorrectRow(d, true)} 
+                        <button
+                          onClick={() => handleCorrectRow(d, true)}
                           title="Edit and correct this record"
                           style={{ padding: '0.3rem 0.6rem', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
                         >
                           Edit
                         </button>
-                        <button 
-                          onClick={() => handlePermanentDeleteRow(d)} 
+                        <button
+                          onClick={() => handlePermanentDeleteRow(d)}
                           title="Permanently remove this record"
                           style={{ padding: '0.3rem 0.6rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
                         >
@@ -3463,16 +3694,52 @@ const UploadPage = () => {
 
   const renderStep1 = () => (
     <div>
-      {/* Info box */}
-      <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
-          <Info size={16} color="#818cf8" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>Step 1 — Master Data Upload</strong>
-            <br />
-            Upload the customer master data Excel sheet. Required columns:&nbsp;
-            <span style={{ color: '#818cf8' }}>Account No, Customer Name, Address, Ref. No., Cost Code, Mobile Number, Panel Capacity, Agreement Date, Bank Code, Branch Code, Bank Account No, Type, Unit Rate, Fix/Variable, Exp</span>
+      {/* Step 1 Info Box with Column Pills & Download Template matching Image 2 */}
+      <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: 16, padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', flex: 1 }}>
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Info size={18} color="#818cf8" />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white' }}>Step 1 — Master Data Upload</div>
+              <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                Upload the customer master data Excel sheet. Required columns:
+              </div>
+
+              {/* Column Pills */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginTop: '0.75rem' }}>
+                {[
+                  'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
+                  'Mobile Number', 'Panel Capacity', 'Capacity', 'Agreement Date',
+                  'Bank Code', 'Branch Code', 'Bank Account No', 'Type', 'Unit Rate',
+                  'Fix/Variable', 'Exp'
+                ].map(col => (
+                  <span key={col} style={{
+                    padding: '0.22rem 0.65rem', borderRadius: 16,
+                    background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.25)',
+                    color: '#a5b4fc', fontSize: '0.74rem', fontWeight: 600
+                  }}>
+                    {col}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
+
+          <button
+            onClick={() => {
+              showToast('Master Data Template download started...', 'info');
+            }}
+            style={{
+              padding: '0.5rem 1rem', borderRadius: 10,
+              background: 'rgba(99, 102, 241, 0.1)', border: '1px solid rgba(99, 102, 241, 0.3)',
+              color: '#818cf8', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+            }}
+          >
+            <Download size={14} /> Download Template
+          </button>
         </div>
       </div>
 
@@ -3522,11 +3789,12 @@ const UploadPage = () => {
       {/* Preview section */}
       {preview && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Valid" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={18} />} />
-            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
-            <StatCard label="Pending" value={preview.errorCount || 0} color={(preview.errorCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<Clock size={18} />} />
+          {/* Stat Cards Grid matching Image 2 style */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+            <StatCard label="Total Rows" value={preview.totalRows} color="#818cf8" icon={<FileText size={20} />} subtitle="Master data records" />
+            <StatCard label="Valid Records" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={20} />} subtitle="Passed schema check" />
+            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={20} />} subtitle="Account No conflicts" />
+            <StatCard label="Pending Errors" value={preview.errorCount || 0} color={(preview.errorCount || 0) > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={20} />} subtitle="Requires correction" />
           </div>
 
           {preview.globalErrors?.length > 0 && (
@@ -3895,19 +4163,21 @@ const UploadPage = () => {
       return String(m.display != null ? m.display : (m.ngen != null ? m.ngen : m.npay));
     };
     const dupFieldDefs = [
-      { key: 'sourceFile',     label: 'Source',          raw: r => dupNorm(r.sourceFile) + (r.sourceRowNum != null ? `#${r.sourceRowNum}` : ''),
-        render: r => r.sourceFile ? <span>{r.sourceFile}{r.sourceRowNum != null ? ` · row ${r.sourceRowNum}` : ''}</span> : '—' },
-      { key: 'prevReadingDate', label: 'Prev Reading',    raw: r => dupNorm(r.prevReadingDate), render: r => renderPlain(r.prevReadingDate) },
-      { key: 'currReadingDate', label: 'Curr Reading',    raw: r => dupNorm(r.currReadingDate), render: r => renderPlain(r.currReadingDate) },
-      { key: 'netType',         label: 'Net Type',        raw: r => dupNorm(r.ngenNetType ?? r.npayNetType ?? (r.mergedNetType && r.mergedNetType.display)), render: r => renderMergedType(r.mergedNetType) },
-      { key: 'kwhImport',       label: 'kWh Import',      raw: r => dupNorm(r.kwhImport), render: r => r.kwhImport ?? '—' },
-      { key: 'kwhExport',       label: 'kWh Export',      raw: r => dupNorm(r.kwhExport), render: r => r.kwhExport ?? '—' },
-      { key: 'kwhSales',        label: 'kWh Sales',       raw: r => dupNorm(r.kwhSales), render: r => r.kwhSales ?? '—' },
-      { key: 'unitRate',        label: 'Unit Rate',       raw: r => dupNorm(r.ngenUnitRate ?? r.unitRate), render: r => r.ngenUnitRate ?? r.unitRate ?? '—' },
-      { key: 'energyPurchase',  label: 'Energy Purchase', raw: r => dupNorm(dupMergedRaw(r.mergedEnergyPurchase)), render: r => renderMergedNum(r.mergedEnergyPurchase) },
-      { key: 'billSetOff',      label: 'Bill Set Off',    raw: r => dupNorm(dupMergedRaw(r.mergedBillSetOff)), render: r => renderMergedNum(r.mergedBillSetOff) },
-      { key: 'retentionMoney',  label: 'Retention',       raw: r => dupNorm(dupMergedRaw(r.mergedRetentionMoney)), render: r => renderMergedNum(r.mergedRetentionMoney) },
-      { key: 'payment',         label: 'Payment',         raw: r => dupNorm(dupMergedRaw(r.mergedPayment)), render: r => renderMergedNum(r.mergedPayment) },
+      {
+        key: 'sourceFile', label: 'Source', raw: r => dupNorm(r.sourceFile) + (r.sourceRowNum != null ? `#${r.sourceRowNum}` : ''),
+        render: r => r.sourceFile ? <span>{r.sourceFile}{r.sourceRowNum != null ? ` · row ${r.sourceRowNum}` : ''}</span> : '—'
+      },
+      { key: 'prevReadingDate', label: 'Prev Reading', raw: r => dupNorm(r.prevReadingDate), render: r => renderPlain(r.prevReadingDate) },
+      { key: 'currReadingDate', label: 'Curr Reading', raw: r => dupNorm(r.currReadingDate), render: r => renderPlain(r.currReadingDate) },
+      { key: 'netType', label: 'Net Type', raw: r => dupNorm(r.ngenNetType ?? r.npayNetType ?? (r.mergedNetType && r.mergedNetType.display)), render: r => renderMergedType(r.mergedNetType) },
+      { key: 'kwhImport', label: 'kWh Import', raw: r => dupNorm(r.kwhImport), render: r => r.kwhImport ?? '—' },
+      { key: 'kwhExport', label: 'kWh Export', raw: r => dupNorm(r.kwhExport), render: r => r.kwhExport ?? '—' },
+      { key: 'kwhSales', label: 'kWh Sales', raw: r => dupNorm(r.kwhSales), render: r => r.kwhSales ?? '—' },
+      { key: 'unitRate', label: 'Unit Rate', raw: r => dupNorm(r.ngenUnitRate ?? r.unitRate), render: r => r.ngenUnitRate ?? r.unitRate ?? '—' },
+      { key: 'energyPurchase', label: 'Energy Purchase', raw: r => dupNorm(dupMergedRaw(r.mergedEnergyPurchase)), render: r => renderMergedNum(r.mergedEnergyPurchase) },
+      { key: 'billSetOff', label: 'Bill Set Off', raw: r => dupNorm(dupMergedRaw(r.mergedBillSetOff)), render: r => renderMergedNum(r.mergedBillSetOff) },
+      { key: 'retentionMoney', label: 'Retention', raw: r => dupNorm(dupMergedRaw(r.mergedRetentionMoney)), render: r => renderMergedNum(r.mergedRetentionMoney) },
+      { key: 'payment', label: 'Payment', raw: r => dupNorm(dupMergedRaw(r.mergedPayment)), render: r => renderMergedNum(r.mergedPayment) },
     ];
     const dupTh = { padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' };
     const dupThDiff = { ...dupTh, color: '#f59e0b' };
@@ -4072,122 +4342,122 @@ const UploadPage = () => {
             <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
           </div>
         ) : (
-        <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['#', 'Account No', 'Name', 'Prev Reading', 'Curr Reading', 'Net Type', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Status', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row, i) => {
-                const rowKey = row.rowNum ?? row.accountNo ?? i;
-                const expanded = mainExpandedRow === rowKey;
-                const dupMembers = rowHasDuplicates(row) ? dupEntriesByAcc[String(row.accountNo ?? '—')] : null;
-                const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.rejectionReason || !!dupMembers;
-                return (
-                <React.Fragment key={rowKey}>
-                <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                  <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    {row.accountNo || '—'}
-                    {row.sourceFile && (
-                      <div style={{ fontFamily: 'inherit', fontSize: '0.58rem', fontWeight: 600, color: '#ec4899', marginTop: 2, letterSpacing: '0.02em' }}>
-                        {row.isDuplicateEntry ? '↳ ' : ''}{row.sourceFile}{row.sourceRowNum != null ? ` · row ${row.sourceRowNum}` : ''}
-                      </div>
-                    )}
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.prevReadingDate)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.currReadingDate)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderMergedType(row.mergedNetType)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.ngenUnitRate ?? row.unitRate ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedEnergyPurchase)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedBillSetOff)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedRetentionMoney)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedPayment)}</td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    <span style={{
-                      padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
-                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
-                    }}>{row.status}</span>
-                    {dupMembers && (
-                      <span style={{
-                        marginLeft: '0.35rem', padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                        background: 'rgba(236,72,153,0.15)', color: '#ec4899', display: 'inline-flex', alignItems: 'center', gap: '0.25rem'
-                      }}><Layers size={11} /> Duplicate (x{dupCountFor(row)})</span>
-                    )}
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
-                    <div style={{ display: 'flex', gap: '0.35rem' }}>
-                      <button onClick={() => handleMainEditRow(row)} title="Edit merged record"
-                        style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Pencil size={11} /> Edit
-                      </button>
-                      <button onClick={() => handleMainDeleteRow(row)} title="Delete merged record"
-                        style={{ padding: '0.22rem 0.5rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <Trash2 size={11} /> Delete
-                      </button>
-                    </div>
-                  </td>
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                  {['#', 'Account No', 'Name', 'Prev Reading', 'Curr Reading', 'Net Type', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Status', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
-                {expanded && hasDetail && (
-                  <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
-                    <td colSpan={16} style={{ padding: '0.75rem 1.25rem' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
-                        {row.rejectionReason && (
-                          <div style={{ color: '#f43f5e', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                            <XCircle size={12} /> <strong>Rejected:</strong> {row.rejectionReason}
+              </thead>
+              <tbody>
+                {filteredRows.map((row, i) => {
+                  const rowKey = row.rowNum ?? row.accountNo ?? i;
+                  const expanded = mainExpandedRow === rowKey;
+                  const dupMembers = rowHasDuplicates(row) ? dupEntriesByAcc[String(row.accountNo ?? '—')] : null;
+                  const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.rejectionReason || !!dupMembers;
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {row.accountNo || '—'}
+                          {row.sourceFile && (
+                            <div style={{ fontFamily: 'inherit', fontSize: '0.58rem', fontWeight: 600, color: '#ec4899', marginTop: 2, letterSpacing: '0.02em' }}>
+                              {row.isDuplicateEntry ? '↳ ' : ''}{row.sourceFile}{row.sourceRowNum != null ? ` · row ${row.sourceRowNum}` : ''}
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.prevReadingDate)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.currReadingDate)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderMergedType(row.mergedNetType)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.ngenUnitRate ?? row.unitRate ?? <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedEnergyPurchase)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedBillSetOff)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedRetentionMoney)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>{renderMergedNum(row.mergedPayment)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          <span style={{
+                            padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
+                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
+                            color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
+                          }}>{row.status}</span>
+                          {dupMembers && (
+                            <span style={{
+                              marginLeft: '0.35rem', padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
+                              background: 'rgba(236,72,153,0.15)', color: '#ec4899', display: 'inline-flex', alignItems: 'center', gap: '0.25rem'
+                            }}><Layers size={11} /> Duplicate (x{dupCountFor(row)})</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                          <div style={{ display: 'flex', gap: '0.35rem' }}>
+                            <button onClick={() => handleMainEditRow(row)} title="Edit merged record"
+                              style={{ padding: '0.22rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <Pencil size={11} /> Edit
+                            </button>
+                            <button onClick={() => handleMainDeleteRow(row)} title="Delete merged record"
+                              style={{ padding: '0.22rem 0.5rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: 5, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+                              <Trash2 size={11} /> Delete
+                            </button>
                           </div>
-                        )}
-                        {row.duplicateReason && (
-                          <div style={{ color: '#ec4899', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                            <AlertTriangle size={12} /> <strong>Duplicate:</strong> {row.duplicateReason}
-                          </div>
-                        )}
-                        {row.sourceFile && (
-                          <div style={{ color: '#ec4899' }}>
-                            <strong>Source:</strong> {row.sourceFile}{row.sourceRowNum != null ? ` (row ${row.sourceRowNum})` : ''}{row.duplicateOccurrence ? ` — ${row.duplicateOccurrence}` : ''}
-                            {row.originalRowNum != null && !row.isOriginalDuplicate ? ` · original at row ${row.originalRowNum}` : ''}
-                          </div>
-                        )}
-                        {row.errors?.length > 0 && (
-                          <div style={{ color: '#ef4444' }}><strong>Errors:</strong> {row.errors.join('; ')}</div>
-                        )}
-                        {row.mismatchFields?.length > 0 && (
-                          <div style={{ color: '#f59e0b' }}><strong>Mismatched fields:</strong> {row.mismatchFields.join(', ')}</div>
-                        )}
-                        {row.missingFields?.length > 0 && (
-                          <div style={{ color: '#ef4444' }}><strong>Missing values:</strong> {row.missingFields.join(', ')}</div>
-                        )}
-                        {row.warnings?.length > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                            <strong style={{ color: 'var(--text-secondary)' }}>All warnings:</strong>
-                            {row.warnings.map((w, wi) => (
-                              <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
-                                <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        {dupMembers && renderDuplicateDetails(row, dupMembers)}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        </td>
+                      </tr>
+                      {expanded && hasDetail && (
+                        <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
+                          <td colSpan={16} style={{ padding: '0.75rem 1.25rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                              {row.rejectionReason && (
+                                <div style={{ color: '#f43f5e', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                  <XCircle size={12} /> <strong>Rejected:</strong> {row.rejectionReason}
+                                </div>
+                              )}
+                              {row.duplicateReason && (
+                                <div style={{ color: '#ec4899', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                  <AlertTriangle size={12} /> <strong>Duplicate:</strong> {row.duplicateReason}
+                                </div>
+                              )}
+                              {row.sourceFile && (
+                                <div style={{ color: '#ec4899' }}>
+                                  <strong>Source:</strong> {row.sourceFile}{row.sourceRowNum != null ? ` (row ${row.sourceRowNum})` : ''}{row.duplicateOccurrence ? ` — ${row.duplicateOccurrence}` : ''}
+                                  {row.originalRowNum != null && !row.isOriginalDuplicate ? ` · original at row ${row.originalRowNum}` : ''}
+                                </div>
+                              )}
+                              {row.errors?.length > 0 && (
+                                <div style={{ color: '#ef4444' }}><strong>Errors:</strong> {row.errors.join('; ')}</div>
+                              )}
+                              {row.mismatchFields?.length > 0 && (
+                                <div style={{ color: '#f59e0b' }}><strong>Mismatched fields:</strong> {row.mismatchFields.join(', ')}</div>
+                              )}
+                              {row.missingFields?.length > 0 && (
+                                <div style={{ color: '#ef4444' }}><strong>Missing values:</strong> {row.missingFields.join(', ')}</div>
+                              )}
+                              {row.warnings?.length > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                  <strong style={{ color: 'var(--text-secondary)' }}>All warnings:</strong>
+                                  {row.warnings.map((w, wi) => (
+                                    <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                      <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {dupMembers && renderDuplicateDetails(row, dupMembers)}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {/* ── Edit merged record modal ── */}
@@ -4582,7 +4852,8 @@ const UploadPage = () => {
                           {unitRateMismatchRows.map((row, i) => {
                             const acc = String(row.accountNo);
                             const checked = unitRateMismatchSelected.includes(acc);
-                            const isEditing = editingMismatch && editingMismatch.field === 'unitRate' && String(editingMismatch.accountNo) === acc;
+                            const isEditingThisRow = editingMismatch && editingMismatch.field === 'unitRate' && String(editingMismatch.accountNo) === acc;
+
                             return (
                               <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
@@ -4590,11 +4861,17 @@ const UploadPage = () => {
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.masterUnitRate ?? '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>
-                                  {isEditing ? (
-                                    <input type="number" step="any" value={editMismatchValue} autoFocus onChange={e => setEditMismatchValue(e.target.value)}
-                                      onKeyDown={e => { if (e.key === 'Enter') handleEditMismatch('unitRate', acc, editMismatchValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMismatchValue(''); } }}
+                                  {isEditingThisRow ? (
+                                    <input type="number" step="any" value={editMasterRateValue} placeholder="Master Rate" onChange={e => setEditMasterRateValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleEditBothUnitRates(acc, editMasterRateValue, editMainRateValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMasterRateValue(''); setEditMainRateValue(''); } }}
+                                      style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                                  ) : (row.masterUnitRate ?? '—')}
+                                </td>
+                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>
+                                  {isEditingThisRow ? (
+                                    <input type="number" step="any" value={editMainRateValue} placeholder="Main Rate" onChange={e => setEditMainRateValue(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') handleEditBothUnitRates(acc, editMasterRateValue, editMainRateValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMasterRateValue(''); setEditMainRateValue(''); } }}
                                       style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
                                   ) : (row.mainUnitRate ?? '—')}
                                 </td>
@@ -4602,13 +4879,13 @@ const UploadPage = () => {
                                   <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Unit Rate Mismatch</span>
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                  {isEditing ? (
+                                  {isEditingThisRow ? (
                                     <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
-                                      <button type="button" onClick={() => handleEditMismatch('unitRate', acc, editMismatchValue)} disabled={editMismatchSaving}
+                                      <button type="button" onClick={() => handleEditBothUnitRates(acc, editMasterRateValue, editMainRateValue)} disabled={editMismatchSaving}
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: editMismatchSaving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: editMismatchSaving ? 0.6 : 1 }}>
                                         {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
                                       </button>
-                                      <button type="button" onClick={() => { setEditingMismatch(null); setEditMismatchValue(''); }} disabled={editMismatchSaving}
+                                      <button type="button" onClick={() => { setEditingMismatch(null); setEditMasterRateValue(''); setEditMainRateValue(''); }} disabled={editMismatchSaving}
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                                         Cancel
                                       </button>
@@ -4619,9 +4896,9 @@ const UploadPage = () => {
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: unitRateApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: unitRateApproving ? 0.6 : 1 }}>
                                         <CheckCircle size={12} /> Approve Unit Rate
                                       </button>
-                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'unitRate', accountNo: acc }); setEditMismatchValue(row.mainUnitRate ?? ''); }}
+                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'unitRate', accountNo: acc }); setEditMasterRateValue(row.masterUnitRate ?? ''); setEditMainRateValue(row.mainUnitRate ?? ''); }}
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
-                                        <Pencil size={12} /> Edit Unit Rate
+                                        <Pencil size={12} /> Edit Unit Rates
                                       </button>
                                     </div>
                                   )}
@@ -4757,10 +5034,10 @@ const UploadPage = () => {
         ) : masterComparisonFilter === 'AGREEMENT_EXPIRY' ? (
           (() => {
             const statusMeta = {
-              EXPIRED:       { label: 'Expired',           color: '#ef4444', bg: 'rgba(239,68,68,0.15)',  rowBg: 'rgba(239,68,68,0.07)' },
-              EXPIRING_SOON: { label: 'Expiring Soon',     color: '#f97316', bg: 'rgba(249,115,22,0.15)', rowBg: 'rgba(249,115,22,0.07)' },
-              ACTIVE:        { label: 'Active',            color: '#10b981', bg: 'rgba(16,185,129,0.15)', rowBg: 'rgba(16,185,129,0.04)' },
-              UNKNOWN:       { label: 'No Agreement Date', color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.08)', rowBg: 'transparent' }
+              EXPIRED: { label: 'Expired', color: '#ef4444', bg: 'rgba(239,68,68,0.15)', rowBg: 'rgba(239,68,68,0.07)' },
+              EXPIRING_SOON: { label: 'Expiring Soon', color: '#f97316', bg: 'rgba(249,115,22,0.15)', rowBg: 'rgba(249,115,22,0.07)' },
+              ACTIVE: { label: 'Active', color: '#10b981', bg: 'rgba(16,185,129,0.15)', rowBg: 'rgba(16,185,129,0.04)' },
+              UNKNOWN: { label: 'No Agreement Date', color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.08)', rowBg: 'transparent' }
             };
             const fmtDate = (d) => d ? d.toISOString().slice(0, 10) : '—';
             const list = agreementRows.filter(r => agreementExpiryFilter === 'ALL' ? true : r.agreementStatus === agreementExpiryFilter);
@@ -5033,131 +5310,133 @@ const UploadPage = () => {
             <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
           </div>
         ) : (
-        <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Unit Rate Check', 'Status', 'Issues'].map(h => (
-                  <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRows.map((row, i) => {
-                const rowKey = row.rowNum ?? row.accountNo ?? i;
-                const expanded = comparisonExpandedRow === rowKey;
-                const errorCount = row.errors?.length || 0;
-                const warningCount = row.warnings?.length || 0;
-                const hasDetail = errorCount + warningCount > 0;
-                return (
-                <React.Fragment key={rowKey}>
-                <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'ERROR' ? '3px solid #ef4444' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerAddress || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.costCode || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.mobileNo || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.panelCapacity ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.agreementDate || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.bankCode || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.branchCode || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.bankAccountNo || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.solarType || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.unitRate ?? row.effectiveUnitRate ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.tariffType || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.billingMode || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.energyPurchase ?? row.salesAmount ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.billSetOff ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.retentionMoney ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? row.paymentSettled ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.outstandingBalance ?? '—'}</td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    {row.masterMatchStatus === 'MATCHED' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.72rem' }}>Matched</span>
-                      : row.masterMatchStatus === 'NOT_FOUND' ? <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.72rem' }}>Not Found</span>
-                      : row.masterMatchStatus === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.72rem' }}>Mismatch</span>
-                      : '—'}
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    {row.netTypeMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
-                      : row.netTypeMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
-                      : '—'}
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    {row.nameMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
-                      : row.nameMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
-                      : '—'}
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    {row.unitRateMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
-                      : row.unitRateMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
-                      : '—'}
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem' }}>
-                    <span style={{
-                      padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                      background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)',
-                      color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : 'var(--text-muted)'
-                    }}>{row.status}</span>
-                  </td>
-                  <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                    {hasDetail ? (
-                      <button type="button" onClick={(e) => { e.stopPropagation(); setComparisonExpandedRow(expanded ? null : rowKey); }}
-                        title={expanded ? 'Hide validation details' : 'View validation details'}
-                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700,
-                          background: errorCount > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
-                          border: errorCount > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(245,158,11,0.3)',
-                          color: errorCount > 0 ? '#ef4444' : '#f59e0b' }}>
-                        {errorCount > 0 ? <XCircle size={12} /> : <AlertTriangle size={12} />}
-                        {errorCount > 0 ? `${errorCount} Error${errorCount > 1 ? 's' : ''}` : `${warningCount} Warning${warningCount > 1 ? 's' : ''}`}
-                        <span style={{ opacity: 0.7, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
-                      </button>
-                    ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
-                  </td>
+          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <thead>
+                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                  {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Unit Rate Check', 'Status', 'Issues'].map(h => (
+                    <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
-                {expanded && hasDetail && (
-                  <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
-                    <td colSpan={31} style={{ padding: '0.75rem 1.25rem' }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.72rem' }}>
-                          {row.refNo && row.refNo !== '—' ? `Ref No ${row.refNo}` : `Account No ${row.accountNo || '—'}`} — validation details
-                        </div>
-                        {errorCount > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                            <strong style={{ color: '#ef4444' }}>Errors:</strong>
-                            {row.errors.map((err, idx) => (
-                              <div key={idx} style={{ color: '#ef4444', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
-                                <XCircle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {err}
+              </thead>
+              <tbody>
+                {filteredRows.map((row, i) => {
+                  const rowKey = row.rowNum ?? row.accountNo ?? i;
+                  const expanded = comparisonExpandedRow === rowKey;
+                  const errorCount = row.errors?.length || 0;
+                  const warningCount = row.warnings?.length || 0;
+                  const hasDetail = errorCount + warningCount > 0;
+                  return (
+                    <React.Fragment key={rowKey}>
+                      <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'ERROR' ? '3px solid #ef4444' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerAddress || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.costCode || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.mobileNo || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.panelCapacity ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.agreementDate || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.bankCode || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.branchCode || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', fontFamily: 'monospace' }}>{row.bankAccountNo || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.solarType || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.unitRate ?? row.effectiveUnitRate ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.tariffType || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.billingMode || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.prevReadingDate || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{row.currReadingDate || '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhImport ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhExport ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.kwhSales ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.energyPurchase ?? row.salesAmount ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.billSetOff ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.retentionMoney ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.payment ?? row.paymentSettled ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>{row.outstandingBalance ?? '—'}</td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          {row.masterMatchStatus === 'MATCHED' ? <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.72rem' }}>Matched</span>
+                            : row.masterMatchStatus === 'NOT_FOUND' ? <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.72rem' }}>Not Found</span>
+                              : row.masterMatchStatus === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontWeight: 600, fontSize: '0.72rem' }}>Mismatch</span>
+                                : '—'}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          {row.netTypeMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
+                            : row.netTypeMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                              : '—'}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          {row.nameMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
+                            : row.nameMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                              : '—'}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          {row.unitRateMatch === 'MATCH' ? <span style={{ color: '#10b981', fontSize: '0.72rem', fontWeight: 600 }}>OK</span>
+                            : row.unitRateMatch === 'MISMATCH' ? <span style={{ color: '#f59e0b', fontSize: '0.72rem', fontWeight: 600 }}>Mismatch</span>
+                              : '—'}
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem' }}>
+                          <span style={{
+                            padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
+                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)',
+                            color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : 'var(--text-muted)'
+                          }}>{row.status}</span>
+                        </td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                          {hasDetail ? (
+                            <button type="button" onClick={(e) => { e.stopPropagation(); setComparisonExpandedRow(expanded ? null : rowKey); }}
+                              title={expanded ? 'Hide validation details' : 'View validation details'}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700,
+                                background: errorCount > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
+                                border: errorCount > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(245,158,11,0.3)',
+                                color: errorCount > 0 ? '#ef4444' : '#f59e0b'
+                              }}>
+                              {errorCount > 0 ? <XCircle size={12} /> : <AlertTriangle size={12} />}
+                              {errorCount > 0 ? `${errorCount} Error${errorCount > 1 ? 's' : ''}` : `${warningCount} Warning${warningCount > 1 ? 's' : ''}`}
+                              <span style={{ opacity: 0.7, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
+                            </button>
+                          ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
+                        </td>
+                      </tr>
+                      {expanded && hasDetail && (
+                        <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
+                          <td colSpan={31} style={{ padding: '0.75rem 1.25rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                              <div style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.72rem' }}>
+                                {row.refNo && row.refNo !== '—' ? `Ref No ${row.refNo}` : `Account No ${row.accountNo || '—'}`} — validation details
                               </div>
-                            ))}
-                          </div>
-                        )}
-                        {warningCount > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                            <strong style={{ color: '#f59e0b' }}>Warnings:</strong>
-                            {row.warnings.map((w, wi) => (
-                              <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
-                                <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-                </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                              {errorCount > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                  <strong style={{ color: '#ef4444' }}>Errors:</strong>
+                                  {row.errors.map((err, idx) => (
+                                    <div key={idx} style={{ color: '#ef4444', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                      <XCircle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {err}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {warningCount > 0 && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                                  <strong style={{ color: '#f59e0b' }}>Warnings:</strong>
+                                  {row.warnings.map((w, wi) => (
+                                    <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                      <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     );
@@ -5268,7 +5547,7 @@ const UploadPage = () => {
                       <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)' }}>{row.index}</td>
                       <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
                       <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
-                      
+
                       {isCustomerBatch ? (
                         <>
                           <td style={{ padding: '0.6rem 0.9rem', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{renderCell(row.customerAddress)}</td>
@@ -5532,77 +5811,94 @@ const UploadPage = () => {
   // ════════════════════════════════════════════════════════════════════════
   return (
     <div style={{ padding: '2rem', maxWidth: 1100, margin: '0 auto' }}>
-      {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'linear-gradient(135deg,#6366f1,#4f46e5)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Upload size={20} color="white" />
-            </div>
-            Excel Import Wizard
-          </h1>
-          <p style={{ margin: '0.35rem 0 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-            6-step sequential data import: Master Data → CEB Assist → NGEN → NPAY → Main Dataset → Finalize
-          </p>
-          {(billingContext.month || billingContext.division) && (
-            <div style={{ marginTop: '0.6rem', display: 'inline-flex', alignItems: 'center', gap: '0.45rem', padding: '0.4rem 0.85rem', borderRadius: 999, background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.35)', fontSize: '0.76rem', fontWeight: 700, color: '#a5b4fc' }}>
-              <Calendar size={13} /> {billingContext.month || 'Billing month from readings'}
-              {billingContext.division && (
-                <>
-                  <span style={{ opacity: 0.5 }}>·</span>
-                  <MapPin size={13} /> {billingContext.division} Division
-                </>
-              )}
-            </div>
-          )}
+      {/* Top Breadcrumb Header Bar matching Image 2 */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', color: '#94a3b8' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#cbd5e1' }}>
+            <Upload size={15} color="#818cf8" />
+            <span>Upload Data</span>
+          </div>
+          <span style={{ color: '#64748b' }}>›</span>
+          <span style={{ color: 'white', fontWeight: 600 }}>
+            {session?.sessionId ? `Multi-File Import (Session ${session.sessionId})` : 'Multi-File Import (Session 150)'}
+          </span>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <button onClick={() => navigate('/monthly-directory')} title="Back to the Monthly Customer Directory" style={{
-            padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+          <button onClick={() => navigate('/monthly-directory')} title="Back to Monthly Directory" style={{
+            padding: '0.45rem 0.95rem', borderRadius: 10, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
             background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)',
-            color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem'
+            color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '0.4rem'
           }}>
-            <ArrowLeft size={14} /> Customer Directory
+            <ArrowLeft size={13} /> Directory
           </button>
-          <button onClick={() => { setActiveView('wizard'); }} style={{
-            padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
-            background: activeView === 'wizard' ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${activeView === 'wizard' ? 'rgba(99,102,241,0.4)' : 'var(--border-color)'}`,
-            color: activeView === 'wizard' ? '#818cf8' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem'
-          }}>
-            <Layers size={14} /> Import Wizard
+
+          {/* Theme toggle */}
+          <button title="Toggle Theme" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#cbd5e1' }}>
+            <Sun size={17} />
           </button>
-          <button onClick={() => { setActiveView('history'); fetchHistory(); }} style={{
-            padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer',
-            background: activeView === 'history' ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.04)',
-            border: `1px solid ${activeView === 'history' ? 'rgba(99,102,241,0.4)' : 'var(--border-color)'}`,
-            color: activeView === 'history' ? '#818cf8' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '0.4rem'
-          }}>
-            <Clock size={14} /> Upload History
-          </button>
+
+          {/* Notification Bell */}
+          <div style={{ position: 'relative' }}>
+            <button title="Notifications" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#cbd5e1' }}>
+              <Bell size={17} />
+            </button>
+            <span style={{ position: 'absolute', top: -3, right: -3, width: 18, height: 18, borderRadius: '50%', background: '#6366f1', color: 'white', fontSize: '0.68rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>3</span>
+          </div>
+
+          {/* User Avatar Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', padding: '0.3rem 0.75rem', borderRadius: 30 }}>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontSize: '0.78rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              AD
+            </div>
+            <div style={{ fontSize: '0.78rem' }}>
+              <div style={{ fontWeight: 700, color: 'white', lineHeight: 1.2 }}>{user?.username || 'admin'}</div>
+              <div style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{user?.role || 'Administrator'}</div>
+            </div>
+          </div>
         </div>
       </div>
 
       {activeView === 'history' ? renderHistory() : activeView === 'staged-review' ? renderStagedReview() : (
-        <div className="card" style={{ padding: '2rem', borderRadius: 16 }}>
-          {/* Rejection Alert Banner */}
+        <div className="card" style={{ padding: '2rem', borderRadius: 20, background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.4)' }}>
+          {/* Rejection Alert Banner matching Image 2 */}
           {latestRejected && wizardStep === 1 && !session && (
-            <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.5rem', marginBottom: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><AlertTriangle size={18} color="#ef4444" /></div>
+            <div style={{
+              background: 'radial-gradient(circle at 10% 20%, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
+              border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 16,
+              padding: '1.25rem 1.5rem', marginBottom: '1.75rem',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.18)', border: '1px solid rgba(239, 68, 68, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <AlertTriangle size={22} color="#ef4444" />
+                </div>
                 <div>
-                  <div style={{ fontWeight: 700, color: 'white', fontSize: '0.92rem' }}>Import Batch Rejected by Admin</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Batch: <strong>{latestRejected.filename}</strong> was rejected.</div>
+                  <div style={{ fontWeight: 700, color: 'white', fontSize: '1rem', letterSpacing: '-0.2px' }}>
+                    Import Batch Rejected by Admin
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: '0.2rem' }}>
+                    Batch: <strong>{latestRejected.filename || 'Multi-File Import (Session 150)'}</strong> was rejected.
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                    Please correct the issues in your Excel sheets and start a new import session below.
+                  </div>
                 </div>
               </div>
-              {latestRejected.rejectionReason && (
-                <div style={{ background: 'rgba(239, 68, 68, 0.04)', border: '1px solid rgba(239, 68, 68, 0.12)', borderRadius: 8, padding: '0.75rem 1rem', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  <strong>Reason:</strong> {latestRejected.rejectionReason}
-                </div>
-              )}
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                Please correct the issues in your Excel sheets and start a new import session below.
-              </div>
+
+              <button
+                onClick={() => {
+                  showToast(latestRejected.rejectionReason ? `Rejection details: ${latestRejected.rejectionReason}` : 'Batch was rejected during review by Administrator.', 'warning');
+                }}
+                style={{
+                  padding: '0.5rem 1rem', borderRadius: 8,
+                  background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)',
+                  color: '#f87171', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+                }}
+              >
+                View Rejection Details <ExternalLink size={13} />
+              </button>
             </div>
           )}
 
@@ -5628,28 +5924,32 @@ const UploadPage = () => {
           {wizardStep === 5 && renderStep5()}
           {wizardStep === 6 && renderStep6()}
 
-          {/* Navigation */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {/* Wizard Bottom Footer Bar matching Image 2 */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 500 }}>
+              Step {wizardStep} of 6 — <strong style={{ color: 'white' }}>{WIZARD_STEPS[wizardStep - 1].label}</strong>
+            </div>
+
+            <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center' }}>
               {wizardStep > 1 && isStepAccessible(wizardStep - 1) && (
                 <button onClick={() => setWizardStep(wizardStep - 1)}
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.5rem 1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', borderRadius: 12, padding: '0.6rem 1.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}>
                   ← Back
                 </button>
               )}
               {wizardStep < 6 && isStepAccessible(wizardStep + 1) && (
                 <button onClick={() => setWizardStep(wizardStep + 1)}
-                  style={{ background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 10, padding: '0.5rem 1.1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 600 }}>
+                  style={{
+                    background: 'linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)',
+                    border: 'none', color: 'white', borderRadius: 12, padding: '0.65rem 2rem',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
+                    fontSize: '0.88rem', fontWeight: 700, boxShadow: '0 4px 16px rgba(99,102,241,0.4)',
+                    transition: 'all 0.2s ease'
+                  }}>
                   Next →
                 </button>
               )}
             </div>
-
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              Step {wizardStep} of 6 — {WIZARD_STEPS[wizardStep - 1].label}
-            </div>
-
-            <div />
           </div>
         </div>
       )}
@@ -5688,126 +5988,126 @@ const UploadPage = () => {
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Correct Row #{correctingRow.rowNum || correctingRow.accountNo}</h3>
               <button onClick={() => setCorrectingRow(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.75rem' }}>
               {wizardStep === 1 && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxHeight: '55vh', overflowY: 'auto', paddingRight: '0.25rem' }}>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.accountNo || ''} 
-                      onChange={e => { clearFieldHighlight('accountNo'); setCorrectingFields(p => ({ ...p, accountNo: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.accountNo || ''}
+                      onChange={e => { clearFieldHighlight('accountNo'); setCorrectingFields(p => ({ ...p, accountNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('accountNo')}
-                      style={getFieldInputStyle('accountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('accountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.customerName || ''} 
-                      onChange={e => { clearFieldHighlight('customerName'); setCorrectingFields(p => ({ ...p, customerName: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.customerName || ''}
+                      onChange={e => { clearFieldHighlight('customerName'); setCorrectingFields(p => ({ ...p, customerName: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('customerName')}
-                      style={getFieldInputStyle('customerName', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('customerName', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Address</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.customerAddress || ''} 
-                      onChange={e => { clearFieldHighlight('customerAddress'); setCorrectingFields(p => ({ ...p, customerAddress: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.customerAddress || ''}
+                      onChange={e => { clearFieldHighlight('customerAddress'); setCorrectingFields(p => ({ ...p, customerAddress: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('customerAddress')}
-                      style={getFieldInputStyle('customerAddress', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('customerAddress', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Ref. No.</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.refNo || ''} 
-                      onChange={e => { clearFieldHighlight('refNo'); setCorrectingFields(p => ({ ...p, refNo: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.refNo || ''}
+                      onChange={e => { clearFieldHighlight('refNo'); setCorrectingFields(p => ({ ...p, refNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('refNo')}
-                      style={getFieldInputStyle('refNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('refNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Cost Code</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.costCode || ''} 
-                      onChange={e => { clearFieldHighlight('costCode'); setCorrectingFields(p => ({ ...p, costCode: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.costCode || ''}
+                      onChange={e => { clearFieldHighlight('costCode'); setCorrectingFields(p => ({ ...p, costCode: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('costCode')}
-                      style={getFieldInputStyle('costCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('costCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.mobileNo || ''} 
-                      onChange={e => { clearFieldHighlight('mobileNo'); setCorrectingFields(p => ({ ...p, mobileNo: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.mobileNo || ''}
+                      onChange={e => { clearFieldHighlight('mobileNo'); setCorrectingFields(p => ({ ...p, mobileNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('mobileNo')}
-                      style={getFieldInputStyle('mobileNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('mobileNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Panel Capacity (kW)</label>
-                    <input 
-                      type="number" 
-                      step="0.01" 
-                      value={correctingFields.panelCapacity !== undefined && correctingFields.panelCapacity !== null ? correctingFields.panelCapacity : ''} 
-                      onChange={e => { clearFieldHighlight('panelCapacity'); setCorrectingFields(p => ({ ...p, panelCapacity: e.target.value === '' ? '' : parseFloat(e.target.value) })); }} 
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={correctingFields.panelCapacity !== undefined && correctingFields.panelCapacity !== null ? correctingFields.panelCapacity : ''}
+                      onChange={e => { clearFieldHighlight('panelCapacity'); setCorrectingFields(p => ({ ...p, panelCapacity: e.target.value === '' ? '' : parseFloat(e.target.value) })); }}
                       onFocus={() => clearFieldHighlight('panelCapacity')}
-                      style={getFieldInputStyle('panelCapacity', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('panelCapacity', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Agreement Date (YYYY-MM-DD)</label>
-                    <input 
-                      type="date" 
-                      value={correctingFields.agreementDate || ''} 
-                      onChange={e => { clearFieldHighlight('agreementDate'); setCorrectingFields(p => ({ ...p, agreementDate: e.target.value })); }} 
+                    <input
+                      type="date"
+                      value={correctingFields.agreementDate || ''}
+                      onChange={e => { clearFieldHighlight('agreementDate'); setCorrectingFields(p => ({ ...p, agreementDate: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('agreementDate')}
-                      style={getFieldInputStyle('agreementDate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('agreementDate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Code</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.bankCode || ''} 
-                      onChange={e => { clearFieldHighlight('bankCode'); setCorrectingFields(p => ({ ...p, bankCode: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.bankCode || ''}
+                      onChange={e => { clearFieldHighlight('bankCode'); setCorrectingFields(p => ({ ...p, bankCode: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('bankCode')}
-                      style={getFieldInputStyle('bankCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('bankCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Branch Code</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.branchCode || ''} 
-                      onChange={e => { clearFieldHighlight('branchCode'); setCorrectingFields(p => ({ ...p, branchCode: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.branchCode || ''}
+                      onChange={e => { clearFieldHighlight('branchCode'); setCorrectingFields(p => ({ ...p, branchCode: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('branchCode')}
-                      style={getFieldInputStyle('branchCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('branchCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Account No</label>
-                    <input 
-                      type="text" 
-                      value={correctingFields.bankAccountNo || ''} 
-                      onChange={e => { clearFieldHighlight('bankAccountNo'); setCorrectingFields(p => ({ ...p, bankAccountNo: e.target.value })); }} 
+                    <input
+                      type="text"
+                      value={correctingFields.bankAccountNo || ''}
+                      onChange={e => { clearFieldHighlight('bankAccountNo'); setCorrectingFields(p => ({ ...p, bankAccountNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('bankAccountNo')}
-                      style={getFieldInputStyle('bankAccountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('bankAccountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
-                    <select 
-                      value={correctingFields.solarType || ''} 
-                      onChange={e => { clearFieldHighlight('solarType'); setCorrectingFields(p => { const next = { ...p, solarType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }} 
+                    <select
+                      value={normalizeSolarTypeOption(correctingFields.solarType) || ''}
+                      onChange={e => { clearFieldHighlight('solarType'); setCorrectingFields(p => { const next = { ...p, solarType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }}
                       onFocus={() => clearFieldHighlight('solarType')}
                       style={getFieldInputStyle('solarType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(15, 23, 42, 0.95)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', appearance: 'auto' })}
                     >
@@ -5820,20 +6120,20 @@ const UploadPage = () => {
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
-                    <input 
-                      type="number" 
-                      step="0.001" 
-                      value={correctingFields.unitRate !== undefined && correctingFields.unitRate !== null ? correctingFields.unitRate : ''} 
-                      onChange={e => { clearFieldHighlight('unitRate'); setCorrectingFields(p => ({ ...p, unitRate: e.target.value === '' ? '' : parseFloat(e.target.value) })); }} 
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={correctingFields.unitRate !== undefined && correctingFields.unitRate !== null ? correctingFields.unitRate : ''}
+                      onChange={e => { clearFieldHighlight('unitRate'); setCorrectingFields(p => ({ ...p, unitRate: e.target.value === '' ? '' : parseFloat(e.target.value) })); }}
                       onFocus={() => clearFieldHighlight('unitRate')}
-                      style={getFieldInputStyle('unitRate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })} 
+                      style={getFieldInputStyle('unitRate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Fix/Variable</label>
-                    <select 
-                      value={correctingFields.tariffType || ''} 
-                      onChange={e => { clearFieldHighlight('tariffType'); setCorrectingFields(p => { const next = { ...p, tariffType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }} 
+                    <select
+                      value={normalizeTariffType(correctingFields.tariffType) || ''}
+                      onChange={e => { clearFieldHighlight('tariffType'); setCorrectingFields(p => { const next = { ...p, tariffType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }}
                       onFocus={() => clearFieldHighlight('tariffType')}
                       style={getFieldInputStyle('tariffType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(15, 23, 42, 0.95)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', appearance: 'auto' })}
                     >
@@ -5848,7 +6148,7 @@ const UploadPage = () => {
                   </div>
                 </div>
               )}
-              
+
               {wizardStep === 2 && (
                 <>
                   <div>
@@ -5867,7 +6167,7 @@ const UploadPage = () => {
                   </div>
                 </>
               )}
-              
+
               {wizardStep === 3 && (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -5936,7 +6236,7 @@ const UploadPage = () => {
                 </>
               )}
             </div>
-            
+
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button onClick={() => setCorrectingRow(null)} style={{ flex: 1, padding: '0.65rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
               <button onClick={handleSaveCorrection} style={{ flex: 1, padding: '0.65rem', background: 'var(--primary)', border: 'none', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Save Edits</button>
@@ -6005,7 +6305,7 @@ const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) =
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
-          
+
           {row.errors && row.errors.length > 0 && (
             <div style={{ padding: '0.75rem 1rem', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: '8px', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>

@@ -2510,7 +2510,7 @@ public class MultiFileImportService {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
                 .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
 
-        if (!"MAIN_DATASET_APPROVED".equals(session.getStage())) {
+        if (!"MAIN_DATASET_APPROVED".equals(session.getStage()) && !"MASTER_COMPARISON_GENERATED".equals(session.getStage())) {
             throw new IllegalStateException("Main Dataset must be approved first. Current stage: " + session.getStage());
         }
 
@@ -2581,8 +2581,7 @@ public class MultiFileImportService {
                 String masterRefNo = masterCust.get("refNo") != null ? masterCust.get("refNo").toString() : "—";
                 String masterCostCode = masterCust.get("costCode") != null ? masterCust.get("costCode").toString() : "—";
                 String masterMobile = masterCust.get("mobileNo") != null ? masterCust.get("mobileNo").toString() : "—";
-                Double masterPanelCap = masterCust.get("panelCapacity") != null && !masterCust.get("panelCapacity").toString().isEmpty()
-                        ? ((Number) masterCust.get("panelCapacity")).doubleValue() : null;
+                Double masterPanelCap = parseDouble(masterCust.get("panelCapacity"));
                 String masterAgrDate = masterCust.get("agreementDate") != null ? masterCust.get("agreementDate").toString() : null;
                 String masterBankCode = masterCust.get("bankCode") != null ? masterCust.get("bankCode").toString() : "—";
                 String masterBranchCode = masterCust.get("branchCode") != null ? masterCust.get("branchCode").toString() : "—";
@@ -2590,8 +2589,7 @@ public class MultiFileImportService {
                 String masterSolarType = masterCust.get("solarType") != null ? masterCust.get("solarType").toString() : null;
                 String masterTariffType = masterCust.get("tariffType") != null ? masterCust.get("tariffType").toString() : null;
                 String masterBillingMode = masterCust.get("billingMode") != null ? masterCust.get("billingMode").toString() : null;
-                Double masterUnitRate = masterCust.get("unitRate") != null && !masterCust.get("unitRate").toString().isEmpty()
-                        ? ((Number) masterCust.get("unitRate")).doubleValue() : null;
+                Double masterUnitRate = parseDouble(masterCust.get("unitRate"));
 
                 enriched.put("customerName", masterName);
                 enriched.put("customerAddress", masterAddress);
@@ -3038,25 +3036,38 @@ public class MultiFileImportService {
                 auditAction = "NAME_MISMATCH_EDITED";
                 break;
             }
-            case "unitRate": {
-                Object oldObj = target.get("mainUnitRate");
-                oldValue = oldObj != null ? oldObj.toString() : "";
-                Double newRate = parseDouble(newValue);
-                target.put("mainUnitRate", newRate);
-                target.put("ngenUnitRate", newRate);
-                Object mObj = target.get("masterUnitRate");
-                Double masterRate = mObj instanceof Number ? ((Number) mObj).doubleValue() : null;
-                if (masterRate != null && newRate != null) {
-                    boolean match = Math.abs(masterRate - newRate) <= 1e-6;
+            case "bothUnitRates":
+            case "unitRates": {
+                Object oldMaster = target.get("masterUnitRate");
+                Object oldMain = target.get("mainUnitRate");
+                oldValue = "master: " + (oldMaster != null ? oldMaster : "") + ", main: " + (oldMain != null ? oldMain : "");
+
+                String[] parts = newValue != null ? newValue.split("\\|", -1) : new String[0];
+                Double newMaster = parts.length > 0 && !parts[0].trim().isEmpty() ? parseDouble(parts[0]) : null;
+                Double newMain = parts.length > 1 && !parts[1].trim().isEmpty() ? parseDouble(parts[1]) : (parts.length > 0 && !parts[0].trim().isEmpty() ? parseDouble(parts[0]) : null);
+
+                if (parts.length > 0 && parts[0] != null && !parts[0].trim().isEmpty()) {
+                    target.put("masterUnitRate", newMaster);
+                    target.put("unitRate", newMaster);
+                }
+                if (parts.length > 1 && parts[1] != null && !parts[1].trim().isEmpty()) {
+                    target.put("mainUnitRate", newMain);
+                    target.put("ngenUnitRate", newMain);
+                }
+
+                Double finalMaster = parseDouble(target.get("masterUnitRate"));
+                Double finalMain = parseDouble(target.get("mainUnitRate"));
+
+                if (finalMaster != null && finalMain != null) {
+                    boolean match = Math.abs(finalMaster - finalMain) <= 1e-6;
                     target.put("unitRateMatch", match ? "MATCH" : "MISMATCH");
                     resolved = match;
                 } else {
-                    // Missing either value — no comparable difference remains, treat as resolved.
                     target.put("unitRateMatch", "MATCH");
                     resolved = true;
                 }
                 flagKey = "unitRateMatch";
-                auditAction = "UNIT_RATE_MISMATCH_EDITED";
+                auditAction = "BOTH_UNIT_RATES_MISMATCH_EDITED";
                 break;
             }
             case "netType": {

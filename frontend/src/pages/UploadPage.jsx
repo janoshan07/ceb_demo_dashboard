@@ -318,32 +318,38 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
 //  STAT CARD (Image 2 Modern Style)
 // ═══════════════════════════════════════════════════════════════════════════
 const StatCard = ({ label, value, color, icon, subtitle }) => {
-  const isEmerald = color === '#10b981' || color === 'emerald';
-  const isRed = color === '#ef4444' || color === 'red';
-  const isAmber = color === '#f59e0b' || color === 'amber';
-  const isIndigo = color === '#6366f1' || color === '#818cf8' || color === 'indigo';
-
-  const badgeColor = isEmerald ? '#10b981' : isRed ? '#ef4444' : isAmber ? '#f59e0b' : '#818cf8';
-  const badgeRgb = isEmerald ? '16, 185, 129' : isRed ? '239, 68, 68' : isAmber ? '245, 158, 11' : '99, 102, 241';
+  const [hovered, setHovered] = useState(false);
+  const badgeColor = color && color !== 'white' ? color : '#818cf8';
 
   return (
-    <div style={{
-      background: 'rgba(15, 23, 42, 0.75)',
-      border: '1px solid rgba(255, 255, 255, 0.08)',
-      borderRadius: 16,
-      padding: '1.1rem 1.25rem',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '1rem',
-      boxShadow: '0 8px 20px rgba(0, 0, 0, 0.2)',
-      transition: 'all 0.25s ease'
-    }}>
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered
+          ? 'linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)'
+          : 'linear-gradient(145deg, rgba(22, 30, 49, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%)',
+        border: `1px solid ${hovered ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.08)'}`,
+        borderRadius: 14,
+        padding: '0.9rem 1.1rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.85rem',
+        boxShadow: hovered ? '0 10px 25px rgba(0, 0, 0, 0.4)' : '0 4px 14px rgba(0, 0, 0, 0.2)',
+        transform: hovered ? 'translateY(-2px)' : 'none',
+        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        height: '100%',
+        minHeight: '78px',
+        boxSizing: 'border-box',
+        overflow: 'hidden'
+      }}
+    >
       <div style={{
-        width: 44,
-        height: 44,
-        borderRadius: 12,
-        background: `rgba(${badgeRgb}, 0.12)`,
-        border: `1px solid rgba(${badgeRgb}, 0.28)`,
+        width: 40,
+        height: 40,
+        borderRadius: 11,
+        background: `${badgeColor}18`,
+        border: `1px solid ${badgeColor}35`,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -352,12 +358,33 @@ const StatCard = ({ label, value, color, icon, subtitle }) => {
       }}>
         {icon}
       </div>
-      <div>
-        <div style={{ fontSize: '0.74rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</div>
-        <div style={{ fontSize: '1.45rem', fontWeight: 800, color: badgeColor || 'white', marginTop: '0.15rem', lineHeight: 1.1 }}>
+      <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <div
+          title={label}
+          style={{
+            fontSize: '0.71rem',
+            color: '#94a3b8',
+            fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }}
+        >
+          {label}
+        </div>
+        <div style={{
+          fontSize: '1.4rem',
+          fontWeight: 700,
+          color: badgeColor || 'white',
+          marginTop: '0.15rem',
+          lineHeight: 1.1,
+          fontFamily: 'monospace, sans-serif'
+        }}>
           {value !== undefined && value !== null ? value : 0}
         </div>
-        {subtitle && <div style={{ fontSize: '0.72rem', color: '#64748b', marginTop: '0.2rem' }}>{subtitle}</div>}
+        {subtitle && <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>}
       </div>
     </div>
   );
@@ -4635,17 +4662,17 @@ const UploadPage = () => {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <StatCard label="Total Records" value={totalRecords} color="white" icon={<FileText size={18} />} />
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
+          <StatCard label="Total Records" value={totalRecords} color="#818cf8" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="New Customers" value={newCustomersCount || 0} color="#38bdf8" icon={<User size={18} />} />
-          <StatCard label="No Billing Data / Payment Hold" value={noBillingDataCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-          <StatCard label="Duplicates" value={duplicateCount || 0} color="#c084fc" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Payment Hold" value={noBillingDataCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Duplicates" value={duplicateCount || 0} color="#c084fc" icon={<Layers size={18} />} />
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
           <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#fbbf24' : '#10b981'} icon={<AlertTriangle size={18} />} />
-          <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#a78bfa' : '#10b981'} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#a78bfa' : '#10b981'} icon={<Zap size={18} />} />
           <StatCard label="Agreement Expired" value={agreementExpiredCount} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
-          <StatCard label="Agreement Expiring Soon" value={agreementExpiringCount} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
+          <StatCard label="Expiring Soon" value={agreementExpiringCount} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
         </div>
 
         {/* Filter tabs */}
@@ -4654,7 +4681,7 @@ const UploadPage = () => {
             { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
             { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
             { key: 'NEW_CUSTOMERS', label: 'New Customers', count: newCustomersCount || 0, color: '#38bdf8' },
-            { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', count: noBillingDataCount || 0, color: '#f59e0b' },
+            { key: 'NO_BILLING_DATA', label: 'Payment Hold', count: noBillingDataCount || 0, color: '#f59e0b' },
             { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
             { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
             { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },

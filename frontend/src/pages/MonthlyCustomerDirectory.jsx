@@ -162,6 +162,7 @@ export const normalizeNetType = (raw) => {
 export const STATUS_FILTERS = [
   { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: '#38bdf8', icon: Sun },
   { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981', icon: CheckCircle },
+  { key: 'MISSING', label: 'Missing Details', cardLabel: 'Missing Details', color: '#f43f5e', icon: AlertTriangle },
   { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8', icon: TrendingUp },
   { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', cardLabel: 'No Billing / Hold', color: '#f59e0b', icon: ZapOff },
   { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
@@ -654,17 +655,52 @@ const MonthlyCustomerDirectory = () => {
 
   const isRecordComplete = useCallback((row) => {
     if (!row) return false;
-    const name = row.customerName || row.masterName || row.npayName;
-    if (!name || !String(name).trim() || name === '—') return false;
-    if (!row.customerAddress || !String(row.customerAddress).trim() || row.customerAddress === '—') return false;
-    if (!row.mobileNo || !String(row.mobileNo).trim() || row.mobileNo === '—') return false;
-    if (!row.agreementDate || row.agreementDate === '—') return false;
-    if (row.panelCapacity === null || row.panelCapacity === undefined || row.panelCapacity === '' || row.panelCapacity === '—') return false;
-    if (!row.bankCode || !String(row.bankCode).trim() || row.bankCode === '—') return false;
-    if (!row.bankAccountNo || !String(row.bankAccountNo).trim() || row.bankAccountNo === '—') return false;
-    const solar = row.solarType || row.masterNetType || row.netType;
-    if (!solar || !String(solar).trim() || solar === '—') return false;
-    if (row.unitRate === null || row.unitRate === undefined || row.unitRate === '' || row.unitRate === '—') return false;
+
+    const isBlank = (val) => {
+      if (val === null || val === undefined) return true;
+      if (typeof val === 'string') {
+        const s = val.trim();
+        return s === '' || s === '—' || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined';
+      }
+      return false;
+    };
+
+    const accountNo = row.accountNo || row.accountNumber;
+    if (isBlank(accountNo)) return false;
+
+    const name = row.customerName || row.masterName || row.npayName || row.name;
+    if (isBlank(name)) return false;
+
+    const address = row.customerAddress || row.address || row.masterAddress;
+    if (isBlank(address)) return false;
+
+    const refNo = row.refNo || row.referenceNo;
+    if (isBlank(refNo)) return false;
+
+    const costCode = row.costCode;
+    if (isBlank(costCode)) return false;
+
+    const mobileNo = row.mobileNo || row.mobile || row.mobileNumber || row.contactNo;
+    if (isBlank(mobileNo)) return false;
+
+    const agreementDate = row.agreementDate;
+    if (isBlank(agreementDate)) return false;
+
+    const panelCapacity = row.panelCapacity ?? row.capacity;
+    if (isBlank(panelCapacity)) return false;
+
+    const bankCode = row.bankCode;
+    if (isBlank(bankCode)) return false;
+
+    const bankAccountNo = row.bankAccountNo || row.accountNoBank;
+    if (isBlank(bankAccountNo)) return false;
+
+    const netType = row.solarType || row.masterNetType || row.netType || row.mainNetType || row.ngenNetType || row.npayNetType;
+    if (isBlank(netType)) return false;
+
+    const unitRate = row.unitRate ?? row.masterUnitRate ?? row.mainUnitRate ?? row.ngenUnitRate;
+    if (isBlank(unitRate)) return false;
+
     return true;
   }, []);
 

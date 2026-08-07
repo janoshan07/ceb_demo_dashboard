@@ -206,16 +206,9 @@ const CustomerDetails = () => {
     if (cust.panelCapacity === null || cust.panelCapacity === undefined || cust.panelCapacity === '' || cust.panelCapacity === '—') missing.push('Panel Capacity');
     if (!cust.agreementDate || cust.agreementDate === '—') missing.push('Agreement Date');
     if (!cust.bankCode || !String(cust.bankCode).trim() || cust.bankCode === '—') missing.push('Bank Code');
-    if (!cust.branchCode || !String(cust.branchCode).trim() || cust.branchCode === '—') missing.push('Branch Code');
     if (!cust.bankAccountNo || !String(cust.bankAccountNo).trim() || cust.bankAccountNo === '—') missing.push('Bank Account No');
     if (!cust.refNo || !String(cust.refNo).trim() || cust.refNo === '—') missing.push('Ref No');
     if (cust.unitRate === null || cust.unitRate === undefined || cust.unitRate === '' || cust.unitRate === '—') missing.push('Unit Rate');
-    if (!cust.tariffType || !String(cust.tariffType).trim() || cust.tariffType === '—') missing.push('Tariff Type');
-    if (!cust.costCode || !String(cust.costCode).trim() || cust.costCode === '—') missing.push('Cost Code');
-    if (!cust.expenseCode || !String(cust.expenseCode).trim() || cust.expenseCode === '—') missing.push('L-Code');
-    
-    const loc = cust.division || cust.branchCode;
-    if (!loc || !String(loc).trim() || loc === '—') missing.push('Location / Division');
 
     return { isComplete: missing.length === 0, missingFields: missing };
   };
@@ -344,7 +337,7 @@ const CustomerDetails = () => {
       const [totalRes, completeRes, missingRes, errorRes] = await Promise.all([
         authFetch('/api/officer/customers?page=0&size=1'),
         authFetch('/api/officer/customers?page=0&size=1&completeness=COMPLETE'),
-        authFetch('/api/officer/customers?page=0&size=1&completeness=MISSING'),
+        authFetch('/api/officer/customers?page=0&size=1000&completeness=MISSING'),
         authFetch('/api/officer/customers?page=0&size=1&validationStatus=ERROR')
       ]);
       
@@ -353,13 +346,13 @@ const CustomerDetails = () => {
         const d = await totalRes.json();
         total = d.totalElements || 0;
       }
-      if (completeRes.ok) {
-        const d = await completeRes.json();
-        complete = d.totalElements || 0;
-      }
       if (missingRes.ok) {
         const d = await missingRes.json();
         missing = d.totalElements || 0;
+      }
+      if (completeRes.ok) {
+        const d = await completeRes.json();
+        complete = d.totalElements || (total > missing ? total - missing : 0);
       }
       if (errorRes.ok) {
         const d = await errorRes.json();
@@ -368,7 +361,7 @@ const CustomerDetails = () => {
       
       setSummaryStats({
         totalCustomers: total,
-        completeCustomers: complete,
+        completeCustomers: total - missing > 0 ? total - missing : complete,
         missingCustomers: missing,
         validationErrorsCount: errors,
         locationsCount: DIRECTORY_DIVISIONS.length
@@ -384,7 +377,8 @@ const CustomerDetails = () => {
       setLoading(true);
       setError(null);
       
-      let url = `/api/officer/customers?page=${page}&size=${pageSize}`;
+      let effectiveSize = completenessFilter === 'MISSING' ? 1000 : pageSize;
+      let url = `/api/officer/customers?page=${page}&size=${effectiveSize}`;
       if (statusFilter !== 'ALL') {
         url += `&validationStatus=${statusFilter}`;
       }
@@ -1455,9 +1449,18 @@ const CustomerDetails = () => {
                               <CheckCircle size={12} /> COMPLETE
                             </span>
                           ) : (
-                            <span className="badge warning" title={`Missing: ${comp.missingFields.join(', ')}`} style={{ background: 'rgba(245,158,11,0.12)', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', cursor: 'help' }}>
-                              <AlertTriangle size={12} /> MISSING ({comp.missingFields.length})
-                            </span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                              <span className="badge warning" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', width: 'fit-content' }}>
+                                <AlertTriangle size={12} /> MISSING ({comp.missingFields.length})
+                              </span>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.15rem' }}>
+                                {comp.missingFields.map(f => (
+                                  <span key={f} style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.12)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
                           )}
                         </td>
                         <td style={{ fontSize: '0.85rem' }}>{cust.agreementDate || '—'}</td>
@@ -1714,87 +1717,91 @@ const CustomerDetails = () => {
       )}
 
         {/* Pagination controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements.toLocaleString()} customers
-          </div>
-          
-          {totalPages > 1 ? (
-            <div className="pagination" style={{ margin: 0 }}>
-              <button 
-                className="pagination-btn" 
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
-                disabled={currentPage === 0 || loading}
-              >
-                <ChevronLeft size={16} />
-              </button>
-              
-              {getPageNumbers().map((item, idx) => {
-                if (item === 'ellipsis-left' || item === 'ellipsis-right') {
-                  return (
-                    <span 
-                      key={`ellipsis-${idx}`} 
-                      style={{ 
-                        display: 'inline-flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        padding: '0 0.5rem', 
-                        color: 'var(--text-secondary)',
-                        fontSize: '0.9rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      ...
-                    </span>
-                  );
-                }
-                return (
-                  <button 
-                    key={item} 
-                    className={`pagination-btn ${currentPage === item ? 'active' : ''}`}
-                    onClick={() => setCurrentPage(item)}
-                    disabled={loading}
-                  >
-                    {item + 1}
-                  </button>
-                );
-              })}
-
-              <button 
-                className="pagination-btn" 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
-                disabled={currentPage === totalPages - 1 || loading}
-              >
-                <ChevronRight size={16} />
-              </button>
+        {completenessFilter !== 'MISSING' && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements.toLocaleString()} customers
             </div>
-          ) : <div />}
+            
+            {totalPages > 1 ? (
+              <div className="pagination" style={{ margin: 0 }}>
+                <button 
+                  className="pagination-btn" 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
+                  disabled={currentPage === 0 || loading}
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                
+                {getPageNumbers().map((item, idx) => {
+                  if (item === 'ellipsis-left' || item === 'ellipsis-right') {
+                    return (
+                      <span 
+                        key={`ellipsis-${idx}`} 
+                        style={{ 
+                          display: 'inline-flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          padding: '0 0.5rem', 
+                          color: 'var(--text-secondary)',
+                          fontSize: '0.9rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        ...
+                      </span>
+                    );
+                  }
+                  
+                  const pageNum = item;
+                  return (
+                    <button
+                      key={pageNum}
+                      className={`pagination-btn ${currentPage === pageNum ? 'active' : ''}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                      disabled={loading}
+                    >
+                      {pageNum + 1}
+                    </button>
+                  );
+                })}
+                
+                <button 
+                  className="pagination-btn" 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
+                  disabled={currentPage >= totalPages - 1 || loading}
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            ) : <div />}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Rows per page:</span>
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(0);
-              }}
-              style={{
-                appearance: 'auto',
-                padding: '0.25rem 0.5rem',
-                fontSize: '0.8rem',
-                background: '#111827',
-                color: 'white',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              {[5, 10, 20, 50].map((sz) => (
-                <option key={sz} value={sz}>{sz}</option>
-              ))}
-            </select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Rows per page:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(0);
+                }}
+                style={{
+                  appearance: 'auto',
+                  padding: '0.25rem 0.5rem',
+                  fontSize: '0.8rem',
+                  background: '#111827',
+                  color: 'white',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                {[5, 10, 20, 50].map((sz) => (
+                  <option key={sz} value={sz}>{sz}</option>
+                ))}
+              </select>
+            </div>
           </div>
-        </div>
+        )}
 
       {/* Details Slide-out Drawer */}
       <div className={`slide-drawer ${drawerOpen ? 'open' : ''}`} style={{ width: '850px', maxWidth: '95%' }}>

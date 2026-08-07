@@ -122,7 +122,6 @@ public class CustomerController {
             if (c.getAgreementDate() == null) missingFields.add("Agreement Date");
             if (c.getPanelCapacity() == null || c.getPanelCapacity() <= 0) missingFields.add("Panel Capacity");
             if (c.getBankCode() == null || c.getBankCode().trim().isEmpty()) missingFields.add("Bank Code");
-            if (c.getBranchCode() == null || c.getBranchCode().trim().isEmpty()) missingFields.add("Branch Code");
             if (c.getBankAccountNo() == null || c.getBankAccountNo().trim().isEmpty()) missingFields.add("Bank Account No");
             
             String solar = c.getSolarType() != null ? c.getSolarType().trim() : "";
@@ -133,19 +132,6 @@ public class CustomerController {
             
             if (c.getRefNo() == null || c.getRefNo().trim().isEmpty()) missingFields.add("Ref No");
             if (c.getUnitRate() == null) missingFields.add("Unit Rate");
-            if (c.getTariffType() == null || c.getTariffType().trim().isEmpty()) missingFields.add("Tariff Type");
-            
-            String costCodeVal = c.getCostCode() != null ? c.getCostCode().getCostCode() : null;
-            if (costCodeVal == null || costCodeVal.trim().isEmpty()) missingFields.add("Cost Code");
-            
-            String expenseCodeVal = c.getExpenseCode() != null ? c.getExpenseCode().getExpCode() : null;
-            if (expenseCodeVal == null || expenseCodeVal.trim().isEmpty()) missingFields.add("L-Code");
-            
-            String divisionVal = c.getDivision() != null ? c.getDivision().trim() : "";
-            if (divisionVal.isEmpty() && c.getBranchCode() != null) {
-                divisionVal = c.getBranchCode().trim();
-            }
-            if (divisionVal.isEmpty()) missingFields.add("Location / Division");
 
             dto.put("isComplete", missingFields.isEmpty());
             dto.put("missingFields", missingFields);
@@ -170,15 +156,21 @@ public class CustomerController {
             @RequestParam(value = "size", defaultValue = "10") int size) {
 
         try {
-            // Resolve a safe sort: whitelist the property, default to Account No ascending.
             String sortProp = (sortBy != null && SORTABLE_FIELDS.contains(sortBy.trim())) ? sortBy.trim() : "accountNo";
             Sort.Direction dir = "desc".equalsIgnoreCase(direction != null ? direction.trim() : "")
                     ? Sort.Direction.DESC : Sort.Direction.ASC;
-            Pageable pageable = PageRequest.of(page, size, Sort.by(dir, sortProp));
 
             String q = (query != null) ? query.trim() : "";
             String status = (validationStatus != null) ? validationStatus.trim() : "";
             String loc = (location != null) ? location.trim() : "";
+            boolean filterByCompleteness = completeness != null && !completeness.trim().isEmpty() && !"ALL".equalsIgnoreCase(completeness.trim());
+
+            Pageable pageable;
+            if (filterByCompleteness || size >= 500) {
+                pageable = PageRequest.of(0, 2000, Sort.by(dir, sortProp));
+            } else {
+                pageable = PageRequest.of(page, size, Sort.by(dir, sortProp));
+            }
 
             Page<Customer> customerPage = customerRepository.searchCustomersFiltered(
                     q.isEmpty() ? null : q,
@@ -186,7 +178,6 @@ public class CustomerController {
                     loc.isEmpty() ? null : loc,
                     pageable);
 
-            // Map each Customer entity to a safe DTO to avoid Hibernate lazy-proxy serialization errors
             List<Map<String, Object>> dtoList = new ArrayList<>();
             for (Customer c : customerPage.getContent()) {
                 try {
@@ -203,17 +194,18 @@ public class CustomerController {
                 }
             }
 
-            // Build a safe pageable response matching Spring Page structure
+            int totalCount = filterByCompleteness ? dtoList.size() : (int) customerPage.getTotalElements();
+
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("content",          dtoList);
-            response.put("totalElements",    customerPage.getTotalElements());
-            response.put("totalPages",       customerPage.getTotalPages());
-            response.put("number",           customerPage.getNumber());
-            response.put("size",             customerPage.getSize());
-            response.put("numberOfElements", customerPage.getNumberOfElements());
-            response.put("first",            customerPage.isFirst());
-            response.put("last",             customerPage.isLast());
-            response.put("empty",            customerPage.isEmpty());
+            response.put("totalElements",    totalCount);
+            response.put("totalPages",       filterByCompleteness ? 1 : customerPage.getTotalPages());
+            response.put("number",           page);
+            response.put("size",             size);
+            response.put("numberOfElements", dtoList.size());
+            response.put("first",            page == 0);
+            response.put("last",             true);
+            response.put("empty",            dtoList.isEmpty());
 
             return ResponseEntity.ok(response);
         } catch (Exception ex) {

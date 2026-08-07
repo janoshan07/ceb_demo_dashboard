@@ -903,8 +903,10 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
 
+  const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
+
   const allCount = rows.length;
-  const validCount = rows.filter(r => r.status === 'VALID' || r.status === 'DUPLICATE').length;
+  const validCount = rows.filter(isValidRecord).length;
   const errorCount = rows.filter(r => r.status === 'ERROR').length;
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
@@ -913,7 +915,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
-    if (activeFilter === 'VALID') return r.status === 'VALID' || r.status === 'DUPLICATE';
+    if (activeFilter === 'VALID') return isValidRecord(r);
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
     if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
@@ -1207,8 +1209,10 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
 
+  const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
+
   const allCount = rows.length;
-  const validCount = rows.filter(r => r.status === 'VALID' || r.status === 'DUPLICATE').length;
+  const validCount = rows.filter(isValidRecord).length;
   const errorCount = rows.filter(r => r.status === 'ERROR').length;
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
@@ -1217,7 +1221,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
-    if (activeFilter === 'VALID') return r.status === 'VALID' || r.status === 'DUPLICATE';
+    if (activeFilter === 'VALID') return isValidRecord(r);
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
     if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
@@ -1759,7 +1763,7 @@ const UploadPage = () => {
     const errorCount = reevaluated.filter(r => r.status === 'ERROR').length;
     const duplicateCount = reevaluated.filter(r => r.status === 'DUPLICATE').length;
     const warningCount = reevaluated.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
-    const validCount = reevaluated.filter(r => r.status === 'VALID').length;
+    const validCount = reevaluated.filter(r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0)).length;
 
     setPreview(prev => ({
       ...prev,
@@ -4987,9 +4991,17 @@ const UploadPage = () => {
                                 <td style={{ padding: '0.5rem 0.75rem' }}>{row.masterNetType || '—'}</td>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
                                   {isEditing ? (
-                                    <input type="text" value={editMismatchValue} autoFocus onChange={e => setEditMismatchValue(e.target.value)}
+                                    <select
+                                      value={editMismatchValue}
+                                      autoFocus
+                                      onChange={e => setEditMismatchValue(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') handleEditMismatch('netType', acc, editMismatchValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMismatchValue(''); } }}
-                                      style={{ width: '160px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem' }} />
+                                      style={{ width: '160px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: '#1a1c23', color: 'white', fontSize: '0.78rem', cursor: 'pointer' }}
+                                    >
+                                      <option value="Net Accounting">Net Accounting</option>
+                                      <option value="Net Plus">Net Plus</option>
+                                      <option value="Net Plus Plus">Net Plus Plus</option>
+                                    </select>
                                   ) : (row.mainNetType || '—')}
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
@@ -5013,7 +5025,18 @@ const UploadPage = () => {
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: netTypeApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: netTypeApproving ? 0.6 : 1 }}>
                                         <CheckCircle size={12} /> Approve Net Type
                                       </button>
-                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'netType', accountNo: acc }); setEditMismatchValue(row.mainNetType || ''); }}
+                                      <button type="button" onClick={() => {
+                                        const cur = (row.mainNetType || '').trim();
+                                        let init = cur;
+                                        if (!['Net Accounting', 'Net Plus', 'Net Plus Plus'].includes(cur)) {
+                                          if (cur.toLowerCase().includes('accounting')) init = 'Net Accounting';
+                                          else if (cur.toLowerCase().includes('plus plus')) init = 'Net Plus Plus';
+                                          else if (cur.toLowerCase().includes('plus')) init = 'Net Plus';
+                                          else init = 'Net Accounting';
+                                        }
+                                        setEditingMismatch({ field: 'netType', accountNo: acc });
+                                        setEditMismatchValue(init);
+                                      }}
                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
                                         <Pencil size={12} /> Edit Net Type
                                       </button>

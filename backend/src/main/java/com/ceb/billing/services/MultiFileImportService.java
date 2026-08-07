@@ -3037,22 +3037,41 @@ public class MultiFileImportService {
                 break;
             }
             case "bothUnitRates":
-            case "unitRates": {
+            case "unitRates":
+            case "unitRate":
+            case "masterUnitRate": {
                 Object oldMaster = target.get("masterUnitRate");
                 Object oldMain = target.get("mainUnitRate");
                 oldValue = "master: " + (oldMaster != null ? oldMaster : "") + ", main: " + (oldMain != null ? oldMain : "");
 
                 String[] parts = newValue != null ? newValue.split("\\|", -1) : new String[0];
-                Double newMaster = parts.length > 0 && !parts[0].trim().isEmpty() ? parseDouble(parts[0]) : null;
-                Double newMain = parts.length > 1 && !parts[1].trim().isEmpty() ? parseDouble(parts[1]) : (parts.length > 0 && !parts[0].trim().isEmpty() ? parseDouble(parts[0]) : null);
-
-                if (parts.length > 0 && parts[0] != null && !parts[0].trim().isEmpty()) {
+                if (parts.length > 1) {
+                    Double newMaster = !parts[0].trim().isEmpty() ? parseDouble(parts[0]) : null;
+                    Double newMain = !parts[1].trim().isEmpty() ? parseDouble(parts[1]) : null;
+                    if (!parts[0].trim().isEmpty()) {
+                        target.put("masterUnitRate", newMaster);
+                        target.put("unitRate", newMaster);
+                    }
+                    if (!parts[1].trim().isEmpty()) {
+                        target.put("mainUnitRate", newMain);
+                        target.put("ngenUnitRate", newMain);
+                    }
+                } else if ("masterUnitRate".equals(fld)) {
+                    Double newMaster = parseDouble(newValue);
                     target.put("masterUnitRate", newMaster);
                     target.put("unitRate", newMaster);
-                }
-                if (parts.length > 1 && parts[1] != null && !parts[1].trim().isEmpty()) {
+                } else if ("unitRate".equals(fld)) {
+                    Double newMain = parseDouble(newValue);
                     target.put("mainUnitRate", newMain);
                     target.put("ngenUnitRate", newMain);
+                } else {
+                    Double newRate = parseDouble(newValue);
+                    if (newRate != null) {
+                        target.put("masterUnitRate", newRate);
+                        target.put("unitRate", newRate);
+                        target.put("mainUnitRate", newRate);
+                        target.put("ngenUnitRate", newRate);
+                    }
                 }
 
                 Double finalMaster = parseDouble(target.get("masterUnitRate"));
@@ -3067,7 +3086,7 @@ public class MultiFileImportService {
                     resolved = true;
                 }
                 flagKey = "unitRateMatch";
-                auditAction = "BOTH_UNIT_RATES_MISMATCH_EDITED";
+                auditAction = "UNIT_RATE_MISMATCH_EDITED";
                 break;
             }
             case "netType": {

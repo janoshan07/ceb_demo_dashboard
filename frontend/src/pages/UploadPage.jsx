@@ -198,7 +198,7 @@ const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAc
 // ═══════════════════════════════════════════════════════════════════════════
 //  FILE DROP ZONE
 // ═══════════════════════════════════════════════════════════════════════════
-const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disabled = false }) => {
+const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disabled = false, requiredColumns = 15 }) => {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
 
@@ -275,7 +275,7 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             <FileSpreadsheet size={20} color="#818cf8" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>15 Required Columns</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>{requiredColumns} Required Columns</div>
             <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Must be included</div>
           </div>
         </div>
@@ -1151,7 +1151,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace' }}>{row.kwhUnitSales ?? '—'}</td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {row.ngenUnitRate != null ? `LKR ${row.ngenUnitRate.toFixed(2)}` : '—'}
+                      {(row.ngenUnitRate != null && row.ngenUnitRate > 0) ? `LKR ${Number(row.ngenUnitRate).toFixed(2)}` : ((row.unitRate != null && row.unitRate > 0) ? `LKR ${Number(row.unitRate).toFixed(2)}` : '—')}
                     </td>
 
                     <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
@@ -3873,7 +3873,7 @@ const UploadPage = () => {
         </div>
       </div>
 
-      <FileDropZone file={file} onFileSelected={handleFileSelect}
+      <FileDropZone file={file} onFileSelected={handleFileSelect} requiredColumns={3}
         hint="Requires columns: Account No, Prv. Rdg. Date (or Previous Reading Date), Crnt. Rdg. Date (or Current Reading Date)" />
 
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
@@ -3949,15 +3949,15 @@ const UploadPage = () => {
           <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
             <strong style={{ color: 'white' }}>NGEN Sheet</strong>
             <br />
-            Required columns: <span style={{ color: '#f59e0b' }}>Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate, Retention Money, Bill Outstanding Set Off, Payment Settled, Outstanding Balance</span>
+            Required columns (11): <span style={{ color: '#f59e0b' }}>Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate, Retention Money, Bill Outstanding Set Off, kWh Sales Amount, Payment Settled, Outstanding Balance</span>
             <br />
             Values are read <em>directly from the uploaded Excel file</em> and displayed exactly as they appear — no recalculation is performed.
           </div>
         </div>
       </div>
 
-      <FileDropZone file={file} onFileSelected={handleFileSelect}
-        hint="Requires: Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate" />
+      <FileDropZone file={file} onFileSelected={handleFileSelect} requiredColumns={11}
+        hint="Requires: Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate, Retention Money, Bill Outstanding Set Off, kWh Sales Amount, Payment Settled, Outstanding Balance" />
 
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>
         {file && !preview && (
@@ -4047,7 +4047,7 @@ const UploadPage = () => {
         </div>
       </div>
 
-      <FileDropZone file={file} onFileSelected={handleFileSelect}
+      <FileDropZone file={file} onFileSelected={handleFileSelect} requiredColumns={6}
         hint="Requires: Account No, Net Type, Name, Energy Purchase, Bill Set Off, Retention Money, Payment" />
 
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.25rem', justifyContent: 'flex-end' }}>

@@ -524,7 +524,10 @@ public class MultiFileImportService {
         NGEN_COLUMN_ALIASES.put("kwhUnitSales", Arrays.asList(
                 "kwhunitsales", "kwhunitssales", "kwhsalesunits", "unitsales", "kwhsales", "salesunits", "netunits", "sales"));
         NGEN_COLUMN_ALIASES.put("ngenUnitRate", Arrays.asList(
-                "unitrate", "unitcost", "perunit", "tariff", "rate", "price"));
+                "unitrate", "unitcost", "perunit", "tariff", "rate", "price", "unitrate/lkr", "unitratelkr",
+                "unitcostlkr", "unitraters", "unitcostrs", "unitratekwh", "unitrateperkwh", "tariffrate",
+                "sellingrate", "priceperunit", "unitprice", "rateperunit", "costperunit", "unit", "cost",
+                "rates", "lkr/unit", "lkr/kwh", "unitrate(lkr)", "unitrate(rs)", "unitcost(lkr)"));
         NGEN_COLUMN_ALIASES.put("retentionMoney", Arrays.asList(
                 "retentionmoney", "retnmoney", "retmoney", "retention", "retn"));
         NGEN_COLUMN_ALIASES.put("kwhSalesAmount", Arrays.asList(
@@ -585,12 +588,12 @@ public class MultiFileImportService {
             }
         }
 
-        // Pass 2 — substring fallback for still-unmapped fields
+        // Pass 2 — substring fallback for still-unmapped fields (header must contain alias)
         for (Map.Entry<String, List<String>> entry : NGEN_COLUMN_ALIASES.entrySet()) {
             if (result.containsKey(entry.getKey())) continue;
             for (String alias : entry.getValue()) {
                 String a = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
-                if (a.isEmpty()) continue;
+                if (a.length() < 3) continue;
                 for (int col = 0; col < cleanHeaders.size(); col++) {
                     if (used.contains(col)) continue;
                     String h = cleanHeaders.get(col);
@@ -640,6 +643,50 @@ public class MultiFileImportService {
 
                 String cleanAcc = accountNo != null ? accountNo.trim() : "";
 
+                // 1. Fallback: Calculate Unit Rate from Sales Amount / Unit Sales if missing or invalid
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
+                    ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
+                }
+
+                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && sessionId != null && !cleanAcc.isEmpty()) {
+                    List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
+                    if (masterList != null) {
+                        for (Map<String, Object> mRow : masterList) {
+                            String mAcc = (String) mRow.get("accountNo");
+                            if (mAcc != null && mAcc.trim().equals(cleanAcc)) {
+                                Double mRate = parseDouble(mRow.get("unitRate"));
+                                if (mRate != null && mRate > 0.0) {
+                                    ngenUnitRate = mRate;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !cleanAcc.isEmpty()) {
+                    try {
+                        Optional<Customer> custOpt = customerRepository.findById(cleanAcc);
+                        if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                            ngenUnitRate = custOpt.get().getUnitRate();
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // 4. Fallback: Unassigned numeric column scan (scan row for plausible unit rate value between 5.0 and 150.0)
+                if (ngenUnitRate == null || ngenUnitRate <= 0.0) {
+                    for (int c = 0; c < row.getLastCellNum(); c++) {
+                        if (ngenCols.values().contains(c)) continue;
+                        Double candidate = numVal(row, c);
+                        if (candidate != null && candidate >= 5.0 && candidate <= 150.0) {
+                            ngenUnitRate = candidate;
+                            break;
+                        }
+                    }
+                }
+
                 Map<String, Object> rowData = new LinkedHashMap<>();
                 rowData.put("rowNum", r + 1);
                 rowData.put("accountNo", cleanAcc);
@@ -670,7 +717,9 @@ public class MultiFileImportService {
                 }
                 if (kwhImport == null) errors.add("kWh Import is missing or invalid");
                 if (kwhExport == null) errors.add("kWh Export is missing or invalid");
-                if (ngenUnitRate == null) errors.add("Unit Rate is missing or invalid");
+                if (ngenUnitRate == null || ngenUnitRate <= 0.0) errors.add("Unit Rate is missing or invalid");
+                if (billSetOff == null) errors.add("Bill OutStd Set Off is missing or invalid");
+                if (retentionMoney == null) errors.add("Retention Money is missing or invalid");
                 if (billSetOff == null) errors.add("Bill OutStd Set Off is missing or invalid");
                 if (retentionMoney == null) errors.add("Retention Money is missing or invalid");
 
@@ -787,6 +836,50 @@ public class MultiFileImportService {
                     continue;
                 }
                 accountNo = accountNo.trim();
+
+                // 1. Fallback: Calculate Unit Rate from Sales Amount / Unit Sales if missing or invalid
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
+                    ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
+                }
+
+                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && sessionId != null && !accountNo.isEmpty()) {
+                    List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
+                    if (masterList != null) {
+                        for (Map<String, Object> mRow : masterList) {
+                            String mAcc = (String) mRow.get("accountNo");
+                            if (mAcc != null && mAcc.trim().equals(accountNo)) {
+                                Double mRate = parseDouble(mRow.get("unitRate"));
+                                if (mRate != null && mRate > 0.0) {
+                                    ngenUnitRate = mRate;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
+                    try {
+                        Optional<Customer> custOpt = customerRepository.findById(accountNo);
+                        if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                            ngenUnitRate = custOpt.get().getUnitRate();
+                        }
+                    } catch (Exception ignored) {}
+                }
+
+                // 4. Fallback: Unassigned numeric column scan (scan row for plausible unit rate value between 5.0 and 150.0)
+                if (ngenUnitRate == null || ngenUnitRate <= 0.0) {
+                    for (int c = 0; c < row.getLastCellNum(); c++) {
+                        if (ngenCols.values().contains(c)) continue;
+                        Double candidate = numVal(row, c);
+                        if (candidate != null && candidate >= 5.0 && candidate <= 150.0) {
+                            ngenUnitRate = candidate;
+                            break;
+                        }
+                    }
+                }
 
                 // Store Excel values exactly as read. Field names preserved for Step 5 (Main Data Set).
                 Map<String, Object> rowData = new LinkedHashMap<>();
@@ -2167,9 +2260,20 @@ public class MultiFileImportService {
             Double kwhExport = numOrNull(ngen, "kwhExport");
             Double kwhSales = numOrNull(ngen, "kwhSales");
             Double ngenUnitRate = numOrNull(ngen, "ngenUnitRate");
+            Double ngenSalesAmount = numOrNull(ngen, "salesAmount");
+            if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && ngenSalesAmount != null && ngenSalesAmount > 0 && kwhSales != null && kwhSales > 0) {
+                ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
+            }
+            if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && acc != null && !acc.trim().isEmpty()) {
+                try {
+                    Optional<Customer> custOpt = customerRepository.findById(acc.trim());
+                    if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                        ngenUnitRate = custOpt.get().getUnitRate();
+                    }
+                } catch (Exception ignored) {}
+            }
             Double ngenBillSetOff = numOrNull(ngen, "billSetOff");
             Double ngenRetentionMoney = numOrNull(ngen, "retentionMoney");
-            Double ngenSalesAmount = numOrNull(ngen, "salesAmount");
             Double ngenPaymentSettled = numOrNull(ngen, "paymentSettled");
             Double ngenOutstandingBalance = numOrNull(ngen, "outstandingBalance");
             String ngenNetType = hasNgen ? (String) ngen.get("ngenNetType") : null;
@@ -3326,9 +3430,21 @@ public class MultiFileImportService {
         Double kwhExport = parseDouble(row.get("kwhExport"));
         Double kwhSales = parseDouble(row.get("kwhSales"));
         Double ngenUnitRate = parseDouble(row.get("ngenUnitRate"));
+        Double ngenSalesAmount = parseDouble(row.get("salesAmount"));
+        if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && ngenSalesAmount != null && ngenSalesAmount > 0 && kwhSales != null && kwhSales > 0) {
+            ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
+        }
+        if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && accountNo != null && !accountNo.trim().isEmpty()) {
+            try {
+                Optional<Customer> custOpt = customerRepository.findById(accountNo.trim());
+                if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                    ngenUnitRate = custOpt.get().getUnitRate();
+                }
+            } catch (Exception ignored) {}
+        }
+        row.put("ngenUnitRate", ngenUnitRate);
         Double ngenBillSetOff = parseDouble(row.get("ngenBillSetOff"));
         Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
-        Double ngenSalesAmount = parseDouble(row.get("salesAmount"));
         Double ngenPaymentSettled = parseDouble(row.get("paymentSettled"));
         String ngenNetType = (String) row.get("ngenNetType");
 

@@ -47,7 +47,7 @@ public class PreviewService {
         FIELD_ALIASES.put("exports", Arrays.asList("exports", "export", "exportunits", "export_units", "kwhout",
                 "units_export", "solar_export", "exportkwh", "exportunit", "kwhexport"));
         FIELD_ALIASES.put("unitcost", Arrays.asList("unitcost", "unit_cost", "rate", "cost", "tariff", "price_per_unit",
-                "unitrate", "perunit", "unit_rate"));
+                "unitrate", "perunit", "unit_rate", "unitratelkr", "unitcostlkr", "unitraters", "unitcostrs", "unitratekwh", "tariffrate", "sellingrate", "priceperunit", "unitprice", "rateperunit", "costperunit", "unit"));
         FIELD_ALIASES.put("totalamount", Arrays.asList("totalamount", "total_amount", "total", "amount", "bill_amount",
                 "billamount", "netamount", "kwhsalesamount", "salesamount"));
         FIELD_ALIASES.put("billingmode",

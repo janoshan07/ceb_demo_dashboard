@@ -1502,6 +1502,15 @@ public class MultiFileImportService {
         return errors;
     }
 
+    private String strVal(Object val) {
+        if (val == null) return "";
+        if (val instanceof Map) {
+            Object inner = ((Map<?, ?>) val).get("value");
+            return inner != null ? String.valueOf(inner) : "";
+        }
+        return String.valueOf(val);
+    }
+
     private String strVal(Row row, Integer colIdx) {
         if (colIdx == null) return null;
         Cell cell = row.getCell(colIdx);
@@ -2614,7 +2623,10 @@ public class MultiFileImportService {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
                 .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
 
-        if (!"MAIN_DATASET_APPROVED".equals(session.getStage()) && !"MASTER_COMPARISON_GENERATED".equals(session.getStage())) {
+        if (!"MAIN_DATASET_APPROVED".equals(session.getStage())
+                && !"MASTER_COMPARISON_GENERATED".equals(session.getStage())
+                && !"MASTER_COMPARISON_APPROVED".equals(session.getStage())
+                && !"COMPLETED".equals(session.getStage())) {
             throw new IllegalStateException("Main Dataset must be approved first. Current stage: " + session.getStage());
         }
 
@@ -2900,17 +2912,171 @@ public class MultiFileImportService {
         session.setStage("MASTER_COMPARISON_GENERATED");
         sessionRepository.save(session);
 
+        Map<String, Object> summary = computeStep6SummaryStats(enrichedList);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
         result.put("stage", "MASTER_COMPARISON_GENERATED");
-        result.put("totalRecords", enrichedList.size());
-        result.put("matchedCount", matchCount);
-        result.put("mismatchCount", mismatchCount);
-        result.put("notFoundCount", notFoundCount);
-        result.put("masterOnlyCount", masterOnlyCount);
+        result.putAll(summary);
+        result.put("validationSummary", summary);
         result.put("rows", enrichedList);
-        result.put("message", String.format("Master Data comparison complete. %d matched, %d mismatches, %d not found, %d master-only (no billing).", matchCount, mismatchCount, notFoundCount, masterOnlyCount));
+        result.put("message", String.format("Master Data comparison complete. %d records processed (%d valid, %d new, %d mismatches).", enrichedList.size(), summary.get("validCount"), summary.get("newCustomersCount"), summary.get("mismatchCount")));
         return result;
+    }
+
+    private boolean isMissingField(Object v) {
+        if (v == null) return true;
+        String s = v.toString().trim();
+        return s.isEmpty() || "—".equals(s) || "null".equalsIgnoreCase(s);
+    }
+
+    public Map<String, Object> computeStep6SummaryStats(List<Map<String, Object>> rows) {
+        int validCount = 0;
+        int errorCount = 0;
+        int warningCount = 0;
+        int duplicateCount = 0;
+        int newCustomersCount = 0;
+        int existingCustomersCount = 0;
+        int missingDetailsCount = 0;
+        int nameMismatchCount = 0;
+        int unitRateMismatchCount = 0;
+        int netTypeMismatchCount = 0;
+        int noBillingDataCount = 0;
+        int agreementExpiredCount = 0;
+        int agreementExpiringSoonCount = 0;
+        int matchedCount = 0;
+        int mismatchCount = 0;
+        int notFoundCount = 0;
+        int masterOnlyCount = 0;
+
+        Set<String> uniqueAccountNos = new HashSet<>();
+
+        // Resolve reference billing month date for agreement expiry
+        LocalDate refDate = LocalDate.now();
+        for (Map<String, Object> r : rows) {
+            String currDateStr = strVal(r.get("currReadingDate"));
+            if (!currDateStr.isEmpty() && !"—".equals(currDateStr)) {
+                LocalDate parsed = safeParseDate(currDateStr);
+                if (parsed != null) {
+                    refDate = parsed;
+                    break;
+                }
+            }
+        }
+        LocalDate monthStart = refDate.withDayOfMonth(1);
+        LocalDate monthEnd = refDate.withDayOfMonth(refDate.lengthOfMonth());
+
+        for (Map<String, Object> r : rows) {
+            String acc = strVal(r.get("accountNo")).trim();
+            if (!acc.isEmpty() && !"—".equals(acc)) {
+                uniqueAccountNos.add(acc);
+            }
+
+            boolean isMasterFound = Boolean.TRUE.equals(r.get("masterDataFound"));
+            boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(r.get("isNewCustomer"));
+            boolean isNoBill = Boolean.TRUE.equals(r.get("masterOnly")) || Boolean.TRUE.equals(r.get("noBillingData")) || Boolean.TRUE.equals(r.get("paymentHold"));
+            boolean isDup = Boolean.TRUE.equals(r.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("hasDuplicateSources"));
+
+            boolean isNameMismatch = "MISMATCH".equals(r.get("nameMatch"));
+            boolean isUnitRateMismatch = "MISMATCH".equals(r.get("unitRateMatch"));
+            boolean isNetTypeMismatch = "MISMATCH".equals(r.get("netTypeMatch"));
+
+            // Agreement Expiry Check (Agreement Date + 7 years)
+            String agrDateStr = strVal(r.get("agreementDate"));
+            String agrStatus = "ACTIVE";
+            if (!agrDateStr.isEmpty() && !"—".equals(agrDateStr)) {
+                LocalDate agrDate = safeParseDate(agrDateStr);
+                if (agrDate != null) {
+                    LocalDate expDate = agrDate.plusYears(7);
+                    if (expDate.isBefore(monthStart)) {
+                        agrStatus = "EXPIRED";
+                    } else if (!expDate.isAfter(monthEnd)) {
+                        agrStatus = "EXPIRING_SOON";
+                    }
+                }
+            }
+            r.put("agreementStatus", agrStatus);
+
+            // Missing Required Details Check (Mandatory profile fields)
+            boolean hasMissingDetails = isMissingField(r.get("accountNo"))
+                    || isMissingField(r.get("customerName"))
+                    || isMissingField(r.get("customerAddress"))
+                    || isMissingField(r.get("mobileNo"))
+                    || isMissingField(r.get("agreementDate"))
+                    || r.get("panelCapacity") == null
+                    || isMissingField(r.get("bankCode"))
+                    || isMissingField(r.get("branchCode"))
+                    || isMissingField(r.get("bankAccountNo"))
+                    || isMissingField(r.get("refNo"))
+                    || (isMissingField(r.get("solarType")) && isMissingField(r.get("ngenNetType")) && isMissingField(r.get("npayNetType")))
+                    || (r.get("unitRate") == null && r.get("mainUnitRate") == null && r.get("masterUnitRate") == null);
+
+            r.put("hasMissingDetails", hasMissingDetails);
+
+            if (isNewCust) newCustomersCount++;
+            else existingCustomersCount++;
+
+            if (isNoBill) {
+                noBillingDataCount++;
+                masterOnlyCount++;
+            }
+            if (isDup) duplicateCount++;
+            if (isNameMismatch) nameMismatchCount++;
+            if (isUnitRateMismatch) unitRateMismatchCount++;
+            if (isNetTypeMismatch) netTypeMismatchCount++;
+            if (hasMissingDetails) missingDetailsCount++;
+            if ("EXPIRED".equals(agrStatus)) agreementExpiredCount++;
+            if ("EXPIRING_SOON".equals(agrStatus)) agreementExpiringSoonCount++;
+
+            if (isMasterFound) matchedCount++;
+            else notFoundCount++;
+
+            if (isNameMismatch || isUnitRateMismatch || isNetTypeMismatch) mismatchCount++;
+
+            // Primary status classification (1 status per row)
+            List<?> errs = r.get("errors") instanceof List ? (List<?>) r.get("errors") : Collections.emptyList();
+            List<?> warns = r.get("warnings") instanceof List ? (List<?>) r.get("warnings") : Collections.emptyList();
+
+            String primaryStatus;
+            if (isDup) {
+                primaryStatus = "DUPLICATE";
+            } else if (!errs.isEmpty()) {
+                primaryStatus = "ERROR";
+            } else if (!warns.isEmpty() || isNameMismatch || isUnitRateMismatch || isNetTypeMismatch || isNoBill || "EXPIRED".equals(agrStatus)) {
+                primaryStatus = "WARNING";
+            } else {
+                primaryStatus = "VALID";
+            }
+
+            r.put("status", primaryStatus);
+
+            if ("VALID".equals(primaryStatus)) validCount++;
+            else if ("ERROR".equals(primaryStatus)) errorCount++;
+            else if ("WARNING".equals(primaryStatus)) warningCount++;
+        }
+
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("totalRecords", rows.size());
+        m.put("uniqueCustomers", uniqueAccountNos.size());
+        m.put("validCount", validCount);
+        m.put("errorCount", errorCount);
+        m.put("warningCount", warningCount);
+        m.put("duplicateCount", duplicateCount);
+        m.put("newCustomersCount", newCustomersCount);
+        m.put("existingCustomersCount", existingCustomersCount);
+        m.put("missingDetailsCount", missingDetailsCount);
+        m.put("nameMismatchCount", nameMismatchCount);
+        m.put("unitRateMismatchCount", unitRateMismatchCount);
+        m.put("netTypeMismatchCount", netTypeMismatchCount);
+        m.put("noBillingDataCount", noBillingDataCount);
+        m.put("agreementExpiredCount", agreementExpiredCount);
+        m.put("agreementExpiringSoonCount", agreementExpiringSoonCount);
+        m.put("matchedCount", matchedCount);
+        m.put("mismatchCount", mismatchCount);
+        m.put("notFoundCount", notFoundCount);
+        m.put("masterOnlyCount", masterOnlyCount);
+
+        return m;
     }
 
     /**
@@ -2957,10 +3123,14 @@ public class MultiFileImportService {
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 
+        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
         result.put("approvedCount", approvedAccounts.size());
         result.put("approvedAccounts", approvedAccounts);
+        result.putAll(summary);
+        result.put("validationSummary", summary);
         result.put("rows", dataset);
         return result;
     }
@@ -3016,10 +3186,14 @@ public class MultiFileImportService {
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 
+        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
         result.put("approvedCount", approvedAccounts.size());
         result.put("approvedAccounts", approvedAccounts);
+        result.putAll(summary);
+        result.put("validationSummary", summary);
         result.put("rows", dataset);
         return result;
     }
@@ -3076,10 +3250,14 @@ public class MultiFileImportService {
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 
+        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
         result.put("approvedCount", approvedAccounts.size());
         result.put("approvedAccounts", approvedAccounts);
+        result.putAll(summary);
+        result.put("validationSummary", summary);
         result.put("rows", dataset);
         return result;
     }
@@ -3224,6 +3402,8 @@ public class MultiFileImportService {
                         username, fld, acctKey, sessionId, java.time.LocalDateTime.now(),
                         oldValue, newValue, resolved ? "RESOLVED (Valid)" : "STILL MISMATCH"));
 
+        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
         result.put("accountNo", acctKey);
@@ -3233,6 +3413,8 @@ public class MultiFileImportService {
         result.put("resolved", resolved);
         result.put("flag", target.get(flagKey));
         result.put("row", target);
+        result.putAll(summary);
+        result.put("validationSummary", summary);
         result.put("rows", dataset);
         return result;
     }
@@ -3353,7 +3535,7 @@ public class MultiFileImportService {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
                 .orElseThrow(() -> new IllegalArgumentException("Import session not found: " + sessionId));
 
-        if (!"MASTER_COMPARISON_GENERATED".equals(session.getStage())) {
+        if (!"MASTER_COMPARISON_GENERATED".equals(session.getStage()) && !"MASTER_COMPARISON_APPROVED".equals(session.getStage())) {
             throw new IllegalStateException("Master Data comparison must be generated first. Current stage: " + session.getStage());
         }
 

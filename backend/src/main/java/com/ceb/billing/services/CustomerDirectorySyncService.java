@@ -134,8 +134,12 @@ public class CustomerDirectorySyncService {
         }
 
         // Stamp the division this billing belongs to (folds onto branch code when absent).
-        if (division != null && !division.trim().isEmpty()) {
-            c.setDivision(division.trim());
+        String divTag = division;
+        if (divTag == null || divTag.trim().isEmpty()) {
+            divTag = str(record, "division", "location");
+        }
+        if (divTag != null && !divTag.trim().isEmpty()) {
+            c.setDivision(divTag.trim());
         }
 
         // Preserve the approved validation state so the directory reflects the snapshot.

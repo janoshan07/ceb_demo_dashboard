@@ -3088,25 +3088,28 @@ const UploadPage = () => {
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Comparison failed.', 'error'); return; }
       const rows = data.rows || [];
-      const errorCount = rows.filter(r => r.status === 'ERROR').length;
-      const warningCount = rows.filter(r => r.status === 'WARNING').length;
-      const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
-      const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
-      const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true || Number(r.ngenSourceCount) > 1 || Number(r.npaySourceCount) > 1;
-
-      const newCustomersCount = rows.filter(isNewCust).length;
-      const noBillingDataCount = rows.filter(isNoBill).length;
-      const duplicateCount = rows.filter(isDup).length;
-      const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
-      const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
-      const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
-      const validCount = rows.filter(r => r.status === 'VALID' && !isNewCust(r) && !isNoBill(r) && !isDup(r) && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
+      const vs = data.validationSummary || data || {};
 
       setMasterComparison({
-        rows, totalRecords: rows.length, errorCount, warningCount, validCount,
-        newCustomersCount, noBillingDataCount, duplicateCount,
-        nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount,
-        matchedCount: data.matchedCount, mismatchCount: data.mismatchCount, notFoundCount: data.notFoundCount
+        rows,
+        totalRecords: vs.totalRecords ?? rows.length,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
       setNameMismatchSelected([]);
       setUnitRateMismatchSelected([]);
@@ -3180,18 +3183,27 @@ const UploadPage = () => {
       const approvedSet = new Set((data.approvedAccounts || accts).map(a => String(a).trim()));
       // Patch the Step 6 rows locally: flip approved accounts to a name MATCH and refresh
       // the validation summary (Name Mismatch ↓, Valid ↑) without re-running the comparison.
-      setMasterComparison(prev => {
-        if (!prev) return prev;
-        const rows = prev.rows.map(r => {
-          const acc = r.accountNo != null ? String(r.accountNo).trim() : null;
-          if (acc && approvedSet.has(acc) && r.nameMatch === 'MISMATCH') {
-            return { ...r, nameMatch: 'MATCH', nameApproved: true };
-          }
-          return r;
-        });
-        const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
-        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH').length;
-        return { ...prev, rows, nameMismatchCount, validCount };
+      const vs = data.validationSummary || data || {};
+      setMasterComparison({
+        rows: data.rows || [],
+        totalRecords: vs.totalRecords ?? 0,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
       setNameMismatchSelected(prev => prev.filter(a => !approvedSet.has(String(a).trim())));
       showToast(`✅ ${data.approvedCount ?? approvedSet.size} name mismatch record(s) approved as Valid.`, 'success');
@@ -3224,18 +3236,27 @@ const UploadPage = () => {
       const approvedSet = new Set((data.approvedAccounts || accts).map(a => String(a).trim()));
       // Patch the Step 6 rows locally: flip approved accounts to a unit rate MATCH and refresh
       // the validation summary (Unit Rate Mismatch ↓, Valid ↑) without re-running the comparison.
-      setMasterComparison(prev => {
-        if (!prev) return prev;
-        const rows = prev.rows.map(r => {
-          const acc = r.accountNo != null ? String(r.accountNo).trim() : null;
-          if (acc && approvedSet.has(acc) && r.unitRateMatch === 'MISMATCH') {
-            return { ...r, unitRateMatch: 'MATCH', unitRateApproved: true };
-          }
-          return r;
-        });
-        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
-        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH').length;
-        return { ...prev, rows, unitRateMismatchCount, validCount };
+      const vs = data.validationSummary || data || {};
+      setMasterComparison({
+        rows: data.rows || [],
+        totalRecords: vs.totalRecords ?? 0,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
       setUnitRateMismatchSelected(prev => prev.filter(a => !approvedSet.has(String(a).trim())));
       showToast(`✅ ${data.approvedCount ?? approvedSet.size} unit rate mismatch record(s) approved as Valid.`, 'success');
@@ -3268,18 +3289,27 @@ const UploadPage = () => {
       const approvedSet = new Set((data.approvedAccounts || accts).map(a => String(a).trim()));
       // Patch the Step 6 rows locally: flip approved accounts to a net type MATCH and refresh
       // the validation summary (Net Type Mismatch ↓, Valid ↑) without re-running the comparison.
-      setMasterComparison(prev => {
-        if (!prev) return prev;
-        const rows = prev.rows.map(r => {
-          const acc = r.accountNo != null ? String(r.accountNo).trim() : null;
-          if (acc && approvedSet.has(acc) && r.netTypeMatch === 'MISMATCH') {
-            return { ...r, netTypeMatch: 'MATCH', netTypeApproved: true };
-          }
-          return r;
-        });
-        const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
-        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
-        return { ...prev, rows, netTypeMismatchCount, validCount };
+      const vs = data.validationSummary || data || {};
+      setMasterComparison({
+        rows: data.rows || [],
+        totalRecords: vs.totalRecords ?? 0,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
       setNetTypeMismatchSelected(prev => prev.filter(a => !approvedSet.has(String(a).trim())));
       showToast(`✅ ${data.approvedCount ?? approvedSet.size} net type mismatch record(s) approved as Valid.`, 'success');
@@ -3314,39 +3344,27 @@ const UploadPage = () => {
       const acc = String(accountNo).trim();
       const newFlag = data.flag; // 'MATCH' (resolved) or 'MISMATCH'
       // Patch the edited row locally (value + new flag) and refresh the validation summary counts.
-      setMasterComparison(prev => {
-        if (!prev) return prev;
-        const rows = prev.rows.map(r => {
-          const a = r.accountNo != null ? String(r.accountNo).trim() : null;
-          if (a !== acc) return r;
-          const patched = { ...r, [flagKey]: newFlag };
-          if (field === 'name') patched.npayName = newValue;
-          if (field === 'unitRate') {
-            const n = (newValue === '' || newValue == null) ? null : Number(newValue);
-            patched.mainUnitRate = (n == null || isNaN(n)) ? null : n;
-            patched.ngenUnitRate = patched.mainUnitRate;
-          }
-          if (field === 'masterUnitRate') {
-            const n = (newValue === '' || newValue == null) ? null : Number(newValue);
-            patched.masterUnitRate = (n == null || isNaN(n)) ? null : n;
-            patched.unitRate = patched.masterUnitRate;
-          }
-          if (field === 'netType') { patched.mainNetType = newValue; patched.ngenNetType = newValue; }
-          
-          if (patched.masterUnitRate != null && patched.mainUnitRate != null) {
-            const match = Math.abs(patched.masterUnitRate - patched.mainUnitRate) <= 1e-6;
-            patched.unitRateMatch = match ? 'MATCH' : 'MISMATCH';
-          } else {
-            patched.unitRateMatch = 'MATCH';
-          }
-
-          return patched;
-        });
-        const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
-        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
-        const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
-        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
-        return { ...prev, rows, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, validCount };
+      const vs = data.validationSummary || data || {};
+      setMasterComparison({
+        rows: data.rows || [],
+        totalRecords: vs.totalRecords ?? 0,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
       // If resolved, drop it from the relevant bulk-selection set.
       if (data.resolved || newFlag === 'MATCH') {
@@ -3382,31 +3400,27 @@ const UploadPage = () => {
       const acc = String(accountNo).trim();
       const newFlag = data.flag;
 
-      setMasterComparison(prev => {
-        if (!prev) return prev;
-        const rows = prev.rows.map(r => {
-          const a = r.accountNo != null ? String(r.accountNo).trim() : null;
-          if (a !== acc) return r;
-
-          const nMaster = (masterValue === '' || masterValue == null) ? null : Number(masterValue);
-          const nMain = (mainValue === '' || mainValue == null) ? null : Number(mainValue);
-
-          const patched = {
-            ...r,
-            masterUnitRate: (nMaster == null || isNaN(nMaster)) ? null : nMaster,
-            unitRate: (nMaster == null || isNaN(nMaster)) ? null : nMaster,
-            mainUnitRate: (nMain == null || isNaN(nMain)) ? null : nMain,
-            ngenUnitRate: (nMain == null || isNaN(nMain)) ? null : nMain,
-            unitRateMatch: newFlag
-          };
-
-          return patched;
-        });
-        const nameMismatchCount = rows.filter(r => r.nameMatch === 'MISMATCH').length;
-        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
-        const netTypeMismatchCount = rows.filter(r => r.netTypeMatch === 'MISMATCH').length;
-        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
-        return { ...prev, rows, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, validCount };
+      const vs = data.validationSummary || data || {};
+      setMasterComparison({
+        rows: data.rows || [],
+        totalRecords: vs.totalRecords ?? 0,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
 
       if (data.resolved || newFlag === 'MATCH') {
@@ -3454,19 +3468,27 @@ const UploadPage = () => {
       if (!res.ok) { if (!silent) showToast(data.message || 'Unit Rate update failed.', 'error'); return false; }
       const newFlag = data.flag; // 'MATCH' or 'MISMATCH' from the unchanged comparison logic
       // Patch the record immediately in the local Step 6 rows and refresh the summary counts.
-      setMasterComparison(prev => {
-        if (!prev) return prev;
-        const rows = prev.rows.map(r => {
-          const a = r.accountNo != null ? String(r.accountNo).trim() : null;
-          if (a !== acc) return r;
-          const patched = { ...r, unitRateMatch: newFlag, mainUnitRate: parsed, ngenUnitRate: parsed };
-          if (r.unitRate !== undefined) patched.unitRate = parsed;
-          if (r.effectiveUnitRate !== undefined) patched.effectiveUnitRate = parsed;
-          return patched;
-        });
-        const unitRateMismatchCount = rows.filter(r => r.unitRateMatch === 'MISMATCH').length;
-        const validCount = rows.filter(r => r.status === 'VALID' && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH').length;
-        return { ...prev, rows, unitRateMismatchCount, validCount };
+      const vs = data.validationSummary || data || {};
+      setMasterComparison({
+        rows: data.rows || [],
+        totalRecords: vs.totalRecords ?? 0,
+        uniqueCustomers: vs.uniqueCustomers ?? 0,
+        validCount: vs.validCount ?? 0,
+        errorCount: vs.errorCount ?? 0,
+        warningCount: vs.warningCount ?? 0,
+        duplicateCount: vs.duplicateCount ?? 0,
+        newCustomersCount: vs.newCustomersCount ?? 0,
+        existingCustomersCount: vs.existingCustomersCount ?? 0,
+        missingDetailsCount: vs.missingDetailsCount ?? 0,
+        noBillingDataCount: vs.noBillingDataCount ?? 0,
+        nameMismatchCount: vs.nameMismatchCount ?? 0,
+        unitRateMismatchCount: vs.unitRateMismatchCount ?? 0,
+        netTypeMismatchCount: vs.netTypeMismatchCount ?? 0,
+        agreementExpiredCount: vs.agreementExpiredCount ?? 0,
+        agreementExpiringSoonCount: vs.agreementExpiringSoonCount ?? 0,
+        matchedCount: vs.matchedCount ?? 0,
+        mismatchCount: vs.mismatchCount ?? 0,
+        notFoundCount: vs.notFoundCount ?? 0
       });
       // Keep the Agreement Expiry Review audit log: old value, new value, edited by, edited time.
       setAgreementRateAudit(prevLog => [{
@@ -4585,7 +4607,7 @@ const UploadPage = () => {
     const hasErrors = (errorCount || 0) > 0;
     const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
     const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
-    const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true || Number(r.ngenSourceCount) > 1 || Number(r.npaySourceCount) > 1;
+    const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true;
 
     const nameMismatchRows = (rows || []).filter(r => r.nameMatch === 'MISMATCH');
     const unitRateMismatchRows = (rows || []).filter(r => r.unitRateMatch === 'MISMATCH');
@@ -4617,12 +4639,12 @@ const UploadPage = () => {
         currentUnitRate: r.mainUnitRate ?? r.unitRate ?? r.effectiveUnitRate ?? null
       };
     });
-    const agreementExpiredCount = agreementRows.filter(r => r.agreementStatus === 'EXPIRED').length;
-    const agreementExpiringCount = agreementRows.filter(r => r.agreementStatus === 'EXPIRING_SOON').length;
+    const agreementExpiredCount = masterComparison.agreementExpiredCount ?? agreementRows.filter(r => r.agreementStatus === 'EXPIRED').length;
+    const agreementExpiringCount = masterComparison.agreementExpiringSoonCount ?? agreementRows.filter(r => r.agreementStatus === 'EXPIRING_SOON').length;
     const agreementActiveCount = agreementRows.filter(r => r.agreementStatus === 'ACTIVE').length;
     const filteredRows = (rows || []).filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
-      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' && !isNewCust(r) && !isNoBill(r) && !isDup(r) && r.nameMatch !== 'MISMATCH' && r.unitRateMatch !== 'MISMATCH' && r.netTypeMatch !== 'MISMATCH';
+      if (masterComparisonFilter === 'VALID') return r.status === 'VALID';
       if (masterComparisonFilter === 'NEW_CUSTOMERS') return isNewCust(r);
       if (masterComparisonFilter === 'NO_BILLING_DATA') return isNoBill(r);
       if (masterComparisonFilter === 'DUPLICATE') return isDup(r);
@@ -4631,6 +4653,8 @@ const UploadPage = () => {
       if (masterComparisonFilter === 'NET_TYPE_MISMATCH') return r.netTypeMatch === 'MISMATCH';
       if (masterComparisonFilter === 'ERROR') return r.status === 'ERROR';
       if (masterComparisonFilter === 'WARNING') return r.status === 'WARNING';
+      if (masterComparisonFilter === 'MISSING_DETAILS') return r.hasMissingDetails === true;
+      if (masterComparisonFilter === 'AGREEMENT_EXPIRY') return r.agreementStatus === 'EXPIRED' || r.agreementStatus === 'EXPIRING_SOON';
       return true;
     });
     return (
@@ -4671,8 +4695,8 @@ const UploadPage = () => {
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
           <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#fbbf24' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#a78bfa' : '#10b981'} icon={<Zap size={18} />} />
-          <StatCard label="Agreement Expired" value={agreementExpiredCount} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
-          <StatCard label="Expiring Soon" value={agreementExpiringCount} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
+          <StatCard label="Agreement Expired" value={agreementExpiredCount || 0} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
+          <StatCard label="Expiring Soon" value={agreementExpiringCount || 0} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
         </div>
 
         {/* Filter tabs */}

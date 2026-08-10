@@ -40,7 +40,7 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
            "(:query IS NULL OR LOWER(c.accountNo) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
            "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%'))) AND " +
            "(:status IS NULL OR c.validationStatus = :status) AND " +
-           "(:location IS NULL OR c.division = :location OR c.branchCode = :location)")
+           "(:location IS NULL OR (c.division IS NOT NULL AND LOWER(TRIM(c.division)) = LOWER(TRIM(:location))) OR (c.division IS NULL AND LOWER(TRIM(c.branchCode)) = LOWER(TRIM(:location))))")
     Page<Customer> searchCustomersFiltered(@Param("query") String query,
                                            @Param("status") String status,
                                            @Param("location") String location,

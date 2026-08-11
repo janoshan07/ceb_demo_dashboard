@@ -2245,3 +2245,10 @@ textarea:focus {
     box-shadow: 0 0 16px rgba(239, 68, 68, 0.9), inset 0 0 8px rgba(239, 68, 68, 0.25) !important;
   }
 }
+
+/* Custom override to prevent global input focus styling on the search bar input */
+input.search-bar-input-override:focus {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}

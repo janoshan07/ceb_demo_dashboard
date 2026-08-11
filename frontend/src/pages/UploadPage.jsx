@@ -5,7 +5,7 @@ import { useToast } from '../context/ToastContext';
 import {
   Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle,
   FileText, Loader, Trash2, Eye,
-  Check, RefreshCw, Layers, Zap, User, Info, Search,
+  Check, RefreshCw, Layers, Zap, User, Info, Search, SlidersHorizontal,
   Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft, Archive,
   Calendar, MapPin, Download, Bell, Sun, Moon, ShieldCheck, ExternalLink
 } from 'lucide-react';
@@ -407,66 +407,174 @@ const StatusBadge = ({ status }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
 //  SEARCH BAR COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
-const SearchBar = ({ value, onChange, count, totalCount, placeholder = "Search Account No, Name, or Ref No..." }) => {
+const SearchBar = ({
+  value,
+  onChange,
+  count,
+  totalCount,
+  placeholder = "Search Account No, Customer Name or Reference...",
+  onToggleFilters,
+  showFilters
+}) => {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '0.75rem',
+      width: '100%',
+      marginBottom: '1.25rem',
+      flexWrap: 'wrap'
+    }}>
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        gap: '0.65rem',
-        background: 'rgba(15, 23, 42, 0.4)',
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '10px',
-        padding: '0.45rem 0.85rem',
-        width: '100%',
-        maxWidth: '380px',
+        background: 'linear-gradient(135deg, rgba(16, 24, 48, 0.5), rgba(9, 15, 36, 0.7))',
+        backdropFilter: 'blur(12px)',
+        border: isFocused ? '1.5px solid #22d3ee' : '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '16px',
+        padding: '0.6rem 1rem',
+        height: '44px',
+        boxSizing: 'border-box',
+        flex: 1,
+        maxWidth: '520px',
         position: 'relative',
-        transition: 'border-color 0.25s ease'
+        boxShadow: isFocused 
+          ? '0 0 16px rgba(34, 211, 238, 0.35), inset 0 0 10px rgba(34, 211, 238, 0.1)' 
+          : '0 4px 12px rgba(0, 0, 0, 0.15)',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
       }}>
-        <Search size={15} color="#94a3b8" />
+        <Search 
+          size={16} 
+          color={isFocused ? '#22d3ee' : '#64748b'} 
+          style={{ marginRight: '0.75rem', transition: 'color 0.3s' }} 
+        />
         <input
           type="text"
+          className="search-bar-input-override"
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           style={{
             background: 'transparent',
             border: 'none',
             color: 'white',
-            fontSize: '0.8rem',
+            fontSize: '0.82rem',
             outline: 'none',
             width: '100%',
-            paddingRight: value ? '1.5rem' : '0'
+            height: '100%',
+            padding: 0,
+            paddingRight: (value || count > 0) ? '6.5rem' : '0',
+            fontFamily: 'inherit',
+            transition: 'all 0.3s'
           }}
         />
-        {value && (
-          <button
-            type="button"
-            onClick={() => onChange('')}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#94a3b8',
-              cursor: 'pointer',
-              padding: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'absolute',
-              right: '0.75rem',
-              transition: 'color 0.2s ease'
-            }}
-          >
-            <X size={15} />
-          </button>
-        )}
-      </div>
-      {value && (
-        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-          Found <strong style={{ color: 'white' }}>{count}</strong> of <strong style={{ color: '#818cf8' }}>{totalCount}</strong> records
+        
+        {/* Right section inside input wrapper: Results count and clear button */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.65rem',
+          position: 'absolute',
+          right: '0.85rem',
+          pointerEvents: 'auto',
+          zIndex: 2
+        }}>
+          {value && (
+            <span style={{
+              fontSize: '0.72rem',
+              color: '#818cf8',
+              background: 'rgba(99, 102, 241, 0.15)',
+              padding: '0.2rem 0.55rem',
+              borderRadius: '8px',
+              fontWeight: 600,
+              letterSpacing: '0.01em',
+              whiteSpace: 'nowrap',
+              transition: 'opacity 0.2s ease'
+            }}>
+              {count} {count === 1 ? 'result' : 'results'}
+            </span>
+          )}
+          
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange('')}
+              style={{
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: 'none',
+                color: '#94a3b8',
+                cursor: 'pointer',
+                width: '20px',
+                height: '20px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                transition: 'all 0.2s ease',
+                outline: 'none'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)';
+                e.currentTarget.style.color = '#f87171';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.color = '#94a3b8';
+              }}
+            >
+              <X size={12} />
+            </button>
+          )}
         </div>
+      </div>
+      
+      {/* Filters Toggle Button */}
+      {onToggleFilters && (
+        <button
+          type="button"
+          onClick={onToggleFilters}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '0.5rem',
+            background: showFilters ? 'rgba(99, 102, 241, 0.12)' : 'rgba(15, 23, 42, 0.4)',
+            border: `1px solid ${showFilters ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.06)'}`,
+            borderRadius: '16px',
+            padding: '0 1.1rem',
+            height: '44px',
+            boxSizing: 'border-box',
+            color: showFilters ? '#a5b4fc' : '#94a3b8',
+            cursor: 'pointer',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            transition: 'all 0.2s ease',
+            boxShadow: showFilters ? '0 0 12px rgba(99, 102, 241, 0.15)' : 'none'
+          }}
+          onMouseEnter={(e) => {
+            if (!showFilters) {
+              e.currentTarget.style.border = '1px solid rgba(99, 102, 241, 0.25)';
+              e.currentTarget.style.color = '#a5b4fc';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!showFilters) {
+              e.currentTarget.style.border = '1px solid rgba(255, 255, 255, 0.06)';
+              e.currentTarget.style.color = '#94a3b8';
+            }
+          }}
+        >
+          <SlidersHorizontal size={14} />
+          <span style={{ whiteSpace: 'nowrap' }}>Filters</span>
+        </button>
       )}
     </div>
   );
@@ -480,6 +588,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
 
   const allCount = rows.length;
   const validCount = rows.filter(r => r.status === 'VALID').length;
@@ -584,8 +693,10 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
         onChange={setSearchText}
         count={searchedRows.length}
         totalCount={rows.length}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+        showFilters={showFilters}
       />
-      {renderFilterTabs()}
+      {showFilters && renderFilterTabs()}
       {!displayed.length ? (
         <div style={{ textAlign: 'center', padding: '3.5rem', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
           <CheckCircle size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
@@ -763,6 +874,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
 
   const allCount = rows.length;
   const validCount = rows.filter(r => r.status === 'VALID').length;
@@ -856,8 +968,10 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
         onChange={setSearchText}
         count={searchedRows.length}
         totalCount={rows.length}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+        showFilters={showFilters}
       />
-      {renderFilterTabs()}
+      {showFilters && renderFilterTabs()}
       {!displayed.length ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
           <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
@@ -1026,6 +1140,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
 
   const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
 
@@ -1128,8 +1243,10 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
         onChange={setSearchText}
         count={searchedRows.length}
         totalCount={rows.length}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+        showFilters={showFilters}
       />
-      {renderFilterTabs()}
+      {showFilters && renderFilterTabs()}
       {!displayed.length ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
           <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
@@ -1347,6 +1464,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
 
   const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
 
@@ -1449,8 +1567,10 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
         onChange={setSearchText}
         count={searchedRows.length}
         totalCount={rows.length}
+        onToggleFilters={() => setShowFilters(!showFilters)}
+        showFilters={showFilters}
       />
-      {renderFilterTabs()}
+      {showFilters && renderFilterTabs()}
       {!displayed.length ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
           <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
@@ -1848,8 +1968,10 @@ const UploadPage = () => {
   const [filterErrors, setFilterErrors] = useState(false);
   const [mainDatasetFilter, setMainDatasetFilter] = useState('ALL');
   const [mainSearchText, setMainSearchText] = useState('');
+  const [showMainFilters, setShowMainFilters] = useState(true);
   const [masterComparisonFilter, setMasterComparisonFilter] = useState('ALL');
   const [comparisonSearchText, setComparisonSearchText] = useState('');
+  const [showComparisonFilters, setShowComparisonFilters] = useState(true);
   // ── Step 6: Name Mismatch review workflow ──
   const [nameMismatchSelected, setNameMismatchSelected] = useState([]); // Account Nos selected for bulk approval
   const [nameApproving, setNameApproving] = useState(false);
@@ -4507,36 +4629,40 @@ const UploadPage = () => {
           onChange={setMainSearchText}
           count={searchedMainRecords.length}
           totalCount={mainRecordCount}
+          onToggleFilters={() => setShowMainFilters(!showMainFilters)}
+          showFilters={showMainFilters}
         />
 
         {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          {[
-            { key: 'ALL', label: 'All Records', count: mainRecordCount || 0, color: 'var(--text-secondary)' },
-            { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
-            { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
-            { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
-            { key: 'DUPLICATE', label: 'Duplicate Accounts', count: duplicateAccountCount || 0, color: '#ec4899' },
-            { key: 'REJECTED', label: 'Rejected', count: rejectedCount || 0, color: '#f43f5e' },
-          ].map(tab => (
-            <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
-              style={{
-                padding: '0.45rem 0.9rem', borderRadius: 8,
-                background: mainDatasetFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: mainDatasetFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-                color: mainDatasetFilter === tab.key ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
-              }}>
-              <span>{tab.label}</span>
-              <span style={{
-                background: mainDatasetFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-                color: mainDatasetFilter === tab.key ? 'black' : tab.color,
-                padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
-              }}>{tab.count}</span>
-            </button>
-          ))}
-        </div>
+        {showMainFilters && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            {[
+              { key: 'ALL', label: 'All Records', count: mainRecordCount || 0, color: 'var(--text-secondary)' },
+              { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
+              { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
+              { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
+              { key: 'DUPLICATE', label: 'Duplicate Accounts', count: duplicateAccountCount || 0, color: '#ec4899' },
+              { key: 'REJECTED', label: 'Rejected', count: rejectedCount || 0, color: '#f43f5e' },
+            ].map(tab => (
+              <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
+                style={{
+                  padding: '0.45rem 0.9rem', borderRadius: 8,
+                  background: mainDatasetFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: mainDatasetFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                  color: mainDatasetFilter === tab.key ? 'white' : 'var(--text-secondary)',
+                  cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+                }}>
+                <span>{tab.label}</span>
+                <span style={{
+                  background: mainDatasetFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+                  color: mainDatasetFilter === tab.key ? 'black' : tab.color,
+                  padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
+                }}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {filteredRows.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
@@ -4862,39 +4988,43 @@ const UploadPage = () => {
           onChange={setComparisonSearchText}
           count={searchedRows.length}
           totalCount={totalRecords}
+          onToggleFilters={() => setShowComparisonFilters(!showComparisonFilters)}
+          showFilters={showComparisonFilters}
         />
 
         {/* Filter tabs */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          {[
-            { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
-            { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
-            { key: 'NEW_CUSTOMERS', label: 'New Customers', count: newCustomersCount || 0, color: '#38bdf8' },
-            { key: 'NO_BILLING_DATA', label: 'Payment Hold', count: noBillingDataCount || 0, color: '#f59e0b' },
-            { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
-            { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
-            { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
-            { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#a78bfa' },
-            { key: 'AGREEMENT_EXPIRY', label: 'Agreement Expiry Review', count: agreementExpiredCount + agreementExpiringCount, color: agreementExpiredCount > 0 ? '#ef4444' : agreementExpiringCount > 0 ? '#f97316' : '#10b981' },
-          ].map(tab => (
-            <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
-              style={{
-                padding: '0.45rem 0.9rem', borderRadius: 8,
-                background: masterComparisonFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: masterComparisonFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-                color: masterComparisonFilter === tab.key ? 'white' : 'var(--text-secondary)',
-                cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
-              }}>
-              <span>{tab.label}</span>
-              <span style={{
-                background: masterComparisonFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-                color: masterComparisonFilter === tab.key ? 'black' : tab.color,
-                padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
-              }}>{tab.count}</span>
-            </button>
-          ))}
-        </div>
+        {showComparisonFilters && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+            {[
+              { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
+              { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
+              { key: 'NEW_CUSTOMERS', label: 'New Customers', count: newCustomersCount || 0, color: '#38bdf8' },
+              { key: 'NO_BILLING_DATA', label: 'Payment Hold', count: noBillingDataCount || 0, color: '#f59e0b' },
+              { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
+              { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
+              { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
+              { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#a78bfa' },
+              { key: 'AGREEMENT_EXPIRY', label: 'Agreement Expiry Review', count: agreementExpiredCount + agreementExpiringCount, color: agreementExpiredCount > 0 ? '#ef4444' : agreementExpiringCount > 0 ? '#f97316' : '#10b981' },
+            ].map(tab => (
+              <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
+                style={{
+                  padding: '0.45rem 0.9rem', borderRadius: 8,
+                  background: masterComparisonFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: masterComparisonFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
+                  color: masterComparisonFilter === tab.key ? 'white' : 'var(--text-secondary)',
+                  cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
+                  display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
+                }}>
+                <span>{tab.label}</span>
+                <span style={{
+                  background: masterComparisonFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
+                  color: masterComparisonFilter === tab.key ? 'black' : tab.color,
+                  padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
+                }}>{tab.count}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {masterComparisonFilter === 'NAME_MISMATCH' ? (
           (() => {

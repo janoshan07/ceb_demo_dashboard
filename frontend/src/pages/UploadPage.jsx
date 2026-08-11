@@ -1986,6 +1986,10 @@ const UploadPage = () => {
   const [editMismatchValue, setEditMismatchValue] = useState('');
   const [editMasterRateValue, setEditMasterRateValue] = useState('');
   const [editMainRateValue, setEditMainRateValue] = useState('');
+  const [editMasterNameValue, setEditMasterNameValue] = useState('');
+  const [editUploadedNameValue, setEditUploadedNameValue] = useState('');
+  const [editMasterActive, setEditMasterActive] = useState(false);
+  const [editUploadedActive, setEditUploadedActive] = useState(false);
   const [editMismatchSaving, setEditMismatchSaving] = useState(false);
   // ── Step 6: Agreement Expiry Review workflow (additional review section only) ──
   const [agreementExpiryFilter, setAgreementExpiryFilter] = useState('ALL'); // ALL | EXPIRED | EXPIRING_SOON | ACTIVE
@@ -3640,6 +3644,11 @@ const UploadPage = () => {
     }
   };
 
+  const handleSaveDualNames = async (accountNo) => {
+    const combinedValue = `${editMasterNameValue}|${editUploadedNameValue}`;
+    await handleEditMismatch('name', accountNo, combinedValue);
+  };
+
   const handleEditBothUnitRates = async (accountNo, masterValue, mainValue) => {
     const sessionId = session?.sessionId;
     if (!sessionId) return;
@@ -5088,49 +5097,189 @@ const UploadPage = () => {
                             const checked = nameMismatchSelected.includes(acc);
                             const isEditing = editingMismatch && editingMismatch.field === 'name' && String(editingMismatch.accountNo) === acc;
                             return (
-                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                                <td style={{ padding: '0.5rem 0.75rem' }}>
-                                  <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
-                                </td>
-                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>
-                                  {isEditing ? (
-                                    <input type="text" value={editMismatchValue} autoFocus onChange={e => setEditMismatchValue(e.target.value)}
-                                      onKeyDown={e => { if (e.key === 'Enter') handleEditMismatch('name', acc, editMismatchValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMismatchValue(''); } }}
-                                      style={{ width: '100%', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem' }} />
-                                  ) : (row.npayName || '—')}
-                                </td>
-                                <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.masterName || '—'}</td>
-                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                  <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Name Mismatch</span>
-                                </td>
-                                <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
-                                  {isEditing ? (
-                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
-                                      <button type="button" onClick={() => handleEditMismatch('name', acc, editMismatchValue)} disabled={editMismatchSaving}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: editMismatchSaving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: editMismatchSaving ? 0.6 : 1 }}>
-                                        {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
-                                      </button>
-                                      <button type="button" onClick={() => { setEditingMismatch(null); setEditMismatchValue(''); }} disabled={editMismatchSaving}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-                                        Cancel
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
-                                      <button type="button" onClick={() => handleApproveNames([acc])} disabled={nameApproving}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: nameApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: nameApproving ? 0.6 : 1 }}>
-                                        <CheckCircle size={12} /> Approve Name
-                                      </button>
-                                      <button type="button" onClick={() => { setEditingMismatch({ field: 'name', accountNo: acc }); setEditMismatchValue(row.npayName || ''); }}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
-                                        <Pencil size={12} /> Edit Name
-                                      </button>
-                                    </div>
-                                  )}
-                                </td>
-                              </tr>
+                               isEditing ? (
+                                 <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(99,102,241,0.03)' }}>
+                                   <td colSpan={7} style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.2)' }}>
+                                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                                       <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                                         <User size={14} />
+                                         <span>Customer Name Mismatch (Account No: {row.accountNo || '—'})</span>
+                                       </div>
+                                       
+                                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
+                                         {/* Master Name Field */}
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', fontWeight: 600 }}>Master Name:</label>
+                                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                             <input
+                                               type="text"
+                                               value={editMasterNameValue}
+                                               onChange={(e) => setEditMasterNameValue(e.target.value)}
+                                               disabled={!editMasterActive}
+                                               style={{
+                                                 flex: 1,
+                                                 padding: '0.4rem 0.65rem',
+                                                 borderRadius: 8,
+                                                 border: `1px solid ${editMasterActive ? '#22d3ee' : 'rgba(255,255,255,0.08)'}`,
+                                                 background: editMasterActive ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.03)',
+                                                 color: editMasterActive ? 'white' : 'var(--text-secondary)',
+                                                 fontSize: '0.8rem',
+                                                 outline: 'none',
+                                                 boxShadow: editMasterActive ? '0 0 12px rgba(34, 211, 238, 0.15)' : 'none',
+                                                 transition: 'all 0.2s'
+                                               }}
+                                             />
+                                             <button
+                                               type="button"
+                                               onClick={() => setEditMasterActive(!editMasterActive)}
+                                               style={{
+                                                 padding: '0.4rem 0.65rem',
+                                                 borderRadius: 8,
+                                                 background: editMasterActive ? 'rgba(34, 211, 238, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                                 border: `1px solid ${editMasterActive ? 'rgba(34, 211, 238, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
+                                                 color: editMasterActive ? '#22d3ee' : 'var(--text-secondary)',
+                                                 fontSize: '0.75rem',
+                                                 fontWeight: 600,
+                                                 cursor: 'pointer',
+                                                 display: 'inline-flex',
+                                                 alignItems: 'center',
+                                                 gap: '0.25rem',
+                                                 transition: 'all 0.2s'
+                                               }}
+                                             >
+                                               <Pencil size={12} />
+                                               <span>Edit</span>
+                                             </button>
+                                           </div>
+                                         </div>
+                                         
+                                         {/* Uploaded / Source Name Field */}
+                                         <div>
+                                           <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', fontWeight: 600 }}>Uploaded Name:</label>
+                                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                             <input
+                                               type="text"
+                                               value={editUploadedNameValue}
+                                               onChange={(e) => setEditUploadedNameValue(e.target.value)}
+                                               disabled={!editUploadedActive}
+                                               style={{
+                                                 flex: 1,
+                                                 padding: '0.4rem 0.65rem',
+                                                 borderRadius: 8,
+                                                 border: `1px solid ${editUploadedActive ? '#22d3ee' : 'rgba(255,255,255,0.08)'}`,
+                                                 background: editUploadedActive ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.03)',
+                                                 color: editUploadedActive ? 'white' : 'var(--text-secondary)',
+                                                 fontSize: '0.8rem',
+                                                 outline: 'none',
+                                                 boxShadow: editUploadedActive ? '0 0 12px rgba(34, 211, 238, 0.15)' : 'none',
+                                                 transition: 'all 0.2s'
+                                               }}
+                                             />
+                                             <button
+                                               type="button"
+                                               onClick={() => setEditUploadedActive(!editUploadedActive)}
+                                               style={{
+                                                 padding: '0.4rem 0.65rem',
+                                                 borderRadius: 8,
+                                                 background: editUploadedActive ? 'rgba(34, 211, 238, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                                                 border: `1px solid ${editUploadedActive ? 'rgba(34, 211, 238, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
+                                                 color: editUploadedActive ? '#22d3ee' : 'var(--text-secondary)',
+                                                 fontSize: '0.75rem',
+                                                 fontWeight: 600,
+                                                 cursor: 'pointer',
+                                                 display: 'inline-flex',
+                                                 alignItems: 'center',
+                                                 gap: '0.25rem',
+                                                 transition: 'all 0.2s'
+                                               }}
+                                             >
+                                               <Pencil size={12} />
+                                               <span>Edit</span>
+                                             </button>
+                                           </div>
+                                         </div>
+                                       </div>
+                                       
+                                       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+                                         <button
+                                           type="button"
+                                           disabled={editMismatchSaving}
+                                           onClick={() => handleSaveDualNames(acc)}
+                                           style={{
+                                             display: 'inline-flex',
+                                             alignItems: 'center',
+                                             gap: '0.35rem',
+                                             padding: '0.45rem 1.1rem',
+                                             borderRadius: 8,
+                                             cursor: editMismatchSaving ? 'not-allowed' : 'pointer',
+                                             fontSize: '0.75rem',
+                                             fontWeight: 700,
+                                             background: 'linear-gradient(135deg,#10b981,#059669)',
+                                             color: 'white',
+                                             border: 'none',
+                                             opacity: editMismatchSaving ? 0.6 : 1
+                                           }}
+                                         >
+                                           {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />}
+                                           <span>Save Correction</span>
+                                         </button>
+                                         
+                                         <button
+                                           type="button"
+                                           disabled={editMismatchSaving}
+                                           onClick={() => { setEditingMismatch(null); }}
+                                           style={{
+                                             display: 'inline-flex',
+                                             alignItems: 'center',
+                                             gap: '0.35rem',
+                                             padding: '0.45rem 1.1rem',
+                                             borderRadius: 8,
+                                             cursor: 'pointer',
+                                             fontSize: '0.75rem',
+                                             fontWeight: 700,
+                                             background: 'rgba(255, 255, 255, 0.05)',
+                                             border: '1px solid var(--border-color)',
+                                             color: 'var(--text-secondary)'
+                                           }}
+                                         >
+                                           <span>Cancel</span>
+                                         </button>
+                                       </div>
+                                     </div>
+                                   </td>
+                                 </tr>
+                               ) : (
+                                 <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                                   <td style={{ padding: '0.5rem 0.75rem' }}>
+                                     <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
+                                   </td>
+                                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+                                   <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
+                                   <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.npayName || '—'}</td>
+                                   <td style={{ padding: '0.5rem 0.75rem', maxWidth: 200 }}>{row.masterName || '—'}</td>
+                                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                     <span style={{ padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700, background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>Name Mismatch</span>
+                                   </td>
+                                   <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
+                                     <div style={{ display: 'inline-flex', gap: '0.3rem' }}>
+                                       <button type="button" onClick={() => handleApproveNames([acc])} disabled={nameApproving}
+                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: nameApproving ? 'not-allowed' : 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', opacity: nameApproving ? 0.6 : 1 }}>
+                                         <CheckCircle size={12} /> Approve Name
+                                       </button>
+                                       <button type="button" onClick={() => {
+                                         setEditingMismatch({ field: 'name', accountNo: acc });
+                                         setEditMasterNameValue(row.masterName || '');
+                                         setEditUploadedNameValue(row.npayName || '');
+                                         setEditMasterActive(false);
+                                         setEditUploadedActive(false);
+                                       }}
+                                         style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6' }}>
+                                         <Pencil size={12} /> Edit Name
+                                       </button>
+                                     </div>
+                                   </td>
+                                 </tr>
+                               )
                             );
                           })}
                         </tbody>

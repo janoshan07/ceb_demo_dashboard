@@ -3305,13 +3305,47 @@ public class MultiFileImportService {
 
         switch (fld) {
             case "name": {
-                Object oldObj = target.get("npayName");
-                oldValue = oldObj != null ? oldObj.toString() : "";
-                target.put("npayName", newValue);
-                String masterName = target.get("masterName") != null ? target.get("masterName").toString() : null;
-                boolean match = masterName != null && !"—".equals(masterName)
-                        && newValue != null && !newValue.trim().isEmpty()
-                        && namesMatch(masterName, newValue);
+                String newMasterName = null;
+                String newUploadedName = null;
+                if (newValue != null && newValue.contains("|")) {
+                    String[] parts = newValue.split("\\|", -1);
+                    if (parts.length > 0) newMasterName = parts[0].trim();
+                    if (parts.length > 1) newUploadedName = parts[1].trim();
+                } else {
+                    newUploadedName = newValue;
+                }
+
+                Object oldMaster = target.get("masterName");
+                Object oldMain = target.get("npayName");
+                oldValue = "master: " + (oldMaster != null ? oldMaster : "") + ", main: " + (oldMain != null ? oldMain : "");
+
+                if (newMasterName != null) {
+                    target.put("masterName", newMasterName);
+                    target.put("customerName", newMasterName);
+                    
+                    // Also update the master data in MASTER_DATA_CACHE!
+                    List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
+                    for (Map<String, Object> mc : masterStaged) {
+                        String acc = mc.get("accountNo") != null ? mc.get("accountNo").toString().trim() : null;
+                        if (acctKey.equals(acc)) {
+                            mc.put("customerName", newMasterName);
+                            break;
+                        }
+                    }
+                    MASTER_DATA_CACHE.put(sessionId, masterStaged);
+                }
+
+                if (newUploadedName != null) {
+                    target.put("npayName", newUploadedName);
+                }
+
+                String currentMaster = target.get("masterName") != null ? target.get("masterName").toString() : "";
+                String currentUploaded = target.get("npayName") != null ? target.get("npayName").toString() : "";
+
+                boolean match = !currentMaster.isEmpty() && !"—".equals(currentMaster)
+                        && !currentUploaded.isEmpty()
+                        && namesMatch(currentMaster, currentUploaded);
+
                 target.put("nameMatch", match ? "MATCH" : "MISMATCH");
                 resolved = match;
                 flagKey = "nameMatch";

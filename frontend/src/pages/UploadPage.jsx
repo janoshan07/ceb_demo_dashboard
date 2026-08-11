@@ -5,7 +5,7 @@ import { useToast } from '../context/ToastContext';
 import {
   Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle,
   FileText, Loader, Trash2, Eye,
-  Check, RefreshCw, Layers, Zap, User, Info,
+  Check, RefreshCw, Layers, Zap, User, Info, Search,
   Database, Clock, CloudUpload, Pencil, X, Save, ArrowLeft, Archive,
   Calendar, MapPin, Download, Bell, Sun, Moon, ShieldCheck, ExternalLink
 } from 'lucide-react';
@@ -407,12 +407,79 @@ const StatusBadge = ({ status }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  SEARCH BAR COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+const SearchBar = ({ value, onChange, count, totalCount, placeholder = "Search Account No, Name, or Ref No..." }) => {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.65rem',
+        background: 'rgba(15, 23, 42, 0.4)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        borderRadius: '10px',
+        padding: '0.45rem 0.85rem',
+        width: '100%',
+        maxWidth: '380px',
+        position: 'relative',
+        transition: 'border-color 0.25s ease'
+      }}>
+        <Search size={15} color="#94a3b8" />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'white',
+            fontSize: '0.8rem',
+            outline: 'none',
+            width: '100%',
+            paddingRight: value ? '1.5rem' : '0'
+          }}
+        />
+        {value && (
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'absolute',
+              right: '0.75rem',
+              transition: 'color 0.2s ease'
+            }}
+          >
+            <X size={15} />
+          </button>
+        )}
+      </div>
+      {value && (
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+          Found <strong style={{ color: 'white' }}>{count}</strong> of <strong style={{ color: '#818cf8' }}>{totalCount}</strong> records
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — Master Data
 // ═══════════════════════════════════════════════════════════════════════════
 const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
+  const [searchText, setSearchText] = useState('');
 
   const allCount = rows.length;
   const validCount = rows.filter(r => r.status === 'VALID').length;
@@ -420,7 +487,16 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
 
-  const displayed = rows.filter(r => {
+  const searchedRows = rows.filter(r => {
+    if (!searchText || searchText.trim() === '') return true;
+    const q = searchText.trim().toLowerCase();
+    const acc = String(r.accountNo || '').toLowerCase();
+    const name = String(r.customerName || '').toLowerCase();
+    const ref = String(r.refNo || '').toLowerCase();
+    return acc.includes(q) || name.includes(q) || ref.includes(q);
+  });
+
+  const displayed = searchedRows.filter(r => {
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
@@ -451,7 +527,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
       });
       return next;
     });
-  }, [rows, filterErrors]);
+  }, [rows, filterErrors, searchText]);
 
   function renderFilterTabs() {
     return (
@@ -501,20 +577,23 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
     );
   }
 
-  if (!displayed.length) return (
-    <div>
-      {renderFilterTabs()}
-      <div style={{ textAlign: 'center', padding: '3.5rem', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
-        <CheckCircle size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-        <div style={{ fontWeight: 600, color: 'white', fontSize: '0.95rem' }}>No visible records found for this filter.</div>
-      </div>
-    </div>
-  );
-
   return (
     <div>
+      <SearchBar
+        value={searchText}
+        onChange={setSearchText}
+        count={searchedRows.length}
+        totalCount={rows.length}
+      />
       {renderFilterTabs()}
-      {selectedKeys.size > 0 && (
+      {!displayed.length ? (
+        <div style={{ textAlign: 'center', padding: '3.5rem', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
+          <CheckCircle size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+          <div style={{ fontWeight: 600, color: 'white', fontSize: '0.95rem' }}>No visible records found.</div>
+        </div>
+      ) : (
+        <>
+          {selectedKeys.size > 0 && (
         <div style={{
           background: 'rgba(239, 68, 68, 0.08)',
           border: '1px solid rgba(239, 68, 68, 0.2)',
@@ -670,6 +749,8 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -681,6 +762,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
+  const [searchText, setSearchText] = useState('');
 
   const allCount = rows.length;
   const validCount = rows.filter(r => r.status === 'VALID').length;
@@ -688,7 +770,16 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
 
-  const displayed = rows.filter(r => {
+  const searchedRows = rows.filter(r => {
+    if (!searchText || searchText.trim() === '') return true;
+    const q = searchText.trim().toLowerCase();
+    const acc = String(r.accountNo || '').toLowerCase();
+    const name = String(r.customerName || '').toLowerCase();
+    const ref = String(r.refNo || '').toLowerCase();
+    return acc.includes(q) || name.includes(q) || ref.includes(q);
+  });
+
+  const displayed = searchedRows.filter(r => {
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
@@ -712,17 +803,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
       });
       return next;
     });
-  }, [rows, activeFilter, filterErrors]);
-
-  if (!displayed.length) return (
-    <div>
-      {renderFilterTabs()}
-      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
-      </div>
-    </div>
-  );
+  }, [rows, activeFilter, filterErrors, searchText]);
 
   function renderFilterTabs() {
     return (
@@ -770,7 +851,20 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
 
   return (
     <div>
+      <SearchBar
+        value={searchText}
+        onChange={setSearchText}
+        count={searchedRows.length}
+        totalCount={rows.length}
+      />
       {renderFilterTabs()}
+      {!displayed.length ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+          <div style={{ fontWeight: 600 }}>No visible records found.</div>
+        </div>
+      ) : (
+        <>
 
       {selectedKeys.size > 0 && (
         <div style={{
@@ -918,6 +1012,8 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -929,6 +1025,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
+  const [searchText, setSearchText] = useState('');
 
   const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
 
@@ -938,7 +1035,16 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
 
-  const displayed = rows.filter(r => {
+  const searchedRows = rows.filter(r => {
+    if (!searchText || searchText.trim() === '') return true;
+    const q = searchText.trim().toLowerCase();
+    const acc = String(r.accountNo || '').toLowerCase();
+    const name = String(r.customerName || '').toLowerCase();
+    const ref = String(r.refNo || '').toLowerCase();
+    return acc.includes(q) || name.includes(q) || ref.includes(q);
+  });
+
+  const displayed = searchedRows.filter(r => {
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
@@ -969,17 +1075,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       });
       return next;
     });
-  }, [rows, activeFilter, filterErrors]);
-
-  if (!displayed.length) return (
-    <div>
-      {renderFilterTabs()}
-      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
-      </div>
-    </div>
-  );
+  }, [rows, activeFilter, filterErrors, searchText]);
 
   function renderFilterTabs() {
     return (
@@ -1027,7 +1123,20 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 
   return (
     <div>
+      <SearchBar
+        value={searchText}
+        onChange={setSearchText}
+        count={searchedRows.length}
+        totalCount={rows.length}
+      />
       {renderFilterTabs()}
+      {!displayed.length ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+          <div style={{ fontWeight: 600 }}>No visible records found.</div>
+        </div>
+      ) : (
+        <>
 
       {selectedKeys.size > 0 && (
         <div style={{
@@ -1223,6 +1332,8 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -1235,6 +1346,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
+  const [searchText, setSearchText] = useState('');
 
   const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
 
@@ -1244,7 +1356,16 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
 
-  const displayed = rows.filter(r => {
+  const searchedRows = rows.filter(r => {
+    if (!searchText || searchText.trim() === '') return true;
+    const q = searchText.trim().toLowerCase();
+    const acc = String(r.accountNo || '').toLowerCase();
+    const name = String(r.customerName || '').toLowerCase();
+    const ref = String(r.refNo || '').toLowerCase();
+    return acc.includes(q) || name.includes(q) || ref.includes(q);
+  });
+
+  const displayed = searchedRows.filter(r => {
     if (activeFilter === 'ALL') {
       return filterErrors ? r.status === 'ERROR' : true;
     }
@@ -1275,17 +1396,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       });
       return next;
     });
-  }, [rows, activeFilter, filterErrors]);
-
-  if (!displayed.length) return (
-    <div>
-      {renderFilterTabs()}
-      <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-        <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-        <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
-      </div>
-    </div>
-  );
+  }, [rows, activeFilter, filterErrors, searchText]);
 
   function renderFilterTabs() {
     return (
@@ -1333,7 +1444,20 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 
   return (
     <div>
+      <SearchBar
+        value={searchText}
+        onChange={setSearchText}
+        count={searchedRows.length}
+        totalCount={rows.length}
+      />
       {renderFilterTabs()}
+      {!displayed.length ? (
+        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+          <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+          <div style={{ fontWeight: 600 }}>No visible records found.</div>
+        </div>
+      ) : (
+        <>
 
       {selectedKeys.size > 0 && (
         <div style={{
@@ -1517,6 +1641,8 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 };
@@ -1721,7 +1847,9 @@ const UploadPage = () => {
   const [approving, setApproving] = useState(false);
   const [filterErrors, setFilterErrors] = useState(false);
   const [mainDatasetFilter, setMainDatasetFilter] = useState('ALL');
+  const [mainSearchText, setMainSearchText] = useState('');
   const [masterComparisonFilter, setMasterComparisonFilter] = useState('ALL');
+  const [comparisonSearchText, setComparisonSearchText] = useState('');
   // ── Step 6: Name Mismatch review workflow ──
   const [nameMismatchSelected, setNameMismatchSelected] = useState([]); // Account Nos selected for bulk approval
   const [nameApproving, setNameApproving] = useState(false);
@@ -1892,6 +2020,11 @@ const UploadPage = () => {
     fetchActiveSession();
     fetchHistory();
   }, []);
+
+  useEffect(() => {
+    setMainSearchText('');
+    setComparisonSearchText('');
+  }, [wizardStep]);
 
   const fetchActiveSession = async () => {
     try {
@@ -4166,7 +4299,16 @@ const UploadPage = () => {
     const mainRecordCount = mainRecords.length;
     const duplicateAccountCount = mainRecords.filter(rowHasDuplicates).length;
 
-    const filteredRows = mainRecords.filter(r => {
+    const searchedMainRecords = mainRecords.filter(r => {
+      if (!mainSearchText || mainSearchText.trim() === '') return true;
+      const q = mainSearchText.trim().toLowerCase();
+      const acc = String(r.accountNo || '').toLowerCase();
+      const name = String(r.customerName || '').toLowerCase();
+      const ref = String(r.refNo || '').toLowerCase();
+      return acc.includes(q) || name.includes(q) || ref.includes(q);
+    });
+
+    const filteredRows = searchedMainRecords.filter(r => {
       if (mainDatasetFilter === 'ALL') return true;
       if (mainDatasetFilter === 'VALID') return r.status === 'VALID';
       if (mainDatasetFilter === 'ERROR') return r.status === 'ERROR';
@@ -4359,6 +4501,13 @@ const UploadPage = () => {
             <div><strong style={{ color: '#f43f5e' }}>{rejectedCount} incomplete record(s) auto-removed.</strong> Account Numbers missing an entire CEB Assist, NGEN or NPAY record are moved to the <strong>Rejected</strong> list and excluded from the Main Dataset. They are shown here for review only and are not imported. Duplicate records are not affected.</div>
           </div>
         )}
+
+        <SearchBar
+          value={mainSearchText}
+          onChange={setMainSearchText}
+          count={searchedMainRecords.length}
+          totalCount={mainRecordCount}
+        />
 
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
@@ -4609,9 +4758,18 @@ const UploadPage = () => {
     const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
     const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true;
 
-    const nameMismatchRows = (rows || []).filter(r => r.nameMatch === 'MISMATCH');
-    const unitRateMismatchRows = (rows || []).filter(r => r.unitRateMatch === 'MISMATCH');
-    const netTypeMismatchRows = (rows || []).filter(r => r.netTypeMatch === 'MISMATCH');
+    const searchedRows = (rows || []).filter(r => {
+      if (!comparisonSearchText || comparisonSearchText.trim() === '') return true;
+      const q = comparisonSearchText.trim().toLowerCase();
+      const acc = String(r.accountNo || '').toLowerCase();
+      const name = String(r.customerName || r.npayName || '').toLowerCase();
+      const ref = String(r.refNo || '').toLowerCase();
+      return acc.includes(q) || name.includes(q) || ref.includes(q);
+    });
+
+    const nameMismatchRows = searchedRows.filter(r => r.nameMatch === 'MISMATCH');
+    const unitRateMismatchRows = searchedRows.filter(r => r.unitRateMatch === 'MISMATCH');
+    const netTypeMismatchRows = searchedRows.filter(r => r.netTypeMatch === 'MISMATCH');
     // ── Agreement Expiry Review (additional section — no comparison logic changed) ──
     // Billing month of the current upload = most frequent month among the reading dates.
     const billingMonthKey = (() => {
@@ -4642,7 +4800,7 @@ const UploadPage = () => {
     const agreementExpiredCount = masterComparison.agreementExpiredCount ?? agreementRows.filter(r => r.agreementStatus === 'EXPIRED').length;
     const agreementExpiringCount = masterComparison.agreementExpiringSoonCount ?? agreementRows.filter(r => r.agreementStatus === 'EXPIRING_SOON').length;
     const agreementActiveCount = agreementRows.filter(r => r.agreementStatus === 'ACTIVE').length;
-    const filteredRows = (rows || []).filter(r => {
+    const filteredRows = searchedRows.filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
       if (masterComparisonFilter === 'VALID') return r.status === 'VALID';
       if (masterComparisonFilter === 'NEW_CUSTOMERS') return isNewCust(r);
@@ -4698,6 +4856,13 @@ const UploadPage = () => {
           <StatCard label="Agreement Expired" value={agreementExpiredCount || 0} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
           <StatCard label="Expiring Soon" value={agreementExpiringCount || 0} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
         </div>
+
+        <SearchBar
+          value={comparisonSearchText}
+          onChange={setComparisonSearchText}
+          count={searchedRows.length}
+          totalCount={totalRecords}
+        />
 
         {/* Filter tabs */}
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
@@ -5114,7 +5279,15 @@ const UploadPage = () => {
               UNKNOWN: { label: 'No Agreement Date', color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.08)', rowBg: 'transparent' }
             };
             const fmtDate = (d) => d ? d.toISOString().slice(0, 10) : '—';
-            const list = agreementRows.filter(r => agreementExpiryFilter === 'ALL' ? true : r.agreementStatus === agreementExpiryFilter);
+            const list = agreementRows.filter(r => {
+              if (agreementExpiryFilter !== 'ALL' && r.agreementStatus !== agreementExpiryFilter) return false;
+              if (!comparisonSearchText || comparisonSearchText.trim() === '') return true;
+              const q = comparisonSearchText.trim().toLowerCase();
+              const acc = String(r.accountNo || '').toLowerCase();
+              const name = String(r.customerName || r.npayName || '').toLowerCase();
+              const ref = String(r.refNo || '').toLowerCase();
+              return acc.includes(q) || name.includes(q) || ref.includes(q);
+            });
             const sortVal = (r, key) => {
               switch (key) {
                 case 'refNo': return String(r.refNo || '');

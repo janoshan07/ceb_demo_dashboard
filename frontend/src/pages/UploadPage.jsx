@@ -1992,7 +1992,7 @@ const UploadPage = () => {
   const [editUploadedActive, setEditUploadedActive] = useState(false);
   const [editMismatchSaving, setEditMismatchSaving] = useState(false);
   // ── Step 6: Agreement Expiry Review workflow (additional review section only) ──
-  const [agreementExpiryFilter, setAgreementExpiryFilter] = useState('ALL'); // ALL | EXPIRED | EXPIRING_SOON | ACTIVE
+  const [agreementExpiryFilter, setAgreementExpiryFilter] = useState('EXPIRED'); // EXPIRED | ALL | EXPIRING_SOON | ACTIVE
   const [agreementExpirySort, setAgreementExpirySort] = useState({ key: 'expiryDate', dir: 'asc' });
   const [agreementExpirySelected, setAgreementExpirySelected] = useState([]); // Account Nos selected for bulk actions
   const [agreementApproved, setAgreementApproved] = useState({}); // accountNo -> { approvedBy, approvedAt }
@@ -4947,7 +4947,7 @@ const UploadPage = () => {
       if (masterComparisonFilter === 'ERROR') return r.status === 'ERROR';
       if (masterComparisonFilter === 'WARNING') return r.status === 'WARNING';
       if (masterComparisonFilter === 'MISSING_DETAILS') return r.hasMissingDetails === true;
-      if (masterComparisonFilter === 'AGREEMENT_EXPIRY') return r.agreementStatus === 'EXPIRED' || r.agreementStatus === 'EXPIRING_SOON';
+      if (masterComparisonFilter === 'EXPIRED_AGREEMENT') return r.agreementStatus === 'EXPIRED';
       return true;
     });
     return (
@@ -5013,7 +5013,7 @@ const UploadPage = () => {
               { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
               { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
               { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#a78bfa' },
-              { key: 'AGREEMENT_EXPIRY', label: 'Agreement Expiry Review', count: agreementExpiredCount + agreementExpiringCount, color: agreementExpiredCount > 0 ? '#ef4444' : agreementExpiringCount > 0 ? '#f97316' : '#10b981' },
+              { key: 'EXPIRED_AGREEMENT', label: 'Expired / 7 Years Completed', count: agreementExpiredCount, color: '#38bdf8' },
             ].map(tab => (
               <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
                 style={{
@@ -5549,7 +5549,7 @@ const UploadPage = () => {
               </div>
             );
           })()
-        ) : masterComparisonFilter === 'AGREEMENT_EXPIRY' ? (
+        ) : masterComparisonFilter === 'EXPIRED_AGREEMENT' ? (
           (() => {
             const statusMeta = {
               EXPIRED: { label: 'Expired', color: '#ef4444', bg: 'rgba(239,68,68,0.15)', rowBg: 'rgba(239,68,68,0.07)' },

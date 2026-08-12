@@ -3042,7 +3042,7 @@ public class MultiFileImportService {
                 primaryStatus = "DUPLICATE";
             } else if (!errs.isEmpty()) {
                 primaryStatus = "ERROR";
-            } else if (!warns.isEmpty() || isNameMismatch || isUnitRateMismatch || isNetTypeMismatch || isNoBill || "EXPIRED".equals(agrStatus)) {
+            } else if (!warns.isEmpty() || isNameMismatch || isUnitRateMismatch || isNetTypeMismatch || isNoBill) {
                 primaryStatus = "WARNING";
             } else {
                 primaryStatus = "VALID";

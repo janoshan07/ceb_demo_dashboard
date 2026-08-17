@@ -431,6 +431,75 @@ public class ExcelValidationService {
             errors.add("L-Code does not match the Type and Fix/Variable combination. Expected: " + expectedLCode);
         }
 
+        // Parse directoryJson and check if the current edited values now resolve the mismatches
+        String dirJson = customer.getDirectoryJson();
+        if (dirJson != null && !dirJson.trim().isEmpty()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Map<String, Object> dirMap = mapper.readValue(dirJson, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                boolean changed = false;
+
+                // 1. Check Name Mismatch
+                String npayName = (String) dirMap.get("npayName");
+                String customerName = customer.getCustomerName();
+                if ("MISMATCH".equals(dirMap.get("nameMatch")) && customerName != null && npayName != null) {
+                    if (com.ceb.billing.services.MultiFileImportService.namesMatch(customerName, npayName)) {
+                        dirMap.put("nameMatch", "MATCH");
+                        changed = true;
+                    }
+                }
+
+                // 2. Check Unit Rate Mismatch
+                Double customerUnitRate = customer.getUnitRate();
+                Object ngenUnitRateObj = dirMap.get("ngenUnitRate");
+                Double ngenUnitRate = ngenUnitRateObj instanceof Number ? ((Number) ngenUnitRateObj).doubleValue() : null;
+                if ("MISMATCH".equals(dirMap.get("unitRateMatch")) && customerUnitRate != null && ngenUnitRate != null) {
+                    if (Math.abs(customerUnitRate - ngenUnitRate) < 1e-6) {
+                        dirMap.put("unitRateMatch", "MATCH");
+                        changed = true;
+                    }
+                }
+
+                // 3. Check Net Type Mismatch
+                String customerSolar = customer.getSolarType();
+                String mainNetType = (String) dirMap.get("mainNetType");
+                if ("MISMATCH".equals(dirMap.get("netTypeMatch")) && customerSolar != null && mainNetType != null) {
+                    String normCustomer = normalizeSolarType(customerSolar);
+                    String normMain = normalizeSolarType(mainNetType);
+                    if (normCustomer != null && normMain != null && normCustomer.equals(normMain)) {
+                        dirMap.put("netTypeMatch", "MATCH");
+                        changed = true;
+                    }
+                }
+
+                if (changed) {
+                    List<?> errs = dirMap.get("errors") instanceof List ? (List<?>) dirMap.get("errors") : Collections.emptyList();
+                    List<?> warns = dirMap.get("warnings") instanceof List ? (List<?>) dirMap.get("warnings") : Collections.emptyList();
+                    boolean isDup = Boolean.TRUE.equals(dirMap.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase((String) dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("hasDuplicateSources"));
+                    
+                    boolean isNameMismatch = "MISMATCH".equals(dirMap.get("nameMatch"));
+                    boolean isUnitRateMismatch = "MISMATCH".equals(dirMap.get("unitRateMatch"));
+                    boolean isNetTypeMismatch = "MISMATCH".equals(dirMap.get("netTypeMatch"));
+
+                    String primaryStatus;
+                    if (isDup) {
+                        primaryStatus = "DUPLICATE";
+                    } else if (!errs.isEmpty()) {
+                        primaryStatus = "ERROR";
+                    } else if (!warns.isEmpty() || isNameMismatch || isUnitRateMismatch || isNetTypeMismatch) {
+                        primaryStatus = "WARNING";
+                    } else {
+                        primaryStatus = "VALID";
+                    }
+                    dirMap.put("status", primaryStatus);
+
+                    customer.setDirectoryJson(mapper.writeValueAsString(dirMap));
+                }
+            } catch (Exception e) {
+                // Ignore parsing exceptions
+            }
+        }
+
         if (errors.isEmpty()) {
             customer.setValidationStatus("VALID");
             customer.setValidationErrors(null);

@@ -20,6 +20,7 @@ import {
   Sun,
   Zap,
   Calendar,
+  Clock,
   DollarSign,
   MapPin,
   ArrowUpDown,
@@ -188,6 +189,9 @@ const CustomerDetails = () => {
   const [viewMode, setViewMode] = useState('SINGLE'); // SINGLE, GROUPED
   const [sortBy, setSortBy] = useState('accountNo');
   const [sortDir, setSortDir] = useState('asc'); // asc | desc
+  const [billingMonths, setBillingMonths] = useState([]);
+  const [selectedBillingMonth, setSelectedBillingMonth] = useState('ALL');
+  const [agreementStatusFilter, setAgreementStatusFilter] = useState('ALL');
 
   // Helper to evaluate completeness of customer details
   const getCustomerCompleteness = (cust) => {
@@ -210,7 +214,24 @@ const CustomerDetails = () => {
     if (!cust.refNo || !String(cust.refNo).trim() || cust.refNo === '—') missing.push('Ref No');
     if (cust.unitRate === null || cust.unitRate === undefined || cust.unitRate === '' || cust.unitRate === '—') missing.push('Unit Rate');
 
-    return { isComplete: missing.length === 0, missingFields: missing };
+    const directory = cust.directory;
+    let hasNameMismatch = false;
+    let hasUnitRateMismatch = false;
+    let hasNetTypeMismatch = false;
+    let isOutstanding = false;
+
+    if (directory) {
+      hasNameMismatch = directory.nameMatch === 'MISMATCH';
+      hasUnitRateMismatch = directory.unitRateMatch === 'MISMATCH';
+      hasNetTypeMismatch = directory.netTypeMatch === 'MISMATCH';
+      isOutstanding = directory.masterOnly === true || directory.noBillingData === true || directory.paymentHold === true;
+    }
+
+    if (hasNameMismatch) missing.push('Name Mismatch');
+    if (hasUnitRateMismatch) missing.push('Unit Rate Mismatch');
+    if (hasNetTypeMismatch) missing.push('Net Type Mismatch');
+
+    return { isComplete: missing.length === 0 && !isOutstanding, missingFields: missing };
   };
 
   const renderValOrMissing = (val, formatter) => {
@@ -334,6 +355,30 @@ const CustomerDetails = () => {
 
   const fetchSummaryStats = async () => {
     try {
+      let url = '/api/officer/customers/summary';
+      if (selectedBillingMonth && selectedBillingMonth !== 'ALL') {
+        url += `?billingMonth=${encodeURIComponent(selectedBillingMonth)}`;
+      }
+      const summaryRes = await authFetch(url);
+      if (summaryRes.ok) {
+        const data = await summaryRes.json();
+        setSummaryStats({
+          totalCustomers: data.total || 0,
+          completeCustomers: data.complete || 0,
+          missingCustomers: data.missing || 0,
+          validationErrorsCount: data.errors || 0,
+          nameMismatchesCount: data.nameMismatch || 0,
+          unitRateMismatchesCount: data.unitRateMismatch || 0,
+          netTypeMismatchesCount: data.netTypeMismatch || 0,
+          otherMismatchesCount: data.otherMismatch || 0,
+          outstandingCustomersCount: data.outstanding || 0,
+          expiredAgreementsCount: data.expired || 0,
+          expiringSoonAgreementsCount: data.expiringSoon || 0,
+          locationsCount: DIRECTORY_DIVISIONS.length
+        });
+        return;
+      }
+      
       const [totalRes, completeRes, missingRes, errorRes] = await Promise.all([
         authFetch('/api/officer/customers?page=0&size=1'),
         authFetch('/api/officer/customers?page=0&size=1&completeness=COMPLETE'),
@@ -385,8 +430,25 @@ const CustomerDetails = () => {
       if (locationFilter !== 'ALL') {
         url += `&location=${encodeURIComponent(locationFilter)}`;
       }
-      if (completenessFilter !== 'ALL') {
-        url += `&completeness=${completenessFilter}`;
+      
+      let completenessVal = completenessFilter;
+      let agreementStatusVal = agreementStatusFilter;
+      if (completenessFilter === 'EXPIRED') {
+        completenessVal = 'ALL';
+        agreementStatusVal = 'EXPIRED';
+      } else if (completenessFilter === 'EXPIRING_SOON') {
+        completenessVal = 'ALL';
+        agreementStatusVal = 'EXPIRING_SOON';
+      }
+
+      if (completenessVal !== 'ALL') {
+        url += `&completeness=${completenessVal}`;
+      }
+      if (selectedBillingMonth && selectedBillingMonth !== 'ALL') {
+        url += `&billingMonth=${encodeURIComponent(selectedBillingMonth)}`;
+      }
+      if (agreementStatusVal && agreementStatusVal !== 'ALL') {
+        url += `&agreementStatus=${agreementStatusVal}`;
       }
       if (sortBy) {
         url += `&sortBy=${encodeURIComponent(sortBy)}&direction=${sortDir}`;
@@ -413,14 +475,26 @@ const CustomerDetails = () => {
 
   const fetchLookups = async () => {
     try {
-      const [ccRes, ntRes, ecRes] = await Promise.all([
+      const [ccRes, ntRes, ecRes, monthsRes] = await Promise.all([
         authFetch('/api/lookup/cost-codes'),
         authFetch('/api/lookup/net-types'),
-        authFetch('/api/lookup/expense-codes')
+        authFetch('/api/lookup/expense-codes'),
+        authFetch('/api/officer/monthly-directory/months')
       ]);
       if (ccRes.ok) setCostCodesList(await ccRes.json());
       if (ntRes.ok) setNetTypesList(await ntRes.json());
       if (ecRes.ok) setExpenseCodesList(await ecRes.json());
+      if (monthsRes.ok) {
+        const mData = await monthsRes.json();
+        if (mData && mData.months) {
+          const list = mData.months.map(m => m.billingMonth).filter(Boolean);
+          const uniqueMonths = Array.from(new Set(list));
+          setBillingMonths(uniqueMonths);
+          if (uniqueMonths.length > 0) {
+            setSelectedBillingMonth(uniqueMonths[0]);
+          }
+        }
+      }
     } catch (e) {
       console.error('Failed to load lookup lists:', e);
     }
@@ -430,7 +504,7 @@ const CustomerDetails = () => {
     fetchCustomers(currentPage, appliedQuery);
     fetchLookups();
     fetchSummaryStats();
-  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, sortBy, sortDir, pageSize]);
+  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, selectedBillingMonth, agreementStatusFilter, sortBy, sortDir, pageSize]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -1033,16 +1107,16 @@ const CustomerDetails = () => {
         </div>
 
         {/* Missing Details */}
-        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', borderLeft: completenessFilter === 'MISSING' ? '3px solid #f59e0b' : '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer' }}>
+        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', borderLeft: (completenessFilter === 'MISSING' || completenessFilter === 'NAME_MISMATCH' || completenessFilter === 'UNIT_RATE_MISMATCH' || completenessFilter === 'NET_TYPE_MISMATCH' || completenessFilter === 'OTHER_MISMATCHES') ? '3px solid #f59e0b' : '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AlertTriangle size={24} color="#f59e0b" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details</div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details / Validation</div>
               <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.missingCustomers.toLocaleString()}</div>
               <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                {summaryStats.totalCustomers > 0 ? (summaryStats.missingCustomers / summaryStats.totalCustomers * 100).toFixed(2) : 0}% missing info
+                {summaryStats.totalCustomers > 0 ? (summaryStats.missingCustomers / summaryStats.totalCustomers * 100).toFixed(2) : 0}% issues / missing info
               </div>
             </div>
           </div>
@@ -1129,7 +1203,182 @@ const CustomerDetails = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            <AlertTriangle size={14} /> Missing Details
+            <AlertTriangle size={14} /> Missing Details / Validation
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('NAME_MISMATCH'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'NAME_MISMATCH' ? 'rgba(251,113,133,0.12)' : '#111827',
+              border: completenessFilter === 'NAME_MISMATCH' ? '1px solid #fb7185' : '1px solid var(--border-color)',
+              color: completenessFilter === 'NAME_MISMATCH' ? '#fb7185' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <User size={14} /> Name Mismatch
+            {summaryStats.nameMismatchesCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#fb7185', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.nameMismatchesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('UNIT_RATE_MISMATCH'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'UNIT_RATE_MISMATCH' ? 'rgba(251,191,36,0.12)' : '#111827',
+              border: completenessFilter === 'UNIT_RATE_MISMATCH' ? '1px solid #fbbf24' : '1px solid var(--border-color)',
+              color: completenessFilter === 'UNIT_RATE_MISMATCH' ? '#fbbf24' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <AlertTriangle size={14} /> Unit Rate Mismatch
+            {summaryStats.unitRateMismatchesCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#fbbf24', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.unitRateMismatchesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('NET_TYPE_MISMATCH'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'NET_TYPE_MISMATCH' ? 'rgba(167,139,250,0.12)' : '#111827',
+              border: completenessFilter === 'NET_TYPE_MISMATCH' ? '1px solid #a78bfa' : '1px solid var(--border-color)',
+              color: completenessFilter === 'NET_TYPE_MISMATCH' ? '#a78bfa' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Zap size={14} /> Net Type Mismatch
+            {summaryStats.netTypeMismatchesCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#a78bfa', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.netTypeMismatchesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('OTHER_MISMATCHES'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'OTHER_MISMATCHES' ? 'rgba(249,115,22,0.12)' : '#111827',
+              border: completenessFilter === 'OTHER_MISMATCHES' ? '1px solid #f97316' : '1px solid var(--border-color)',
+              color: completenessFilter === 'OTHER_MISMATCHES' ? '#f97316' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <AlertCircle size={14} /> Other Mismatches
+            {summaryStats.otherMismatchesCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#f97316', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.otherMismatchesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('OUTSTANDING'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'OUTSTANDING' ? 'rgba(56,189,248,0.12)' : '#111827',
+              border: completenessFilter === 'OUTSTANDING' ? '1px solid #38bdf8' : '1px solid var(--border-color)',
+              color: completenessFilter === 'OUTSTANDING' ? '#38bdf8' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Clock size={14} /> Outstanding Customers
+            {summaryStats.outstandingCustomersCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#38bdf8', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.outstandingCustomersCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('EXPIRED'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'EXPIRED' ? 'rgba(239,68,68,0.12)' : '#111827',
+              border: completenessFilter === 'EXPIRED' ? '1px solid #ef4444' : '1px solid var(--border-color)',
+              color: completenessFilter === 'EXPIRED' ? '#f87171' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Clock size={14} /> Expired Agreements
+            {summaryStats.expiredAgreementsCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.expiredAgreementsCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => { setCompletenessFilter('EXPIRING_SOON'); setStatusFilter('ALL'); setCurrentPage(0); }}
+            style={{
+              padding: '0.5rem 1.1rem',
+              background: completenessFilter === 'EXPIRING_SOON' ? 'rgba(249,115,22,0.12)' : '#111827',
+              border: completenessFilter === 'EXPIRING_SOON' ? '1px solid #f97316' : '1px solid var(--border-color)',
+              color: completenessFilter === 'EXPIRING_SOON' ? '#f97316' : 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Clock size={14} /> Expiring Soon
+            {summaryStats.expiringSoonAgreementsCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#f97316', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.expiringSoonAgreementsCount}
+              </span>
+            )}
           </button>
 
           <button
@@ -1251,6 +1500,38 @@ const CustomerDetails = () => {
           >
             <Filter size={14} /> Filter <ChevronDown size={14} />
           </button>
+        </div>
+
+        {/* Billing Month and Agreement Status Filter Panel */}
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
+            <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Billing Month:</label>
+            <select
+              value={selectedBillingMonth}
+              onChange={(e) => { setSelectedBillingMonth(e.target.value); setCurrentPage(0); }}
+              className="form-input"
+              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
+            >
+              <option value="ALL">All Billing Months</option>
+              {billingMonths.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
+            <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Agreement Status:</label>
+            <select
+              value={agreementStatusFilter}
+              onChange={(e) => { setAgreementStatusFilter(e.target.value); setCurrentPage(0); }}
+              className="form-input"
+              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="EXPIRED">Expired (7 Years Completed)</option>
+              <option value="EXPIRING_SOON">Expiring Soon (7 Years Approaching)</option>
+            </select>
+          </div>
         </div>
 
         {/* Location tags + Sorting controls */}

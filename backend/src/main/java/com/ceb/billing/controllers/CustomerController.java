@@ -33,6 +33,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Objects;
 import java.util.logging.Logger;
+import java.time.LocalDate;
+import java.time.Month;
+import java.time.format.DateTimeFormatter;
 
 @RestController
 @RequestMapping
@@ -133,7 +136,28 @@ public class CustomerController {
             if (c.getRefNo() == null || c.getRefNo().trim().isEmpty()) missingFields.add("Ref No");
             if (c.getUnitRate() == null) missingFields.add("Unit Rate");
 
-            dto.put("isComplete", missingFields.isEmpty());
+            boolean hasNameMismatch = false;
+            boolean hasUnitRateMismatch = false;
+            boolean hasNetTypeMismatch = false;
+            boolean isOutstanding = false;
+
+            if (directory instanceof Map) {
+                Map<?, ?> dirMap = (Map<?, ?>) directory;
+                hasNameMismatch = "MISMATCH".equals(dirMap.get("nameMatch"));
+                hasUnitRateMismatch = "MISMATCH".equals(dirMap.get("unitRateMatch"));
+                hasNetTypeMismatch = "MISMATCH".equals(dirMap.get("netTypeMatch"));
+                isOutstanding = Boolean.TRUE.equals(dirMap.get("masterOnly")) 
+                             || Boolean.TRUE.equals(dirMap.get("noBillingData")) 
+                             || Boolean.TRUE.equals(dirMap.get("paymentHold"));
+            }
+
+            if (hasNameMismatch) missingFields.add("Name Mismatch");
+            if (hasUnitRateMismatch) missingFields.add("Unit Rate Mismatch");
+            if (hasNetTypeMismatch) missingFields.add("Net Type Mismatch");
+
+            boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding;
+
+            dto.put("isComplete", isComplete);
             dto.put("missingFields", missingFields);
         } catch (Exception ex) {
             log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
@@ -143,6 +167,168 @@ public class CustomerController {
 
     // --- Officer Customer Endpoints ---
 
+    public static LocalDate computeAgreementExpiry(LocalDate agreementDate) {
+        if (agreementDate == null) return null;
+        return agreementDate.plusYears(7);
+    }
+
+    public static LocalDate[] getBillingMonthRange(String billingMonthStr) {
+        if (billingMonthStr == null || billingMonthStr.trim().isEmpty()) {
+            return null;
+        }
+        try {
+            String[] parts = billingMonthStr.trim().split("\\s+");
+            if (parts.length == 2) {
+                String monthName = parts[0].toUpperCase();
+                int year = Integer.parseInt(parts[1]);
+                Month month = Month.valueOf(monthName);
+                LocalDate start = LocalDate.of(year, month, 1);
+                LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+                return new LocalDate[]{start, end};
+            }
+        } catch (Exception e) {
+            try {
+                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+                LocalDate start = LocalDate.parse(billingMonthStr.trim() + "-01", fmt);
+                LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+                return new LocalDate[]{start, end};
+            } catch (Exception ex) {
+                // Ignore
+            }
+        }
+        return null;
+    }
+
+    public static String getAgreementStatus(LocalDate agreementDate, LocalDate start, LocalDate end) {
+        LocalDate expiry = computeAgreementExpiry(agreementDate);
+        if (expiry == null) {
+            return "UNKNOWN";
+        }
+        if (expiry.isBefore(start)) {
+            return "EXPIRED";
+        }
+        if (!expiry.isAfter(end)) {
+            return "EXPIRING_SOON";
+        }
+        return "ACTIVE";
+    }
+
+    @GetMapping("/api/officer/customers/summary")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getOfficerCustomersSummary(
+            @RequestParam(value = "billingMonth", required = false) String billingMonth) {
+        try {
+            List<Customer> all = customerRepository.findAll();
+            int total = 0;
+            int complete = 0;
+            int missing = 0;
+            int nameMismatch = 0;
+            int unitRateMismatch = 0;
+            int netTypeMismatch = 0;
+            int otherMismatch = 0;
+            int outstanding = 0;
+            int errors = 0;
+            int expired = 0;
+            int expiringSoon = 0;
+
+            LocalDate[] range = null;
+            if (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim())) {
+                range = getBillingMonthRange(billingMonth);
+            }
+
+            for (Customer c : all) {
+                Map<String, Object> dto = toSafeDto(c);
+                
+                Object dirObj = dto.get("directory");
+                Map<?, ?> directory = (dirObj instanceof Map) ? (Map<?, ?>) dirObj : null;
+                
+                String recBillingMonth = null;
+                if (directory != null && directory.get("billingMonth") != null) {
+                    recBillingMonth = String.valueOf(directory.get("billingMonth")).trim();
+                }
+
+                if (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim())) {
+                    if (recBillingMonth == null || !recBillingMonth.equalsIgnoreCase(billingMonth.trim())) {
+                        continue;
+                    }
+                }
+
+                total++;
+
+                boolean isComplete = Boolean.TRUE.equals(dto.get("isComplete"));
+                boolean hasNameMismatch = false;
+                boolean hasUnitRateMismatch = false;
+                boolean hasNetTypeMismatch = false;
+                boolean isNoBill = false;
+                
+                if (directory != null) {
+                    hasNameMismatch = "MISMATCH".equals(directory.get("nameMatch"));
+                    hasUnitRateMismatch = "MISMATCH".equals(directory.get("unitRateMatch"));
+                    hasNetTypeMismatch = "MISMATCH".equals(directory.get("netTypeMatch"));
+                    isNoBill = Boolean.TRUE.equals(directory.get("masterOnly")) 
+                            || Boolean.TRUE.equals(directory.get("noBillingData")) 
+                            || Boolean.TRUE.equals(directory.get("paymentHold"));
+                }
+
+                if ("ERROR".equalsIgnoreCase(c.getValidationStatus())) {
+                    errors++;
+                }
+
+                if (c.getAgreementDate() != null) {
+                    String targetMonth = (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim()))
+                            ? billingMonth.trim() : recBillingMonth;
+                    if (targetMonth != null && !targetMonth.isEmpty()) {
+                        LocalDate[] targetRange = (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim()))
+                                ? range : getBillingMonthRange(targetMonth);
+                        if (targetRange != null) {
+                            String statusStr = getAgreementStatus(c.getAgreementDate(), targetRange[0], targetRange[1]);
+                            if ("EXPIRED".equalsIgnoreCase(statusStr)) {
+                                expired++;
+                            } else if ("EXPIRING_SOON".equalsIgnoreCase(statusStr)) {
+                                expiringSoon++;
+                            }
+                        }
+                    }
+                }
+
+                if (isNoBill) {
+                    outstanding++;
+                } else {
+                    boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
+                    if (isComplete && !hasMismatch) {
+                        complete++;
+                    } else {
+                        missing++;
+                        if (hasNameMismatch) nameMismatch++;
+                        if (hasUnitRateMismatch) unitRateMismatch++;
+                        if (hasNetTypeMismatch) netTypeMismatch++;
+                        if (!hasMismatch) {
+                            otherMismatch++;
+                        }
+                    }
+                }
+            }
+
+            Map<String, Integer> stats = new LinkedHashMap<>();
+            stats.put("total", total);
+            stats.put("complete", complete);
+            stats.put("missing", missing);
+            stats.put("nameMismatch", nameMismatch);
+            stats.put("unitRateMismatch", unitRateMismatch);
+            stats.put("netTypeMismatch", netTypeMismatch);
+            stats.put("otherMismatch", otherMismatch);
+            stats.put("outstanding", outstanding);
+            stats.put("errors", errors);
+            stats.put("expired", expired);
+            stats.put("expiringSoon", expiringSoon);
+
+            return ResponseEntity.ok(stats);
+        } catch (Exception ex) {
+            log.severe("GET /api/officer/customers/summary failed: " + ex.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load summary stats: " + ex.getMessage()));
+        }
+    }
+
     @GetMapping("/api/officer/customers")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomers(
@@ -150,6 +336,8 @@ public class CustomerController {
             @RequestParam(value = "validationStatus", required = false) String validationStatus,
             @RequestParam(value = "location", required = false) String location,
             @RequestParam(value = "completeness", required = false) String completeness,
+            @RequestParam(value = "billingMonth", required = false) String billingMonth,
+            @RequestParam(value = "agreementStatus", required = false) String agreementStatus,
             @RequestParam(value = "sortBy", required = false) String sortBy,
             @RequestParam(value = "direction", required = false) String direction,
             @RequestParam(value = "page", defaultValue = "0") int page,
@@ -163,7 +351,10 @@ public class CustomerController {
             String q = (query != null) ? query.trim() : "";
             String status = (validationStatus != null) ? validationStatus.trim() : "";
             String loc = (location != null) ? location.trim() : "";
-            boolean filterByCompleteness = completeness != null && !completeness.trim().isEmpty() && !"ALL".equalsIgnoreCase(completeness.trim());
+            
+            boolean filterByCompleteness = (completeness != null && !completeness.trim().isEmpty() && !"ALL".equalsIgnoreCase(completeness.trim()))
+                    || (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim()))
+                    || (agreementStatus != null && !agreementStatus.trim().isEmpty() && !"ALL".equalsIgnoreCase(agreementStatus.trim()));
 
             Pageable pageable;
             if (filterByCompleteness || size >= 500) {
@@ -182,11 +373,98 @@ public class CustomerController {
             for (Customer c : customerPage.getContent()) {
                 try {
                     Map<String, Object> dto = toSafeDto(c);
-                    if ("COMPLETE".equalsIgnoreCase(completeness) && !Boolean.TRUE.equals(dto.get("isComplete"))) {
-                        continue;
+                    
+                    Object dirObj = dto.get("directory");
+                    Map<?, ?> directory = (dirObj instanceof Map) ? (Map<?, ?>) dirObj : null;
+                    
+                    String recBillingMonth = null;
+                    if (directory != null && directory.get("billingMonth") != null) {
+                        recBillingMonth = String.valueOf(directory.get("billingMonth")).trim();
                     }
-                    if (("MISSING".equalsIgnoreCase(completeness) || "INCOMPLETE".equalsIgnoreCase(completeness)) && Boolean.TRUE.equals(dto.get("isComplete"))) {
-                        continue;
+
+                    // 1. Filter by billingMonth
+                    if (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim())) {
+                        if (recBillingMonth == null || !recBillingMonth.equalsIgnoreCase(billingMonth.trim())) {
+                            continue;
+                        }
+                    }
+
+                    // 2. Filter by agreementStatus
+                    if (agreementStatus != null && !agreementStatus.trim().isEmpty() && !"ALL".equalsIgnoreCase(agreementStatus.trim())) {
+                        LocalDate agDate = c.getAgreementDate();
+                        if (agDate == null) {
+                            continue;
+                        }
+                        String targetMonth = (billingMonth != null && !billingMonth.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingMonth.trim()))
+                                ? billingMonth.trim() : recBillingMonth;
+                        if (targetMonth == null || targetMonth.isEmpty()) {
+                            continue;
+                        }
+                        LocalDate[] range = getBillingMonthRange(targetMonth);
+                        if (range == null) {
+                            continue;
+                        }
+                        String statusStr = getAgreementStatus(agDate, range[0], range[1]);
+                        if (!statusStr.equalsIgnoreCase(agreementStatus.trim())) {
+                            continue;
+                        }
+                    }
+
+                    // 3. Filter by completeness
+                    if (completeness != null && !completeness.trim().isEmpty() && !"ALL".equalsIgnoreCase(completeness.trim())) {
+                        String compFilter = completeness.trim().toUpperCase();
+                        boolean isComplete = Boolean.TRUE.equals(dto.get("isComplete"));
+                        
+                        boolean hasNameMismatch = false;
+                        boolean hasUnitRateMismatch = false;
+                        boolean hasNetTypeMismatch = false;
+                        boolean isOutstanding = false;
+                        
+                        if (directory != null) {
+                            hasNameMismatch = "MISMATCH".equals(directory.get("nameMatch"));
+                            hasUnitRateMismatch = "MISMATCH".equals(directory.get("unitRateMatch"));
+                            hasNetTypeMismatch = "MISMATCH".equals(directory.get("netTypeMatch"));
+                            isOutstanding = Boolean.TRUE.equals(directory.get("masterOnly")) 
+                                         || Boolean.TRUE.equals(directory.get("noBillingData")) 
+                                         || Boolean.TRUE.equals(directory.get("paymentHold"));
+                        }
+                        
+                        if ("COMPLETE".equals(compFilter)) {
+                            if (!isComplete || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch || isOutstanding) {
+                                continue;
+                            }
+                        } else if ("MISSING".equals(compFilter) || "INCOMPLETE".equals(compFilter)) {
+                            if (isOutstanding) {
+                                continue;
+                            }
+                            boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
+                            if (isComplete && !hasMismatch) {
+                                continue;
+                            }
+                        } else if ("NAME_MISMATCH".equals(compFilter)) {
+                            if (!hasNameMismatch || isOutstanding) {
+                                continue;
+                            }
+                        } else if ("UNIT_RATE_MISMATCH".equals(compFilter)) {
+                            if (!hasUnitRateMismatch || isOutstanding) {
+                                continue;
+                            }
+                        } else if ("NET_TYPE_MISMATCH".equals(compFilter)) {
+                            if (!hasNetTypeMismatch || isOutstanding) {
+                                continue;
+                            }
+                        } else if ("OTHER_MISMATCHES".equals(compFilter)) {
+                            if (isOutstanding || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch) {
+                                continue;
+                            }
+                            if (isComplete) {
+                                continue;
+                            }
+                        } else if ("OUTSTANDING".equals(compFilter)) {
+                            if (!isOutstanding) {
+                                continue;
+                            }
+                        }
                     }
                     dtoList.add(dto);
                 } catch (Exception ex) {

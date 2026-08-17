@@ -3042,15 +3042,34 @@ public class MultiFileImportService {
                 primaryStatus = "DUPLICATE";
             } else if (!errs.isEmpty()) {
                 primaryStatus = "ERROR";
-            } else if (!warns.isEmpty() || isNameMismatch || isUnitRateMismatch || isNetTypeMismatch || isNoBill) {
+            } else if (isNameMismatch || isUnitRateMismatch || isNetTypeMismatch) {
                 primaryStatus = "WARNING";
             } else {
-                primaryStatus = "VALID";
+                boolean hasOtherWarnings = false;
+                for (Object w : warns) {
+                    if (w != null && !w.toString().contains("No matching Main Data Set")) {
+                        hasOtherWarnings = true;
+                        break;
+                    }
+                }
+                if (hasOtherWarnings) {
+                    primaryStatus = "WARNING";
+                } else if (isNoBill) {
+                    primaryStatus = "VALID";
+                } else if (!warns.isEmpty()) {
+                    primaryStatus = "WARNING";
+                } else {
+                    primaryStatus = "VALID";
+                }
             }
 
             r.put("status", primaryStatus);
 
-            if ("VALID".equals(primaryStatus)) validCount++;
+            if ("VALID".equals(primaryStatus)) {
+                if (!isNoBill) {
+                    validCount++;
+                }
+            }
             else if ("ERROR".equals(primaryStatus)) errorCount++;
             else if ("WARNING".equals(primaryStatus)) warningCount++;
         }
@@ -3530,7 +3549,7 @@ public class MultiFileImportService {
      * tolerating reordering, initials vs expanded names, abbreviations and minor spelling variants.
      * Returns false only when the names clearly refer to different people.
      */
-    private static boolean namesMatch(String masterName, String npayName) {
+    public static boolean namesMatch(String masterName, String npayName) {
         java.util.List<String> ta = nameTokens(masterName);
         java.util.List<String> tb = nameTokens(npayName);
         java.util.List<String> wa = new java.util.ArrayList<>();

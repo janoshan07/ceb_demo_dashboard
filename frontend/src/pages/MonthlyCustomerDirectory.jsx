@@ -162,13 +162,14 @@ export const normalizeNetType = (raw) => {
 export const STATUS_FILTERS = [
   { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: '#38bdf8', icon: Sun },
   { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981', icon: CheckCircle },
-  { key: 'MISSING', label: 'Missing Details', cardLabel: 'Missing Details', color: '#f43f5e', icon: AlertTriangle },
-  { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8', icon: TrendingUp },
-  { key: 'NO_BILLING_DATA', label: 'No Billing Data / Payment Hold', cardLabel: 'No Billing / Hold', color: '#f59e0b', icon: ZapOff },
-  { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
+  { key: 'MISSING', label: 'Missing Details / Validation', cardLabel: 'Missing Details / Validation', color: '#f43f5e', icon: AlertTriangle },
   { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185', icon: UserX },
   { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24', icon: DollarSign },
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
+  { key: 'OTHER_MISMATCHES', label: 'Other Mismatches', cardLabel: 'Other Mismatches', color: '#f97316', icon: AlertCircle },
+  { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', cardLabel: 'Outstanding Customers', color: '#38bdf8', icon: Clock },
+  { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8', icon: TrendingUp },
+  { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
   { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444', icon: AlertCircle },
   { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316', icon: Clock },
 ];
@@ -716,11 +717,21 @@ const MonthlyCustomerDirectory = () => {
       case 'NEW_CUSTOMERS': return isNew;
       case 'NO_BILLING_DATA': return isNoBill;
       case 'DUPLICATE': return dup;
-      case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH';
-      case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH';
-      case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH';
-      case 'COMPLETE': return isRecordComplete(row);
-      case 'MISSING': return !isRecordComplete(row);
+      case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH' && !isNoBill;
+      case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH' && !isNoBill;
+      case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH' && !isNoBill;
+      case 'OTHER_MISMATCHES': {
+        const hasMismatch = row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH';
+        return !isRecordComplete(row) && !hasMismatch && !isNoBill;
+      }
+      case 'COMPLETE': {
+        const hasMismatch = row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH';
+        return isRecordComplete(row) && !hasMismatch && !isNoBill;
+      }
+      case 'MISSING': {
+        const hasMismatch = row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH';
+        return (!isRecordComplete(row) || hasMismatch) && !isNoBill;
+      }
       case 'CORRECTED': return row.step6Corrected === true || row.correctedInDirectory === true;
       case 'EXPIRED': return rowExpiry(row) === 'EXPIRED';
       case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON';

@@ -4983,7 +4983,7 @@ const UploadPage = () => {
           <StatCard label="Total Records" value={totalRecords} color="#818cf8" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
           <StatCard label="New Customers" value={newCustomersCount || 0} color="#38bdf8" icon={<User size={18} />} />
-          <StatCard label="Payment Hold" value={noBillingDataCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
+          <StatCard label="Outstanding Customers" value={noBillingDataCount || 0} color="#38bdf8" icon={<Clock size={18} />} />
           <StatCard label="Duplicates" value={duplicateCount || 0} color="#c084fc" icon={<Layers size={18} />} />
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
           <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#fbbf24' : '#10b981'} icon={<AlertTriangle size={18} />} />
@@ -5008,7 +5008,7 @@ const UploadPage = () => {
               { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
               { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
               { key: 'NEW_CUSTOMERS', label: 'New Customers', count: newCustomersCount || 0, color: '#38bdf8' },
-              { key: 'NO_BILLING_DATA', label: 'Payment Hold', count: noBillingDataCount || 0, color: '#f59e0b' },
+              { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', count: noBillingDataCount || 0, color: '#38bdf8' },
               { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
               { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
               { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },

@@ -63,9 +63,16 @@ public class CustomerDirectorySyncService {
             return 0;
         }
         String division = snap.getDivision();
+        String billingMonth = snap.getBillingMonth();
         int synced = 0;
         for (Map<String, Object> record : records) {
             try {
+                if (billingMonth != null) {
+                    record.put("billingMonth", billingMonth);
+                }
+                if (division != null) {
+                    record.put("division", division);
+                }
                 if (upsertCustomer(record, division)) synced++;
             } catch (Exception e) {
                 log.warning("CustomerDirectorySync: failed to sync a record from snapshot "

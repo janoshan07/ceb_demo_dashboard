@@ -207,7 +207,7 @@ public class CustomerController {
         if (expiry.isBefore(start)) {
             return "EXPIRED";
         }
-        if (!expiry.isAfter(end)) {
+        if (expiry.isBefore(start.plusMonths(2))) {
             return "EXPIRING_SOON";
         }
         return "ACTIVE";

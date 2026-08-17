@@ -2990,7 +2990,7 @@ public class MultiFileImportService {
                     LocalDate expDate = agrDate.plusYears(7);
                     if (expDate.isBefore(monthStart)) {
                         agrStatus = "EXPIRED";
-                    } else if (!expDate.isAfter(monthEnd)) {
+                    } else if (expDate.isBefore(monthStart.plusMonths(2))) {
                         agrStatus = "EXPIRING_SOON";
                     }
                 }

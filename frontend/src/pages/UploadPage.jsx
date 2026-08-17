@@ -125,7 +125,11 @@ export const computeAgreementExpiry = (agreementDate) => {
 export const agreementExpiryStatus = (expiry, billingMonthStart, billingMonthEnd) => {
   if (!expiry) return 'UNKNOWN';
   if (expiry < billingMonthStart) return 'EXPIRED';
-  if (expiry <= billingMonthEnd) return 'EXPIRING_SOON';
+  
+  const limitDate = new Date(billingMonthStart);
+  limitDate.setUTCMonth(limitDate.getUTCMonth() + 2);
+  
+  if (expiry < limitDate) return 'EXPIRING_SOON';
   return 'ACTIVE';
 };
 

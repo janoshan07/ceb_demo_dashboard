@@ -192,6 +192,7 @@ const CustomerDetails = () => {
   const [billingMonths, setBillingMonths] = useState([]);
   const [selectedBillingMonth, setSelectedBillingMonth] = useState('ALL');
   const [agreementStatusFilter, setAgreementStatusFilter] = useState('ALL');
+  const [netTypeFilter, setNetTypeFilter] = useState('ALL');
 
   // Helper to evaluate completeness of customer details
   const getCustomerCompleteness = (cust) => {
@@ -356,8 +357,21 @@ const CustomerDetails = () => {
   const fetchSummaryStats = async () => {
     try {
       let url = '/api/officer/customers/summary';
+      const params = [];
       if (selectedBillingMonth && selectedBillingMonth !== 'ALL') {
-        url += `?billingMonth=${encodeURIComponent(selectedBillingMonth)}`;
+        params.push(`billingMonth=${encodeURIComponent(selectedBillingMonth)}`);
+      }
+      if (appliedQuery.trim()) {
+        params.push(`query=${encodeURIComponent(appliedQuery.trim())}`);
+      }
+      if (locationFilter !== 'ALL') {
+        params.push(`location=${encodeURIComponent(locationFilter)}`);
+      }
+      if (netTypeFilter !== 'ALL') {
+        params.push(`netType=${encodeURIComponent(netTypeFilter)}`);
+      }
+      if (params.length > 0) {
+        url += `?${params.join('&')}`;
       }
       const summaryRes = await authFetch(url);
       if (summaryRes.ok) {
@@ -429,6 +443,9 @@ const CustomerDetails = () => {
       }
       if (locationFilter !== 'ALL') {
         url += `&location=${encodeURIComponent(locationFilter)}`;
+      }
+      if (netTypeFilter !== 'ALL') {
+        url += `&netType=${encodeURIComponent(netTypeFilter)}`;
       }
       
       let completenessVal = completenessFilter;
@@ -504,7 +521,7 @@ const CustomerDetails = () => {
     fetchCustomers(currentPage, appliedQuery);
     fetchLookups();
     fetchSummaryStats();
-  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, selectedBillingMonth, agreementStatusFilter, sortBy, sortDir, pageSize]);
+  }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, selectedBillingMonth, agreementStatusFilter, netTypeFilter, sortBy, sortDir, pageSize]);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -1398,7 +1415,7 @@ const CustomerDetails = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            <AlertCircle size={14} /> Validation Errors
+            <AlertCircle size={14} /> New Customers
             {summaryStats.validationErrorsCount > 0 && (
               <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
                 {summaryStats.validationErrorsCount}
@@ -1484,6 +1501,8 @@ const CustomerDetails = () => {
               setLocationFilter('ALL');
               setStatusFilter('ALL');
               setCompletenessFilter('ALL');
+              setAgreementStatusFilter('ALL');
+              setNetTypeFilter('ALL');
               setSearchQuery('');
               setAppliedQuery('');
               setCurrentPage(0);
@@ -1502,7 +1521,7 @@ const CustomerDetails = () => {
           </button>
         </div>
 
-        {/* Billing Month and Agreement Status Filter Panel */}
+        {/* Billing Month, Agreement Status and Net Type Filter Panel */}
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
             <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Billing Month:</label>
@@ -1530,6 +1549,21 @@ const CustomerDetails = () => {
               <option value="ALL">All Statuses</option>
               <option value="EXPIRED">Expired (7 Years Completed)</option>
               <option value="EXPIRING_SOON">Expiring Soon (7 Years Approaching)</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
+            <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Type:</label>
+            <select
+              value={netTypeFilter}
+              onChange={(e) => { setNetTypeFilter(e.target.value); setCurrentPage(0); }}
+              className="form-input"
+              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
+            >
+              <option value="ALL">All Net Types</option>
+              {netTypesList.map((nt) => (
+                <option key={nt.id} value={nt.name}>{nt.name}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -1683,9 +1717,9 @@ const CustomerDetails = () => {
                               <span 
                                 className="badge danger" 
                                 style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: 'rgba(239, 68, 68, 0.18)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', cursor: 'help' }}
-                                title={cust.validationErrors ? parseErrors(cust.validationErrors).join('; ') : 'Validation errors present'}
+                                title={cust.validationErrors ? parseErrors(cust.validationErrors).join('; ') : 'New customer details present'}
                               >
-                                Error
+                                New Customer
                               </span>
                             )}
                           </div>
@@ -2102,6 +2136,71 @@ const CustomerDetails = () => {
         {selectedCustomer && (
           <div className="drawer-body">
             
+            {/* Validation Issues Banner */}
+            {(() => {
+              const errors = [];
+              if (selectedCustomer.validationStatus === 'ERROR') {
+                const parsed = parseErrors(selectedCustomer.validationErrors);
+                parsed.forEach(err => {
+                  errors.push({
+                    type: 'New Customer',
+                    reason: err
+                  });
+                });
+              }
+              const dir = selectedCustomer.directory;
+              if (dir) {
+                if (dir.nameMatch === 'MISMATCH') {
+                  errors.push({
+                    type: 'Name Mismatch',
+                    reason: `Customer name in Directory ('${selectedCustomer.customerName || '—'}') does not match billing data name ('${dir.billingName || dir.name || '—'}').`
+                  });
+                }
+                if (dir.unitRateMatch === 'MISMATCH') {
+                  errors.push({
+                    type: 'Unit Rate Mismatch',
+                    reason: `Unit rate in Profile (${selectedCustomer.unitRate !== null && selectedCustomer.unitRate !== undefined ? selectedCustomer.unitRate : '—'}) does not match NGEN/NPAY/Main billing rate (${dir.unitRate || dir.billingUnitRate || '—'}).`
+                  });
+                }
+                if (dir.netTypeMatch === 'MISMATCH') {
+                  errors.push({
+                    type: 'Net Type Mismatch',
+                    reason: `Solar/Tariff Net Type in Profile does not match NGEN/NPAY billing net type.`
+                  });
+                }
+              }
+              const comp = getCustomerCompleteness(selectedCustomer);
+              if (!comp.isComplete) {
+                comp.missingFields.forEach(field => {
+                  if (field !== 'Name Mismatch' && field !== 'Unit Rate Mismatch' && field !== 'Net Type Mismatch') {
+                    errors.push({
+                      type: 'Missing Profile Detail',
+                      reason: `Required profile field '${field}' is missing or invalid.`
+                    });
+                  }
+                });
+              }
+
+              if (errors.length === 0) return null;
+
+              return (
+                <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
+                  <div style={{ color: '#ef4444', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                    <AlertCircle size={16} />
+                    Validation Issues Detected
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {errors.map((err, i) => (
+                      <div key={i} style={{ fontSize: '0.82rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
+                        <span style={{ fontWeight: 600, color: '#fca5a5', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>{err.type}</span>
+                        <span>{err.reason}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Tab Navigation */}
             <div style={{ display: 'flex', gap: '0.5rem', borderBottom: '1px solid var(--border-color)', marginBottom: '1.25rem', paddingBottom: '0.5rem' }}>
               <button
@@ -2139,19 +2238,6 @@ const CustomerDetails = () => {
             {/* TAB CONTENT: OVERVIEW */}
             {activeTab === 'overview' && (
               <div className="animate-fade-in">
-                {selectedCustomer.validationStatus === 'ERROR' && (
-                  <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
-                    <div style={{ color: '#ef4444', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <AlertCircle size={16} />
-                      Validation Issues
-                    </div>
-                    <ul style={{ margin: 0, paddingLeft: '1.25rem', color: '#f87171', fontSize: '0.82rem', lineHeight: 1.7 }}>
-                      {parseErrors(selectedCustomer.validationErrors).map((err, i) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.25rem', alignItems: 'start' }}>
                   {/* Profile Card */}
                   <div className="card" style={{ backgroundColor: 'var(--bg-primary)' }}>
@@ -2466,9 +2552,9 @@ const CustomerDetails = () => {
                           </div>
                         </div>
                         <div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Validation Status</span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Classification Status</span>
                           <div style={{ fontWeight: 600, marginTop: '0.1rem', color: selectedCustomer.validationStatus === 'ERROR' ? '#f87171' : 'var(--success)' }}>
-                            {selectedCustomer.validationStatus || 'VALID'}
+                            {selectedCustomer.validationStatus === 'ERROR' ? 'New Customer' : 'Valid'}
                           </div>
                         </div>
                       </div>
@@ -2571,7 +2657,7 @@ const CustomerDetails = () => {
                         </div>
                       </div>
                       <span className={`badge ${selectedCustomer.validationStatus === 'ERROR' ? 'danger' : 'success'}`} style={{ padding: '0.25rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, background: selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: selectedCustomer.validationStatus === 'ERROR' ? '#f87171' : '#10b981', border: `1px solid ${selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
-                        {selectedCustomer.validationStatus === 'ERROR' ? 'Error' : 'Valid'}
+                        {selectedCustomer.validationStatus === 'ERROR' ? 'New Customer' : 'Valid'}
                       </span>
                     </div>
 

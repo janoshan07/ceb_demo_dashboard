@@ -19,4 +19,10 @@ public interface MonthlyDirectorySnapshotRepository extends JpaRepository<Monthl
     List<MonthlyDirectorySnapshot> findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(String billingMonth, String division);
 
     List<MonthlyDirectorySnapshot> findByStatusOrderByCreatedDateDesc(String status);
+
+    List<MonthlyDirectorySnapshot> findByBillingMonthIgnoreCaseAndStatus(String billingMonth, String status);
+
+    List<MonthlyDirectorySnapshot> findByDivisionIgnoreCaseAndStatus(String division, String status);
+
+    List<MonthlyDirectorySnapshot> findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(String billingMonth, String division, String status);
 }

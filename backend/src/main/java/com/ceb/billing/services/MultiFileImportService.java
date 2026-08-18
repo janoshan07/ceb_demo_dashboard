@@ -2828,7 +2828,6 @@ public class MultiFileImportService {
                 } else {
                     enriched.put("masterDataFound", false);
                     enriched.put("isNewCustomer", true);
-                    errors.add("Account No not found in Master Data or customer database");
                     notFoundCount++;
                 }
             }
@@ -2885,7 +2884,9 @@ public class MultiFileImportService {
             warnings.add("No matching Main Data Set (billing) record — imported fields marked as missing.");
             enriched.put("errors", errors);
             enriched.put("warnings", warnings);
-            enriched.put("status", "WARNING");
+            enriched.put("status", "REJECTED");
+            enriched.put("rejected", true);
+            enriched.put("rejectionReason", "Rejected / No Billing Data");
             enrichedList.add(enriched);
             masterOnlyCount++;
         }
@@ -2948,6 +2949,7 @@ public class MultiFileImportService {
         int mismatchCount = 0;
         int notFoundCount = 0;
         int masterOnlyCount = 0;
+        int rejectedCount = 0;
 
         Set<String> uniqueAccountNos = new HashSet<>();
 
@@ -2974,7 +2976,17 @@ public class MultiFileImportService {
 
             boolean isMasterFound = Boolean.TRUE.equals(r.get("masterDataFound"));
             boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(r.get("isNewCustomer"));
-            boolean isNoBill = Boolean.TRUE.equals(r.get("masterOnly")) || Boolean.TRUE.equals(r.get("noBillingData")) || Boolean.TRUE.equals(r.get("paymentHold"));
+            boolean isPaymentHold = Boolean.TRUE.equals(r.get("paymentHold"));
+            boolean isNoBill = Boolean.TRUE.equals(r.get("masterOnly")) || Boolean.TRUE.equals(r.get("noBillingData"));
+            
+            boolean isPaymentMismatch = false;
+            Object pMap = r.get("mergedPayment");
+            if (pMap instanceof Map) {
+                isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+            }
+            
+            boolean isRejected = "REJECTED".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("rejected"));
+            boolean isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
             boolean isDup = Boolean.TRUE.equals(r.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("hasDuplicateSources"));
 
             boolean isNameMismatch = "MISMATCH".equals(r.get("nameMatch"));
@@ -3016,8 +3028,10 @@ public class MultiFileImportService {
             if (isNewCust) newCustomersCount++;
             else existingCustomersCount++;
 
-            if (isNoBill) {
+            if (isOutstanding) {
                 noBillingDataCount++;
+            }
+            if (isNoBill) {
                 masterOnlyCount++;
             }
             if (isDup) duplicateCount++;
@@ -3040,6 +3054,8 @@ public class MultiFileImportService {
             String primaryStatus;
             if (isDup) {
                 primaryStatus = "DUPLICATE";
+            } else if (Boolean.TRUE.equals(r.get("rejected")) || "REJECTED".equalsIgnoreCase(strVal(r.get("status")))) {
+                primaryStatus = "REJECTED";
             } else if (!errs.isEmpty()) {
                 primaryStatus = "ERROR";
             } else if (isNameMismatch || isUnitRateMismatch || isNetTypeMismatch) {
@@ -3066,12 +3082,13 @@ public class MultiFileImportService {
             r.put("status", primaryStatus);
 
             if ("VALID".equals(primaryStatus)) {
-                if (!isNoBill) {
+                if (!isOutstanding) {
                     validCount++;
                 }
             }
             else if ("ERROR".equals(primaryStatus)) errorCount++;
             else if ("WARNING".equals(primaryStatus)) warningCount++;
+            else if ("REJECTED".equals(primaryStatus)) rejectedCount++;
         }
 
         Map<String, Object> m = new LinkedHashMap<>();
@@ -3094,6 +3111,7 @@ public class MultiFileImportService {
         m.put("mismatchCount", mismatchCount);
         m.put("notFoundCount", notFoundCount);
         m.put("masterOnlyCount", masterOnlyCount);
+        m.put("rejectedCount", rejectedCount);
 
         return m;
     }
@@ -4191,6 +4209,13 @@ public class MultiFileImportService {
 
         List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
 
+        Set<String> validMasterAccounts = new HashSet<>();
+        for (Map<String, Object> row : mainDataset) {
+            if (!Boolean.TRUE.equals(row.get("masterOnly")) && row.get("accountNo") != null) {
+                validMasterAccounts.add(row.get("accountNo").toString().trim());
+            }
+        }
+
         // Apply corrections overlay to main dataset rows
         List<Map<String, Object>> correctedDataset = new ArrayList<>();
         // Original (pre-correction) row for every corrected row, so Officer corrections can be
@@ -4217,6 +4242,17 @@ public class MultiFileImportService {
 
             if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
                 skippedCount++;
+                Map<String, Object> finalRow = new LinkedHashMap<>(row);
+                finalRow.put("status", "REJECTED");
+                finalRow.put("rejected", true);
+                if (corr.containsKey("rejectionReason")) {
+                    finalRow.put("rejectionReason", corr.get("rejectionReason"));
+                } else if (corr.containsKey("deleteReason")) {
+                    finalRow.put("rejectionReason", corr.get("deleteReason"));
+                } else {
+                    finalRow.put("rejectionReason", "Rejected during Step 6 review");
+                }
+                correctedDataset.add(finalRow);
                 continue;
             }
 
@@ -4256,14 +4292,22 @@ public class MultiFileImportService {
                 }
                 if (isDeleted) continue;
 
+                boolean isMasterOnlyRejected = acc != null && !validMasterAccounts.contains(acc.trim());
                 String[] validation = stagedValidation(mc, mapper);
-                if ("INVALID".equals(validation[0])) stagedErrorRows++;
+                String valStatus = validation[0];
+                String valReason = validation[1];
+                if (isMasterOnlyRejected) {
+                    valStatus = "REJECTED";
+                    valReason = "Rejected / No Billing Data";
+                } else if ("INVALID".equals(valStatus)) {
+                    stagedErrorRows++;
+                }
 
                 BillingUploadStaging staging = new BillingUploadStaging(
                         uploadId,
                         mapper.writeValueAsString(mc),
-                        validation[0],
-                        validation[1],
+                        valStatus,
+                        valReason,
                         "CUSTOMER_PROFILE"
                 );
                 billingUploadStagingRepository.save(staging);
@@ -4380,6 +4424,8 @@ public class MultiFileImportService {
                 if (corrections.containsKey(rNum) && Boolean.TRUE.equals(corrections.get(rNum).get("deleted"))) isDeleted = true;
             }
             if (isDeleted) continue;
+            boolean isMasterOnlyRejected = !validMasterAccounts.contains(accountNo);
+            if (isMasterOnlyRejected) continue;
 
             String customerName = (String) stagedCust.get("customerName");
             String customerAddress = (String) stagedCust.get("customerAddress");

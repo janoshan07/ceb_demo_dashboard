@@ -186,15 +186,29 @@ public class CustomerController {
         boolean hasNameMismatch = "MISMATCH".equals(record.get("nameMatch"));
         boolean hasUnitRateMismatch = "MISMATCH".equals(record.get("unitRateMatch"));
         boolean hasNetTypeMismatch = "MISMATCH".equals(record.get("netTypeMatch"));
-        boolean isOutstanding = Boolean.TRUE.equals(record.get("masterOnly")) 
-                     || Boolean.TRUE.equals(record.get("noBillingData")) 
-                     || Boolean.TRUE.equals(record.get("paymentHold"));
+        
+        boolean isMasterFound = true;
+        if (record.containsKey("masterDataFound")) {
+            isMasterFound = Boolean.TRUE.equals(record.get("masterDataFound"));
+        }
+        boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(record.get("isNewCustomer"));
+        boolean isPaymentHold = Boolean.TRUE.equals(record.get("paymentHold"));
+        boolean isNoBill = Boolean.TRUE.equals(record.get("masterOnly")) || Boolean.TRUE.equals(record.get("noBillingData"));
+        
+        boolean isPaymentMismatch = false;
+        Object pMap = record.get("mergedPayment");
+        if (pMap instanceof Map) {
+            isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+        }
+        
+        boolean isRejected = "REJECTED".equals(record.get("status")) || Boolean.TRUE.equals(record.get("rejected"));
+        boolean isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
 
         if (hasNameMismatch) missingFields.add("Name Mismatch");
         if (hasUnitRateMismatch) missingFields.add("Unit Rate Mismatch");
         if (hasNetTypeMismatch) missingFields.add("Net Type Mismatch");
 
-        boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding;
+        boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding && !isRejected;
 
         dto.put("isComplete", isComplete);
         dto.put("missingFields", missingFields);
@@ -268,16 +282,35 @@ public class CustomerController {
                 hasNameMismatch = "MISMATCH".equals(dirMap.get("nameMatch"));
                 hasUnitRateMismatch = "MISMATCH".equals(dirMap.get("unitRateMatch"));
                 hasNetTypeMismatch = "MISMATCH".equals(dirMap.get("netTypeMatch"));
-                isOutstanding = Boolean.TRUE.equals(dirMap.get("masterOnly")) 
-                             || Boolean.TRUE.equals(dirMap.get("noBillingData")) 
-                             || Boolean.TRUE.equals(dirMap.get("paymentHold"));
+                
+                boolean isMasterFound = true;
+                if (dirMap.containsKey("masterDataFound")) {
+                    isMasterFound = Boolean.TRUE.equals(dirMap.get("masterDataFound"));
+                }
+                boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(dirMap.get("isNewCustomer"));
+                boolean isPaymentHold = Boolean.TRUE.equals(dirMap.get("paymentHold"));
+                boolean isNoBill = Boolean.TRUE.equals(dirMap.get("masterOnly")) || Boolean.TRUE.equals(dirMap.get("noBillingData"));
+                
+                boolean isPaymentMismatch = false;
+                Object pMap = dirMap.get("mergedPayment");
+                if (pMap instanceof Map) {
+                    isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+                }
+                
+                boolean isRejected = "REJECTED".equals(dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("rejected"));
+                isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
             }
 
             if (hasNameMismatch) missingFields.add("Name Mismatch");
             if (hasUnitRateMismatch) missingFields.add("Unit Rate Mismatch");
             if (hasNetTypeMismatch) missingFields.add("Net Type Mismatch");
 
-            boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding;
+            boolean isRejected = false;
+            if (directory instanceof Map) {
+                Map<?, ?> dirMap = (Map<?, ?>) directory;
+                isRejected = "REJECTED".equals(dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("rejected"));
+            }
+            boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding && !isRejected;
 
             dto.put("isComplete", isComplete);
             dto.put("missingFields", missingFields);
@@ -419,6 +452,7 @@ public class CustomerController {
             int errors = 0;
             int expired = 0;
             int expiringSoon = 0;
+            int rejected = 0;
 
             LocalDate[] range = null;
             if (isSpecificMonth) {
@@ -509,18 +543,40 @@ public class CustomerController {
                 boolean hasNameMismatch = false;
                 boolean hasUnitRateMismatch = false;
                 boolean hasNetTypeMismatch = false;
-                boolean isNoBill = false;
+                boolean isOutstanding = false;
                 
                 if (directory != null) {
                     hasNameMismatch = "MISMATCH".equals(directory.get("nameMatch"));
                     hasUnitRateMismatch = "MISMATCH".equals(directory.get("unitRateMatch"));
                     hasNetTypeMismatch = "MISMATCH".equals(directory.get("netTypeMatch"));
-                    isNoBill = Boolean.TRUE.equals(directory.get("masterOnly")) 
-                            || Boolean.TRUE.equals(directory.get("noBillingData")) 
-                            || Boolean.TRUE.equals(directory.get("paymentHold"));
+                    
+                    boolean isMasterFound = true;
+                    if (directory.containsKey("masterDataFound")) {
+                        isMasterFound = Boolean.TRUE.equals(directory.get("masterDataFound"));
+                    }
+                    boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(directory.get("isNewCustomer"));
+                    boolean isPaymentHold = Boolean.TRUE.equals(directory.get("paymentHold"));
+                    boolean isNoBill = Boolean.TRUE.equals(directory.get("masterOnly")) || Boolean.TRUE.equals(directory.get("noBillingData"));
+                    
+                    boolean isPaymentMismatch = false;
+                    Object pMap = directory.get("mergedPayment");
+                    if (pMap instanceof Map) {
+                        isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+                    }
+                    
+                    isOutstanding = isNewCust || isPaymentHold || isNoBill || isPaymentMismatch;
+                } else {
+                    boolean isNewCust = Boolean.TRUE.equals(dto.get("isNewCustomer"));
+                    boolean isPaymentHold = Boolean.TRUE.equals(dto.get("paymentHold"));
+                    boolean isNoBill = Boolean.TRUE.equals(dto.get("masterOnly")) || Boolean.TRUE.equals(dto.get("noBillingData"));
+                    isOutstanding = isNewCust || isPaymentHold || isNoBill;
                 }
 
                 String valStatus = String.valueOf(dto.get("validationStatus"));
+                boolean isRejected = "REJECTED".equalsIgnoreCase(valStatus) 
+                        || "REJECTED".equals(dto.get("status")) 
+                        || (directory != null && ("REJECTED".equals(directory.get("status")) || Boolean.TRUE.equals(directory.get("rejected"))));
+                isOutstanding = isOutstanding && !isRejected;
                 if ("ERROR".equalsIgnoreCase(valStatus)) {
                     errors++;
                 }
@@ -544,7 +600,9 @@ public class CustomerController {
                     } catch (Exception ignored) {}
                 }
 
-                if (isNoBill) {
+                if (isRejected) {
+                    rejected++;
+                } else if (isOutstanding) {
                     outstanding++;
                 } else {
                     boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
@@ -571,6 +629,7 @@ public class CustomerController {
             stats.put("netTypeMismatch", netTypeMismatch);
             stats.put("otherMismatch", otherMismatch);
             stats.put("outstanding", outstanding);
+            stats.put("rejected", rejected);
             stats.put("errors", errors);
             stats.put("expired", expired);
             stats.put("expiringSoon", expiringSoon);
@@ -708,16 +767,30 @@ public class CustomerController {
                             boolean hasNameMismatch = "MISMATCH".equals(rec.get("nameMatch"));
                             boolean hasUnitRateMismatch = "MISMATCH".equals(rec.get("unitRateMatch"));
                             boolean hasNetTypeMismatch = "MISMATCH".equals(rec.get("netTypeMatch"));
-                            boolean isOutstanding = Boolean.TRUE.equals(rec.get("masterOnly")) 
-                                         || Boolean.TRUE.equals(rec.get("noBillingData")) 
-                                         || Boolean.TRUE.equals(rec.get("paymentHold"));
+                            
+                            boolean isMasterFound = true;
+                            if (rec.containsKey("masterDataFound")) {
+                                isMasterFound = Boolean.TRUE.equals(rec.get("masterDataFound"));
+                            }
+                            boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(rec.get("isNewCustomer"));
+                            boolean isPaymentHold = Boolean.TRUE.equals(rec.get("paymentHold"));
+                            boolean isNoBill = Boolean.TRUE.equals(rec.get("masterOnly")) || Boolean.TRUE.equals(rec.get("noBillingData"));
+                            
+                            boolean isPaymentMismatch = false;
+                            Object pMap = rec.get("mergedPayment");
+                            if (pMap instanceof Map) {
+                                isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+                            }
+                            
+                            boolean isRejected = "REJECTED".equals(rec.get("status")) || Boolean.TRUE.equals(rec.get("rejected"));
+                            boolean isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
                             
                             if ("COMPLETE".equals(compFilter)) {
-                                if (!isComplete || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch || isOutstanding) {
+                                if (!isComplete || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("MISSING".equals(compFilter) || "INCOMPLETE".equals(compFilter)) {
-                                if (isOutstanding) {
+                                if (isOutstanding || isRejected) {
                                     continue;
                                 }
                                 boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
@@ -725,26 +798,30 @@ public class CustomerController {
                                     continue;
                                 }
                             } else if ("NAME_MISMATCH".equals(compFilter)) {
-                                if (!hasNameMismatch || isOutstanding) {
+                                if (!hasNameMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("UNIT_RATE_MISMATCH".equals(compFilter)) {
-                                if (!hasUnitRateMismatch || isOutstanding) {
+                                if (!hasUnitRateMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("NET_TYPE_MISMATCH".equals(compFilter)) {
-                                if (!hasNetTypeMismatch || isOutstanding) {
+                                if (!hasNetTypeMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("OTHER_MISMATCHES".equals(compFilter)) {
-                                if (isOutstanding || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch) {
+                                if (isOutstanding || isRejected || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch) {
                                     continue;
                                 }
                                 if (isComplete) {
                                     continue;
                                 }
                             } else if ("OUTSTANDING".equals(compFilter)) {
-                                if (!isOutstanding) {
+                                if (!isOutstanding || isRejected) {
+                                    continue;
+                                }
+                            } else if ("REJECTED".equals(compFilter)) {
+                                if (!isRejected) {
                                     continue;
                                 }
                             }
@@ -855,17 +932,38 @@ public class CustomerController {
                                 hasNameMismatch = "MISMATCH".equals(directory.get("nameMatch"));
                                 hasUnitRateMismatch = "MISMATCH".equals(directory.get("unitRateMatch"));
                                 hasNetTypeMismatch = "MISMATCH".equals(directory.get("netTypeMatch"));
-                                isOutstanding = Boolean.TRUE.equals(directory.get("masterOnly")) 
-                                             || Boolean.TRUE.equals(directory.get("noBillingData")) 
-                                             || Boolean.TRUE.equals(directory.get("paymentHold"));
+                                
+                                boolean isMasterFound = true;
+                                if (directory.containsKey("masterDataFound")) {
+                                    isMasterFound = Boolean.TRUE.equals(directory.get("masterDataFound"));
+                                }
+                                boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(directory.get("isNewCustomer"));
+                                boolean isPaymentHold = Boolean.TRUE.equals(directory.get("paymentHold"));
+                                boolean isNoBill = Boolean.TRUE.equals(directory.get("masterOnly")) || Boolean.TRUE.equals(directory.get("noBillingData"));
+                                
+                                boolean isPaymentMismatch = false;
+                                Object pMap = directory.get("mergedPayment");
+                                if (pMap instanceof Map) {
+                                    isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+                                }
+                                
+                                isOutstanding = isNewCust || isPaymentHold || isNoBill || isPaymentMismatch;
+                            } else {
+                                boolean isNewCust = Boolean.TRUE.equals(dto.get("isNewCustomer"));
+                                boolean isPaymentHold = Boolean.TRUE.equals(dto.get("paymentHold"));
+                                boolean isNoBill = Boolean.TRUE.equals(dto.get("masterOnly")) || Boolean.TRUE.equals(dto.get("noBillingData"));
+                                isOutstanding = isNewCust || isPaymentHold || isNoBill;
                             }
                             
+                            boolean isRejected = "REJECTED".equals(dto.get("status")) || (directory != null && ("REJECTED".equals(directory.get("status")) || Boolean.TRUE.equals(directory.get("rejected"))));
+                            isOutstanding = isOutstanding && !isRejected;
+                            
                             if ("COMPLETE".equals(compFilter)) {
-                                if (!isComplete || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch || isOutstanding) {
+                                if (!isComplete || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("MISSING".equals(compFilter) || "INCOMPLETE".equals(compFilter)) {
-                                if (isOutstanding) {
+                                if (isOutstanding || isRejected) {
                                     continue;
                                 }
                                 boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
@@ -873,26 +971,30 @@ public class CustomerController {
                                     continue;
                                 }
                             } else if ("NAME_MISMATCH".equals(compFilter)) {
-                                if (!hasNameMismatch || isOutstanding) {
+                                if (!hasNameMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("UNIT_RATE_MISMATCH".equals(compFilter)) {
-                                if (!hasUnitRateMismatch || isOutstanding) {
+                                if (!hasUnitRateMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("NET_TYPE_MISMATCH".equals(compFilter)) {
-                                if (!hasNetTypeMismatch || isOutstanding) {
+                                if (!hasNetTypeMismatch || isOutstanding || isRejected) {
                                     continue;
                                 }
                             } else if ("OTHER_MISMATCHES".equals(compFilter)) {
-                                if (isOutstanding || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch) {
+                                if (isOutstanding || isRejected || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch) {
                                     continue;
                                 }
                                 if (isComplete) {
                                     continue;
                                 }
                             } else if ("OUTSTANDING".equals(compFilter)) {
-                                if (!isOutstanding) {
+                                if (!isOutstanding || isRejected) {
+                                    continue;
+                                }
+                            } else if ("REJECTED".equals(compFilter)) {
+                                if (!isRejected) {
                                     continue;
                                 }
                             }
@@ -1109,7 +1211,7 @@ public class CustomerController {
 
         Optional<Customer> customer = customerRepository.findById(Objects.requireNonNull(accountNo));
         if (customer.isPresent()) {
-            return ResponseEntity.ok(customer.get());
+            return ResponseEntity.ok(toSafeDto(customer.get()));
         }
         return ResponseEntity.notFound().build();
     }

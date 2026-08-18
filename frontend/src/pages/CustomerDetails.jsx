@@ -9,6 +9,7 @@ import {
   History, 
   Edit,
   X,
+  XCircle,
   ChevronLeft,
   ChevronRight,
   TrendingDown,
@@ -179,6 +180,10 @@ const CustomerDetails = () => {
     completeCustomers: 0,
     missingCustomers: 0,
     validationErrorsCount: 0,
+    outstandingCustomersCount: 0,
+    rejectedCount: 0,
+    expiredAgreementsCount: 0,
+    expiringSoonAgreementsCount: 0,
     locationsCount: 5
   });
   const [loading, setLoading] = useState(false);
@@ -225,7 +230,13 @@ const CustomerDetails = () => {
       hasNameMismatch = directory.nameMatch === 'MISMATCH';
       hasUnitRateMismatch = directory.unitRateMatch === 'MISMATCH';
       hasNetTypeMismatch = directory.netTypeMatch === 'MISMATCH';
-      isOutstanding = directory.masterOnly === true || directory.noBillingData === true || directory.paymentHold === true;
+      
+      const isNew = directory.masterDataFound === false || directory.isNewCustomer === true;
+      const isPaymentHold = directory.paymentHold === true;
+      const isNoBillOnly = directory.masterOnly === true || directory.noBillingData === true;
+      const isPaymentMismatch = directory.mergedPayment?.mismatch === true;
+      
+      isOutstanding = isNew || isPaymentHold || isNoBillOnly || isPaymentMismatch;
     }
 
     if (hasNameMismatch) missing.push('Name Mismatch');
@@ -386,6 +397,7 @@ const CustomerDetails = () => {
           netTypeMismatchesCount: data.netTypeMismatch || 0,
           otherMismatchesCount: data.otherMismatch || 0,
           outstandingCustomersCount: data.outstanding || 0,
+          rejectedCount: data.rejected || 0,
           expiredAgreementsCount: data.expired || 0,
           expiringSoonAgreementsCount: data.expiringSoon || 0,
           locationsCount: DIRECTORY_DIVISIONS.length
@@ -1397,14 +1409,13 @@ const CustomerDetails = () => {
               </span>
             )}
           </button>
-
           <button
-            onClick={() => { setStatusFilter('ERROR'); setCompletenessFilter('ALL'); setCurrentPage(0); }}
+            onClick={() => { setCompletenessFilter('REJECTED'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: statusFilter === 'ERROR' ? 'rgba(239,68,68,0.12)' : '#111827',
-              border: statusFilter === 'ERROR' ? '1px solid #ef4444' : '1px solid var(--border-color)',
-              color: statusFilter === 'ERROR' ? '#f87171' : 'var(--text-secondary)',
+              background: completenessFilter === 'REJECTED' ? 'rgba(244,63,94,0.12)' : '#111827',
+              border: completenessFilter === 'REJECTED' ? '1px solid #f43f5e' : '1px solid var(--border-color)',
+              color: completenessFilter === 'REJECTED' ? '#fb7185' : 'var(--text-secondary)',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1415,13 +1426,14 @@ const CustomerDetails = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            <AlertCircle size={14} /> New Customers
-            {summaryStats.validationErrorsCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.validationErrorsCount}
+            <XCircle size={14} /> Rejected Records
+            {summaryStats.rejectedCount > 0 && (
+              <span style={{ marginLeft: '0.35rem', background: '#f43f5e', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+                {summaryStats.rejectedCount}
               </span>
             )}
           </button>
+
         </div>
 
         {/* View Mode Toggle */}
@@ -2135,6 +2147,22 @@ const CustomerDetails = () => {
 
         {selectedCustomer && (
           <div className="drawer-body">
+            
+            {/* Rejection Reason Banner */}
+            {(selectedCustomer.status === 'REJECTED' || selectedCustomer.validationStatus === 'REJECTED' || selectedCustomer.directory?.status === 'REJECTED' || selectedCustomer.directory?.rejected === true) && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
+                <div style={{ color: '#ef4444', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                  <XCircle size={16} style={{ color: '#ef4444' }} />
+                  Record Rejected
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#f87171' }}>
+                  <strong>Rejection Reason / Comments:</strong>
+                  <div style={{ marginTop: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.04)', borderRadius: 6, border: '1px solid rgba(239, 68, 68, 0.1)' }}>
+                    {selectedCustomer.directory?.rejectionReason || selectedCustomer.rejectionReason || 'Rejected during Step 6 review'}
+                  </div>
+                </div>
+              </div>
+            )}
             
             {/* Validation Issues Banner */}
             {(() => {

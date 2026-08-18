@@ -972,20 +972,37 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.15rem', fontSize: '0.8rem' }}>
-              <div>
-                <span style={{ color: 'var(--text-secondary)' }}>Bank</span>
-                <div style={{ fontWeight: 500 }}>{customerInfo?.bankCode || '—'}</div>
+            {customerInfo?.isComplete ? (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.15rem', fontSize: '0.8rem' }}>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Bank</span>
+                  <div style={{ fontWeight: 500 }}>{customerInfo?.bankCode || '—'}</div>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Branch</span>
+                  <div style={{ fontWeight: 500 }}>{customerInfo?.branchCode || '—'}</div>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Bank A/C</span>
+                  <div style={{ fontWeight: 500 }}>{customerInfo?.bankAccountNo || '—'}</div>
+                </div>
               </div>
-              <div>
-                <span style={{ color: 'var(--text-secondary)' }}>Branch</span>
-                <div style={{ fontWeight: 500 }}>{customerInfo?.branchCode || '—'}</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.15rem', fontSize: '0.8rem' }}>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Outstanding Balance</span>
+                  <div style={{ fontWeight: 700, color: 'var(--danger)' }}>
+                    {customerInfo?.directory?.outstandingBalance != null ? formatLKR(customerInfo.directory.outstandingBalance) : '—'}
+                  </div>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-secondary)' }}>Payment Amount</span>
+                  <div style={{ fontWeight: 700, color: 'var(--success)' }}>
+                    {customerInfo?.directory?.payment != null ? formatLKR(customerInfo.directory.payment) : (customerInfo?.directory?.paymentSettled != null ? formatLKR(customerInfo.directory.paymentSettled) : '—')}
+                  </div>
+                </div>
               </div>
-              <div>
-                <span style={{ color: 'var(--text-secondary)' }}>Bank A/C</span>
-                <div style={{ fontWeight: 500 }}>{customerInfo?.bankAccountNo || '—'}</div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

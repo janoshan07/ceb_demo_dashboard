@@ -92,8 +92,12 @@ public class StagingMigrationService {
         for (BillingUploadStaging record : stagingRecords) {
             String status = record.getValidationStatus();
 
-            if ("INVALID".equals(status)) {
-                invalidCount++;
+            if ("INVALID".equals(status) || "REJECTED".equals(status)) {
+                if ("REJECTED".equals(status)) {
+                    skippedCount++;
+                } else {
+                    invalidCount++;
+                }
                 continue;
             }
             if ("DUPLICATE".equals(status)) {

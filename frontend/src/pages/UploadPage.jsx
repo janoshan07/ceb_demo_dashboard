@@ -4894,7 +4894,11 @@ const UploadPage = () => {
     const { rows, totalRecords, errorCount, warningCount, validCount, newCustomersCount, noBillingDataCount, duplicateCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
     const hasErrors = (errorCount || 0) > 0;
     const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
-    const isNoBill = r => r.masterOnly === true || r.noBillingData === true || r.paymentHold === true;
+    const isPaymentHold = r => r.paymentHold === true;
+    const isNoBillOnly = r => r.masterOnly === true || r.noBillingData === true;
+    const isPaymentMismatch = r => r.mergedPayment?.mismatch === true;
+    const isRejected = r => r.status === 'REJECTED' || r.rejected === true;
+    const isNoBill = r => (isNewCust(r) || isPaymentHold(r) || isNoBillOnly(r) || isPaymentMismatch(r)) && !isRejected(r);
     const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true;
 
     const searchedRows = (rows || []).filter(r => {
@@ -4942,8 +4946,8 @@ const UploadPage = () => {
     const filteredRows = searchedRows.filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
       if (masterComparisonFilter === 'VALID') return r.status === 'VALID';
-      if (masterComparisonFilter === 'NEW_CUSTOMERS') return isNewCust(r);
       if (masterComparisonFilter === 'NO_BILLING_DATA') return isNoBill(r);
+      if (masterComparisonFilter === 'REJECTED') return r.status === 'REJECTED';
       if (masterComparisonFilter === 'DUPLICATE') return isDup(r);
       if (masterComparisonFilter === 'NAME_MISMATCH') return r.nameMatch === 'MISMATCH';
       if (masterComparisonFilter === 'UNIT_RATE_MISMATCH') return r.unitRateMatch === 'MISMATCH';
@@ -4986,7 +4990,6 @@ const UploadPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
           <StatCard label="Total Records" value={totalRecords} color="#818cf8" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
-          <StatCard label="New Customers" value={newCustomersCount || 0} color="#38bdf8" icon={<User size={18} />} />
           <StatCard label="Outstanding Customers" value={noBillingDataCount || 0} color="#38bdf8" icon={<Clock size={18} />} />
           <StatCard label="Duplicates" value={duplicateCount || 0} color="#c084fc" icon={<Layers size={18} />} />
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
@@ -5011,8 +5014,8 @@ const UploadPage = () => {
             {[
               { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
               { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
-              { key: 'NEW_CUSTOMERS', label: 'New Customers', count: newCustomersCount || 0, color: '#38bdf8' },
               { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', count: noBillingDataCount || 0, color: '#38bdf8' },
+              { key: 'REJECTED', label: 'Rejected', count: (rows || []).filter(r => r.status === 'REJECTED').length, color: '#f43f5e' },
               { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
               { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
               { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
@@ -5855,11 +5858,11 @@ const UploadPage = () => {
                   const expanded = comparisonExpandedRow === rowKey;
                   const errorCount = row.errors?.length || 0;
                   const warningCount = row.warnings?.length || 0;
-                  const hasDetail = errorCount + warningCount > 0;
+                  const hasDetail = errorCount + warningCount > 0 || row.status === 'REJECTED';
                   return (
                     <React.Fragment key={rowKey}>
                       <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'ERROR' ? '3px solid #ef4444' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
@@ -5909,8 +5912,8 @@ const UploadPage = () => {
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           <span style={{
                             padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)',
-                            color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : 'var(--text-muted)'
+                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.08)',
+                            color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : row.status === 'REJECTED' ? '#f43f5e' : 'var(--text-muted)'
                           }}>{row.status}</span>
                         </td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
@@ -5945,6 +5948,14 @@ const UploadPage = () => {
                                       <XCircle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {err}
                                     </div>
                                   ))}
+                                </div>
+                              )}
+                              {row.status === 'REJECTED' && row.rejectionReason && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', marginTop: '0.25rem' }}>
+                                  <strong style={{ color: '#f43f5e' }}>Rejection Reason:</strong>
+                                  <div style={{ color: '#f43f5e', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                    <XCircle size={11} style={{ color: '#f43f5e', flexShrink: 0, marginTop: 2 }} /> {row.rejectionReason}
+                                  </div>
                                 </div>
                               )}
                               {warningCount > 0 && (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Archive, FolderOpen, Pencil, Trash2, Download, X, Loader,
+  Archive, FolderOpen, Pencil, Trash2, Download, X, Loader, XCircle,
   Calendar, Users, CheckCircle, Clock, RefreshCw, FileSpreadsheet,
   Edit3, History, AlertTriangle, ShieldCheck, RotateCcw, Save, Search, Eye,
   ChevronDown, Check, MapPin, ArrowLeft, Plus, CloudUpload,
@@ -168,7 +168,7 @@ export const STATUS_FILTERS = [
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
   { key: 'OTHER_MISMATCHES', label: 'Other Mismatches', cardLabel: 'Other Mismatches', color: '#f97316', icon: AlertCircle },
   { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', cardLabel: 'Outstanding Customers', color: '#38bdf8', icon: Clock },
-  { key: 'NEW_CUSTOMERS', label: 'New Customers', cardLabel: 'New Customers', color: '#38bdf8', icon: TrendingUp },
+  { key: 'REJECTED', label: 'Rejected Records', cardLabel: 'Rejected', color: '#f43f5e', icon: XCircle },
   { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
   { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444', icon: AlertCircle },
   { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316', icon: Clock },
@@ -208,7 +208,10 @@ export const MismatchChip = ({ label, color = '#f87171', bg = 'rgba(239,68,68,0.
 
 export const RecordStatusBadge = ({ row }) => {
   const isNew = row.masterDataFound === false || row.isNewCustomer === true;
-  const isNoBill = row.masterOnly === true || row.noBillingData === true || row.paymentHold === true;
+  const isPaymentHold = row.paymentHold === true;
+  const isNoBillOnly = row.masterOnly === true || row.noBillingData === true;
+  const isPaymentMismatch = row.mergedPayment?.mismatch === true;
+  const isNoBill = isNew || isPaymentHold || isNoBillOnly || isPaymentMismatch;
   const dup = isDuplicateRecord(row);
   const st = String(row.status || row.validationStatus || 'VALID').toUpperCase();
   const cfg = RECORD_STATUS_STYLE[st] || RECORD_STATUS_STYLE.VALID;
@@ -219,10 +222,12 @@ export const RecordStatusBadge = ({ row }) => {
       {row.recordApproved === true && (
         <span style={{ fontSize: '0.62rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircle size={10} /> Approved</span>
       )}
-      {(row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH' || dup || isNew || isNoBill) && (
+      {(row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH' || dup || isNoBill) && (
         <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {isNew && <MismatchChip label="/ New Customer" color="#38bdf8" bg="rgba(56,189,248,0.15)" border="rgba(56,189,248,0.3)" />}
-          {isNoBill && <MismatchChip label="/ No Billing" color="#f59e0b" bg="rgba(245,158,11,0.15)" border="rgba(245,158,11,0.3)" />}
+          {isNoBillOnly && <MismatchChip label="/ No Billing" color="#f59e0b" bg="rgba(245,158,11,0.15)" border="rgba(245,158,11,0.3)" />}
+          {isPaymentHold && <MismatchChip label="/ Payment Hold" color="#f59e0b" bg="rgba(245,158,11,0.15)" border="rgba(245,158,11,0.3)" />}
+          {isPaymentMismatch && <MismatchChip label="/ Payment Mismatch" color="#fbbf24" bg="rgba(251,191,36,0.15)" border="rgba(251,191,36,0.3)" />}
           {dup && <MismatchChip label="/ Duplicate" color="#c084fc" bg="rgba(168,85,247,0.15)" border="rgba(168,85,247,0.3)" />}
           {row.nameMatch === 'MISMATCH' && <MismatchChip label="/ Name" color="#fb7185" bg="rgba(251,113,133,0.15)" border="rgba(251,113,133,0.3)" />}
           {row.unitRateMatch === 'MISMATCH' && <MismatchChip label="/ Rate" color="#fbbf24" bg="rgba(251,191,36,0.15)" border="rgba(251,191,36,0.3)" />}
@@ -656,6 +661,8 @@ const MonthlyCustomerDirectory = () => {
 
   const isRecordComplete = useCallback((row) => {
     if (!row) return false;
+    const isRejected = String(row.status || '').toUpperCase() === 'REJECTED' || row.rejected === true;
+    if (isRejected) return false;
 
     const isBlank = (val) => {
       if (val === null || val === undefined) return true;
@@ -708,33 +715,37 @@ const MonthlyCustomerDirectory = () => {
   // One predicate shared by the clickable summary cards and the Status dropdown.
   const matchesFilter = useCallback((row, key) => {
     const isNew = row.masterDataFound === false || row.isNewCustomer === true;
-    const isNoBill = row.masterOnly === true || row.noBillingData === true || row.paymentHold === true;
+    const isPaymentHold = row.paymentHold === true;
+    const isNoBillOnly = row.masterOnly === true || row.noBillingData === true;
+    const isPaymentMismatch = row.mergedPayment?.mismatch === true;
+    const isRejected = String(row.status || '').toUpperCase() === 'REJECTED' || row.rejected === true;
+    const isNoBill = (isNew || isPaymentHold || isNoBillOnly || isPaymentMismatch) && !isRejected;
     const dup = isDuplicateRecord(row);
 
     switch (key) {
       case 'ALL': return true;
-      case 'VALID': return String(row.status || '').toUpperCase() === 'VALID' && !isNew && !isNoBill && !dup && row.nameMatch !== 'MISMATCH' && row.unitRateMatch !== 'MISMATCH' && row.netTypeMatch !== 'MISMATCH';
-      case 'NEW_CUSTOMERS': return isNew;
+      case 'VALID': return String(row.status || '').toUpperCase() === 'VALID' && !isNoBill && !dup && row.nameMatch !== 'MISMATCH' && row.unitRateMatch !== 'MISMATCH' && row.netTypeMatch !== 'MISMATCH' && !isRejected;
       case 'NO_BILLING_DATA': return isNoBill;
-      case 'DUPLICATE': return dup;
-      case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH' && !isNoBill;
-      case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH' && !isNoBill;
-      case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH' && !isNoBill;
+      case 'REJECTED': return isRejected;
+      case 'DUPLICATE': return dup && !isRejected;
+      case 'NAME_MISMATCH': return row.nameMatch === 'MISMATCH' && !isNoBill && !isRejected;
+      case 'UNIT_RATE_MISMATCH': return row.unitRateMatch === 'MISMATCH' && !isNoBill && !isRejected;
+      case 'NET_TYPE_MISMATCH': return row.netTypeMatch === 'MISMATCH' && !isNoBill && !isRejected;
       case 'OTHER_MISMATCHES': {
         const hasMismatch = row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH';
-        return !isRecordComplete(row) && !hasMismatch && !isNoBill;
+        return !isRecordComplete(row) && !hasMismatch && !isNoBill && !isRejected;
       }
       case 'COMPLETE': {
         const hasMismatch = row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH';
-        return isRecordComplete(row) && !hasMismatch && !isNoBill;
+        return isRecordComplete(row) && !hasMismatch && !isNoBill && !isRejected;
       }
       case 'MISSING': {
         const hasMismatch = row.nameMatch === 'MISMATCH' || row.unitRateMatch === 'MISMATCH' || row.netTypeMatch === 'MISMATCH';
-        return (!isRecordComplete(row) || hasMismatch) && !isNoBill;
+        return (!isRecordComplete(row) || hasMismatch) && !isNoBill && !isRejected;
       }
-      case 'CORRECTED': return row.step6Corrected === true || row.correctedInDirectory === true;
-      case 'EXPIRED': return rowExpiry(row) === 'EXPIRED';
-      case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON';
+      case 'CORRECTED': return (row.step6Corrected === true || row.correctedInDirectory === true) && !isRejected;
+      case 'EXPIRED': return rowExpiry(row) === 'EXPIRED' && !isRejected;
+      case 'EXPIRING_SOON': return rowExpiry(row) === 'EXPIRING_SOON' && !isRejected;
       default: return String(row.status || '').toUpperCase() === key;
     }
   }, [rowExpiry, isRecordComplete]);
@@ -1302,6 +1313,12 @@ const MonthlyCustomerDirectory = () => {
               {/* Validation — status, errors, warnings, duplicates and mismatch history, preserved as approved */}
               <div style={{ marginTop: '1rem', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
                 <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#f87171', marginBottom: '0.5rem' }}>Validation</div>
+                {(detailRecord.status === 'REJECTED' || detailRecord.rejected === true) && (
+                  <div style={{ marginTop: '0.25rem', marginBottom: '0.75rem', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 8, padding: '0.6rem 0.8rem', background: 'rgba(239, 68, 68, 0.05)', color: '#f87171', fontSize: '0.78rem' }}>
+                    <strong style={{ display: 'block', marginBottom: '0.15rem' }}>Rejection Reason / Comments:</strong>
+                    {detailRecord.rejectionReason || 'Rejected during Step 6 review'}
+                  </div>
+                )}
                 {(detailRecord.errors || []).map((e, i) => (
                   <div key={`e${i}`} style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{e}</div>
                 ))}

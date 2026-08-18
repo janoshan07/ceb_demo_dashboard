@@ -136,6 +136,17 @@ public class MonthlyDirectoryService {
                 else if (accountNo != null && corrections.containsKey(accountNo)) corr = corrections.get(accountNo);
             }
             if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                Map<String, Object> finalRow = new LinkedHashMap<>(row);
+                finalRow.put("status", "REJECTED");
+                finalRow.put("rejected", true);
+                if (corr.containsKey("rejectionReason")) {
+                    finalRow.put("rejectionReason", corr.get("rejectionReason"));
+                } else if (corr.containsKey("deleteReason")) {
+                    finalRow.put("rejectionReason", corr.get("deleteReason"));
+                } else {
+                    finalRow.put("rejectionReason", "Rejected during Step 6 review");
+                }
+                finalData.add(finalRow);
                 continue;
             }
 

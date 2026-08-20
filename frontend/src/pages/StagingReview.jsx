@@ -24,7 +24,7 @@ import {
 import {
   CARD_SECTIONS,
   EDIT_FIELDS,
-  STATUS_FILTERS,
+  STAGING_STATUS_FILTERS as STATUS_FILTERS,
   cellText,
   fieldValue,
   recordNetType,

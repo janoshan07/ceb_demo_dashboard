@@ -136,17 +136,7 @@ public class MonthlyDirectoryService {
                 else if (accountNo != null && corrections.containsKey(accountNo)) corr = corrections.get(accountNo);
             }
             if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
-                Map<String, Object> finalRow = new LinkedHashMap<>(row);
-                finalRow.put("status", "REJECTED");
-                finalRow.put("rejected", true);
-                if (corr.containsKey("rejectionReason")) {
-                    finalRow.put("rejectionReason", corr.get("rejectionReason"));
-                } else if (corr.containsKey("deleteReason")) {
-                    finalRow.put("rejectionReason", corr.get("deleteReason"));
-                } else {
-                    finalRow.put("rejectionReason", "Rejected during Step 6 review");
-                }
-                finalData.add(finalRow);
+                // Skip manually rejected record from Customer Directory snapshot
                 continue;
             }
 
@@ -155,6 +145,11 @@ public class MonthlyDirectoryService {
                 finalRow.putAll(corr);
                 finalRow.put("step6Corrected", true);
                 correctionInfo.put(finalRow, new Object[]{corr, strVal(row.get("status"))});
+            }
+            boolean isRejected = "REJECTED".equalsIgnoreCase(strVal(finalRow.get("status"))) || Boolean.TRUE.equals(finalRow.get("rejected"));
+            if (isRejected) {
+                // Skip master-only rejected record from Customer Directory snapshot
+                continue;
             }
             finalData.add(finalRow);
         }
@@ -375,13 +370,21 @@ public class MonthlyDirectoryService {
             }
         }
 
-        Map<String, Object> summary = parseJsonObject(s.getValidationSummary());
-        if ((summary == null || summary.isEmpty()) && !records.isEmpty()) {
-            summary = computeSummary(records);
+        // Filter out rejected records for backward compatibility / double safety
+        List<Map<String, Object>> filteredRecords = new ArrayList<>();
+        for (Map<String, Object> r : records) {
+            boolean isRejected = "REJECTED".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("rejected"));
+            if (!isRejected) {
+                filteredRecords.add(r);
+            }
         }
+        records = filteredRecords;
+
+        Map<String, Object> summary = computeSummary(records);
 
         out.put("validationSummary", summary);
         out.put("records", records);
+        out.put("totalRecords", records.size());
         out.put("auditLog", parseJsonArray(s.getAuditLogJson()));
         return out;
     }

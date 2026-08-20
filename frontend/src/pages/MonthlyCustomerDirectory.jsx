@@ -168,6 +168,20 @@ export const STATUS_FILTERS = [
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
   { key: 'OTHER_MISMATCHES', label: 'Other Mismatches', cardLabel: 'Other Mismatches', color: '#f97316', icon: AlertCircle },
   { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', cardLabel: 'Outstanding Customers', color: '#38bdf8', icon: Clock },
+  { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
+  { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444', icon: AlertCircle },
+  { key: 'EXPIRING_SOON', label: 'Expiring Soon', cardLabel: 'Expiring Soon', color: '#f97316', icon: Clock },
+];
+
+export const STAGING_STATUS_FILTERS = [
+  { key: 'ALL', label: 'All Statuses', cardLabel: 'Total Customers', color: '#38bdf8', icon: Sun },
+  { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981', icon: CheckCircle },
+  { key: 'MISSING', label: 'Missing Details / Validation', cardLabel: 'Missing Details / Validation', color: '#f43f5e', icon: AlertTriangle },
+  { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185', icon: UserX },
+  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24', icon: DollarSign },
+  { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
+  { key: 'OTHER_MISMATCHES', label: 'Other Mismatches', cardLabel: 'Other Mismatches', color: '#f97316', icon: AlertCircle },
+  { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', cardLabel: 'Outstanding Customers', color: '#38bdf8', icon: Clock },
   { key: 'REJECTED', label: 'Rejected Records', cardLabel: 'Rejected', color: '#f43f5e', icon: XCircle },
   { key: 'DUPLICATE', label: 'Duplicates', cardLabel: 'Duplicates', color: '#c084fc', icon: Layers },
   { key: 'EXPIRED', label: 'Expired Agreements', cardLabel: 'Expired', color: '#ef4444', icon: AlertCircle },
@@ -493,6 +507,9 @@ const MonthlyCustomerDirectory = () => {
       const res = await authFetch(`/api/officer/monthly-directory/${item.id}`);
       const data = await res.json();
       if (!res.ok) { showToast(data.message || 'Failed to open directory.', 'error'); setViewing(null); return; }
+      if (data && Array.isArray(data.records)) {
+        data.records = data.records.filter(r => !(String(r.status || '').toUpperCase() === 'REJECTED' || r.rejected === true));
+      }
       setViewing(data);
     } catch (e) {
       showToast('Failed to open directory: ' + e.message, 'error');

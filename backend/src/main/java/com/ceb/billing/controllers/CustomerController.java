@@ -536,18 +536,11 @@ public class CustomerController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerCustomersSummary(
             @RequestParam(value = "billingMonth", required = false) String billingMonth,
-            @RequestParam(value = "query", required = false) String query,
-            @RequestParam(value = "validationStatus", required = false) String validationStatus,
-            @RequestParam(value = "location", required = false) String location,
-            @RequestParam(value = "netType", required = false) String netType,
-            @RequestParam(value = "agreementStatus", required = false) String agreementStatus) {
+            @RequestParam(value = "location", required = false) String location) {
         try {
             List<Map<String, Object>> rawRecords = new ArrayList<>();
             final String bmTrim = billingMonth != null ? billingMonth.trim() : "";
             boolean isSpecificMonth = !bmTrim.isEmpty() && !"ALL".equalsIgnoreCase(bmTrim);
-            
-            String q = (query != null) ? query.trim() : "";
-            String status = (validationStatus != null) ? validationStatus.trim() : "";
             String loc = (location != null) ? location.trim() : "";
 
             if (isSpecificMonth) {
@@ -580,23 +573,7 @@ public class CustomerController {
                     }
                 }
             } else {
-                List<Customer> allCustomers;
-                if (!loc.isEmpty() && !"ALL".equalsIgnoreCase(loc)) {
-                    Pageable pageable = PageRequest.of(0, 10000);
-                    allCustomers = customerRepository.searchCustomersFiltered(
-                            q.isEmpty() ? null : q,
-                            status.isEmpty() ? null : status,
-                            loc,
-                            pageable).getContent();
-                } else {
-                    Pageable pageable = PageRequest.of(0, 10000);
-                    allCustomers = customerRepository.searchCustomersFiltered(
-                            q.isEmpty() ? null : q,
-                            status.isEmpty() ? null : status,
-                            null,
-                            pageable).getContent();
-                }
-
+                List<Customer> allCustomers = customerRepository.findAll();
                 for (Customer c : allCustomers) {
                     try {
                         Map<String, Object> dto = toSafeDto(c);
@@ -634,69 +611,13 @@ public class CustomerController {
                 Object dirObj = dto.get("directory");
                 Map<?, ?> directory = (dirObj instanceof Map) ? (Map<?, ?>) dirObj : null;
                 
-                String recBillingMonth = null;
-                if (directory != null && directory.get("billingMonth") != null) {
-                    recBillingMonth = String.valueOf(directory.get("billingMonth")).trim();
-                }
+                String recBillingMonth = isSpecificMonth ? bmTrim : (directory != null && directory.get("billingMonth") != null ? String.valueOf(directory.get("billingMonth")).trim() : null);
 
-                if (isSpecificMonth) {
-                    if (recBillingMonth == null || !recBillingMonth.equalsIgnoreCase(bmTrim)) {
-                        continue;
-                    }
-                }
-
-                // Apply in-memory search query
-                if (!q.isEmpty()) {
-                    String acc = String.valueOf(dto.get("accountNo")).toLowerCase();
-                    String name = String.valueOf(dto.get("customerName")).toLowerCase();
-                    String mob = String.valueOf(dto.get("mobileNo")).toLowerCase();
-                    String queryLower = q.toLowerCase();
-                    if (!acc.contains(queryLower) && !name.contains(queryLower) && !mob.contains(queryLower)) {
-                        continue;
-                    }
-                }
-
-                // Apply validation status filter
-                if (!status.isEmpty() && !"ALL".equalsIgnoreCase(status)) {
-                    String valStatus = String.valueOf(dto.get("validationStatus"));
-                    if (!valStatus.equalsIgnoreCase(status)) {
-                        continue;
-                    }
-                }
-
-                // Apply location filter (if not already filtered by database query)
+                // Apply location filter
                 if (!loc.isEmpty() && !"ALL".equalsIgnoreCase(loc)) {
-                    String recDiv = String.valueOf(dto.get("division"));
-                    if (!recDiv.equalsIgnoreCase(loc)) {
-                        continue;
-                    }
-                }
-
-                // Apply Net Type filter
-                if (netType != null && !netType.trim().isEmpty() && !"ALL".equalsIgnoreCase(netType.trim())) {
-                    String recNet = String.valueOf(dto.get("solarType"));
-                    if (recNet == null || !recNet.trim().equalsIgnoreCase(netType.trim())) {
-                        continue;
-                    }
-                }
-
-                // Apply agreementStatus
-                if (agreementStatus != null && !agreementStatus.trim().isEmpty() && !"ALL".equalsIgnoreCase(agreementStatus.trim())) {
-                    String agrDateStr = (String) dto.get("agreementDate");
-                    if (agrDateStr == null) {
-                        continue;
-                    }
-                    LocalDate agDate = LocalDate.parse(agrDateStr);
-                    String targetMonth = isSpecificMonth ? bmTrim : recBillingMonth;
-                    if (targetMonth == null || targetMonth.isEmpty()) {
-                        continue;
-                    }
-                    LocalDate[] targetRange = isSpecificMonth ? range : getBillingMonthRange(targetMonth);
-                    if (targetRange == null) {
-                        continue;
-                    }
-                    String statusStr = getAgreementStatus(agDate, targetRange[0], targetRange[1]);
-                    if (!statusStr.equalsIgnoreCase(agreementStatus.trim())) {
+                    String recDiv = dto.get("division") != null ? String.valueOf(dto.get("division")).trim() : "";
+                    String recBranch = dto.get("branchCode") != null ? String.valueOf(dto.get("branchCode")).trim() : "";
+                    if (!loc.equalsIgnoreCase(recDiv) && !loc.equalsIgnoreCase(recBranch)) {
                         continue;
                     }
                 }
@@ -746,20 +667,19 @@ public class CustomerController {
                 }
 
                 String agrDateStr = (String) dto.get("agreementDate");
-                if (agrDateStr != null && !agrDateStr.isEmpty()) {
+                if (agrDateStr != null && !agrDateStr.trim().isEmpty() && !"—".equals(agrDateStr.trim())) {
                     try {
-                        LocalDate agDate = LocalDate.parse(agrDateStr);
-                        String targetMonth = isSpecificMonth ? bmTrim : recBillingMonth;
-                        if (targetMonth != null && !targetMonth.isEmpty()) {
-                            LocalDate[] targetRange = isSpecificMonth ? range : getBillingMonthRange(targetMonth);
-                            if (targetRange != null) {
-                                String statusStr = getAgreementStatus(agDate, targetRange[0], targetRange[1]);
-                                if ("EXPIRED".equalsIgnoreCase(statusStr)) {
-                                    expired++;
-                                } else if ("EXPIRING_SOON".equalsIgnoreCase(statusStr)) {
-                                    expiringSoon++;
-                                }
-                            }
+                        LocalDate agDate = LocalDate.parse(agrDateStr.trim());
+                        LocalDate[] targetRange = isSpecificMonth ? range : (recBillingMonth != null ? getBillingMonthRange(recBillingMonth) : null);
+                        if (targetRange == null) {
+                            LocalDate now = LocalDate.now();
+                            targetRange = new LocalDate[]{ now.withDayOfMonth(1), now.withDayOfMonth(now.lengthOfMonth()) };
+                        }
+                        String statusStr = getAgreementStatus(agDate, targetRange[0], targetRange[1]);
+                        if ("EXPIRED".equalsIgnoreCase(statusStr)) {
+                            expired++;
+                        } else if ("EXPIRING_SOON".equalsIgnoreCase(statusStr)) {
+                            expiringSoon++;
                         }
                     } catch (Exception ignored) {}
                 }
@@ -1267,13 +1187,14 @@ public class CustomerController {
     @PutMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> officerUpdateCustomer(@PathVariable String accountNo,
-            @RequestBody Customer customerDetails) {
+            @RequestBody Map<String, Object> payload) {
         Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
-        if (optCustomer.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
+        Customer customer = optCustomer.orElseGet(() -> {
+            Customer c = new Customer();
+            c.setAccountNo(accountNo);
+            return c;
+        });
 
-        Customer customer = optCustomer.get();
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) auth.getPrincipal();
 
@@ -1282,10 +1203,9 @@ public class CustomerController {
             objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
             Map<String, Object> oldMap = getCustomerFieldMap(customer);
-            Map<String, Object> newMap = getCustomerFieldMap(customerDetails);
 
             String oldJson = objectMapper.writeValueAsString(oldMap);
-            String newJson = objectMapper.writeValueAsString(newMap);
+            String newJson = objectMapper.writeValueAsString(payload);
 
             ApprovalRequest request = new ApprovalRequest(
                     null,
@@ -1298,15 +1218,49 @@ public class CustomerController {
             auditLogService.log("CUSTOMER_EDIT_REQUEST", "Billing Officer " + userDetails.getUsername()
                     + " submitted customer edit request for " + accountNo);
 
+            flagPendingApprovalInSnapshots(accountNo);
+
             // Explicitly set status PENDING to notify frontend
             Map<String, Object> response = new HashMap<>();
             response.put("requestId", request.getRequestId());
             response.put("status", "PENDING");
-            response.put("message", "Customer edit request queued for approval.");
+            response.put("message", "Customer edit request queued for administrator approval.");
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(new MessageResponse("Failed to create approval request: " + e.getMessage()));
+        }
+    }
+
+    private void flagPendingApprovalInSnapshots(String accountNo) {
+        try {
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = monthlyDirectorySnapshotRepository.findAll();
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+                if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
+                    continue;
+                }
+                boolean modified = false;
+                List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                if (list != null) {
+                    for (Map<String, Object> rec : list) {
+                        String acc = str(rec, "accountNo");
+                        if (accountNo.equals(acc)) {
+                            rec.put("pendingAdminApproval", true);
+                            rec.put("approvalStatus", "PENDING_APPROVAL");
+                            // Do NOT mark as complete until Admin approves
+                            rec.put("isComplete", false);
+                            modified = true;
+                        }
+                    }
+                    if (modified) {
+                        snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+                        monthlyDirectorySnapshotRepository.save(snap);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warning("Failed to flag pending approval in snapshots for account " + accountNo + ": " + ex.getMessage());
         }
     }
 
@@ -1335,28 +1289,100 @@ public class CustomerController {
             @RequestBody Map<String, Object> payload) {
         try {
             Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
+            Customer customer;
+            String oldName = "";
             if (optCustomer.isEmpty()) {
-                return ResponseEntity.notFound().build();
+                customer = new Customer();
+                customer.setAccountNo(accountNo);
+            } else {
+                customer = optCustomer.get();
+                oldName = customer.getCustomerName() != null ? customer.getCustomerName() : "";
             }
-
-            Customer customer = optCustomer.get();
-            String oldName = customer.getCustomerName();
             
             applyCustomerEdits(customer, payload);
 
             excelValidationService.revalidateCustomer(customer);
-            customerRepository.save(Objects.requireNonNull(customer));
+            Customer savedCustomer = customerRepository.save(Objects.requireNonNull(customer));
+
+            updateCustomerInSnapshots(accountNo, payload);
 
             // Audit Log Entry
             String auditDetail = String.format("Admin updated customer account: %s. Name changed from '%s' to '%s'",
                     accountNo, oldName, customer.getCustomerName());
             auditLogService.log("CUSTOMER_UPDATE", auditDetail);
 
-            return ResponseEntity.ok(toSafeDto(customer));
+            return ResponseEntity.ok(toSafeDto(savedCustomer));
         } catch (Exception ex) {
             log.severe("PUT /api/admin/customers/" + accountNo + " failed: " + ex.getMessage());
             ex.printStackTrace();
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to update customer details: " + ex.getMessage()));
+        }
+    }
+
+    private void updateCustomerInSnapshots(String accountNo, Map<String, Object> payload) {
+        try {
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = monthlyDirectorySnapshotRepository.findAll();
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+                if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
+                    continue;
+                }
+                boolean modified = false;
+                List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                if (list != null) {
+                    for (Map<String, Object> rec : list) {
+                        String acc = str(rec, "accountNo");
+                        if (accountNo.equals(acc)) {
+                            if (payload.containsKey("customerName") && payload.get("customerName") != null) {
+                                rec.put("customerName", payload.get("customerName"));
+                                rec.put("name", payload.get("customerName"));
+                            }
+                            if (payload.containsKey("customerAddress") && payload.get("customerAddress") != null) {
+                                rec.put("customerAddress", payload.get("customerAddress"));
+                                rec.put("address", payload.get("customerAddress"));
+                            }
+                            if (payload.containsKey("mobileNo") && payload.get("mobileNo") != null) {
+                                rec.put("mobileNo", payload.get("mobileNo"));
+                            }
+                            if (payload.containsKey("agreementDate") && payload.get("agreementDate") != null) {
+                                rec.put("agreementDate", payload.get("agreementDate"));
+                            }
+                            if (payload.containsKey("panelCapacity") && payload.get("panelCapacity") != null) {
+                                rec.put("panelCapacity", payload.get("panelCapacity"));
+                            }
+                            if (payload.containsKey("solarType") && payload.get("solarType") != null) {
+                                rec.put("solarType", payload.get("solarType"));
+                                rec.put("netTypeName", payload.get("solarType"));
+                            }
+                            if (payload.containsKey("tariffType") && payload.get("tariffType") != null) {
+                                rec.put("tariffType", payload.get("tariffType"));
+                            }
+                            if (payload.containsKey("bankCode") && payload.get("bankCode") != null) {
+                                rec.put("bankCode", payload.get("bankCode"));
+                            }
+                            if (payload.containsKey("branchCode") && payload.get("branchCode") != null) {
+                                rec.put("branchCode", payload.get("branchCode"));
+                            }
+                            if (payload.containsKey("bankAccountNo") && payload.get("bankAccountNo") != null) {
+                                rec.put("bankAccountNo", payload.get("bankAccountNo"));
+                            }
+                            if (payload.containsKey("refNo") && payload.get("refNo") != null) {
+                                rec.put("refNo", payload.get("refNo"));
+                            }
+                            if (payload.containsKey("unitRate") && payload.get("unitRate") != null) {
+                                rec.put("unitRate", payload.get("unitRate"));
+                            }
+                            modified = true;
+                        }
+                    }
+                    if (modified) {
+                        snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+                        monthlyDirectorySnapshotRepository.save(snap);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warning("Failed to update customer in snapshots for account " + accountNo + ": " + ex.getMessage());
         }
     }
 

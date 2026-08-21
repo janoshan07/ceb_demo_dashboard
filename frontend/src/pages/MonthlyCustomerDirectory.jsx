@@ -233,6 +233,11 @@ export const RecordStatusBadge = ({ row }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
       <span style={{ padding: '0.2rem 0.55rem', borderRadius: 6, fontSize: '0.66rem', fontWeight: 800, background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}44` }}>{cfg.label}</span>
+      {row.pendingAdminApproval === true && (
+        <span style={{ fontSize: '0.62rem', color: '#f59e0b', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.3)', padding: '0.1rem 0.35rem', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          <Clock size={10} /> Pending Admin Approval
+        </span>
+      )}
       {row.recordApproved === true && (
         <span style={{ fontSize: '0.62rem', color: '#10b981', display: 'inline-flex', alignItems: 'center', gap: 3 }}><CheckCircle size={10} /> Approved</span>
       )}

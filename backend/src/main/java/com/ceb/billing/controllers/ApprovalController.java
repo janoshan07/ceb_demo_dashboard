@@ -59,6 +59,41 @@ public class ApprovalController {
     @Autowired
     private MonthlyDirectoryService monthlyDirectoryService;
 
+    @Autowired
+    private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository monthlyDirectorySnapshotRepository;
+
+    private static final java.util.logging.Logger log = java.util.logging.Logger.getLogger(ApprovalController.class.getName());
+
+    private String str(Map<String, Object> r, String... keys) {
+        if (r == null) return null;
+        for (String k : keys) {
+            Object v = r.get(k);
+            if (v instanceof Map) v = ((Map<?, ?>) v).get("value");
+            if (v != null) {
+                String s = v.toString().trim();
+                if (!s.isEmpty() && !"—".equals(s)) return s;
+            }
+        }
+        return null;
+    }
+
+    private Double dbl(Map<String, Object> r, String... keys) {
+        if (r == null) return null;
+        for (String k : keys) {
+            Object v = r.get(k);
+            if (v instanceof Map) v = ((Map<?, ?>) v).get("value");
+            if (v != null) {
+                try {
+                    String s = v.toString().trim().replace(",", "");
+                    if (!s.isEmpty() && !"—".equals(s)) {
+                        return Double.parseDouble(s);
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return null;
+    }
+
     @GetMapping
     public ResponseEntity<List<ApprovalRequest>> getPendingApprovals() {
         List<ApprovalRequest> pending = approvalRequestRepository.findByStatusOrderByCreatedAtDesc("PENDING");
@@ -106,6 +141,7 @@ public class ApprovalController {
                     applyCustomerEdits(customer, newValues);
                     excelValidationService.revalidateCustomer(customer);
                     customerRepository.save(Objects.requireNonNull(customer));
+                    updateCustomerInSnapshotsAfterApproval(request.getAccountNo(), newValues);
                     auditLogService.log("CUSTOMER_CREATE_APPROVED",
                             String.format("Admin %s approved manual customer creation for %s requested by %s", adminUsername,
                                      request.getAccountNo(), request.getChangedBy()));
@@ -116,17 +152,21 @@ public class ApprovalController {
                     }
                     auditLogService.log("CUSTOMER_DELETE_APPROVED",
                             String.format("Admin %s approved customer deletion for %s requested by %s", adminUsername,
-                                    request.getAccountNo(), request.getChangedBy()));
+                                     request.getAccountNo(), request.getChangedBy()));
                 } else {
                     // UPDATE
                     Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(request.getAccountNo()));
+                    Customer customer;
                     if (optCustomer.isEmpty()) {
-                        return ResponseEntity.badRequest().body(new MessageResponse("Customer account no longer exists."));
+                        customer = new Customer();
+                        customer.setAccountNo(request.getAccountNo());
+                    } else {
+                        customer = optCustomer.get();
                     }
-                    Customer customer = optCustomer.get();
                     applyCustomerEdits(customer, newValues);
                     excelValidationService.revalidateCustomer(customer);
                     customerRepository.save(Objects.requireNonNull(customer));
+                    updateCustomerInSnapshotsAfterApproval(request.getAccountNo(), newValues);
                     auditLogService.log("CUSTOMER_EDIT_APPROVED",
                             String.format("Admin %s approved customer %s changes from %s", adminUsername,
                                     request.getAccountNo(), request.getChangedBy()));
@@ -198,6 +238,10 @@ public class ApprovalController {
         request.setStatus("REJECTED");
         approvalRequestRepository.save(Objects.requireNonNull(request));
 
+        if ("CUSTOMER".equals(request.getEntityType())) {
+            clearPendingApprovalInSnapshots(request.getAccountNo());
+        }
+
         String targetDetail;
         if ("MONTHLY_DIRECTORY".equals(request.getEntityType())) {
             targetDetail = "Monthly Directory Snapshot ID " + request.getBillingId();
@@ -209,6 +253,181 @@ public class ApprovalController {
                         adminUsername, request.getChangedBy(), targetDetail));
 
         return ResponseEntity.ok(new MessageResponse("Approval request rejected successfully."));
+    }
+
+    private void updateCustomerInSnapshotsAfterApproval(String accountNo, Map<String, Object> payload) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = monthlyDirectorySnapshotRepository.findAll();
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+                if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
+                    continue;
+                }
+                boolean modified = false;
+                List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                if (list != null) {
+                    for (Map<String, Object> rec : list) {
+                        String acc = str(rec, "accountNo");
+                        if (accountNo.equals(acc)) {
+                            // Update customer fields
+                            if (payload.containsKey("customerName") && payload.get("customerName") != null) {
+                                rec.put("customerName", payload.get("customerName"));
+                                rec.put("name", payload.get("customerName"));
+                            }
+                            if (payload.containsKey("customerAddress") && payload.get("customerAddress") != null) {
+                                rec.put("customerAddress", payload.get("customerAddress"));
+                                rec.put("address", payload.get("customerAddress"));
+                            }
+                            if (payload.containsKey("mobileNo") && payload.get("mobileNo") != null) {
+                                rec.put("mobileNo", payload.get("mobileNo"));
+                            }
+                            if (payload.containsKey("agreementDate") && payload.get("agreementDate") != null) {
+                                rec.put("agreementDate", payload.get("agreementDate"));
+                            }
+                            if (payload.containsKey("panelCapacity") && payload.get("panelCapacity") != null) {
+                                rec.put("panelCapacity", payload.get("panelCapacity"));
+                            }
+                            if (payload.containsKey("solarType") && payload.get("solarType") != null) {
+                                rec.put("solarType", payload.get("solarType"));
+                                rec.put("netTypeName", payload.get("solarType"));
+                            }
+                            if (payload.containsKey("tariffType") && payload.get("tariffType") != null) {
+                                rec.put("tariffType", payload.get("tariffType"));
+                            }
+                            if (payload.containsKey("bankCode") && payload.get("bankCode") != null) {
+                                rec.put("bankCode", payload.get("bankCode"));
+                            }
+                            if (payload.containsKey("branchCode") && payload.get("branchCode") != null) {
+                                rec.put("branchCode", payload.get("branchCode"));
+                            }
+                            if (payload.containsKey("bankAccountNo") && payload.get("bankAccountNo") != null) {
+                                rec.put("bankAccountNo", payload.get("bankAccountNo"));
+                            }
+                            if (payload.containsKey("refNo") && payload.get("refNo") != null) {
+                                rec.put("refNo", payload.get("refNo"));
+                            }
+                            if (payload.containsKey("unitRate") && payload.get("unitRate") != null) {
+                                rec.put("unitRate", payload.get("unitRate"));
+                            }
+                            if (payload.containsKey("costCodeId") && payload.get("costCodeId") != null) {
+                                rec.put("costCodeId", payload.get("costCodeId"));
+                            }
+                            if (payload.containsKey("netTypeId") && payload.get("netTypeId") != null) {
+                                rec.put("netTypeId", payload.get("netTypeId"));
+                            }
+                            if (payload.containsKey("expenseCodeId") && payload.get("expenseCodeId") != null) {
+                                rec.put("expenseCodeId", payload.get("expenseCodeId"));
+                            }
+
+                            // Re-evaluate mismatches
+                            String newName = str(rec, "customerName");
+                            String masterName = str(rec, "masterName");
+                            if (masterName != null && newName != null && newName.trim().equalsIgnoreCase(masterName.trim())) {
+                                rec.put("nameMatch", "MATCH");
+                            }
+
+                            Double newUnitRate = dbl(rec, "unitRate");
+                            Double masterUnitRate = dbl(rec, "masterUnitRate");
+                            if (masterUnitRate != null && newUnitRate != null && Math.abs(newUnitRate - masterUnitRate) < 0.001) {
+                                rec.put("unitRateMatch", "MATCH");
+                            }
+
+                            String newNetType = str(rec, "solarType", "netTypeName");
+                            String masterNetType = str(rec, "masterNetType", "masterSolarType");
+                            if (masterNetType != null && newNetType != null && newNetType.trim().equalsIgnoreCase(masterNetType.trim())) {
+                                rec.put("netTypeMatch", "MATCH");
+                            }
+
+                            // Clear pending approval
+                            rec.remove("pendingAdminApproval");
+                            rec.remove("approvalStatus");
+
+                            // Re-calculate completeness
+                            java.util.List<String> missingFields = new java.util.ArrayList<>();
+                            if (str(rec, "customerName") == null) missingFields.add("Customer Name");
+                            if (str(rec, "customerAddress") == null) missingFields.add("Customer Address");
+                            if (str(rec, "mobileNo") == null) missingFields.add("Mobile No");
+                            if (str(rec, "agreementDate") == null) missingFields.add("Agreement Date");
+                            Double cap = dbl(rec, "panelCapacity");
+                            if (cap == null || cap <= 0) missingFields.add("Panel Capacity");
+                            if (str(rec, "bankCode") == null) missingFields.add("Bank Code");
+                            if (str(rec, "bankAccountNo") == null) missingFields.add("Bank Account No");
+                            if (str(rec, "solarType", "netTypeName") == null) missingFields.add("Solar System Type");
+                            if (str(rec, "refNo") == null) missingFields.add("Ref No");
+                            if (dbl(rec, "unitRate") == null) missingFields.add("Unit Rate");
+
+                            boolean hasNameMismatch = "MISMATCH".equals(rec.get("nameMatch"));
+                            boolean hasUnitRateMismatch = "MISMATCH".equals(rec.get("unitRateMatch"));
+                            boolean hasNetTypeMismatch = "MISMATCH".equals(rec.get("netTypeMatch"));
+                            
+                            boolean isMasterFound = !rec.containsKey("masterDataFound") || Boolean.TRUE.equals(rec.get("masterDataFound"));
+                            boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(rec.get("isNewCustomer"));
+                            boolean isPaymentHold = Boolean.TRUE.equals(rec.get("paymentHold"));
+                            boolean isNoBill = Boolean.TRUE.equals(rec.get("masterOnly")) || Boolean.TRUE.equals(rec.get("noBillingData"));
+                            
+                            boolean isPaymentMismatch = false;
+                            Object pMap = rec.get("mergedPayment");
+                            if (pMap instanceof Map) {
+                                isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
+                            }
+                            boolean isRejected = "REJECTED".equals(rec.get("status")) || Boolean.TRUE.equals(rec.get("rejected"));
+                            boolean isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
+
+                            boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding && !isRejected;
+
+                            rec.put("isComplete", isComplete);
+                            rec.put("missingFields", missingFields);
+                            if (isComplete) {
+                                rec.put("validationStatus", "VALID");
+                                rec.put("status", "VALID");
+                            }
+
+                            modified = true;
+                        }
+                    }
+                    if (modified) {
+                        snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+                        monthlyDirectorySnapshotRepository.save(snap);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warning("Failed to update snapshots on approval for account " + accountNo + ": " + ex.getMessage());
+        }
+    }
+
+    private void clearPendingApprovalInSnapshots(String accountNo) {
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = monthlyDirectorySnapshotRepository.findAll();
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+                if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
+                    continue;
+                }
+                boolean modified = false;
+                List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                if (list != null) {
+                    for (Map<String, Object> rec : list) {
+                        String acc = str(rec, "accountNo");
+                        if (accountNo.equals(acc)) {
+                            rec.remove("pendingAdminApproval");
+                            rec.remove("approvalStatus");
+                            modified = true;
+                        }
+                    }
+                    if (modified) {
+                        snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+                        monthlyDirectorySnapshotRepository.save(snap);
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warning("Failed to clear pending approval flag in snapshots for account " + accountNo + ": " + ex.getMessage());
+        }
     }
 
     private void applyCustomerEdits(Customer customer, Map<String, Object> values) {

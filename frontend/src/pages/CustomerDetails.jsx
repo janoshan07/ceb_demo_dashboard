@@ -182,6 +182,9 @@ const CustomerDetails = () => {
     totalCustomers: 0,
     completeCustomers: 0,
     missingCustomers: 0,
+    nameMismatchesCount: 0,
+    unitRateMismatchesCount: 0,
+    netTypeMismatchesCount: 0,
     validationErrorsCount: 0,
     outstandingCustomersCount: 0,
     rejectedCount: 0,
@@ -388,18 +391,18 @@ const CustomerDetails = () => {
       if (summaryRes.ok) {
         const data = await summaryRes.json();
         setSummaryStats({
-          totalCustomers: data.total || 0,
-          completeCustomers: data.complete || 0,
-          missingCustomers: data.missing || 0,
-          validationErrorsCount: data.errors || 0,
-          nameMismatchesCount: data.nameMismatch || 0,
-          unitRateMismatchesCount: data.unitRateMismatch || 0,
-          netTypeMismatchesCount: data.netTypeMismatch || 0,
-          otherMismatchesCount: data.otherMismatch || 0,
-          outstandingCustomersCount: data.outstanding || 0,
-          rejectedCount: data.rejected || 0,
-          expiredAgreementsCount: data.expired || 0,
-          expiringSoonAgreementsCount: data.expiringSoon || 0,
+          totalCustomers: data.total ?? 0,
+          completeCustomers: data.complete ?? 0,
+          missingCustomers: data.missing ?? 0,
+          validationErrorsCount: data.errors ?? 0,
+          nameMismatchesCount: data.nameMismatch ?? 0,
+          unitRateMismatchesCount: data.unitRateMismatch ?? 0,
+          netTypeMismatchesCount: data.netTypeMismatch ?? 0,
+          otherMismatchesCount: data.otherMismatch ?? 0,
+          outstandingCustomersCount: data.outstanding ?? 0,
+          rejectedCount: data.rejected ?? 0,
+          expiredAgreementsCount: data.expired ?? 0,
+          expiringSoonAgreementsCount: data.expiringSoon ?? 0,
           locationsCount: DIRECTORY_DIVISIONS.length
         });
         return;
@@ -430,13 +433,14 @@ const CustomerDetails = () => {
         errors = d.totalElements || 0;
       }
       
-      setSummaryStats({
+      setSummaryStats(prev => ({
+        ...prev,
         totalCustomers: total,
         completeCustomers: total - missing > 0 ? total - missing : complete,
         missingCustomers: missing,
         validationErrorsCount: errors,
         locationsCount: DIRECTORY_DIVISIONS.length
-      });
+      }));
     } catch (e) {
       console.error('Failed to load summary stats:', e);
     }
@@ -1270,7 +1274,7 @@ const CustomerDetails = () => {
               transition: 'all 0.2s ease'
             }}
           >
-            <AlertTriangle size={14} /> Missing Details / Validation
+            <AlertTriangle size={14} /> Missing Details
             <span style={{ marginLeft: '0.35rem', background: '#f59e0b', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
               {summaryStats.missingCustomers ?? 0}
             </span>
@@ -2140,6 +2144,19 @@ const CustomerDetails = () => {
                   <div style={{ marginTop: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.04)', borderRadius: 6, border: '1px solid rgba(239, 68, 68, 0.1)' }}>
                     {selectedCustomer.directory?.rejectionReason || selectedCustomer.rejectionReason || 'Rejected during Step 6 review'}
                   </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Pending Admin Approval Banner */}
+            {(selectedCustomer.pendingAdminApproval === true || selectedCustomer.approvalStatus === 'PENDING_APPROVAL' || selectedCustomer.directory?.pendingAdminApproval === true || selectedCustomer.directory?.approvalStatus === 'PENDING_APPROVAL') && (
+              <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
+                <div style={{ color: '#fbbf24', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                  <Clock size={16} style={{ color: '#fbbf24' }} />
+                  Pending Admin Approval
+                </div>
+                <div style={{ fontSize: '0.82rem', color: '#fde68a' }}>
+                  An officer has submitted corrections for this customer. Edits are currently awaiting Administrator review and approval before live completion.
                 </div>
               </div>
             )}

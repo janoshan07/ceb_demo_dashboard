@@ -2146,34 +2146,56 @@ const CustomerDetails = () => {
             
             {/* Validation Issues Banner */}
             {(() => {
-              const errors = [];
+              const issues = [];
               if (selectedCustomer.validationStatus === 'ERROR') {
                 const parsed = parseErrors(selectedCustomer.validationErrors);
                 parsed.forEach(err => {
-                  errors.push({
+                  issues.push({
                     type: 'New Customer',
                     reason: err
                   });
                 });
               }
-              const dir = selectedCustomer.directory;
+              const dir = selectedCustomer.directory || selectedCustomer;
               if (dir) {
-                if (dir.nameMatch === 'MISMATCH') {
-                  errors.push({
+                if (dir.nameMatch === 'MISMATCH' || selectedCustomer.nameMatch === 'MISMATCH') {
+                  const masterName = dir.masterName || dir.customerName || selectedCustomer.customerName || '—';
+                  const mainName = dir.billingName || dir.npayName || dir.ngenName || dir.mainName || '—';
+                  issues.push({
                     type: 'Name Mismatch',
-                    reason: `Customer name in Directory ('${selectedCustomer.customerName || '—'}') does not match billing data name ('${dir.billingName || dir.name || '—'}').`
+                    master: masterName,
+                    main: mainName,
+                    reason: `Customer name in Directory ('${masterName}') does not match billing data name ('${mainName}').`
                   });
                 }
-                if (dir.unitRateMatch === 'MISMATCH') {
-                  errors.push({
+                if (dir.unitRateMatch === 'MISMATCH' || selectedCustomer.unitRateMatch === 'MISMATCH') {
+                  const masterRate = dir.masterUnitRate !== undefined && dir.masterUnitRate !== null ? dir.masterUnitRate : (selectedCustomer.unitRate !== undefined && selectedCustomer.unitRate !== null ? selectedCustomer.unitRate : '—');
+                  const mainRate = dir.mainUnitRate !== undefined && dir.mainUnitRate !== null ? dir.mainUnitRate : (dir.ngenUnitRate !== undefined && dir.ngenUnitRate !== null ? dir.ngenUnitRate : (dir.billingUnitRate || dir.unitRate || '—'));
+                  issues.push({
                     type: 'Unit Rate Mismatch',
-                    reason: `Unit rate in Profile (${selectedCustomer.unitRate !== null && selectedCustomer.unitRate !== undefined ? selectedCustomer.unitRate : '—'}) does not match NGEN/NPAY/Main billing rate (${dir.unitRate || dir.billingUnitRate || '—'}).`
+                    master: typeof masterRate === 'number' ? `${masterRate.toFixed(2)} LKR` : (masterRate !== '—' && !isNaN(Number(masterRate)) ? `${Number(masterRate).toFixed(2)} LKR` : masterRate),
+                    main: typeof mainRate === 'number' ? `${mainRate.toFixed(2)} LKR` : (mainRate !== '—' && !isNaN(Number(mainRate)) ? `${Number(mainRate).toFixed(2)} LKR` : mainRate),
+                    reason: `Unit rate in Profile does not match NGEN/NPAY/Main billing rate.`
                   });
                 }
-                if (dir.netTypeMatch === 'MISMATCH') {
-                  errors.push({
+                if (dir.netTypeMatch === 'MISMATCH' || selectedCustomer.netTypeMatch === 'MISMATCH') {
+                  const masterNet = dir.masterNetType || selectedCustomer.solarType || selectedCustomer.netTypeName || '—';
+                  const mainNet = dir.mainNetType || dir.ngenNetType || dir.npayNetType || '—';
+                  issues.push({
                     type: 'Net Type Mismatch',
+                    master: masterNet,
+                    main: mainNet,
                     reason: `Solar/Tariff Net Type in Profile does not match NGEN/NPAY billing net type.`
+                  });
+                }
+                if (dir.mergedPayment?.mismatch || dir.paymentMismatch) {
+                  const masterPay = dir.mergedPayment?.ngenPayment !== undefined ? dir.mergedPayment.ngenPayment : (dir.ngenPayment || '—');
+                  const mainPay = dir.mergedPayment?.npayPayment !== undefined ? dir.mergedPayment.npayPayment : (dir.npayPayment || '—');
+                  issues.push({
+                    type: 'Payment Mismatch',
+                    master: typeof masterPay === 'number' ? `${masterPay.toLocaleString()} LKR` : masterPay,
+                    main: typeof mainPay === 'number' ? `${mainPay.toLocaleString()} LKR` : mainPay,
+                    reason: `Payment calculated in NGEN does not match NPAY settlement.`
                   });
                 }
               }
@@ -2181,7 +2203,7 @@ const CustomerDetails = () => {
               if (!comp.isComplete) {
                 comp.missingFields.forEach(field => {
                   if (field !== 'Name Mismatch' && field !== 'Unit Rate Mismatch' && field !== 'Net Type Mismatch') {
-                    errors.push({
+                    issues.push({
                       type: 'Missing Profile Detail',
                       reason: `Required profile field '${field}' is missing or invalid.`
                     });
@@ -2189,19 +2211,32 @@ const CustomerDetails = () => {
                 });
               }
 
-              if (errors.length === 0) return null;
+              if (issues.length === 0) return null;
 
               return (
                 <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
-                  <div style={{ color: '#ef4444', fontWeight: 700, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                  <div style={{ color: '#ef4444', fontWeight: 700, marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
                     <AlertCircle size={16} />
                     Validation Issues Detected
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {errors.map((err, i) => (
-                      <div key={i} style={{ fontSize: '0.82rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.1rem' }}>
-                        <span style={{ fontWeight: 600, color: '#fca5a5', textTransform: 'uppercase', fontSize: '0.7rem', letterSpacing: '0.05em' }}>{err.type}</span>
-                        <span>{err.reason}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                    {issues.map((err, i) => (
+                      <div key={i} style={{ fontSize: '0.82rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                        <span style={{ fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', fontSize: '0.74rem', letterSpacing: '0.05em' }}>{err.type}</span>
+                        {err.master !== undefined && err.main !== undefined ? (
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.2rem', padding: '0.45rem 0.65rem', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                            <div>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '0.1rem' }}>Master:</span>
+                              <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.master)}</span>
+                            </div>
+                            <div>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '0.1rem' }}>Main:</span>
+                              <span style={{ fontWeight: 700, color: '#f87171', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.main)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.82rem' }}>{err.reason}</span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2244,7 +2279,13 @@ const CustomerDetails = () => {
             )}
 
             {/* TAB CONTENT: OVERVIEW */}
-            {activeTab === 'overview' && (
+            {activeTab === 'overview' && (() => {
+              const dirRecord = selectedCustomer.directory || selectedCustomer;
+              const hasNameMismatch = Boolean(dirRecord?.nameMatch === 'MISMATCH' || selectedCustomer.nameMatch === 'MISMATCH');
+              const hasUnitRateMismatch = Boolean(dirRecord?.unitRateMatch === 'MISMATCH' || selectedCustomer.unitRateMatch === 'MISMATCH');
+              const hasNetTypeMismatch = Boolean(dirRecord?.netTypeMatch === 'MISMATCH' || selectedCustomer.netTypeMatch === 'MISMATCH');
+
+              return (
               <div className="animate-fade-in">
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.25rem', alignItems: 'start' }}>
                   {/* Profile Card */}
@@ -2287,13 +2328,24 @@ const CustomerDetails = () => {
                       {editError && <div className="login-error">{editError}</div>}
                       
                       <div className="form-group">
-                        <label className="form-label">Customer Name</label>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <label className="form-label">Customer Name</label>
+                          {hasNameMismatch && (
+                            <span style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <AlertTriangle size={11} /> Name Mismatch
+                            </span>
+                          )}
+                        </div>
                         <input 
                           type="text" 
                           className="login-form-input" 
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                           required
+                          style={{
+                            border: hasNameMismatch ? '1px solid #ef4444' : undefined,
+                            animation: hasNameMismatch ? 'errorPulseBlink 1.5s infinite' : undefined
+                          }}
                         />
                       </div>
 
@@ -2318,7 +2370,14 @@ const CustomerDetails = () => {
                           />
                         </div>
                         <div className="form-group">
-                          <label className="form-label">Net Type (Solar Type)</label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label">Net Type (Solar Type)</label>
+                            {hasNetTypeMismatch && (
+                              <span style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <AlertTriangle size={11} /> Net Type Mismatch
+                              </span>
+                            )}
+                          </div>
                           <select 
                             className="login-form-input" 
                             value={editNetTypeId}
@@ -2327,7 +2386,11 @@ const CustomerDetails = () => {
                               const selected = netTypesList.find(n => n.id.toString() === e.target.value);
                               if (selected) setEditSolarType(selected.name);
                             }}
-                            style={{ appearance: 'auto' }}
+                            style={{
+                              appearance: 'auto',
+                              border: hasNetTypeMismatch ? '1px solid #ef4444' : undefined,
+                              animation: hasNetTypeMismatch ? 'errorPulseBlink 1.5s infinite' : undefined
+                            }}
                           >
                             <option value="">Select Net Type</option>
                             {netTypesList.map(n => (
@@ -2370,13 +2433,24 @@ const CustomerDetails = () => {
                           />
                         </div>
                         <div className="form-group">
-                          <label className="form-label">Unit Rate</label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <label className="form-label">Unit Rate</label>
+                            {hasUnitRateMismatch && (
+                              <span style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <AlertTriangle size={11} /> Rate Mismatch
+                              </span>
+                            )}
+                          </div>
                           <input 
                             type="number" 
                             step="0.001"
                             className="login-form-input" 
                             value={editUnitRate}
                             onChange={(e) => setEditUnitRate(e.target.value)}
+                            style={{
+                              border: hasUnitRateMismatch ? '1px solid #ef4444' : undefined,
+                              animation: hasUnitRateMismatch ? 'errorPulseBlink 1.5s infinite' : undefined
+                            }}
                           />
                         </div>
                       </div>
@@ -2475,15 +2549,47 @@ const CustomerDetails = () => {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.1rem' }}>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                        <div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Name</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>
+                        <div style={{
+                          padding: hasNameMismatch ? '0.45rem 0.65rem' : undefined,
+                          borderRadius: hasNameMismatch ? 8 : undefined,
+                          border: hasNameMismatch ? '1px solid #ef4444' : undefined,
+                          background: hasNameMismatch ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                          animation: hasNameMismatch ? 'errorPulseBlink 1.5s infinite' : undefined,
+                          transition: 'all 0.2s ease'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.72rem', color: hasNameMismatch ? '#f87171' : 'var(--text-secondary)', fontWeight: hasNameMismatch ? 700 : 500 }}>
+                              Customer Name
+                            </span>
+                            {hasNameMismatch && (
+                              <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <AlertTriangle size={10} /> MISMATCH
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: hasNameMismatch ? '#fca5a5' : 'inherit' }}>
                             {renderValOrMissing(selectedCustomer.customerName || selectedCustomer.directory?.customerName || selectedCustomer.directory?.masterName || selectedCustomer.directory?.npayName || selectedCustomer.directory?.ngenName)}
                           </div>
                         </div>
-                        <div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Solar System Type</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: (selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType) ? 'var(--success)' : 'inherit' }}>
+                        <div style={{
+                          padding: hasNetTypeMismatch ? '0.45rem 0.65rem' : undefined,
+                          borderRadius: hasNetTypeMismatch ? 8 : undefined,
+                          border: hasNetTypeMismatch ? '1px solid #ef4444' : undefined,
+                          background: hasNetTypeMismatch ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                          animation: hasNetTypeMismatch ? 'errorPulseBlink 1.5s infinite' : undefined,
+                          transition: 'all 0.2s ease'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.72rem', color: hasNetTypeMismatch ? '#f87171' : 'var(--text-secondary)', fontWeight: hasNetTypeMismatch ? 700 : 500 }}>
+                              Solar System Type
+                            </span>
+                            {hasNetTypeMismatch && (
+                              <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <AlertTriangle size={10} /> MISMATCH
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: hasNetTypeMismatch ? '#fca5a5' : ((selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType) ? 'var(--success)' : 'inherit') }}>
                             {renderValOrMissing(selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType || selectedCustomer.directory?.ngenNetType || selectedCustomer.directory?.npayNetType)}
                           </div>
                         </div>
@@ -2547,9 +2653,25 @@ const CustomerDetails = () => {
                             {renderValOrMissing(selectedCustomer.refNo || selectedCustomer.directory?.refNo || selectedCustomer.directory?.masterRefNo)}
                           </div>
                         </div>
-                        <div>
-                          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Unit Rate</span>
-                          <div style={{ fontWeight: 500 }}>
+                        <div style={{
+                          padding: hasUnitRateMismatch ? '0.45rem 0.65rem' : undefined,
+                          borderRadius: hasUnitRateMismatch ? 8 : undefined,
+                          border: hasUnitRateMismatch ? '1px solid #ef4444' : undefined,
+                          background: hasUnitRateMismatch ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                          animation: hasUnitRateMismatch ? 'errorPulseBlink 1.5s infinite' : undefined,
+                          transition: 'all 0.2s ease'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: '0.72rem', color: hasUnitRateMismatch ? '#f87171' : 'var(--text-secondary)', fontWeight: hasUnitRateMismatch ? 700 : 500 }}>
+                              Unit Rate
+                            </span>
+                            {hasUnitRateMismatch && (
+                              <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                <AlertTriangle size={10} /> MISMATCH
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontWeight: 500, color: hasUnitRateMismatch ? '#fca5a5' : 'inherit' }}>
                             {renderValOrMissing(selectedCustomer.unitRate ?? selectedCustomer.directory?.unitRate ?? selectedCustomer.directory?.masterUnitRate ?? selectedCustomer.directory?.ngenUnitRate, (v) => `${v} LKR`)}
                           </div>
                         </div>
@@ -2753,7 +2875,8 @@ const CustomerDetails = () => {
                 );
               })()}
             </div>
-          )}
+            );
+          })()}
 
             {/* TAB CONTENT: BILLING HISTORY */}
             {activeTab === 'billing' && (

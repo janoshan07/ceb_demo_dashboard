@@ -121,10 +121,10 @@ public class CustomerController {
         String accountNo = str(record, "accountNo");
         dto.put("accountNo", accountNo != null ? accountNo : "");
         dto.put("customerName", str(record, "customerName", "masterName", "npayName", "ngenName"));
-        dto.put("customerAddress", str(record, "customerAddress"));
-        dto.put("mobileNo", str(record, "mobileNo"));
+        dto.put("customerAddress", str(record, "customerAddress", "masterAddress", "address"));
+        dto.put("mobileNo", str(record, "mobileNo", "masterMobile", "telephone", "phone"));
         
-        String agreementDateStr = str(record, "agreementDate");
+        String agreementDateStr = str(record, "agreementDate", "masterAgreementDate", "masterAgrDate");
         LocalDate agreementDate = null;
         if (agreementDateStr != null && !agreementDateStr.trim().isEmpty() && !"—".equals(agreementDateStr)) {
             try {
@@ -135,18 +135,48 @@ public class CustomerController {
         }
         dto.put("agreementDate", agreementDate != null ? agreementDate.toString() : null);
         
-        dto.put("panelCapacity", dbl(record, "panelCapacity"));
-        dto.put("bankCode", str(record, "bankCode"));
-        dto.put("branchCode", str(record, "branchCode"));
-        dto.put("bankAccountNo", str(record, "bankAccountNo"));
-        dto.put("refNo", str(record, "refNo"));
-        dto.put("tariffType", str(record, "tariffType"));
+        dto.put("panelCapacity", dbl(record, "panelCapacity", "masterPanelCapacity", "masterPanelCap", "capacity"));
+        dto.put("bankCode", str(record, "bankCode", "masterBankCode"));
+        dto.put("branchCode", str(record, "branchCode", "masterBranchCode"));
+        dto.put("bankAccountNo", str(record, "bankAccountNo", "masterBankAccountNo"));
+        dto.put("refNo", str(record, "refNo", "masterRefNo"));
+        dto.put("tariffType", str(record, "tariffType", "masterTariffType"));
         
         String solarType = str(record, "solarType", "masterNetType", "ngenNetType", "npayNetType");
         dto.put("solarType", solarType);
+        dto.put("netTypeName", solarType);
         
         Double unitRate = dbl(record, "unitRate", "masterUnitRate", "ngenUnitRate");
         dto.put("unitRate", unitRate);
+        
+        String costCode = str(record, "costCode", "masterCostCode", "cost_code");
+        dto.put("costCode", costCode);
+        if (costCode != null) {
+            costCodeRepository.findByCostCode(costCode.trim()).ifPresent(cc -> dto.put("costCodeId", cc.getId()));
+        }
+        
+        String expenseCode = str(record, "billingMode", "expenseCode", "lCode", "masterBillingMode", "masterExpenseCode", "masterLCode", "expCode");
+        if (expenseCode == null && solarType != null && dto.get("tariffType") != null) {
+            expenseCode = ExcelValidationService.deriveLCode(solarType, (String) dto.get("tariffType"));
+        }
+        dto.put("expenseCode", expenseCode);
+        if (expenseCode != null) {
+            final String cleanEc = expenseCode.trim();
+            expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(ec -> dto.put("expenseCodeId", ec.getId()), () -> {
+                try {
+                    expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(ec -> dto.put("expenseCodeId", ec.getId()));
+                } catch (Exception ignored) {
+                    expenseCodeRepository.findAll().stream()
+                        .filter(e -> cleanEc.equalsIgnoreCase(e.getExp()) || cleanEc.equalsIgnoreCase(e.getExpCode()))
+                        .findFirst()
+                        .ifPresent(ec -> dto.put("expenseCodeId", ec.getId()));
+                }
+            });
+        }
+        
+        if (solarType != null) {
+            netTypeRepository.findByName(solarType.trim()).ifPresent(nt -> dto.put("netTypeId", nt.getId()));
+        }
         
         String validationStatus = "VALID";
         String status = str(record, "status");
@@ -219,58 +249,192 @@ public class CustomerController {
     private Map<String, Object> toSafeDto(Customer c) {
         Map<String, Object> dto = new LinkedHashMap<>();
         try {
-            dto.put("accountNo",       c.getAccountNo());
-            dto.put("customerName",    c.getCustomerName());
-            dto.put("customerAddress", c.getCustomerAddress());
-            dto.put("mobileNo",        c.getMobileNo());
-            dto.put("agreementDate",   c.getAgreementDate() != null ? c.getAgreementDate().toString() : null);
-            dto.put("panelCapacity",   c.getPanelCapacity());
-            dto.put("bankCode",        c.getBankCode());
-            dto.put("branchCode",      c.getBranchCode());
-            dto.put("bankAccountNo",   c.getBankAccountNo());
-            dto.put("solarType",       c.getSolarType());
-            dto.put("refNo",           c.getRefNo());
-            dto.put("unitRate",        c.getUnitRate());
-            dto.put("tariffType",      c.getTariffType());
-            dto.put("createdAt",       c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
-            // Safely read lazy associations — returns null if not loaded rather than throwing
-            try { dto.put("costCode",     c.getCostCode()     != null ? c.getCostCode().getCostCode()   : null); } catch (Exception e) { dto.put("costCode",     null); }
-            try { dto.put("netTypeName",  c.getNetType()      != null ? c.getNetType().getName()         : null); } catch (Exception e) { dto.put("netTypeName",  null); }
-            try { dto.put("expenseCode",  c.getExpenseCode()  != null ? c.getExpenseCode().getExpCode() : null); } catch (Exception e) { dto.put("expenseCode",  null); }
-            dto.put("validationStatus", c.getValidationStatus());
-            dto.put("validationErrors", c.getValidationErrors());
-            dto.put("division",        c.getDivision());
             // Full merged Monthly Directory record so the Customer 360 view can show the same
             // Master / CEB Assist / NGEN / NPAY detail. Returned as a parsed object (or null).
             Object directory = null;
+            Map<String, Object> dirMap = null;
             if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
                 try {
-                    directory = objectMapper.readValue(c.getDirectoryJson(),
+                    dirMap = objectMapper.readValue(c.getDirectoryJson(),
                             new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    directory = dirMap;
                 } catch (Exception e) {
                     directory = null;
+                    dirMap = null;
                 }
             }
+
+            dto.put("accountNo",       c.getAccountNo());
+
+            String custName = c.getCustomerName();
+            if ((custName == null || custName.trim().isEmpty()) && dirMap != null) {
+                custName = str(dirMap, "customerName", "masterName", "npayName", "ngenName");
+            }
+            dto.put("customerName",    custName);
+
+            String custAddr = c.getCustomerAddress();
+            if ((custAddr == null || custAddr.trim().isEmpty()) && dirMap != null) {
+                custAddr = str(dirMap, "customerAddress", "masterAddress", "address");
+            }
+            dto.put("customerAddress", custAddr);
+
+            String mob = c.getMobileNo();
+            if ((mob == null || mob.trim().isEmpty()) && dirMap != null) {
+                mob = str(dirMap, "mobileNo", "masterMobile", "telephone", "phone");
+            }
+            dto.put("mobileNo",        mob);
+
+            String agrDate = c.getAgreementDate() != null ? c.getAgreementDate().toString() : null;
+            if (agrDate == null && dirMap != null) {
+                agrDate = str(dirMap, "agreementDate", "masterAgreementDate", "masterAgrDate");
+            }
+            dto.put("agreementDate",   agrDate);
+
+            Double panCap = c.getPanelCapacity();
+            if ((panCap == null || panCap <= 0) && dirMap != null) {
+                panCap = dbl(dirMap, "panelCapacity", "masterPanelCapacity", "masterPanelCap", "capacity");
+            }
+            dto.put("panelCapacity",   panCap);
+
+            String bCode = c.getBankCode();
+            if ((bCode == null || bCode.trim().isEmpty()) && dirMap != null) {
+                bCode = str(dirMap, "bankCode", "masterBankCode");
+            }
+            dto.put("bankCode",        bCode);
+
+            String brCode = c.getBranchCode();
+            if ((brCode == null || brCode.trim().isEmpty()) && dirMap != null) {
+                brCode = str(dirMap, "branchCode", "masterBranchCode");
+            }
+            dto.put("branchCode",      brCode);
+
+            String bAcc = c.getBankAccountNo();
+            if ((bAcc == null || bAcc.trim().isEmpty()) && dirMap != null) {
+                bAcc = str(dirMap, "bankAccountNo", "masterBankAccountNo");
+            }
+            dto.put("bankAccountNo",   bAcc);
+
+            String sType = c.getSolarType();
+            if ((sType == null || sType.trim().isEmpty()) && dirMap != null) {
+                sType = str(dirMap, "solarType", "masterNetType", "ngenNetType", "npayNetType");
+            }
+            dto.put("solarType",       sType);
+
+            String ref = c.getRefNo();
+            if ((ref == null || ref.trim().isEmpty()) && dirMap != null) {
+                ref = str(dirMap, "refNo", "masterRefNo");
+            }
+            dto.put("refNo",           ref);
+
+            Double uRate = c.getUnitRate();
+            if (uRate == null && dirMap != null) {
+                uRate = dbl(dirMap, "unitRate", "masterUnitRate", "ngenUnitRate");
+            }
+            dto.put("unitRate",        uRate);
+
+            String tType = c.getTariffType();
+            if ((tType == null || tType.trim().isEmpty()) && dirMap != null) {
+                tType = str(dirMap, "tariffType", "masterTariffType");
+            }
+            dto.put("tariffType",      tType);
+
+            dto.put("createdAt",       c.getCreatedAt() != null ? c.getCreatedAt().toString() : null);
+
+            // Safely read lazy associations or fall back to directory JSON / lookup
+            String costCodeVal = null;
+            final Long[] costCodeIdHolder = new Long[]{null};
+            try {
+                if (c.getCostCode() != null) {
+                    costCodeVal = c.getCostCode().getCostCode();
+                    costCodeIdHolder[0] = c.getCostCode().getId();
+                }
+            } catch (Exception ignored) {}
+            if (costCodeVal == null && dirMap != null) {
+                costCodeVal = str(dirMap, "costCode", "masterCostCode", "cost_code");
+                if (costCodeVal != null) {
+                    final String ccTrim = costCodeVal.trim();
+                    costCodeRepository.findByCostCode(ccTrim).ifPresent(cc -> costCodeIdHolder[0] = cc.getId());
+                }
+            }
+            dto.put("costCode", costCodeVal);
+            dto.put("costCodeId", costCodeIdHolder[0]);
+
+            String netTypeNameVal = null;
+            final Long[] netTypeIdHolder = new Long[]{null};
+            try {
+                if (c.getNetType() != null) {
+                    netTypeNameVal = c.getNetType().getName();
+                    netTypeIdHolder[0] = c.getNetType().getId();
+                }
+            } catch (Exception ignored) {}
+            if (netTypeNameVal == null) {
+                netTypeNameVal = sType;
+            }
+            if (netTypeNameVal != null && netTypeIdHolder[0] == null) {
+                final String ntTrim = netTypeNameVal.trim();
+                netTypeRepository.findByName(ntTrim).ifPresent(nt -> netTypeIdHolder[0] = nt.getId());
+            }
+            dto.put("netTypeName", netTypeNameVal);
+            dto.put("netTypeId", netTypeIdHolder[0]);
+
+            String expenseCodeVal = null;
+            final Long[] expenseCodeIdHolder = new Long[]{null};
+            try {
+                if (c.getExpenseCode() != null) {
+                    expenseCodeVal = c.getExpenseCode().getExpCode();
+                    expenseCodeIdHolder[0] = c.getExpenseCode().getId();
+                }
+            } catch (Exception ignored) {}
+            if (expenseCodeVal == null && dirMap != null) {
+                expenseCodeVal = str(dirMap, "billingMode", "expenseCode", "lCode", "masterBillingMode", "masterExpenseCode", "masterLCode", "expCode");
+            }
+            if (expenseCodeVal == null && sType != null && tType != null) {
+                expenseCodeVal = ExcelValidationService.deriveLCode(sType, tType);
+            }
+            if (expenseCodeVal != null && expenseCodeIdHolder[0] == null) {
+                final String cleanEc = expenseCodeVal.trim();
+                expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(ec -> expenseCodeIdHolder[0] = ec.getId(), () -> {
+                    try {
+                        expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(ec -> expenseCodeIdHolder[0] = ec.getId());
+                    } catch (Exception ignored) {
+                        expenseCodeRepository.findAll().stream()
+                            .filter(e -> cleanEc.equalsIgnoreCase(e.getExp()) || cleanEc.equalsIgnoreCase(e.getExpCode()))
+                            .findFirst()
+                            .ifPresent(ec -> expenseCodeIdHolder[0] = ec.getId());
+                    }
+                });
+            }
+            dto.put("expenseCode", expenseCodeVal);
+            dto.put("expenseCodeId", expenseCodeIdHolder[0]);
+
+            dto.put("validationStatus", c.getValidationStatus());
+            dto.put("validationErrors", c.getValidationErrors());
+
+            String div = c.getDivision();
+            if ((div == null || div.trim().isEmpty()) && dirMap != null) {
+                div = str(dirMap, "division", "location");
+            }
+            dto.put("division",        div);
             dto.put("directory", directory);
 
             // Compute Completeness (Complete Details vs Missing Details)
             List<String> missingFields = new ArrayList<>();
-            if (c.getCustomerName() == null || c.getCustomerName().trim().isEmpty()) missingFields.add("Customer Name");
-            if (c.getCustomerAddress() == null || c.getCustomerAddress().trim().isEmpty()) missingFields.add("Customer Address");
-            if (c.getMobileNo() == null || c.getMobileNo().trim().isEmpty()) missingFields.add("Mobile No");
-            if (c.getAgreementDate() == null) missingFields.add("Agreement Date");
-            if (c.getPanelCapacity() == null || c.getPanelCapacity() <= 0) missingFields.add("Panel Capacity");
-            if (c.getBankCode() == null || c.getBankCode().trim().isEmpty()) missingFields.add("Bank Code");
-            if (c.getBankAccountNo() == null || c.getBankAccountNo().trim().isEmpty()) missingFields.add("Bank Account No");
+            if (custName == null || custName.trim().isEmpty()) missingFields.add("Customer Name");
+            if (custAddr == null || custAddr.trim().isEmpty()) missingFields.add("Customer Address");
+            if (mob == null || mob.trim().isEmpty()) missingFields.add("Mobile No");
+            if (c.getAgreementDate() == null && agrDate == null) missingFields.add("Agreement Date");
+            if (panCap == null || panCap <= 0) missingFields.add("Panel Capacity");
+            if (bCode == null || bCode.trim().isEmpty()) missingFields.add("Bank Code");
+            if (bAcc == null || bAcc.trim().isEmpty()) missingFields.add("Bank Account No");
             
-            String solar = c.getSolarType() != null ? c.getSolarType().trim() : "";
-            if (solar.isEmpty() && c.getNetType() != null && c.getNetType().getName() != null) {
-                solar = c.getNetType().getName().trim();
+            String solar = sType != null ? sType.trim() : "";
+            if (solar.isEmpty() && netTypeNameVal != null) {
+                solar = netTypeNameVal.trim();
             }
             if (solar.isEmpty()) missingFields.add("Solar System Type");
             
-            if (c.getRefNo() == null || c.getRefNo().trim().isEmpty()) missingFields.add("Ref No");
-            if (c.getUnitRate() == null) missingFields.add("Unit Rate");
+            if (ref == null || ref.trim().isEmpty()) missingFields.add("Ref No");
+            if (uRate == null) missingFields.add("Unit Rate");
 
             boolean hasNameMismatch = false;
             boolean hasUnitRateMismatch = false;
@@ -278,26 +442,26 @@ public class CustomerController {
             boolean isOutstanding = false;
 
             if (directory instanceof Map) {
-                Map<?, ?> dirMap = (Map<?, ?>) directory;
-                hasNameMismatch = "MISMATCH".equals(dirMap.get("nameMatch"));
-                hasUnitRateMismatch = "MISMATCH".equals(dirMap.get("unitRateMatch"));
-                hasNetTypeMismatch = "MISMATCH".equals(dirMap.get("netTypeMatch"));
+                Map<?, ?> dMap = (Map<?, ?>) directory;
+                hasNameMismatch = "MISMATCH".equals(dMap.get("nameMatch"));
+                hasUnitRateMismatch = "MISMATCH".equals(dMap.get("unitRateMatch"));
+                hasNetTypeMismatch = "MISMATCH".equals(dMap.get("netTypeMatch"));
                 
                 boolean isMasterFound = true;
-                if (dirMap.containsKey("masterDataFound")) {
-                    isMasterFound = Boolean.TRUE.equals(dirMap.get("masterDataFound"));
+                if (dMap.containsKey("masterDataFound")) {
+                    isMasterFound = Boolean.TRUE.equals(dMap.get("masterDataFound"));
                 }
-                boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(dirMap.get("isNewCustomer"));
-                boolean isPaymentHold = Boolean.TRUE.equals(dirMap.get("paymentHold"));
-                boolean isNoBill = Boolean.TRUE.equals(dirMap.get("masterOnly")) || Boolean.TRUE.equals(dirMap.get("noBillingData"));
+                boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(dMap.get("isNewCustomer"));
+                boolean isPaymentHold = Boolean.TRUE.equals(dMap.get("paymentHold"));
+                boolean isNoBill = Boolean.TRUE.equals(dMap.get("masterOnly")) || Boolean.TRUE.equals(dMap.get("noBillingData"));
                 
                 boolean isPaymentMismatch = false;
-                Object pMap = dirMap.get("mergedPayment");
+                Object pMap = dMap.get("mergedPayment");
                 if (pMap instanceof Map) {
                     isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
                 }
                 
-                boolean isRejected = "REJECTED".equals(dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("rejected"));
+                boolean isRejected = "REJECTED".equals(dMap.get("status")) || Boolean.TRUE.equals(dMap.get("rejected"));
                 isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
             }
 
@@ -307,8 +471,8 @@ public class CustomerController {
 
             boolean isRejected = false;
             if (directory instanceof Map) {
-                Map<?, ?> dirMap = (Map<?, ?>) directory;
-                isRejected = "REJECTED".equals(dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("rejected"));
+                Map<?, ?> dMap = (Map<?, ?>) directory;
+                isRejected = "REJECTED".equals(dMap.get("status")) || Boolean.TRUE.equals(dMap.get("rejected"));
             }
             boolean isComplete = missingFields.isEmpty() && !hasNameMismatch && !hasUnitRateMismatch && !hasNetTypeMismatch && !isOutstanding && !isRejected;
 

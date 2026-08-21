@@ -65,13 +65,16 @@ const DETAIL_SECTIONS = [
   {
     title: 'Master Data', color: '#38bdf8',
     fields: [
-      { label: 'Address', keys: ['customerAddress'] },
-      { label: 'Mobile Number', keys: ['mobileNo'] },
-      { label: 'Agreement Date', keys: ['agreementDate'] },
-      { label: 'Net Type', keys: ['masterNetType', 'solarType'] },
-      { label: 'Unit Rate', keys: ['masterUnitRate', 'unitRate'] },
+      { label: 'Address', keys: ['customerAddress', 'masterAddress', 'address'] },
+      { label: 'Mobile Number', keys: ['mobileNo', 'masterMobile', 'telephone', 'phone'] },
+      { label: 'Agreement Date', keys: ['agreementDate', 'masterAgreementDate', 'masterAgrDate'] },
+      { label: 'Net Type', keys: ['masterNetType', 'solarType', 'ngenNetType', 'npayNetType'] },
+      { label: 'Unit Rate', keys: ['masterUnitRate', 'unitRate', 'ngenUnitRate'] },
+      { label: 'Tariff Type', keys: ['tariffType', 'masterTariffType'] },
+      { label: 'Cost Code', keys: ['costCode', 'masterCostCode', 'cost_code'] },
+      { label: 'L-Code', keys: ['billingMode', 'expenseCode', 'lCode', 'masterBillingMode', 'masterExpenseCode', 'masterLCode', 'expCode'] },
       { label: 'Bank Details', bank: true },
-      { label: 'Panel Capacity', keys: ['panelCapacity'] },
+      { label: 'Panel Capacity', keys: ['panelCapacity', 'masterPanelCapacity', 'masterPanelCap', 'capacity'] },
     ],
   },
   {
@@ -247,7 +250,10 @@ const CustomerDetails = () => {
   };
 
   const renderValOrMissing = (val, formatter) => {
-    if (val === null || val === undefined || String(val).trim() === '' || String(val).trim() === '—') {
+    if (val && typeof val === 'object' && 'value' in val) {
+      val = val.value;
+    }
+    if (val === null || val === undefined || String(val).trim() === '' || String(val).trim() === '—' || String(val).trim().toLowerCase() === 'null' || String(val).trim().toLowerCase() === 'undefined') {
       return <span style={{ color: '#ef4444', fontWeight: 600 }}>Missing</span>;
     }
     return formatter ? formatter(val) : val;
@@ -372,14 +378,8 @@ const CustomerDetails = () => {
       if (selectedBillingMonth && selectedBillingMonth !== 'ALL') {
         params.push(`billingMonth=${encodeURIComponent(selectedBillingMonth)}`);
       }
-      if (appliedQuery.trim()) {
-        params.push(`query=${encodeURIComponent(appliedQuery.trim())}`);
-      }
       if (locationFilter !== 'ALL') {
         params.push(`location=${encodeURIComponent(locationFilter)}`);
-      }
-      if (netTypeFilter !== 'ALL') {
-        params.push(`netType=${encodeURIComponent(netTypeFilter)}`);
       }
       if (params.length > 0) {
         url += `?${params.join('&')}`;
@@ -634,21 +634,53 @@ const CustomerDetails = () => {
     setActiveTab('overview');
     
     // Prep Edit Fields
-    setEditName(customer.customerName);
-    setEditAddress(customer.customerAddress || '');
-    setEditMobile(customer.mobileNo || '');
-    setEditAgreementDate(customer.agreementDate || '');
-    setEditCapacity(customer.panelCapacity || '');
-    setEditSolarType(customer.solarType || 'Net Plus');
-    setEditBankCode(customer.bankCode || '');
-    setEditBranchCode(customer.branchCode || '');
-    setEditBankAccountNo(customer.bankAccountNo || '');
-    setEditRefNo(customer.refNo || '');
-    setEditUnitRate(customer.unitRate || '');
-    setEditTariffType(customer.tariffType || '');
-    setEditCostCodeId(customer.costCodeId || '');
-    setEditNetTypeId(customer.netTypeId || '');
-    setEditExpenseCodeId(customer.expenseCodeId || '');
+    const cName = customer.customerName || customer.directory?.customerName || customer.directory?.masterName || '';
+    setEditName(cName);
+    setEditAddress(customer.customerAddress || customer.directory?.customerAddress || customer.directory?.address || '');
+    setEditMobile(customer.mobileNo || customer.directory?.mobileNo || customer.directory?.telephone || customer.directory?.phone || '');
+    setEditAgreementDate(customer.agreementDate || customer.directory?.agreementDate || '');
+    setEditCapacity(customer.panelCapacity ?? customer.directory?.panelCapacity ?? '');
+    const sType = customer.solarType || customer.netTypeName || customer.directory?.solarType || customer.directory?.masterNetType || 'Net Plus';
+    setEditSolarType(sType);
+    setEditBankCode(customer.bankCode || customer.directory?.bankCode || customer.directory?.masterBankCode || '');
+    setEditBranchCode(customer.branchCode || customer.directory?.branchCode || customer.directory?.masterBranchCode || '');
+    setEditBankAccountNo(customer.bankAccountNo || customer.directory?.bankAccountNo || customer.directory?.masterBankAccountNo || '');
+    setEditRefNo(customer.refNo || customer.directory?.refNo || customer.directory?.masterRefNo || '');
+    setEditUnitRate(customer.unitRate ?? customer.directory?.unitRate ?? customer.directory?.masterUnitRate ?? '');
+    const tType = customer.tariffType || customer.directory?.tariffType || customer.directory?.masterTariffType || '';
+    setEditTariffType(tType);
+
+    // Resolve Cost Code ID
+    let ccId = customer.costCodeId;
+    if (!ccId && costCodesList.length > 0) {
+      const cCode = customer.costCode || customer.directory?.costCode || customer.directory?.masterCostCode;
+      if (cCode) {
+        const found = costCodesList.find(c => String(c.costCode).trim() === String(cCode).trim() || String(c.id) === String(cCode).trim());
+        if (found) ccId = found.id;
+      }
+    }
+    setEditCostCodeId(ccId || '');
+
+    // Resolve Net Type ID
+    let ntId = customer.netTypeId;
+    if (!ntId && netTypesList.length > 0 && sType) {
+      const found = netTypesList.find(n => n.name.trim().toLowerCase() === sType.trim().toLowerCase());
+      if (found) ntId = found.id;
+    }
+    setEditNetTypeId(ntId || '');
+
+    // Resolve Expense Code (L-Code) ID
+    let ecId = customer.expenseCodeId;
+    const lCode = customer.expenseCode || customer.directory?.billingMode || customer.directory?.expenseCode || customer.directory?.lCode || customer.directory?.masterBillingMode || customer.directory?.masterExpenseCode || deriveLCode(sType, tType);
+    if (!ecId && expenseCodesList.length > 0 && lCode) {
+      const found = expenseCodesList.find(e => 
+        String(e.expCode).trim().toLowerCase() === String(lCode).trim().toLowerCase() ||
+        String(e.exp).trim().toLowerCase() === String(lCode).trim().toLowerCase() ||
+        String(e.id) === String(lCode).trim()
+      );
+      if (found) ecId = found.id;
+    }
+    setEditExpenseCodeId(ecId || '');
 
     fetchBillingHistory(customer.accountNo);
   };
@@ -1136,7 +1168,7 @@ const CustomerDetails = () => {
         </div>
 
         {/* Missing Details */}
-        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', borderLeft: (completenessFilter === 'MISSING' || completenessFilter === 'NAME_MISMATCH' || completenessFilter === 'UNIT_RATE_MISMATCH' || completenessFilter === 'NET_TYPE_MISMATCH' || completenessFilter === 'OTHER_MISMATCHES') ? '3px solid #f59e0b' : '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer' }}>
+        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', borderLeft: (completenessFilter === 'MISSING' || completenessFilter === 'NAME_MISMATCH' || completenessFilter === 'UNIT_RATE_MISMATCH' || completenessFilter === 'NET_TYPE_MISMATCH') ? '3px solid #f59e0b' : '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <AlertTriangle size={24} color="#f59e0b" />
@@ -1193,6 +1225,9 @@ const CustomerDetails = () => {
             }}
           >
             <User size={14} /> All Customers
+            <span style={{ marginLeft: '0.35rem', background: '#3b82f6', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.totalCustomers ?? 0}
+            </span>
           </button>
 
           <button
@@ -1213,6 +1248,9 @@ const CustomerDetails = () => {
             }}
           >
             <CheckCircle size={14} /> Complete Details
+            <span style={{ marginLeft: '0.35rem', background: '#10b981', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.completeCustomers ?? 0}
+            </span>
           </button>
 
           <button
@@ -1233,6 +1271,9 @@ const CustomerDetails = () => {
             }}
           >
             <AlertTriangle size={14} /> Missing Details / Validation
+            <span style={{ marginLeft: '0.35rem', background: '#f59e0b', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.missingCustomers ?? 0}
+            </span>
           </button>
 
           <button
@@ -1253,11 +1294,9 @@ const CustomerDetails = () => {
             }}
           >
             <User size={14} /> Name Mismatch
-            {summaryStats.nameMismatchesCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#fb7185', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.nameMismatchesCount}
-              </span>
-            )}
+            <span style={{ marginLeft: '0.35rem', background: '#fb7185', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.nameMismatchesCount ?? 0}
+            </span>
           </button>
 
           <button
@@ -1278,11 +1317,9 @@ const CustomerDetails = () => {
             }}
           >
             <AlertTriangle size={14} /> Unit Rate Mismatch
-            {summaryStats.unitRateMismatchesCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#fbbf24', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.unitRateMismatchesCount}
-              </span>
-            )}
+            <span style={{ marginLeft: '0.35rem', background: '#fbbf24', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.unitRateMismatchesCount ?? 0}
+            </span>
           </button>
 
           <button
@@ -1303,36 +1340,9 @@ const CustomerDetails = () => {
             }}
           >
             <Zap size={14} /> Net Type Mismatch
-            {summaryStats.netTypeMismatchesCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#a78bfa', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.netTypeMismatchesCount}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => { setCompletenessFilter('OTHER_MISMATCHES'); setStatusFilter('ALL'); setCurrentPage(0); }}
-            style={{
-              padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'OTHER_MISMATCHES' ? 'rgba(249,115,22,0.12)' : '#111827',
-              border: completenessFilter === 'OTHER_MISMATCHES' ? '1px solid #f97316' : '1px solid var(--border-color)',
-              color: completenessFilter === 'OTHER_MISMATCHES' ? '#f97316' : 'var(--text-secondary)',
-              fontWeight: 600,
-              fontSize: '0.8rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <AlertCircle size={14} /> Other Mismatches
-            {summaryStats.otherMismatchesCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#f97316', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.otherMismatchesCount}
-              </span>
-            )}
+            <span style={{ marginLeft: '0.35rem', background: '#a78bfa', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.netTypeMismatchesCount ?? 0}
+            </span>
           </button>
 
           <button
@@ -1353,11 +1363,9 @@ const CustomerDetails = () => {
             }}
           >
             <Clock size={14} /> Outstanding Customers
-            {summaryStats.outstandingCustomersCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#38bdf8', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.outstandingCustomersCount}
-              </span>
-            )}
+            <span style={{ marginLeft: '0.35rem', background: '#38bdf8', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.outstandingCustomersCount ?? 0}
+            </span>
           </button>
 
           <button
@@ -1378,11 +1386,9 @@ const CustomerDetails = () => {
             }}
           >
             <Clock size={14} /> Expired Agreements
-            {summaryStats.expiredAgreementsCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.expiredAgreementsCount}
-              </span>
-            )}
+            <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.expiredAgreementsCount ?? 0}
+            </span>
           </button>
 
           <button
@@ -1403,35 +1409,9 @@ const CustomerDetails = () => {
             }}
           >
             <Clock size={14} /> Expiring Soon
-            {summaryStats.expiringSoonAgreementsCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#f97316', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.expiringSoonAgreementsCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => { setCompletenessFilter('REJECTED'); setStatusFilter('ALL'); setCurrentPage(0); }}
-            style={{
-              padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'REJECTED' ? 'rgba(244,63,94,0.12)' : '#111827',
-              border: completenessFilter === 'REJECTED' ? '1px solid #f43f5e' : '1px solid var(--border-color)',
-              color: completenessFilter === 'REJECTED' ? '#fb7185' : 'var(--text-secondary)',
-              fontWeight: 600,
-              fontSize: '0.8rem',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.4rem',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <XCircle size={14} /> Rejected Records
-            {summaryStats.rejectedCount > 0 && (
-              <span style={{ marginLeft: '0.35rem', background: '#f43f5e', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
-                {summaryStats.rejectedCount}
-              </span>
-            )}
+            <span style={{ marginLeft: '0.35rem', background: '#f97316', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+              {summaryStats.expiringSoonAgreementsCount ?? 0}
+            </span>
           </button>
 
         </div>
@@ -2497,12 +2477,14 @@ const CustomerDetails = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Name</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>{renderValOrMissing(selectedCustomer.customerName)}</div>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem' }}>
+                            {renderValOrMissing(selectedCustomer.customerName || selectedCustomer.directory?.customerName || selectedCustomer.directory?.masterName || selectedCustomer.directory?.npayName || selectedCustomer.directory?.ngenName)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Solar System Type</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: selectedCustomer.solarType ? 'var(--success)' : 'inherit' }}>
-                            {renderValOrMissing(selectedCustomer.solarType)}
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: (selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType) ? 'var(--success)' : 'inherit' }}>
+                            {renderValOrMissing(selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType || selectedCustomer.directory?.ngenNetType || selectedCustomer.directory?.npayNetType)}
                           </div>
                         </div>
                       </div>
@@ -2510,23 +2492,29 @@ const CustomerDetails = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Customer Address</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.customerAddress)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.customerAddress || selectedCustomer.directory?.customerAddress || selectedCustomer.directory?.address)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Mobile No</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.mobileNo)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.mobileNo || selectedCustomer.directory?.mobileNo || selectedCustomer.directory?.telephone || selectedCustomer.directory?.phone)}
+                          </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
-                          <div style={{ fontWeight: 600 }}>{renderValOrMissing(selectedCustomer.panelCapacity, (v) => `${v} kW`)}</div>
+                          <div style={{ fontWeight: 600 }}>
+                            {renderValOrMissing(selectedCustomer.panelCapacity ?? selectedCustomer.directory?.panelCapacity, (v) => `${v} kW`)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Agreement Date</span>
                           <div style={{ fontWeight: 600 }}>
-                            {renderValOrMissing(selectedCustomer.agreementDate, (v) => new Date(v).toLocaleDateString('en-LK'))}
+                            {renderValOrMissing(selectedCustomer.agreementDate || selectedCustomer.directory?.agreementDate, (v) => new Date(v).toLocaleDateString('en-LK'))}
                           </div>
                         </div>
                       </div>
@@ -2534,55 +2522,82 @@ const CustomerDetails = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Code</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.bankCode)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.bankCode || selectedCustomer.directory?.bankCode || selectedCustomer.directory?.masterBankCode)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Branch Code</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.branchCode)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.branchCode || selectedCustomer.directory?.branchCode || selectedCustomer.directory?.masterBranchCode)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Bank Account No</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.bankAccountNo)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.bankAccountNo || selectedCustomer.directory?.bankAccountNo || selectedCustomer.directory?.masterBankAccountNo)}
+                          </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Ref No</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.refNo)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.refNo || selectedCustomer.directory?.refNo || selectedCustomer.directory?.masterRefNo)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Unit Rate</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.unitRate, (v) => `${v} LKR`)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.unitRate ?? selectedCustomer.directory?.unitRate ?? selectedCustomer.directory?.masterUnitRate ?? selectedCustomer.directory?.ngenUnitRate, (v) => `${v} LKR`)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Tariff Type</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.tariffType)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.tariffType || selectedCustomer.directory?.tariffType || selectedCustomer.directory?.masterTariffType)}
+                          </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Cost Code</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.costCode)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(selectedCustomer.costCode || selectedCustomer.directory?.costCode || selectedCustomer.directory?.masterCostCode)}
+                          </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>L-Code</span>
-                          <div style={{ fontWeight: 500 }}>{renderValOrMissing(selectedCustomer.expenseCode)}</div>
+                          <div style={{ fontWeight: 500 }}>
+                            {renderValOrMissing(
+                              selectedCustomer.expenseCode ||
+                              selectedCustomer.directory?.billingMode ||
+                              selectedCustomer.directory?.expenseCode ||
+                              selectedCustomer.directory?.lCode ||
+                              selectedCustomer.directory?.masterBillingMode ||
+                              selectedCustomer.directory?.masterExpenseCode ||
+                              deriveLCode(
+                                selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType,
+                                selectedCustomer.tariffType || selectedCustomer.directory?.tariffType || selectedCustomer.directory?.masterTariffType
+                              )
+                            )}
+                          </div>
                         </div>
                       </div>
 
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem' }}>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Location / Division</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: (selectedCustomer.division || selectedCustomer.branchCode) ? '#38bdf8' : 'inherit' }}>
-                            <MapPin size={13} /> {renderValOrMissing(selectedCustomer.division || selectedCustomer.branchCode)}
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', display: 'flex', alignItems: 'center', gap: '0.3rem', color: (selectedCustomer.division || selectedCustomer.branchCode || selectedCustomer.directory?.division || selectedCustomer.directory?.location) ? '#38bdf8' : 'inherit' }}>
+                            <MapPin size={13} /> {renderValOrMissing(selectedCustomer.division || selectedCustomer.branchCode || selectedCustomer.directory?.division || selectedCustomer.directory?.location)}
                           </div>
                         </div>
                         <div>
                           <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Classification Status</span>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: selectedCustomer.validationStatus === 'ERROR' ? '#f87171' : 'var(--success)' }}>
-                            {selectedCustomer.validationStatus === 'ERROR' ? 'New Customer' : 'Valid'}
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: (selectedCustomer.validationStatus === 'ERROR' || selectedCustomer.directory?.status === 'ERROR') ? '#f87171' : 'var(--success)' }}>
+                            {(selectedCustomer.validationStatus === 'ERROR' || selectedCustomer.directory?.status === 'ERROR') ? 'New Customer' : 'Valid'}
                           </div>
                         </div>
                       </div>

@@ -100,13 +100,13 @@ public class CustomerDirectorySyncService {
         if (name != null) c.setCustomerName(name);
         else if (isBlank(c.getCustomerName())) c.setCustomerName(accountNo); // NOT NULL guard
 
-        setIfPresent(str(record, "customerAddress"), c::setCustomerAddress);
-        setIfPresent(str(record, "mobileNo"), c::setMobileNo);
-        setIfPresent(str(record, "bankCode"), c::setBankCode);
-        setIfPresent(str(record, "branchCode"), c::setBranchCode);
-        setIfPresent(str(record, "bankAccountNo"), c::setBankAccountNo);
-        setIfPresent(str(record, "refNo"), c::setRefNo);
-        setIfPresent(str(record, "tariffType"), c::setTariffType);
+        setIfPresent(str(record, "customerAddress", "masterAddress", "address"), c::setCustomerAddress);
+        setIfPresent(str(record, "mobileNo", "masterMobile", "telephone", "phone"), c::setMobileNo);
+        setIfPresent(str(record, "bankCode", "masterBankCode"), c::setBankCode);
+        setIfPresent(str(record, "branchCode", "masterBranchCode"), c::setBranchCode);
+        setIfPresent(str(record, "bankAccountNo", "masterBankAccountNo"), c::setBankAccountNo);
+        setIfPresent(str(record, "refNo", "masterRefNo"), c::setRefNo);
+        setIfPresent(str(record, "tariffType", "masterTariffType"), c::setTariffType);
 
         String solarType = str(record, "masterNetType", "ngenNetType", "npayNetType", "solarType");
         if (solarType != null) {
@@ -117,25 +117,36 @@ public class CustomerDirectorySyncService {
         Double unitRate = dbl(record, "masterUnitRate", "unitRate", "ngenUnitRate");
         if (unitRate != null) c.setUnitRate(unitRate);
 
-        Double panelCapacity = dbl(record, "panelCapacity");
+        Double panelCapacity = dbl(record, "panelCapacity", "masterPanelCapacity", "masterPanelCap", "capacity");
         if (panelCapacity != null) c.setPanelCapacity(panelCapacity);
 
-        LocalDate agreementDate = date(record, "agreementDate");
+        LocalDate agreementDate = date(record, "agreementDate", "masterAgreementDate", "masterAgrDate");
         if (agreementDate != null) c.setAgreementDate(agreementDate);
 
-        String costCode = str(record, "costCode");
+        String costCode = str(record, "costCode", "masterCostCode", "cost_code");
         if (costCode != null) {
-            costCodeRepository.findByCostCode(costCode.trim()).ifPresent(c::setCostCode);
+            final String ccTrim = costCode.trim();
+            costCodeRepository.findByCostCode(ccTrim).ifPresentOrElse(c::setCostCode, () -> {
+                try {
+                    costCodeRepository.findById(Long.parseLong(ccTrim)).ifPresent(c::setCostCode);
+                } catch (Exception ignored) {}
+            });
         }
 
-        String expCode = str(record, "billingMode", "expenseCode", "lCode");
+        String expCode = str(record, "billingMode", "expenseCode", "lCode", "masterBillingMode", "masterExpenseCode", "masterLCode", "expCode");
+        if (expCode == null) {
+            expCode = com.ceb.billing.services.ExcelValidationService.deriveLCode(c.getSolarType(), c.getTariffType());
+        }
         if (expCode != null) {
             final String cleanEc = expCode.trim();
             expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(c::setExpenseCode, () -> {
                 try {
                     expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(c::setExpenseCode);
                 } catch (Exception ignored) {
-                    // free-text expense code that is neither a known code nor an id — leave as-is
+                    expenseCodeRepository.findAll().stream()
+                        .filter(e -> cleanEc.equalsIgnoreCase(e.getExp()) || cleanEc.equalsIgnoreCase(e.getExpCode()))
+                        .findFirst()
+                        .ifPresent(c::setExpenseCode);
                 }
             });
         }

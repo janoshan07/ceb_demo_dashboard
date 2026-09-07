@@ -321,42 +321,65 @@ public class ApprovalController {
                                 rec.put("expenseCodeId", payload.get("expenseCodeId"));
                             }
 
-                            // Re-evaluate mismatches
-                            String newName = str(rec, "customerName");
-                            String masterName = str(rec, "masterName");
-                            if (masterName != null && newName != null && newName.trim().equalsIgnoreCase(masterName.trim())) {
-                                rec.put("nameMatch", "MATCH");
+                            // Re-evaluate mismatches using the SAME helpers used during Step 6 / import.
+
+                            // 1. Name mismatch — use the intelligent tokenised namesMatch() that
+                            //    tolerates reordering, initials, abbreviations and minor variants.
+                            if ("MISMATCH".equals(rec.get("nameMatch"))) {
+                                String newName    = str(rec, "customerName");
+                                String masterName = str(rec, "masterName");
+                                if (masterName != null && newName != null
+                                        && com.ceb.billing.services.MultiFileImportService.namesMatch(newName, masterName)) {
+                                    rec.put("nameMatch", "MATCH");
+                                }
                             }
 
-                            Double newUnitRate = dbl(rec, "unitRate");
-                            Double masterUnitRate = dbl(rec, "masterUnitRate");
-                            if (masterUnitRate != null && newUnitRate != null && Math.abs(newUnitRate - masterUnitRate) < 0.001) {
-                                rec.put("unitRateMatch", "MATCH");
+                            // 2. Unit Rate mismatch — compare the corrected main-data rate against
+                            //    ngenUnitRate (the upstream canonical value the mismatch was
+                            //    originally detected against).  Fall back to masterUnitRate only
+                            //    when ngenUnitRate is absent.
+                            if ("MISMATCH".equals(rec.get("unitRateMatch"))) {
+                                Double newUnitRate    = dbl(rec, "unitRate");
+                                Double refUnitRate    = dbl(rec, "ngenUnitRate", "masterUnitRate");
+                                if (refUnitRate != null && newUnitRate != null
+                                        && Math.abs(newUnitRate - refUnitRate) < 1e-6) {
+                                    rec.put("unitRateMatch", "MATCH");
+                                }
                             }
 
-                            String newNetType = str(rec, "solarType", "netTypeName");
-                            String masterNetType = str(rec, "masterNetType", "masterSolarType");
-                            if (masterNetType != null && newNetType != null && newNetType.trim().equalsIgnoreCase(masterNetType.trim())) {
-                                rec.put("netTypeMatch", "MATCH");
+                            // 3. Net Type mismatch — normalise both sides so spelling/case variants
+                            //    ("plus", "Net Plus", "NETPLUS") are treated as equivalent.
+                            if ("MISMATCH".equals(rec.get("netTypeMatch"))) {
+                                String rawNew  = str(rec, "solarType", "netTypeName");
+                                String rawRef  = str(rec, "masterNetType", "masterSolarType", "mainNetType");
+                                if (rawNew != null && rawRef != null) {
+                                    String normNew = ExcelValidationService.normalizeSolarType(rawNew);
+                                    String normRef = ExcelValidationService.normalizeSolarType(rawRef);
+                                    if (normNew != null && normRef != null && normNew.equalsIgnoreCase(normRef)) {
+                                        rec.put("netTypeMatch", "MATCH");
+                                    }
+                                }
                             }
 
                             // Clear pending approval
                             rec.remove("pendingAdminApproval");
                             rec.remove("approvalStatus");
 
-                            // Re-calculate completeness
+                            // Re-calculate completeness — mirror the same field list used in
+                            // CustomerController.toSafeDto so the two paths stay in sync.
                             java.util.List<String> missingFields = new java.util.ArrayList<>();
                             if (str(rec, "customerName") == null) missingFields.add("Customer Name");
-                            if (str(rec, "customerAddress") == null) missingFields.add("Customer Address");
-                            if (str(rec, "mobileNo") == null) missingFields.add("Mobile No");
-                            if (str(rec, "agreementDate") == null) missingFields.add("Agreement Date");
-                            Double cap = dbl(rec, "panelCapacity");
+                            if (str(rec, "customerAddress", "address") == null) missingFields.add("Customer Address");
+                            if (str(rec, "mobileNo", "masterMobile", "telephone", "phone") == null) missingFields.add("Mobile No");
+                            if (str(rec, "agreementDate", "masterAgreementDate", "masterAgrDate") == null) missingFields.add("Agreement Date");
+                            Double cap = dbl(rec, "panelCapacity", "masterPanelCapacity");
                             if (cap == null || cap <= 0) missingFields.add("Panel Capacity");
-                            if (str(rec, "bankCode") == null) missingFields.add("Bank Code");
-                            if (str(rec, "bankAccountNo") == null) missingFields.add("Bank Account No");
-                            if (str(rec, "solarType", "netTypeName") == null) missingFields.add("Solar System Type");
-                            if (str(rec, "refNo") == null) missingFields.add("Ref No");
-                            if (dbl(rec, "unitRate") == null) missingFields.add("Unit Rate");
+                            if (str(rec, "bankCode", "masterBankCode") == null) missingFields.add("Bank Code");
+                            if (str(rec, "bankAccountNo", "masterBankAccountNo") == null) missingFields.add("Bank Account No");
+                            String solarStr = str(rec, "solarType", "masterNetType", "ngenNetType", "npayNetType");
+                            if (solarStr == null) missingFields.add("Solar System Type");
+                            if (str(rec, "refNo", "masterRefNo") == null) missingFields.add("Ref No");
+                            if (dbl(rec, "unitRate", "masterUnitRate", "ngenUnitRate") == null) missingFields.add("Unit Rate");
 
                             boolean hasNameMismatch = "MISMATCH".equals(rec.get("nameMatch"));
                             boolean hasUnitRateMismatch = "MISMATCH".equals(rec.get("unitRateMatch"));

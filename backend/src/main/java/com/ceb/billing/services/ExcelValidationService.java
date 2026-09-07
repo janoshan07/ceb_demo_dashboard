@@ -440,7 +440,11 @@ public class ExcelValidationService {
                 boolean changed = false;
 
                 // 1. Check Name Mismatch
-                String npayName = (String) dirMap.get("npayName");
+                // The snapshot may store the reference name under "npayName" (NPAY upload path)
+                // or under "masterName" (master data path). Try both.
+                String npayName = dirMap.get("npayName") != null
+                        ? (String) dirMap.get("npayName")
+                        : (dirMap.get("masterName") != null ? (String) dirMap.get("masterName") : null);
                 String customerName = customer.getCustomerName();
                 if ("MISMATCH".equals(dirMap.get("nameMatch")) && customerName != null && npayName != null) {
                     if (com.ceb.billing.services.MultiFileImportService.namesMatch(customerName, npayName)) {
@@ -461,8 +465,14 @@ public class ExcelValidationService {
                 }
 
                 // 3. Check Net Type Mismatch
+                // The snapshot may use "mainNetType" (set during Step 6 merge) or
+                // "masterNetType" / "masterSolarType" (set on the master data path).
                 String customerSolar = customer.getSolarType();
-                String mainNetType = (String) dirMap.get("mainNetType");
+                String mainNetType = dirMap.get("mainNetType") != null
+                        ? (String) dirMap.get("mainNetType")
+                        : (dirMap.get("masterNetType") != null
+                                ? (String) dirMap.get("masterNetType")
+                                : (dirMap.get("masterSolarType") != null ? (String) dirMap.get("masterSolarType") : null));
                 if ("MISMATCH".equals(dirMap.get("netTypeMatch")) && customerSolar != null && mainNetType != null) {
                     String normCustomer = normalizeSolarType(customerSolar);
                     String normMain = normalizeSolarType(mainNetType);

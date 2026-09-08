@@ -305,6 +305,21 @@ public class PaymentControlService {
         double totalOnHold = 0.0;
         Set<String> distinctCustomers = new HashSet<>();
 
+        // Pre-fetch all batch items to reflect settlement state per month
+        List<PaymentBatchItem> allBatchItems = Collections.emptyList();
+        if (paymentBatchItemRepository != null) {
+            try {
+                allBatchItems = paymentBatchItemRepository.findAll();
+            } catch (Exception ignored) {}
+        }
+        Map<String, PaymentBatchItem> batchItemMap = new HashMap<>();
+        for (PaymentBatchItem bi : allBatchItems) {
+            if (bi.getBatch() != null && bi.getBatch().getBillingPeriod() != null) {
+                String k = bi.getAccountNo().trim().toLowerCase() + "::" + bi.getBatch().getBillingPeriod().trim().toLowerCase();
+                batchItemMap.put(k, bi);
+            }
+        }
+
         for (Map<String, Object> r : records) {
             String acc = strVal(r.get("accountNo"));
             if (!acc.isEmpty()) {
@@ -314,12 +329,33 @@ public class PaymentControlService {
             Map<String, Double> fin = elig.getFinancials();
             double payable = fin.getOrDefault("totalPayable", 0.0);
 
-            if ("READY".equals(elig.getPaymentStatus())) {
+            String status = elig.getPaymentStatus();
+            String bMonth = strVal(r.get("billingMonth"));
+            PaymentBatchItem bItem = !bMonth.isEmpty() ? batchItemMap.get(acc.trim().toLowerCase() + "::" + bMonth.trim().toLowerCase()) : null;
+            if (bItem != null && bItem.getBatch() != null) {
+                String biStatus = strVal(bItem.getPaymentStatus());
+                String bStatus = strVal(bItem.getBatch().getStatus());
+                if ("PAID".equalsIgnoreCase(biStatus) || "PAID".equalsIgnoreCase(bStatus)) {
+                    status = "PAID";
+                } else if ("PAYMENT_PROCESSED".equalsIgnoreCase(bStatus)) {
+                    status = "PROCESSING";
+                } else if ("APPROVED".equalsIgnoreCase(bStatus)) {
+                    status = "APPROVED";
+                } else if ("REJECTED".equalsIgnoreCase(bStatus)) {
+                    status = "REJECTED";
+                } else if ("SUBMITTED".equalsIgnoreCase(bStatus) || "UNDER_REVIEW".equalsIgnoreCase(bStatus)) {
+                    status = "REVIEW";
+                }
+            }
+
+            if ("READY".equals(status)) {
                 paymentReadyCount++;
                 totalPayable += payable;
-            } else if ("REVIEW".equals(elig.getPaymentStatus())) {
+            } else if ("REVIEW".equals(status)) {
                 reviewCount++;
                 totalOnHold += payable;
+            } else if ("PAID".equals(status) || "PROCESSING".equals(status) || "APPROVED".equals(status)) {
+                // Batch-processed/paid items: do not count in Ready or On Hold
             } else {
                 onHoldCount++;
                 totalOnHold += payable;
@@ -513,9 +549,40 @@ public class PaymentControlService {
         Map<String, Object> target = null;
         for (Map<String, Object> r : records) {
             if (accountNo.trim().equalsIgnoreCase(strVal(r.get("accountNo")))) {
-                target = r;
-                break;
+                if (billingPeriod != null && !billingPeriod.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingPeriod.trim())) {
+                    String bMonth = strVal(r.get("billingMonth"));
+                    if (billingPeriod.trim().equalsIgnoreCase(bMonth)) {
+                        target = r;
+                        break;
+                    }
+                }
+                if (target == null) {
+                    target = r;
+                }
             }
+        }
+        if (target == null) {
+            try {
+                Map<String, Object> dossier = getCustomerMonthWisePaymentDossier(accountNo);
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> months = (List<Map<String, Object>>) dossier.get("months");
+                if (months != null && !months.isEmpty()) {
+                    if (billingPeriod != null && !billingPeriod.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingPeriod.trim())) {
+                        for (Map<String, Object> m : months) {
+                            if (billingPeriod.trim().equalsIgnoreCase(strVal(m.get("billingMonth")))) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> rec = (Map<String, Object>) m.get("record");
+                                if (rec != null) { target = rec; break; }
+                            }
+                        }
+                    }
+                    if (target == null) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> rec = (Map<String, Object>) months.get(0).get("record");
+                        if (rec != null) target = rec;
+                    }
+                }
+            } catch (Exception ignored) {}
         }
         if (target == null) {
             throw new IllegalArgumentException("Customer record not found for account: " + accountNo);
@@ -1059,7 +1126,7 @@ public class PaymentControlService {
 
         if (targetSnapshot == null || targetIndex == -1 || snapshotData == null) {
             // Find the snapshot containing this customer
-            List<MonthlyDirectorySnapshot> snapshots = getApprovedSnapshots(billingPeriod, null);
+            List<MonthlyDirectorySnapshot> snapshots = getSnapshots(billingPeriod, null);
             for (MonthlyDirectorySnapshot snap : snapshots) {
                 if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
                     List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
@@ -1145,7 +1212,7 @@ public class PaymentControlService {
     @Transactional
     public Map<String, Object> togglePaymentHold(String accountNo, String billingPeriod, boolean hold,
                                                 String reason, String username) throws Exception {
-        List<MonthlyDirectorySnapshot> snapshots = getApprovedSnapshots(billingPeriod, null);
+        List<MonthlyDirectorySnapshot> snapshots = getSnapshots(billingPeriod, null);
         for (MonthlyDirectorySnapshot snap : snapshots) {
             if (snap.getFinalDataJson() != null) {
                 List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
@@ -1404,10 +1471,16 @@ public class PaymentControlService {
 
     // ── Canonical Data Loader ─────────────────────────────────────────────
     public List<Map<String, Object>> loadCanonicalRecords(String billingPeriod, String division) {
-        List<MonthlyDirectorySnapshot> snapshots = getApprovedSnapshots(billingPeriod, division);
+        String bp = billingPeriod != null ? billingPeriod.trim() : "";
+        String divFilter = division != null ? division.trim() : "";
+        boolean hasBp = !bp.isEmpty() && !"ALL".equalsIgnoreCase(bp);
+        boolean hasDiv = !divFilter.isEmpty() && !"ALL".equalsIgnoreCase(divFilter);
+
+        List<MonthlyDirectorySnapshot> snapshots = getSnapshots(bp, divFilter);
         List<Map<String, Object>> result = new ArrayList<>();
         Set<String> seenRecords = new HashSet<>();
 
+        // 1. Process month-wise directory snapshots
         for (MonthlyDirectorySnapshot snap : snapshots) {
             if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
                 try {
@@ -1415,13 +1488,39 @@ public class PaymentControlService {
                     for (Map<String, Object> rec : list) {
                         String acc = strVal(rec.get("accountNo"));
                         if (acc.isEmpty()) continue;
-                        String bMonth = snap.getBillingMonth() != null ? snap.getBillingMonth() : strVal(rec.get("billingMonth"));
-                        String key = acc + "::" + (bMonth.isEmpty() ? "CURRENT" : bMonth);
+                        String bMonth = snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()
+                                ? snap.getBillingMonth().trim() : strVal(rec.get("billingMonth"));
+                        if (bMonth.isEmpty()) {
+                            bMonth = snap.getDatasetName() != null && !snap.getDatasetName().trim().isEmpty() ? snap.getDatasetName().trim() : "CURRENT";
+                        }
+                        String snapDiv = snap.getDivision() != null && !snap.getDivision().trim().isEmpty()
+                                ? snap.getDivision().trim() : strVal(rec.get("division"));
+                        if (snapDiv.isEmpty()) {
+                            snapDiv = strVal(rec.get("branchCode"));
+                        }
+
+                        // Filter by billingPeriod if specified
+                        if (hasBp && !bp.equalsIgnoreCase(bMonth)) {
+                            continue;
+                        }
+                        // Filter by division if specified
+                        if (hasDiv && !divFilter.equalsIgnoreCase(snapDiv)) {
+                            continue;
+                        }
+
+                        String key = acc + "::" + bMonth;
                         if (seenRecords.contains(key)) continue;
                         seenRecords.add(key);
-                        rec.put("billingMonth", !bMonth.isEmpty() ? bMonth : (snap.getDatasetName() != null ? snap.getDatasetName() : "CURRENT"));
-                        if (snap.getDivision() != null && !rec.containsKey("division")) {
-                            rec.put("division", snap.getDivision());
+
+                        rec.put("billingMonth", bMonth);
+                        if (!snapDiv.isEmpty()) {
+                            rec.put("division", snapDiv);
+                        }
+                        if (snap.getId() != null) {
+                            rec.put("snapshotId", snap.getId());
+                        }
+                        if (snap.getDatasetName() != null) {
+                            rec.put("datasetName", snap.getDatasetName());
                         }
                         if (!rec.containsKey("billingPeriod") || strVal(rec.get("billingPeriod")).isEmpty()) {
                             Object bFrom = rec.get("fromDate") != null ? rec.get("fromDate") : (rec.get("billingFrom") != null ? rec.get("billingFrom") : rec.get("periodFrom"));
@@ -1429,7 +1528,7 @@ public class PaymentControlService {
                             if (bFrom != null && bTo != null) {
                                 rec.put("billingPeriod", bFrom + " to " + bTo);
                             } else {
-                                rec.put("billingPeriod", rec.get("billingMonth"));
+                                rec.put("billingPeriod", bMonth);
                             }
                         }
                         result.add(rec);
@@ -1439,24 +1538,157 @@ public class PaymentControlService {
                 }
             }
         }
+
+        // 2. Process customerRepository (Customer 360 source of truth) for any directory records
+        if (customerRepository != null) {
+            try {
+                List<Customer> allCusts = customerRepository.findAll();
+                for (Customer c : allCusts) {
+                    if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                        try {
+                            Map<String, Object> dirRec = objectMapper.readValue(c.getDirectoryJson(), new TypeReference<Map<String, Object>>() {});
+                            String acc = strVal(dirRec.get("accountNo"));
+                            if (acc.isEmpty()) acc = c.getAccountNo();
+                            if (acc.isEmpty()) continue;
+
+                            String bMonth = strVal(dirRec.get("billingMonth"));
+                            if (bMonth.isEmpty()) {
+                                bMonth = "February 2026";
+                            }
+
+                            String div = strVal(dirRec.get("division"));
+                            if (div.isEmpty()) {
+                                div = c.getDivision() != null && !c.getDivision().trim().isEmpty() ? c.getDivision().trim() : (c.getBranchCode() != null ? c.getBranchCode().trim() : "");
+                            }
+
+                            // Filter by billingPeriod if specified
+                            if (hasBp && !bp.equalsIgnoreCase(bMonth)) {
+                                continue;
+                            }
+                            // Filter by division if specified
+                            if (hasDiv && !divFilter.equalsIgnoreCase(div) && (c.getBranchCode() == null || !divFilter.equalsIgnoreCase(c.getBranchCode()))) {
+                                continue;
+                            }
+
+                            String key = acc + "::" + bMonth;
+                            if (seenRecords.contains(key)) continue;
+                            seenRecords.add(key);
+
+                            dirRec.put("accountNo", acc);
+                            dirRec.put("billingMonth", bMonth);
+                            if (!div.isEmpty()) {
+                                dirRec.put("division", div);
+                            }
+                            if (!dirRec.containsKey("customerName") || strVal(dirRec.get("customerName")).isEmpty()) {
+                                if (c.getCustomerName() != null) dirRec.put("customerName", c.getCustomerName());
+                            }
+                            if (!dirRec.containsKey("customerAddress") || strVal(dirRec.get("customerAddress")).isEmpty()) {
+                                if (c.getCustomerAddress() != null) dirRec.put("customerAddress", c.getCustomerAddress());
+                            }
+                            if (!dirRec.containsKey("mobileNo") || strVal(dirRec.get("mobileNo")).isEmpty()) {
+                                if (c.getMobileNo() != null) dirRec.put("mobileNo", c.getMobileNo());
+                            }
+                            if (!dirRec.containsKey("bankCode") || strVal(dirRec.get("bankCode")).isEmpty()) {
+                                if (c.getBankCode() != null) dirRec.put("bankCode", c.getBankCode());
+                            }
+                            if (!dirRec.containsKey("branchCode") || strVal(dirRec.get("branchCode")).isEmpty()) {
+                                if (c.getBranchCode() != null) dirRec.put("branchCode", c.getBranchCode());
+                            }
+                            if (!dirRec.containsKey("bankAccountNo") || strVal(dirRec.get("bankAccountNo")).isEmpty()) {
+                                if (c.getBankAccountNo() != null) dirRec.put("bankAccountNo", c.getBankAccountNo());
+                            }
+                            if (!dirRec.containsKey("solarType") || strVal(dirRec.get("solarType")).isEmpty()) {
+                                if (c.getSolarType() != null) dirRec.put("solarType", c.getSolarType());
+                            }
+                            if (!dirRec.containsKey("unitRate") || dirRec.get("unitRate") == null) {
+                                if (c.getUnitRate() != null) dirRec.put("unitRate", c.getUnitRate());
+                            }
+                            if (!dirRec.containsKey("panelCapacity") || dirRec.get("panelCapacity") == null) {
+                                if (c.getPanelCapacity() != null) dirRec.put("panelCapacity", c.getPanelCapacity());
+                            }
+                            if (!dirRec.containsKey("billingPeriod") || strVal(dirRec.get("billingPeriod")).isEmpty()) {
+                                Object bFrom = dirRec.get("fromDate") != null ? dirRec.get("fromDate") : (dirRec.get("billingFrom") != null ? dirRec.get("billingFrom") : dirRec.get("periodFrom"));
+                                Object bTo = dirRec.get("toDate") != null ? dirRec.get("toDate") : (dirRec.get("billingTo") != null ? dirRec.get("billingTo") : dirRec.get("periodTo"));
+                                if (bFrom != null && bTo != null) {
+                                    dirRec.put("billingPeriod", bFrom + " to " + bTo);
+                                } else {
+                                    dirRec.put("billingPeriod", bMonth);
+                                }
+                            }
+                            result.add(dirRec);
+                        } catch (Exception ignored) {}
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
         return result;
     }
 
-    private List<MonthlyDirectorySnapshot> getApprovedSnapshots(String billingPeriod, String division) {
+    private List<MonthlyDirectorySnapshot> getSnapshots(String billingPeriod, String division) {
+        if (monthlyDirectorySnapshotRepository == null) return Collections.emptyList();
         String bp = billingPeriod != null ? billingPeriod.trim() : "";
         String div = division != null ? division.trim() : "";
         boolean hasBp = !bp.isEmpty() && !"ALL".equalsIgnoreCase(bp);
         boolean hasDiv = !div.isEmpty() && !"ALL".equalsIgnoreCase(div);
 
+        List<MonthlyDirectorySnapshot> snapshots = Collections.emptyList();
         if (hasBp && hasDiv) {
-            return monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, div, "APPROVED");
+            snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, div, "APPROVED");
+            if (snapshots.isEmpty()) {
+                snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(bp, div);
+            }
         } else if (hasBp) {
-            return monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bp, "APPROVED");
+            snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bp, "APPROVED");
+            if (snapshots.isEmpty()) {
+                snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bp);
+            }
         } else if (hasDiv) {
-            return monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(div, "APPROVED");
+            snapshots = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(div, "APPROVED");
+            if (snapshots.isEmpty()) {
+                snapshots = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCase(div);
+            }
         } else {
-            return monthlyDirectorySnapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
+            snapshots = monthlyDirectorySnapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
+            if (snapshots.isEmpty()) {
+                snapshots = monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc();
+            }
         }
+        return snapshots;
+    }
+
+    public List<String> getAvailableBillingMonths() {
+        Set<String> months = new LinkedHashSet<>();
+        if (monthlyDirectorySnapshotRepository != null) {
+            try {
+                List<MonthlyDirectorySnapshot> snaps = monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc();
+                for (MonthlyDirectorySnapshot s : snaps) {
+                    if (s.getBillingMonth() != null && !s.getBillingMonth().trim().isEmpty()) {
+                        months.add(s.getBillingMonth().trim());
+                    } else if (s.getDatasetName() != null && !s.getDatasetName().trim().isEmpty()) {
+                        months.add(s.getDatasetName().trim());
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (customerRepository != null) {
+            try {
+                List<Customer> customers = customerRepository.findAll();
+                for (Customer c : customers) {
+                    if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                        try {
+                            Map<String, Object> map = objectMapper.readValue(c.getDirectoryJson(), new TypeReference<Map<String, Object>>() {});
+                            String bm = strVal(map.get("billingMonth"));
+                            if (!bm.isEmpty()) months.add(bm);
+                        } catch (Exception ignored) {}
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        if (months.isEmpty()) {
+            months.add("February 2026");
+        }
+        return new ArrayList<>(months);
     }
 
     private String strVal(Object o) {

@@ -44,7 +44,7 @@ const formatLKR = (val) => {
 
 const PaymentControlCenter = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, authFetch } = useAuth();
   const isAdmin = user?.role === 'ADMIN';
 
   // ── Filters & Navigation State ─────────────────────────────────────
@@ -107,7 +107,7 @@ const PaymentControlCenter = () => {
       if (billingPeriod && billingPeriod !== 'ALL') params.append('billingPeriod', billingPeriod);
       if (division && division !== 'ALL') params.append('division', division);
 
-      const res = await fetch(`/api/payments/summary?${params.toString()}`);
+      const res = await authFetch(`/api/payments/summary?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setSummary(data);
@@ -115,7 +115,7 @@ const PaymentControlCenter = () => {
     } catch (err) {
       console.error('Failed to load canonical summary:', err);
     }
-  }, [billingPeriod, division]);
+  }, [billingPeriod, division, authFetch]);
 
   // ── 2. Load Customers Table (Paginated & Server-filtered) ───────────
   const fetchCustomers = useCallback(async () => {
@@ -143,7 +143,7 @@ const PaymentControlCenter = () => {
       params.append('page', currentPage);
       params.append('size', pageSize);
 
-      const res = await fetch(`/api/payments/customers?${params.toString()}`);
+      const res = await authFetch(`/api/payments/customers?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setCustomersData(data);
@@ -153,12 +153,12 @@ const PaymentControlCenter = () => {
     } finally {
       setLoading(false);
     }
-  }, [billingPeriod, division, activeTab, statusFilter, searchQuery, holdReasonFilter, validationFilter, netTypeFilter, currentPage, pageSize]);
+  }, [billingPeriod, division, activeTab, statusFilter, searchQuery, holdReasonFilter, validationFilter, netTypeFilter, currentPage, pageSize, authFetch]);
 
   // ── 3. Load Batches ────────────────────────────────────────────────
   const fetchBatches = useCallback(async () => {
     try {
-      const res = await fetch('/api/payments/batches');
+      const res = await authFetch('/api/payments/batches');
       if (res.ok) {
         const data = await res.json();
         setBatches(data || []);
@@ -166,12 +166,12 @@ const PaymentControlCenter = () => {
     } catch (err) {
       console.error('Failed to load batches:', err);
     }
-  }, []);
+  }, [authFetch]);
 
   // ── 4. Load History ────────────────────────────────────────────────
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch('/api/payments/history');
+      const res = await authFetch('/api/payments/history');
       if (res.ok) {
         const data = await res.json();
         setHistoryItems(data || []);
@@ -179,13 +179,21 @@ const PaymentControlCenter = () => {
     } catch (err) {
       console.error('Failed to load payment history:', err);
     }
-  }, []);
+  }, [authFetch]);
 
   // ── 5. Load Available Billing Months ───────────────────────────────
   useEffect(() => {
     const loadMonths = async () => {
       try {
-        const res = await fetch('/api/officer/monthly-directory/months');
+        let res = await authFetch('/api/payments/months');
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            setAvailableMonths(list.map(m => typeof m === 'string' ? m : (m.billingMonth || m.name)).filter(Boolean));
+            return;
+          }
+        }
+        res = await authFetch('/api/officer/monthly-directory/months');
         if (res.ok) {
           const list = await res.json();
           if (Array.isArray(list)) {
@@ -197,7 +205,7 @@ const PaymentControlCenter = () => {
       }
     };
     loadMonths();
-  }, []);
+  }, [authFetch]);
 
   // React to filter changes
   useEffect(() => {
@@ -270,7 +278,7 @@ const PaymentControlCenter = () => {
       const bp = rowBillingMonth || billingPeriod;
       const params = new URLSearchParams();
       if (bp && bp !== 'ALL') params.append('billingPeriod', bp);
-      const res = await fetch(`/api/payments/customers/${accountNo}?${params.toString()}`);
+      const res = await authFetch(`/api/payments/customers/${accountNo}?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setSelectedCustomerDetails(data);
@@ -306,7 +314,7 @@ const PaymentControlCenter = () => {
       const params = new URLSearchParams();
       if (bp && bp !== 'ALL') params.append('billingPeriod', bp);
 
-      const res = await fetch(`/api/payments/customers/${acc}/correct?${params.toString()}`, {
+      const res = await authFetch(`/api/payments/customers/${acc}/correct?${params.toString()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(correctionForm)
@@ -340,7 +348,7 @@ const PaymentControlCenter = () => {
       params.append('hold', String(!currentHold));
       if (reason) params.append('reason', reason);
 
-      const res = await fetch(`/api/payments/customers/${accountNo}/toggle-hold?${params.toString()}`, {
+      const res = await authFetch(`/api/payments/customers/${accountNo}/toggle-hold?${params.toString()}`, {
         method: 'POST'
       });
       const data = await res.json();
@@ -374,7 +382,7 @@ const PaymentControlCenter = () => {
         return;
       }
 
-      const res = await fetch('/api/payments/batches', {
+      const res = await authFetch('/api/payments/batches', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -411,7 +419,7 @@ const PaymentControlCenter = () => {
 
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/payments/batches/${batchId}/transition`, {
+      const res = await authFetch(`/api/payments/batches/${batchId}/transition`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, reason })
@@ -434,7 +442,7 @@ const PaymentControlCenter = () => {
   const openBatchDetails = async (batchId) => {
     setActionLoading(true);
     try {
-      const res = await fetch(`/api/payments/batches/${batchId}`);
+      const res = await authFetch(`/api/payments/batches/${batchId}`);
       if (res.ok) {
         const data = await res.json();
         setSelectedBatchDetails(data);

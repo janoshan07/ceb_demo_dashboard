@@ -42,6 +42,20 @@ public class PaymentControlController {
     }
 
     /**
+     * Available Billing Months for Month-Wise Payment Control.
+     */
+    @GetMapping("/months")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getAvailableMonths() {
+        try {
+            return ResponseEntity.ok(paymentControlService.getAvailableBillingMonths());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(new MessageResponse("Failed to load billing months: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Evaluated Customer Directory for Payment Control:
      * Returns READY / ON_HOLD / REVIEW customers with server-side pagination, search, and category filter.
      */

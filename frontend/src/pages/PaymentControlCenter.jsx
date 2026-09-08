@@ -94,6 +94,8 @@ const PaymentControlCenter = () => {
   const [batchReviewModalOpen, setBatchReviewModalOpen] = useState(false);
   const [selectedBatchDetails, setSelectedBatchDetails] = useState(null);
   const [batchDetailsModalOpen, setBatchDetailsModalOpen] = useState(false);
+  const [summaryModalCard, setSummaryModalCard] = useState(null);
+  const [hoveredCard, setHoveredCard] = useState(null);
 
   const showToast = (msg, type = 'success') => {
     setToastMessage({ msg, type });
@@ -595,128 +597,254 @@ const PaymentControlCenter = () => {
         marginBottom: '1.75rem'
       }}>
         {/* Card 1: Total Customers */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(17, 24, 39, 0.8))',
-          border: '1px solid rgba(59, 130, 246, 0.25)',
-          borderRadius: '12px',
-          padding: '1.15rem 1.35rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#60a5fa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Total Customers
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('TOTAL_CUSTOMERS')}
+          onMouseEnter={() => setHoveredCard('TOTAL_CUSTOMERS')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'TOTAL_CUSTOMERS'
+              ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(17, 24, 39, 0.95))'
+              : 'linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(17, 24, 39, 0.8))',
+            border: hoveredCard === 'TOTAL_CUSTOMERS' ? '1px solid rgba(59, 130, 246, 0.65)' : '1px solid rgba(59, 130, 246, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'TOTAL_CUSTOMERS' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'TOTAL_CUSTOMERS' ? '0 10px 24px -4px rgba(59, 130, 246, 0.28)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#60a5fa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Total Customers
+              </span>
+              <User size={18} style={{ color: '#3b82f6' }} />
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+              {(summary.totalCustomers || summary.customerCount || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total canonical producers</span>
+            <span style={{ fontSize: '0.72rem', color: '#60a5fa', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_CUSTOMERS' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
             </span>
-            <User size={18} style={{ color: '#3b82f6' }} />
-          </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
-            {(summary.totalCustomers || summary.customerCount || 0).toLocaleString()}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Total canonical producers
           </div>
         </div>
 
         {/* Card 2: Payment Ready */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(17, 24, 39, 0.8))',
-          border: '1px solid rgba(16, 185, 129, 0.25)',
-          borderRadius: '12px',
-          padding: '1.15rem 1.35rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Payment Ready
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('PAYMENT_READY')}
+          onMouseEnter={() => setHoveredCard('PAYMENT_READY')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'PAYMENT_READY'
+              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(17, 24, 39, 0.95))'
+              : 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(17, 24, 39, 0.8))',
+            border: hoveredCard === 'PAYMENT_READY' ? '1px solid rgba(16, 185, 129, 0.65)' : '1px solid rgba(16, 185, 129, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'PAYMENT_READY' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'PAYMENT_READY' ? '0 10px 24px -4px rgba(16, 185, 129, 0.28)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Payment Ready
+              </span>
+              <CheckCircle2 size={18} style={{ color: '#10b981' }} />
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+              {(summary.paymentReadyCount || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Verified eligible for disbursement</span>
+            <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_READY' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
             </span>
-            <CheckCircle2 size={18} style={{ color: '#10b981' }} />
-          </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
-            {(summary.paymentReadyCount || 0).toLocaleString()}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Verified eligible for disbursement
           </div>
         </div>
 
         {/* Card 3: Payment On Hold */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(17, 24, 39, 0.8))',
-          border: '1px solid rgba(245, 158, 11, 0.25)',
-          borderRadius: '12px',
-          padding: '1.15rem 1.35rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Payment On Hold
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('PAYMENT_ON_HOLD')}
+          onMouseEnter={() => setHoveredCard('PAYMENT_ON_HOLD')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'PAYMENT_ON_HOLD'
+              ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(17, 24, 39, 0.95))'
+              : 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(17, 24, 39, 0.8))',
+            border: hoveredCard === 'PAYMENT_ON_HOLD' ? '1px solid rgba(245, 158, 11, 0.65)' : '1px solid rgba(245, 158, 11, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'PAYMENT_ON_HOLD' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'PAYMENT_ON_HOLD' ? '0 10px 24px -4px rgba(245, 158, 11, 0.28)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Payment On Hold
+              </span>
+              <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+              {(summary.onHoldCount || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Withheld by blocking validations</span>
+            <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_ON_HOLD' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
             </span>
-            <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
-          </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
-            {(summary.onHoldCount || 0).toLocaleString()}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Withheld by blocking validations
           </div>
         </div>
 
         {/* Card 4: Requires Review */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(17, 24, 39, 0.8))',
-          border: '1px solid rgba(168, 85, 247, 0.25)',
-          borderRadius: '12px',
-          padding: '1.15rem 1.35rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Requires Review
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('REQUIRES_REVIEW')}
+          onMouseEnter={() => setHoveredCard('REQUIRES_REVIEW')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'REQUIRES_REVIEW'
+              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(17, 24, 39, 0.95))'
+              : 'linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(17, 24, 39, 0.8))',
+            border: hoveredCard === 'REQUIRES_REVIEW' ? '1px solid rgba(168, 85, 247, 0.65)' : '1px solid rgba(168, 85, 247, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'REQUIRES_REVIEW' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'REQUIRES_REVIEW' ? '0 10px 24px -4px rgba(168, 85, 247, 0.28)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Requires Review
+              </span>
+              <Clock size={18} style={{ color: '#a855f7' }} />
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+              {(summary.reviewCount || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Duplicate / audit flag</span>
+            <span style={{ fontSize: '0.72rem', color: '#c084fc', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'REQUIRES_REVIEW' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
             </span>
-            <Clock size={18} style={{ color: '#a855f7' }} />
-          </div>
-          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
-            {(summary.reviewCount || 0).toLocaleString()}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Duplicate / audit flag
           </div>
         </div>
 
         {/* Card 5: Total Payable */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(17, 24, 39, 0.8))',
-          border: '1px solid rgba(6, 182, 212, 0.25)',
-          borderRadius: '12px',
-          padding: '1.15rem 1.35rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Total Payable
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('TOTAL_PAYABLE')}
+          onMouseEnter={() => setHoveredCard('TOTAL_PAYABLE')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'TOTAL_PAYABLE'
+              ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.22), rgba(17, 24, 39, 0.95))'
+              : 'linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(17, 24, 39, 0.8))',
+            border: hoveredCard === 'TOTAL_PAYABLE' ? '1px solid rgba(6, 182, 212, 0.65)' : '1px solid rgba(6, 182, 212, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'TOTAL_PAYABLE' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'TOTAL_PAYABLE' ? '0 10px 24px -4px rgba(6, 182, 212, 0.28)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Total Payable
+              </span>
+              <DollarSign size={18} style={{ color: '#06b6d4' }} />
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {formatLKR(summary.totalPayable)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Ready settlement balance</span>
+            <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_PAYABLE' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
             </span>
-            <DollarSign size={18} style={{ color: '#06b6d4' }} />
-          </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {formatLKR(summary.totalPayable)}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Ready settlement balance
           </div>
         </div>
 
         {/* Card 6: Total On Hold */}
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(17, 24, 39, 0.8))',
-          border: '1px solid rgba(239, 68, 68, 0.25)',
-          borderRadius: '12px',
-          padding: '1.15rem 1.35rem'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-            <span style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Total On Hold
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('TOTAL_ON_HOLD')}
+          onMouseEnter={() => setHoveredCard('TOTAL_ON_HOLD')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'TOTAL_ON_HOLD'
+              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(17, 24, 39, 0.95))'
+              : 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(17, 24, 39, 0.8))',
+            border: hoveredCard === 'TOTAL_ON_HOLD' ? '1px solid rgba(239, 68, 68, 0.65)' : '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'TOTAL_ON_HOLD' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'TOTAL_ON_HOLD' ? '0 10px 24px -4px rgba(239, 68, 68, 0.28)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Total On Hold
+              </span>
+              <Lock size={18} style={{ color: '#ef4444' }} />
+            </div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f87171', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {formatLKR(summary.totalOnHold)}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Pending resolution</span>
+            <span style={{ fontSize: '0.72rem', color: '#f87171', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_ON_HOLD' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
             </span>
-            <Lock size={18} style={{ color: '#ef4444' }} />
-          </div>
-          <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f87171', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {formatLKR(summary.totalOnHold)}
-          </div>
-          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-            Pending resolution
           </div>
         </div>
       </div>
@@ -2679,6 +2807,524 @@ const PaymentControlCenter = () => {
           </div>
         </div>
       )}
+
+      {/* ── 10. SUMMARY CARD DETAILS MODAL POPUP ─────────────────────── */}
+      {summaryModalCard && (() => {
+        const getModalCardConfig = (cardKey) => {
+          switch (cardKey) {
+            case 'TOTAL_CUSTOMERS':
+              return {
+                title: 'Total Customers Overview',
+                icon: <User size={22} style={{ color: '#3b82f6' }} />,
+                color: '#3b82f6',
+                gradient: 'linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(59, 130, 246, 0.15)',
+                badgeText: '#60a5fa',
+                badgeBorder: 'rgba(59, 130, 246, 0.3)',
+                stat: (summary.totalCustomers || summary.customerCount || 0).toLocaleString(),
+                statLabel: 'Total Canonical Solar Producers',
+                description: 'Complete directory of registered solar producers across the selected billing period and division scope. This count represents the complete backend dataset invariant of local filters.',
+                filterTab: 'ALL',
+                filterTabLabel: 'View All in Table',
+                metrics: [
+                  { label: 'Payment Ready', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
+                  { label: 'Payment On Hold', value: (summary.onHoldCount || 0).toLocaleString(), color: '#f59e0b' },
+                  { label: 'Requires Review', value: (summary.reviewCount || 0).toLocaleString(), color: '#c084fc' },
+                  { label: 'Total Ready Payable', value: formatLKR(summary.totalPayable), color: '#38bdf8' },
+                  { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#f87171' }
+                ],
+                filterPredicate: () => true
+              };
+
+            case 'PAYMENT_READY':
+              return {
+                title: 'Payment Ready Verification',
+                icon: <CheckCircle2 size={22} style={{ color: '#10b981' }} />,
+                color: '#10b981',
+                gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(16, 185, 129, 0.15)',
+                badgeText: '#34d399',
+                badgeBorder: 'rgba(16, 185, 129, 0.3)',
+                stat: (summary.paymentReadyCount || 0).toLocaleString(),
+                statLabel: 'Verified Eligible for Disbursement',
+                description: 'Producers who have passed all 11 backend verification and banking integrity checks. These records are verified, free of payment holds, and ready for payment batch bundling.',
+                filterTab: 'READY',
+                filterTabLabel: 'View Payment Ready Tab',
+                metrics: [
+                  { label: 'Ready Producers', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
+                  { label: 'Ready Total Payable', value: formatLKR(summary.totalPayable), color: '#34d399' },
+                  { label: 'Verification Gates', value: '11 of 11 Passed', color: '#60a5fa' },
+                  { label: 'Batch Eligibility', value: 'Eligible for Batch Creation', color: '#10b981' }
+                ],
+                filterPredicate: (c) => c.paymentStatus === 'READY' || c.isEligible
+              };
+
+            case 'PAYMENT_ON_HOLD':
+              return {
+                title: 'Payment On Hold Diagnostics',
+                icon: <AlertTriangle size={22} style={{ color: '#f59e0b' }} />,
+                color: '#f59e0b',
+                gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(245, 158, 11, 0.15)',
+                badgeText: '#fbbf24',
+                badgeBorder: 'rgba(245, 158, 11, 0.3)',
+                stat: (summary.onHoldCount || 0).toLocaleString(),
+                statLabel: 'Withheld by Blocking Validations',
+                description: 'Producers temporarily prevented from receiving disbursement due to active payment holds, missing bank or identity information, negative net calculations, or validation errors.',
+                filterTab: 'ON_HOLD',
+                filterTabLabel: 'View On Hold Tab',
+                metrics: [
+                  { label: 'On Hold Producers', value: (summary.onHoldCount || 0).toLocaleString(), color: '#f59e0b' },
+                  { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#f87171' },
+                  { label: 'Primary Blockers', value: 'Holds & Missing Details', color: '#fbbf24' },
+                  { label: 'Resolution Path', value: 'Customer 360 / Edit Details', color: '#38bdf8' }
+                ],
+                filterPredicate: (c) => c.paymentStatus === 'ON_HOLD' || (c.holdReasons && c.holdReasons.length > 0)
+              };
+
+            case 'REQUIRES_REVIEW':
+              return {
+                title: 'Requires Review Audit Queue',
+                icon: <Clock size={22} style={{ color: '#a855f7' }} />,
+                color: '#a855f7',
+                gradient: 'linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(168, 85, 247, 0.15)',
+                badgeText: '#c084fc',
+                badgeBorder: 'rgba(168, 85, 247, 0.3)',
+                stat: (summary.reviewCount || 0).toLocaleString(),
+                statLabel: 'Pending Officer Investigation',
+                description: 'Producers flagged with multi-source billing discrepancies, duplicate records, or pending supervisory batch review requiring official confirmation.',
+                filterTab: 'REVIEW',
+                filterTabLabel: 'View Requires Review Tab',
+                metrics: [
+                  { label: 'Flagged Records', value: (summary.reviewCount || 0).toLocaleString(), color: '#a855f7' },
+                  { label: 'Review Categories', value: 'Duplicate Sources / Batches', color: '#c084fc' },
+                  { label: 'Under Review Batches', value: batches.filter(b => b.status === 'UNDER_REVIEW' || b.status === 'SUBMITTED').length, color: '#fbbf24' },
+                  { label: 'Audit Gateway', value: 'Supervisor Action Required', color: '#60a5fa' }
+                ],
+                filterPredicate: (c) => c.paymentStatus === 'REVIEW'
+              };
+
+            case 'TOTAL_PAYABLE':
+              return {
+                title: 'Total Ready Payable Balance',
+                icon: <DollarSign size={22} style={{ color: '#06b6d4' }} />,
+                color: '#06b6d4',
+                gradient: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(6, 182, 212, 0.15)',
+                badgeText: '#38bdf8',
+                badgeBorder: 'rgba(6, 182, 212, 0.3)',
+                stat: formatLKR(summary.totalPayable),
+                statLabel: 'Net Approved Settlement Capital',
+                description: 'Aggregated net settlement amount payable to verified ready producers. Calculated as: kWh Energy Purchase / Sales Amount minus Bill Set-Off and Retention Money.',
+                filterTab: 'READY',
+                filterTabLabel: 'View Ready Accounts in Table',
+                metrics: [
+                  { label: 'Ready Payable', value: formatLKR(summary.totalPayable), color: '#38bdf8' },
+                  { label: 'Eligible Payees', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
+                  { label: 'Formula Enforced', value: 'kWh Sales − SetOff − Retention', color: '#fbbf24' },
+                  { label: 'Disbursement Status', value: 'Available for Batching', color: '#34d399' }
+                ],
+                filterPredicate: (c) => (c.totalPayable != null && c.totalPayable > 0) || c.paymentStatus === 'READY'
+              };
+
+            case 'TOTAL_ON_HOLD':
+              return {
+                title: 'Total Withheld / On Hold Balance',
+                icon: <Lock size={22} style={{ color: '#ef4444' }} />,
+                color: '#ef4444',
+                gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(239, 68, 68, 0.15)',
+                badgeText: '#f87171',
+                badgeBorder: 'rgba(239, 68, 68, 0.3)',
+                stat: formatLKR(summary.totalOnHold),
+                statLabel: 'Withheld Financial Liability',
+                description: 'Aggregate value of payments currently held or pending review due to active hold triggers, identity mismatches, or missing details awaiting verification.',
+                filterTab: 'ON_HOLD',
+                filterTabLabel: 'View On Hold Accounts in Table',
+                metrics: [
+                  { label: 'Withheld Total', value: formatLKR(summary.totalOnHold), color: '#f87171' },
+                  { label: 'Withheld Producers', value: ((summary.onHoldCount || 0) + (summary.reviewCount || 0)).toLocaleString(), color: '#fbbf24' },
+                  { label: 'Disbursement Guard', value: 'Strictly Locked', color: '#ef4444' },
+                  { label: 'Release Trigger', value: 'Pass Validation Criteria', color: '#38bdf8' }
+                ],
+                filterPredicate: (c) => c.paymentStatus === 'ON_HOLD' || c.paymentStatus === 'REVIEW' || (c.holdReasons && c.holdReasons.length > 0)
+              };
+
+            default:
+              return null;
+          }
+        };
+
+        const modalConfig = getModalCardConfig(summaryModalCard);
+        if (!modalConfig) return null;
+
+        const relevantRecords = customersData.content.filter(modalConfig.filterPredicate);
+
+        return (
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              background: 'rgba(0, 0, 0, 0.82)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 99999,
+              padding: '1.5rem'
+            }}
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setSummaryModalCard(null);
+            }}
+          >
+            <div style={{
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '880px',
+              maxHeight: '88vh',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.8)'
+            }}>
+              {/* Modal Header */}
+              <div style={{
+                padding: '1.25rem 1.75rem',
+                borderBottom: '1px solid var(--border-color)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(0,0,0,0.2)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '10px',
+                    background: modalConfig.badgeColor,
+                    border: `1px solid ${modalConfig.badgeBorder}`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    {modalConfig.icon}
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                        {modalConfig.title}
+                      </h3>
+                      <span style={{
+                        padding: '0.15rem 0.6rem',
+                        borderRadius: '999px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        background: modalConfig.badgeColor,
+                        color: modalConfig.badgeText,
+                        border: `1px solid ${modalConfig.badgeBorder}`
+                      }}>
+                        Summary Breakdown
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                      Scope: <strong style={{ color: '#38bdf8' }}>{billingPeriod === 'ALL' ? 'All Months' : billingPeriod}</strong> • Division: <strong style={{ color: '#38bdf8' }}>{division}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => setSummaryModalCard(null)}
+                  className="btn"
+                  title="Close modal"
+                  style={{
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid var(--border-color)',
+                    color: 'var(--text-muted)',
+                    borderRadius: '8px',
+                    width: '36px',
+                    height: '36px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Modal Body (Scrollable) */}
+              <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.35rem' }}>
+                {/* Hero Stat & Description Banner */}
+                <div style={{
+                  background: modalConfig.gradient,
+                  border: `1px solid ${modalConfig.badgeBorder}`,
+                  borderRadius: '12px',
+                  padding: '1.25rem 1.5rem',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '1rem'
+                }}>
+                  <div>
+                    <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: modalConfig.badgeText, fontWeight: 700 }}>
+                      {modalConfig.statLabel}
+                    </span>
+                    <div style={{ fontSize: '2.1rem', fontWeight: 900, color: '#f3f4f6', marginTop: '0.2rem', letterSpacing: '-0.02em' }}>
+                      {modalConfig.stat}
+                    </div>
+                    <div style={{ fontSize: '0.85rem', color: 'rgba(243, 244, 246, 0.85)', marginTop: '0.4rem', maxWidth: '620px', lineHeight: '1.45' }}>
+                      {modalConfig.description}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Key Metrics Grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                  gap: '0.85rem'
+                }}>
+                  {modalConfig.metrics.map((m, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '0.9rem 1.1rem'
+                      }}
+                    >
+                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
+                        {m.label}
+                      </div>
+                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: m.color, marginTop: '0.25rem' }}>
+                        {m.value}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Relevant Customer Records Section */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <FileText size={16} style={{ color: '#38bdf8' }} />
+                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        Relevant Customer Records ({relevantRecords.length} on current page)
+                      </h4>
+                    </div>
+                    {customersData.totalElements > 0 && (
+                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                        From {customersData.totalElements.toLocaleString()} loaded producers
+                      </span>
+                    )}
+                  </div>
+
+                  {relevantRecords.length === 0 ? (
+                    <div style={{
+                      background: 'rgba(0,0,0,0.2)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '2.2rem 1.5rem',
+                      textAlign: 'center',
+                      color: 'var(--text-muted)'
+                    }}>
+                      <SlidersHorizontal size={32} style={{ margin: '0 auto 0.6rem', opacity: 0.35 }} />
+                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                        No records on the current page match this specific category
+                      </div>
+                      <div style={{ fontSize: '0.8rem', marginTop: '0.35rem', maxWidth: '480px', margin: '0.35rem auto 0' }}>
+                        The canonical count above reflects the complete dataset. Click below to switch the main table tab to view all matching records.
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: 'rgba(0,0,0,0.2)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                          <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
+                            <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                              <th style={{ padding: '0.65rem 0.85rem' }}>Account No</th>
+                              <th style={{ padding: '0.65rem 0.85rem' }}>Customer Name</th>
+                              <th style={{ padding: '0.65rem 0.85rem' }}>Solar Type</th>
+                              <th style={{ padding: '0.65rem 0.85rem' }}>Location</th>
+                              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Total Payable</th>
+                              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Status</th>
+                              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {relevantRecords.map((c, i) => {
+                              const isReady = c.paymentStatus === 'READY' || c.isEligible;
+                              const isHold = c.paymentStatus === 'ON_HOLD';
+                              const isRev = c.paymentStatus === 'REVIEW';
+
+                              let badgeBg = 'rgba(255,255,255,0.06)';
+                              let badgeColor = 'var(--text-secondary)';
+                              let badgeBorder = 'var(--border-color)';
+                              if (isReady) {
+                                badgeBg = 'rgba(16, 185, 129, 0.15)';
+                                badgeColor = '#34d399';
+                                badgeBorder = 'rgba(16, 185, 129, 0.3)';
+                              } else if (isHold) {
+                                badgeBg = 'rgba(245, 158, 11, 0.15)';
+                                badgeColor = '#fbbf24';
+                                badgeBorder = 'rgba(245, 158, 11, 0.3)';
+                              } else if (isRev) {
+                                badgeBg = 'rgba(168, 85, 247, 0.15)';
+                                badgeColor = '#c084fc';
+                                badgeBorder = 'rgba(168, 85, 247, 0.3)';
+                              }
+
+                              return (
+                                <tr
+                                  key={c.accountNo || i}
+                                  style={{
+                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                    transition: 'background 0.15s ease'
+                                  }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                >
+                                  <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>
+                                    {c.accountNo}
+                                  </td>
+                                  <td style={{ padding: '0.55rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {c.customerName || '—'}
+                                  </td>
+                                  <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                    {c.solarType || '—'}
+                                  </td>
+                                  <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                    {c.division || c.branchCode || '—'}
+                                  </td>
+                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: isReady ? '#10b981' : (isHold ? '#f59e0b' : 'var(--text-primary)') }}>
+                                    {formatLKR(c.totalPayable)}
+                                  </td>
+                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'center' }}>
+                                    <span style={{
+                                      padding: '0.15rem 0.5rem',
+                                      borderRadius: '4px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      background: badgeBg,
+                                      color: badgeColor,
+                                      border: `1px solid ${badgeBorder}`
+                                    }}>
+                                      {c.paymentStatus || 'ON_HOLD'}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right' }}>
+                                    <button
+                                      onClick={() => {
+                                        setSummaryModalCard(null);
+                                        openCustomerDetails(c.accountNo, c.billingMonth);
+                                      }}
+                                      title="Inspect payment dossier"
+                                      style={{
+                                        background: 'rgba(56, 189, 248, 0.12)',
+                                        border: '1px solid rgba(56, 189, 248, 0.25)',
+                                        color: '#38bdf8',
+                                        padding: '0.25rem 0.55rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.72rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '0.25rem'
+                                      }}
+                                    >
+                                      <Eye size={12} />
+                                      <span>Inspect</span>
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Modal Footer */}
+              <div style={{
+                padding: '1rem 1.75rem',
+                borderTop: '1px solid var(--border-color)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(0,0,0,0.2)'
+              }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Canonical Metric: <strong style={{ color: modalConfig.badgeText }}>{modalConfig.stat}</strong>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {modalConfig.filterTab && (
+                    <button
+                      onClick={() => {
+                        setActiveTab(modalConfig.filterTab);
+                        setCurrentPage(0);
+                        setSummaryModalCard(null);
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.35rem'
+                      }}
+                    >
+                      <Filter size={13} />
+                      <span>{modalConfig.filterTabLabel}</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => setSummaryModalCard(null)}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      padding: '0.5rem 1.25rem',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.82rem',
+                      fontWeight: 600
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

@@ -118,6 +118,56 @@ public class CustomerController {
         return null;
     }
 
+    public static String resolveLocation(Map<String, Object> dto) {
+        if (dto == null) return "";
+        Object divObj = dto.get("division");
+        if (divObj != null && !divObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(divObj.toString().trim())) {
+            return divObj.toString().trim();
+        }
+        Object branchObj = dto.get("branchCode");
+        if (branchObj != null && !branchObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(branchObj.toString().trim())) {
+            return branchObj.toString().trim();
+        }
+        Object dirObj = dto.get("directory");
+        if (dirObj instanceof Map) {
+            Map<?, ?> dir = (Map<?, ?>) dirObj;
+            Object dDiv = dir.get("division");
+            if (dDiv != null && !dDiv.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dDiv.toString().trim())) {
+                return dDiv.toString().trim();
+            }
+            Object dLoc = dir.get("location");
+            if (dLoc != null && !dLoc.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dLoc.toString().trim())) {
+                return dLoc.toString().trim();
+            }
+            Object dBranch = dir.get("branchCode");
+            if (dBranch != null && !dBranch.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dBranch.toString().trim())) {
+                return dBranch.toString().trim();
+            }
+            Object dMasterBranch = dir.get("masterBranchCode");
+            if (dMasterBranch != null && !dMasterBranch.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dMasterBranch.toString().trim())) {
+                return dMasterBranch.toString().trim();
+            }
+        }
+        Object accObj = dto.get("accountNo");
+        if (accObj != null) {
+            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accObj.toString().trim());
+            if (detected != null && !detected.trim().isEmpty()) {
+                return detected.trim();
+            }
+        }
+        return "";
+    }
+
+    public static boolean matchesLocation(String customerLoc, String targetLoc) {
+        if (targetLoc == null || targetLoc.trim().isEmpty() || "ALL".equalsIgnoreCase(targetLoc.trim())) {
+            return true;
+        }
+        if (customerLoc == null || customerLoc.trim().isEmpty()) {
+            return false;
+        }
+        return customerLoc.trim().equalsIgnoreCase(targetLoc.trim());
+    }
+
     private Map<String, Object> mapRecordToDto(Map<String, Object> record) {
         Map<String, Object> dto = new LinkedHashMap<>();
         
@@ -191,8 +241,18 @@ public class CustomerController {
         dto.put("validationErrors", record.get("errors"));
         dto.put("directory", record);
         
-        String recDiv = str(record, "division", "location");
-        dto.put("division", recDiv != null ? recDiv : "");
+        String recDiv = str(record, "division", "location", "branchCode", "masterBranchCode");
+        if (recDiv == null || recDiv.trim().isEmpty()) {
+            Object snapDiv = record.get("snapshotDivision");
+            if (snapDiv != null && !snapDiv.toString().trim().isEmpty()) {
+                recDiv = snapDiv.toString().trim();
+            }
+        }
+        if ((recDiv == null || recDiv.trim().isEmpty()) && accountNo != null) {
+            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
+            if (detected != null) recDiv = detected;
+        }
+        dto.put("division", recDiv != null ? recDiv.trim() : "");
         
         List<String> missingFields = new ArrayList<>();
         String name = (String) dto.get("customerName");
@@ -430,9 +490,15 @@ public class CustomerController {
 
             String div = c.getDivision();
             if ((div == null || div.trim().isEmpty()) && dirMap != null) {
-                div = str(dirMap, "division", "location");
+                div = str(dirMap, "division", "location", "branchCode", "masterBranchCode");
             }
-            dto.put("division",        div);
+            if (div == null || div.trim().isEmpty()) {
+                div = c.getBranchCode();
+            }
+            if ((div == null || div.trim().isEmpty()) && c.getAccountNo() != null) {
+                div = com.ceb.billing.utils.BranchDetector.detectBranch(c.getAccountNo().trim());
+            }
+            dto.put("division",        div != null ? div.trim() : "");
             dto.put("directory", directory);
 
             // Compute Completeness (Complete Details vs Missing Details)
@@ -587,11 +653,10 @@ public class CustomerController {
             String loc = (location != null) ? location.trim() : "";
 
             if (isSpecificMonth) {
-                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots;
-                if (loc.isEmpty() || "ALL".equalsIgnoreCase(loc)) {
-                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bmTrim, "APPROVED");
-                } else {
-                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bmTrim, loc, "APPROVED");
+                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots =
+                        monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bmTrim, "APPROVED");
+                if (snapshots.isEmpty()) {
+                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bmTrim);
                 }
 
                 Set<String> seenAccounts = new HashSet<>();
@@ -605,6 +670,9 @@ public class CustomerController {
                                     String acc = str(rec, "accountNo");
                                     if (acc == null || seenAccounts.contains(acc)) {
                                         continue;
+                                    }
+                                    if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
+                                        rec.putIfAbsent("snapshotDivision", snap.getDivision().trim());
                                     }
                                     seenAccounts.add(acc);
                                     rawRecords.add(rec);
@@ -656,11 +724,10 @@ public class CustomerController {
                 
                 String recBillingMonth = isSpecificMonth ? bmTrim : (directory != null && directory.get("billingMonth") != null ? String.valueOf(directory.get("billingMonth")).trim() : null);
 
-                // Apply location filter
+                // Apply location filter strictly by actual location
                 if (!loc.isEmpty() && !"ALL".equalsIgnoreCase(loc)) {
-                    String recDiv = dto.get("division") != null ? String.valueOf(dto.get("division")).trim() : "";
-                    String recBranch = dto.get("branchCode") != null ? String.valueOf(dto.get("branchCode")).trim() : "";
-                    if (!loc.equalsIgnoreCase(recDiv) && !loc.equalsIgnoreCase(recBranch)) {
+                    String custLoc = resolveLocation(dto);
+                    if (!matchesLocation(custLoc, loc)) {
                         continue;
                     }
                 }
@@ -800,11 +867,10 @@ public class CustomerController {
             boolean isSpecificMonth = !bmTrim.isEmpty() && !"ALL".equalsIgnoreCase(bmTrim);
 
             if (isSpecificMonth) {
-                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots;
-                if (loc.isEmpty() || "ALL".equalsIgnoreCase(loc)) {
-                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bmTrim, "APPROVED");
-                } else {
-                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bmTrim, loc, "APPROVED");
+                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots =
+                        monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bmTrim, "APPROVED");
+                if (snapshots.isEmpty()) {
+                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bmTrim);
                 }
 
                 List<Map<String, Object>> rawRecords = new ArrayList<>();
@@ -819,6 +885,9 @@ public class CustomerController {
                                     String acc = str(rec, "accountNo");
                                     if (acc == null || seenAccounts.contains(acc)) {
                                         continue;
+                                    }
+                                    if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
+                                        rec.putIfAbsent("snapshotDivision", snap.getDivision().trim());
                                     }
                                     seenAccounts.add(acc);
                                     rawRecords.add(rec);
@@ -853,10 +922,10 @@ public class CustomerController {
                             }
                         }
 
-                        // Apply location (division)
+                        // Apply location (division) strictly by actual location
                         if (!loc.isEmpty() && !"ALL".equalsIgnoreCase(loc)) {
-                            String recDiv = String.valueOf(dto.get("division"));
-                            if (!recDiv.equalsIgnoreCase(loc)) {
+                            String custLoc = resolveLocation(dto);
+                            if (!matchesLocation(custLoc, loc)) {
                                 continue;
                             }
                         }
@@ -990,11 +1059,12 @@ public class CustomerController {
                 // FALLBACK: Query from Customer repository for "ALL"
                 boolean filterByCompleteness = (completeness != null && !completeness.trim().isEmpty() && !"ALL".equalsIgnoreCase(completeness.trim()))
                         || (agreementStatus != null && !agreementStatus.trim().isEmpty() && !"ALL".equalsIgnoreCase(agreementStatus.trim()))
-                        || (netType != null && !netType.trim().isEmpty() && !"ALL".equalsIgnoreCase(netType.trim()));
+                        || (netType != null && !netType.trim().isEmpty() && !"ALL".equalsIgnoreCase(netType.trim()))
+                        || (!loc.isEmpty() && !"ALL".equalsIgnoreCase(loc));
 
                 Pageable pageable;
                 if (filterByCompleteness || size >= 500) {
-                    pageable = PageRequest.of(0, 2000, Sort.by(dir, sortProp));
+                    pageable = PageRequest.of(0, 5000, Sort.by(dir, sortProp));
                 } else {
                     pageable = PageRequest.of(page, size, Sort.by(dir, sortProp));
                 }
@@ -1008,6 +1078,14 @@ public class CustomerController {
                 for (Customer c : customerPage.getContent()) {
                     try {
                         Map<String, Object> dto = toSafeDto(c);
+                        
+                        // Strict check on resolved location
+                        if (!loc.isEmpty() && !"ALL".equalsIgnoreCase(loc)) {
+                            String custLoc = resolveLocation(dto);
+                            if (!matchesLocation(custLoc, loc)) {
+                                continue;
+                            }
+                        }
                         
                         Object dirObj = dto.get("directory");
                         Map<?, ?> directory = (dirObj instanceof Map) ? (Map<?, ?>) dirObj : null;

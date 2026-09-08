@@ -391,8 +391,8 @@ const CustomerDetails = () => {
       if (selectedBillingMonth && selectedBillingMonth !== 'ALL') {
         params.push(`billingMonth=${encodeURIComponent(selectedBillingMonth)}`);
       }
-      if (locationFilter !== 'ALL') {
-        params.push(`location=${encodeURIComponent(locationFilter)}`);
+      if (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') {
+        params.push(`location=${encodeURIComponent(locationFilter.trim())}`);
       }
       if (params.length > 0) {
         url += `?${params.join('&')}`;
@@ -467,8 +467,8 @@ const CustomerDetails = () => {
       if (statusFilter !== 'ALL') {
         url += `&validationStatus=${statusFilter}`;
       }
-      if (locationFilter !== 'ALL') {
-        url += `&location=${encodeURIComponent(locationFilter)}`;
+      if (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') {
+        url += `&location=${encodeURIComponent(locationFilter.trim())}`;
       }
       if (netTypeFilter !== 'ALL') {
         url += `&netType=${encodeURIComponent(netTypeFilter)}`;
@@ -1680,7 +1680,7 @@ const CustomerDetails = () => {
               Locations:
             </span>
             {['ALL', ...DIRECTORY_DIVISIONS].map((loc) => {
-              const active = locationFilter === loc;
+              const active = (locationFilter || 'ALL').trim().toUpperCase() === loc.trim().toUpperCase();
               return (
                 <button
                   key={loc}
@@ -1783,11 +1783,38 @@ const CustomerDetails = () => {
               </table>
             ) : customers.length === 0 ? (
               <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                <User size={42} style={{ opacity: 0.35, marginBottom: '0.75rem', color: '#818cf8' }} />
-                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white' }}>No Customer Records Found</div>
-                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
-                  The Customer Directory is empty. Records will automatically populate here when new billing data is uploaded and approved by an Admin.
+                <MapPin size={42} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#38bdf8' }} />
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white' }}>
+                  {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
+                    ? `No Customers Found for Location: ${locationFilter}`
+                    : (appliedQuery ? `No Customers Matching "${appliedQuery}"` : 'No Customer Records Found')}
                 </div>
+                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
+                  {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
+                    ? `There are no customer records belonging to "${locationFilter}" under the selected filters.`
+                    : (appliedQuery
+                      ? 'No customer records matched your search query. Try checking for typos or searching by account number.'
+                      : 'The Customer Directory is empty. Records will automatically populate here when new billing data is uploaded and approved by an Admin.')}
+                </div>
+                {(locationFilter !== 'ALL' || appliedQuery || statusFilter !== 'ALL' || completenessFilter !== 'ALL' || agreementStatusFilter !== 'ALL' || netTypeFilter !== 'ALL') && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setLocationFilter('ALL');
+                      setStatusFilter('ALL');
+                      setCompletenessFilter('ALL');
+                      setAgreementStatusFilter('ALL');
+                      setNetTypeFilter('ALL');
+                      setSearchQuery('');
+                      setAppliedQuery('');
+                      setCurrentPage(0);
+                    }}
+                    style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', background: 'rgba(56,189,248,0.08)', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}
+                  >
+                    Reset Location & Filters
+                  </button>
+                )}
               </div>
             ) : (
               <table className="custom-table">
@@ -1988,6 +2015,41 @@ const CustomerDetails = () => {
               </table>
             )}
           </div>
+        </div>
+      ) : customers.length === 0 ? (
+        <div className="card" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(30,41,59,0.2)' }}>
+          <MapPin size={42} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#38bdf8' }} />
+          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white' }}>
+            {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
+              ? `No Customers Found for Location: ${locationFilter}`
+              : (appliedQuery ? `No Customers Matching "${appliedQuery}"` : 'No Customer Records Found')}
+          </div>
+          <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
+            {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
+              ? `There are no customer records belonging to "${locationFilter}" under the selected filters.`
+              : (appliedQuery
+                ? 'No customer records matched your search query. Try checking for typos or searching by account number.'
+                : 'The Customer Directory is empty. Records will automatically populate here when new billing data is uploaded and approved by an Admin.')}
+          </div>
+          {(locationFilter !== 'ALL' || appliedQuery || statusFilter !== 'ALL' || completenessFilter !== 'ALL' || agreementStatusFilter !== 'ALL' || netTypeFilter !== 'ALL') && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setLocationFilter('ALL');
+                setStatusFilter('ALL');
+                setCompletenessFilter('ALL');
+                setAgreementStatusFilter('ALL');
+                setNetTypeFilter('ALL');
+                setSearchQuery('');
+                setAppliedQuery('');
+                setCurrentPage(0);
+              }}
+              style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', background: 'rgba(56,189,248,0.08)', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}
+            >
+              Reset Location & Filters
+            </button>
+          )}
         </div>
       ) : (
         /* Grouped View: 2 Distinct Groups */

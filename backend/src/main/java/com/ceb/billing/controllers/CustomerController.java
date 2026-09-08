@@ -75,6 +75,9 @@ public class CustomerController {
     @Autowired
     private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository monthlyDirectorySnapshotRepository;
 
+    @Autowired(required = false)
+    private com.ceb.billing.services.PaymentControlService paymentControlService;
+
     /** Customer list fields that may be used to sort the Customer Directory (whitelist). */
     private static final java.util.Set<String> SORTABLE_FIELDS = java.util.Set.of(
             "accountNo", "customerName", "agreementDate", "panelCapacity",
@@ -242,6 +245,21 @@ public class CustomerController {
 
         dto.put("isComplete", isComplete);
         dto.put("missingFields", missingFields);
+
+        // Populate canonical payment status and financials
+        if (paymentControlService != null) {
+            try {
+                com.ceb.billing.models.PaymentEligibilityResult elig = paymentControlService.canPay(record);
+                dto.put("paymentStatus", elig.getPaymentStatus());
+                dto.put("isPaymentEligible", elig.isEligible());
+                dto.put("paymentHoldReasons", elig.getHoldReasons());
+                if (elig.getFinancials() != null) {
+                    dto.put("currentPayment", elig.getFinancials().get("currentPayment"));
+                    dto.put("totalPayable", elig.getFinancials().get("totalPayable"));
+                    dto.put("outstandingBalance", elig.getFinancials().get("outstandingBalance"));
+                }
+            } catch (Exception ignored) {}
+        }
         
         return dto;
     }
@@ -478,6 +496,31 @@ public class CustomerController {
 
             dto.put("isComplete", isComplete);
             dto.put("missingFields", missingFields);
+
+            // Populate canonical payment status and financials
+            if (paymentControlService != null && directory instanceof Map) {
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> dirRecord = (Map<String, Object>) directory;
+                    com.ceb.billing.models.PaymentEligibilityResult elig = paymentControlService.canPay(dirRecord);
+                    dto.put("paymentStatus", elig.getPaymentStatus());
+                    dto.put("isPaymentEligible", elig.isEligible());
+                    dto.put("paymentHoldReasons", elig.getHoldReasons());
+                    if (elig.getFinancials() != null) {
+                        dto.put("currentPayment", elig.getFinancials().get("currentPayment"));
+                        dto.put("totalPayable", elig.getFinancials().get("totalPayable"));
+                        dto.put("outstandingBalance", elig.getFinancials().get("outstandingBalance"));
+                    }
+                } catch (Exception ignored) {}
+            }
+            if (!dto.containsKey("paymentStatus")) {
+                dto.put("paymentStatus", "ON_HOLD");
+                dto.put("isPaymentEligible", false);
+                dto.put("paymentHoldReasons", List.of("No Billing Data for this Customer"));
+                dto.put("currentPayment", 0.0);
+                dto.put("totalPayable", 0.0);
+                dto.put("outstandingBalance", 0.0);
+            }
         } catch (Exception ex) {
             log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
         }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { 
@@ -164,6 +164,7 @@ const deriveLCode = (solarType, tariffType) => {
 
 const CustomerDetails = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { authFetch, user } = useAuth();
   const { showToast, showConfirm } = useToast();
   
@@ -267,7 +268,16 @@ const CustomerDetails = () => {
   const [billingHistory, setBillingHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('overview'); // overview, billing, analytics
+  const [activeTab, setActiveTab] = useState('overview'); // overview, billing, analytics, payment
+
+  // Payment Control State
+  const [paymentDossier, setPaymentDossier] = useState(null);
+  const [paymentDossierLoading, setPaymentDossierLoading] = useState(false);
+  const [selectedDossierMonth, setSelectedDossierMonth] = useState(null);
+  const [resolveModalOpen, setResolveModalOpen] = useState(false);
+  const [resolveForm, setResolveForm] = useState({});
+  const [resolveLoading, setResolveLoading] = useState(false);
+  const [resolveTargetMonth, setResolveTargetMonth] = useState(null);
 
   // Helpers for Customer 360 calculations
   const calculatePerformanceScore = (exportUnits, panelCapacity) => {
@@ -539,6 +549,40 @@ const CustomerDetails = () => {
     fetchSummaryStats();
   }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, selectedBillingMonth, agreementStatusFilter, netTypeFilter, sortBy, sortDir, pageSize]);
 
+  // Handle URL query parameters to open Customer 360 & Payment Control directly (e.g. from Payment Control Center)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const targetAccount = params.get('accountNo');
+    const targetTab = params.get('tab') || 'overview';
+    if (targetAccount) {
+      const found = customers.find(c => String(c.accountNo).trim() === String(targetAccount).trim());
+      if (found) {
+        handleViewDetails(found, targetTab);
+      } else {
+        authFetch(`/api/payments/customers/${encodeURIComponent(targetAccount)}/dossier`)
+          .then(res => res.ok ? res.json() : null)
+          .then(dossier => {
+            if (dossier) {
+              const custObj = {
+                accountNo: dossier.accountNo,
+                customerName: dossier.customerName,
+                solarType: dossier.solarType,
+                division: dossier.division,
+                paymentStatus: dossier.latestPaymentStatus,
+                isPaymentEligible: dossier.isPaymentEligible,
+                currentPayment: dossier.currentPayment,
+                totalPayable: dossier.totalPayable,
+                outstandingBalance: dossier.outstandingBalance,
+                directory: dossier.months?.[0]?.record || {}
+              };
+              handleViewDetails(custObj, targetTab);
+            }
+          })
+          .catch(console.error);
+      }
+    }
+  }, [location.search, customers.length]);
+
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     setAppliedQuery(searchQuery);
@@ -628,14 +672,79 @@ const CustomerDetails = () => {
     }
   };
 
-  const handleViewDetails = (customer) => {
+  // Fetch Month-Wise Payment Dossier
+  const fetchPaymentDossier = async (accountNo) => {
+    if (!accountNo) return;
+    setPaymentDossierLoading(true);
+    try {
+      const res = await authFetch(`/api/payments/customers/${encodeURIComponent(accountNo)}/dossier`);
+      if (res.ok) {
+        const data = await res.json();
+        setPaymentDossier(data);
+        if (data.months && data.months.length > 0) {
+          setSelectedDossierMonth(data.months[0].billingMonth);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load payment dossier', err);
+    } finally {
+      setPaymentDossierLoading(false);
+    }
+  };
+
+  const handleOpenResolveModal = (monthDossier) => {
+    setResolveTargetMonth(monthDossier);
+    const rec = monthDossier?.record || {};
+    setResolveForm({
+      snapshotId: monthDossier?.snapshotId,
+      customerName: rec.customerName || rec.masterName || '',
+      solarType: rec.solarType || rec.masterNetType || 'Net Plus',
+      unitRate: rec.unitRate ?? rec.masterUnitRate ?? '',
+      bankCode: rec.bankCode || rec.masterBankCode || '',
+      branchCode: rec.branchCode || rec.masterBranchCode || '',
+      bankAccountNo: rec.bankAccountNo || rec.masterBankAccountNo || '',
+      mobileNo: rec.mobileNo || rec.masterMobile || '',
+      agreementDate: rec.agreementDate || rec.masterAgreementDate || '',
+      panelCapacity: rec.panelCapacity ?? rec.masterPanelCapacity ?? ''
+    });
+    setResolveModalOpen(true);
+  };
+
+  const handleSaveCorrection = async () => {
+    if (!selectedCustomer?.accountNo || !resolveTargetMonth) return;
+    setResolveLoading(true);
+    try {
+      const res = await authFetch(`/api/payments/customers/${encodeURIComponent(selectedCustomer.accountNo)}/correct?billingPeriod=${encodeURIComponent(resolveTargetMonth.billingMonth || '')}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(resolveForm)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || 'Correction saved! Record re-validated successfully.', 'success');
+        setResolveModalOpen(false);
+        await fetchPaymentDossier(selectedCustomer.accountNo);
+        // Also refresh customer directory list so table badge updates
+        if (typeof fetchCustomers === 'function') fetchCustomers();
+      } else {
+        showToast(data.message || 'Failed to save correction', 'error');
+      }
+    } catch (err) {
+      showToast('Network error while saving correction: ' + err.message, 'error');
+    } finally {
+      setResolveLoading(false);
+    }
+  };
+
+  const handleViewDetails = (customer, initialTab = 'overview') => {
     setSelectedCustomer(customer);
     setDrawerOpen(true);
     setIsEditing(false);
     setEditError(null);
     setEditMessage(null);
     setEditingBill(null);
-    setActiveTab('overview');
+    setActiveTab(initialTab);
+    fetchPaymentDossier(customer.accountNo);
     
     // Prep Edit Fields
     const cName = customer.customerName || customer.directory?.customerName || customer.directory?.masterName || '';
@@ -1649,6 +1758,7 @@ const CustomerDetails = () => {
                     <th>MOBILE</th>
                     <th>SOLAR TYPE</th>
                     <th>COMPLETENESS</th>
+                    <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                     <th>AGREEMENT DATE</th>
                     <th>LOCATION</th>
                     <th style={{ textAlign: 'right' }}>ACTIONS</th>
@@ -1663,6 +1773,7 @@ const CustomerDetails = () => {
                       <td><div className="skeleton" style={{ height: '16px', width: '100px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '24px', width: '90px', borderRadius: '4px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '24px', width: '80px', borderRadius: '4px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '24px', width: '85px', borderRadius: '4px', margin: '0 auto' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '120px' }}></div></td>
                       <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '90px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
@@ -1688,6 +1799,7 @@ const CustomerDetails = () => {
                     <th>MOBILE</th>
                     <th>SOLAR TYPE</th>
                     <th>COMPLETENESS</th>
+                    <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
                     <th>AGREEMENT DATE</th>
                     <th>LOCATION</th>
                     <th style={{ textAlign: 'right' }}>ACTIONS</th>
@@ -1774,6 +1886,58 @@ const CustomerDetails = () => {
                             </div>
                           )}
                         </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {(() => {
+                            const status = cust.paymentStatus || 'ON_HOLD';
+                            let bg = 'rgba(245, 158, 11, 0.15)';
+                            let color = '#f59e0b';
+                            let border = '1px solid rgba(245, 158, 11, 0.3)';
+                            if (status === 'READY') {
+                              bg = 'rgba(16, 185, 129, 0.15)';
+                              color = '#10b981';
+                              border = '1px solid rgba(16, 185, 129, 0.3)';
+                            } else if (status === 'PAID') {
+                              bg = 'rgba(5, 150, 105, 0.15)';
+                              color = '#059669';
+                              border = '1px solid rgba(5, 150, 105, 0.3)';
+                            } else if (status === 'PROCESSING' || status === 'APPROVED') {
+                              bg = 'rgba(99, 102, 241, 0.15)';
+                              color = '#818cf8';
+                              border = '1px solid rgba(99, 102, 241, 0.3)';
+                            } else if (status === 'REVIEW') {
+                              bg = 'rgba(168, 85, 247, 0.15)';
+                              color = '#c084fc';
+                              border = '1px solid rgba(168, 85, 247, 0.3)';
+                            } else if (status === 'REJECTED') {
+                              bg = 'rgba(239, 68, 68, 0.15)';
+                              color = '#ef4444';
+                              border = '1px solid rgba(239, 68, 68, 0.3)';
+                            }
+                            return (
+                              <span
+                                className="badge"
+                                onClick={() => handleViewDetails(cust, 'payment')}
+                                title="Click to inspect Payment Control & Dossier"
+                                style={{
+                                  background: bg,
+                                  color: color,
+                                  border: border,
+                                  padding: '0.22rem 0.6rem',
+                                  borderRadius: '6px',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.35rem'
+                                }}
+                              >
+                                <CreditCard size={11} />
+                                {status.replace('_', ' ')}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td style={{ fontSize: '0.85rem' }}>{cust.agreementDate || '—'}</td>
                         <td>
                           {(cust.division || cust.branchCode) ? (
@@ -1784,6 +1948,14 @@ const CustomerDetails = () => {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                            <button 
+                              className="btn btn-secondary" 
+                              title="Payment Control & Dossier"
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}
+                              onClick={() => handleViewDetails(cust, 'payment')}
+                            >
+                              <CreditCard size={14} />
+                            </button>
                             <button 
                               className="btn btn-secondary" 
                               title="View Profile"
@@ -2286,6 +2458,29 @@ const CustomerDetails = () => {
                 onClick={() => setActiveTab('analytics')}
               >
                 Analytics
+              </button>
+              <button
+                type="button"
+                className={`btn ${activeTab === 'payment' ? 'btn-primary' : 'btn-secondary'}`}
+                style={{
+                  padding: '0.4rem 0.8rem',
+                  fontSize: '0.8rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  border: activeTab === 'payment' ? '1px solid rgba(16, 185, 129, 0.4)' : undefined,
+                  background: activeTab === 'payment' ? 'rgba(16, 185, 129, 0.2)' : undefined,
+                  color: activeTab === 'payment' ? '#34d399' : undefined
+                }}
+                onClick={() => {
+                  setActiveTab('payment');
+                  if (!paymentDossier || paymentDossier.accountNo !== selectedCustomer?.accountNo) {
+                    fetchPaymentDossier(selectedCustomer?.accountNo);
+                  }
+                }}
+              >
+                <CreditCard size={14} />
+                <span>Payment Control</span>
               </button>
             </div>
 
@@ -3141,9 +3336,678 @@ const CustomerDetails = () => {
               );
             })()}
 
+            {/* TAB CONTENT: PAYMENT CONTROL */}
+            {activeTab === 'payment' && (() => {
+              const dossier = paymentDossier;
+              const months = dossier?.months || [];
+              const selectedMonthObj = months.find(m => m.billingMonth === selectedDossierMonth) || months[0] || null;
+
+              if (paymentDossierLoading) {
+                return (
+                  <div className="animate-fade-in" style={{ padding: '2.5rem 1rem', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                      <div className="skeleton" style={{ width: '45px', height: '45px', borderRadius: '50%' }}></div>
+                      <div className="skeleton" style={{ width: '240px', height: '20px', borderRadius: '4px' }}></div>
+                      <div className="skeleton" style={{ width: '100%', height: '140px', borderRadius: '12px' }}></div>
+                      <div className="skeleton" style={{ width: '100%', height: '300px', borderRadius: '12px' }}></div>
+                    </div>
+                  </div>
+                );
+              }
+
+              if (!dossier) {
+                return (
+                  <div className="animate-fade-in" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+                    <CreditCard size={38} style={{ color: '#f59e0b', opacity: 0.8, marginBottom: '0.75rem' }} />
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'white' }}>Payment Control Dossier</h4>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem auto 1.5rem', maxWidth: '440px' }}>
+                      Fetch the complete month-wise financial ledger, eligibility checks, and diagnostics for account {selectedCustomer?.accountNo}.
+                    </p>
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => fetchPaymentDossier(selectedCustomer?.accountNo)}
+                      style={{ padding: '0.5rem 1.25rem', fontSize: '0.85rem' }}
+                    >
+                      Load Payment Control Dossier
+                    </button>
+                  </div>
+                );
+              }
+
+              const latestStatus = dossier.latestPaymentStatus || 'ON_HOLD';
+              const isEligible = Boolean(dossier.isPaymentEligible);
+
+              return (
+                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Canonical Summary Card */}
+                  <div style={{
+                    background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                    borderRadius: '14px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    padding: '1.25rem',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem', color: '#38bdf8' }}>
+                            {dossier.accountNo}
+                          </span>
+                          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white' }}>
+                            {dossier.customerName || selectedCustomer?.customerName}
+                          </span>
+                          <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '0.15rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                            {dossier.solarType || selectedCustomer?.solarType || 'Net Plus'}
+                          </span>
+                          {dossier.division && (
+                            <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '0.15rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                              <MapPin size={11} style={{ marginRight: '3px' }} />
+                              {dossier.division.toUpperCase()}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '0.35rem' }}>
+                          Active Billing Cycle: <strong style={{ color: 'white' }}>{dossier.latestBillingMonth || '—'}</strong>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <span style={{
+                          padding: '0.3rem 0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.75rem',
+                          fontWeight: 700,
+                          letterSpacing: '0.03em',
+                          background: isEligible ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                          color: isEligible ? '#10b981' : '#f87171',
+                          border: `1px solid ${isEligible ? 'rgba(16, 185, 129, 0.35)' : 'rgba(239, 68, 68, 0.35)'}`
+                        }}>
+                          {isEligible ? '✓ PAYMENT ELIGIBLE' : '⚠ PAYMENT ON HOLD'}
+                        </span>
+                        <span style={{
+                          padding: '0.3rem 0.85rem',
+                          borderRadius: '8px',
+                          fontSize: '0.8rem',
+                          fontWeight: 800,
+                          background: latestStatus === 'READY' ? 'rgba(16, 185, 129, 0.2)' : latestStatus === 'PAID' ? 'rgba(5, 150, 105, 0.2)' : latestStatus === 'REVIEW' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                          color: latestStatus === 'READY' ? '#10b981' : latestStatus === 'PAID' ? '#059669' : latestStatus === 'REVIEW' ? '#c084fc' : '#f59e0b',
+                          border: `1px solid ${latestStatus === 'READY' ? 'rgba(16, 185, 129, 0.4)' : latestStatus === 'PAID' ? 'rgba(5, 150, 105, 0.4)' : latestStatus === 'REVIEW' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                        }}>
+                          {latestStatus.replace('_', ' ')}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Financial KPI 5-Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Current Payment</div>
+                        <div style={{ color: '#38bdf8', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                          LKR {Number(dossier.currentPayment || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Bill Set-Off</div>
+                        <div style={{ color: '#fbbf24', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                          LKR {Number(dossier.billSetOff || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Retention Money</div>
+                        <div style={{ color: '#c084fc', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                          LKR {Number(dossier.retentionMoney || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Outstanding Balance</div>
+                        <div style={{ color: '#f87171', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                          LKR {Number(dossier.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '10px', padding: '0.75rem' }}>
+                        <div style={{ color: '#34d399', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>Total Payable</div>
+                        <div style={{ color: '#10b981', fontSize: '1.15rem', fontWeight: 800, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                          LKR {Number(dossier.totalPayable || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Month-Wise Payment History Timeline & Strict Isolation */}
+                  <div className="card" style={{ backgroundColor: 'var(--bg-primary)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+                          <Calendar size={16} style={{ color: '#38bdf8' }} />
+                          <span>Month-Wise Payment History & Isolation</span>
+                        </h4>
+                        <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '0.2rem' }}>
+                          Each month maintains independent financials, status, and diagnostics.
+                        </div>
+                      </div>
+
+                      {/* Month pills selector */}
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {months.map(m => {
+                          const isSel = selectedMonthObj?.billingMonth === m.billingMonth;
+                          const mStatus = m.paymentStatus || 'ON_HOLD';
+                          return (
+                            <button
+                              key={m.billingMonth + m.snapshotId}
+                              onClick={() => setSelectedDossierMonth(m.billingMonth)}
+                              style={{
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '8px',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                background: isSel ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                                border: isSel ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.08)',
+                                color: isSel ? 'white' : 'var(--text-secondary)'
+                              }}
+                            >
+                              <span>{m.billingMonth}</span>
+                              <span style={{
+                                width: '7px',
+                                height: '7px',
+                                borderRadius: '50%',
+                                background: mStatus === 'READY' ? '#10b981' : mStatus === 'PAID' ? '#059669' : mStatus === 'REVIEW' ? '#c084fc' : '#f59e0b'
+                              }} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Selected Month Detail View */}
+                    {selectedMonthObj ? (() => {
+                      const m = selectedMonthObj;
+                      const mStatus = m.paymentStatus || 'ON_HOLD';
+                      const cat = m.categorizedIssues || {};
+                      const hasMismatches = (cat.mismatches || []).length > 0;
+                      const hasMissing = (cat.missingDetails || []).length > 0;
+                      const hasValErrors = (cat.validationErrors || []).length > 0;
+                      const hasHolds = (cat.holds || []).length > 0;
+                      const hasOutstanding = (cat.outstanding || []).length > 0;
+                      const hasAnyIssues = hasMismatches || hasMissing || hasValErrors || hasHolds || hasOutstanding;
+
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
+                          {/* Selected Month Header Strip */}
+                          <div style={{
+                            background: 'rgba(255, 255, 255, 0.02)',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            padding: '0.85rem 1rem',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: '0.75rem'
+                          }}>
+                            <div>
+                              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>
+                                {m.billingMonth} • <span style={{ color: '#38bdf8', fontWeight: 500 }}>{m.division} Division</span>
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                Snapshot: {m.datasetName || m.billingMonth} {m.approvalDate ? `• Approved ${String(m.approvalDate).substring(0, 10)}` : ''}
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Payable for this Month</div>
+                                <div style={{ color: '#10b981', fontWeight: 800, fontFamily: 'monospace', fontSize: '1.05rem' }}>
+                                  LKR {Number(m.financials?.totalPayable || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                              </div>
+                              <span style={{
+                                padding: '0.3rem 0.75rem',
+                                borderRadius: '8px',
+                                fontSize: '0.8rem',
+                                fontWeight: 800,
+                                background: mStatus === 'READY' ? 'rgba(16, 185, 129, 0.2)' : mStatus === 'PAID' ? 'rgba(5, 150, 105, 0.2)' : mStatus === 'REVIEW' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                                color: mStatus === 'READY' ? '#10b981' : mStatus === 'PAID' ? '#059669' : mStatus === 'REVIEW' ? '#c084fc' : '#f59e0b',
+                                border: `1px solid ${mStatus === 'READY' ? 'rgba(16, 185, 129, 0.4)' : mStatus === 'PAID' ? 'rgba(5, 150, 105, 0.4)' : mStatus === 'REVIEW' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+                              }}>
+                                {mStatus.replace('_', ' ')}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* "Why is this payment on hold?" Diagnostics Panel */}
+                          {(mStatus !== 'PAID' && (hasAnyIssues || mStatus !== 'READY')) && (
+                            <div style={{
+                              background: 'rgba(245, 158, 11, 0.05)',
+                              border: '1px solid rgba(245, 158, 11, 0.25)',
+                              borderRadius: '12px',
+                              padding: '1.1rem'
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                  <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
+                                  <h5 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#fbbf24', margin: 0 }}>
+                                    Why is this payment on hold for {m.billingMonth}?
+                                  </h5>
+                                </div>
+                                <button
+                                  className="btn btn-primary"
+                                  onClick={() => handleOpenResolveModal(m)}
+                                  style={{
+                                    padding: '0.35rem 0.85rem',
+                                    fontSize: '0.78rem',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.35rem',
+                                    background: '#f59e0b',
+                                    color: '#000',
+                                    fontWeight: 700,
+                                    border: 'none',
+                                    borderRadius: '6px'
+                                  }}
+                                >
+                                  <Edit size={13} />
+                                  <span>Resolve Issue</span>
+                                </button>
+                              </div>
+
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                                {/* Category 1: MISMATCH */}
+                                {hasMismatches && (
+                                  <div style={{ background: 'rgba(239, 68, 68, 0.1)', borderLeft: '3px solid #ef4444', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
+                                    <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                      🔴 Data Mismatch Detected (Master Data vs Billing Source)
+                                    </div>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#fca5a5' }}>
+                                      {cat.mismatches.map((item, idx) => (
+                                        <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Category 2: MISSING_DETAILS */}
+                                {hasMissing && (
+                                  <div style={{ background: 'rgba(245, 158, 11, 0.1)', borderLeft: '3px solid #f59e0b', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
+                                    <div style={{ color: '#fbbf24', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                      🟡 Missing Required Customer Information
+                                    </div>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#fde68a' }}>
+                                      {cat.missingDetails.map((item, idx) => (
+                                        <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Category 3: VALIDATION_ERROR */}
+                                {hasValErrors && (
+                                  <div style={{ background: 'rgba(249, 115, 22, 0.1)', borderLeft: '3px solid #f97316', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
+                                    <div style={{ color: '#fb923c', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                      🟠 Staging / File Validation Error
+                                    </div>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#fed7aa' }}>
+                                      {cat.validationErrors.map((item, idx) => (
+                                        <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Category 4: HOLD_ACTIVE */}
+                                {hasHolds && (
+                                  <div style={{ background: 'rgba(56, 189, 248, 0.1)', borderLeft: '3px solid #38bdf8', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
+                                    <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                      🔵 Manual Payment Hold Flag Active
+                                    </div>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#bae6fd' }}>
+                                      {cat.holds.map((item, idx) => (
+                                        <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+
+                                {/* Category 5: OUTSTANDING */}
+                                {hasOutstanding && (
+                                  <div style={{ background: 'rgba(168, 85, 247, 0.1)', borderLeft: '3px solid #a855f7', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
+                                    <div style={{ color: '#c084fc', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                      🟣 Financial / Payable Condition
+                                    </div>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#e9d5ff' }}>
+                                      {cat.outstanding.map((item, idx) => (
+                                        <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* If READY: Success Card */}
+                          {mStatus === 'READY' && (
+                            <div style={{
+                              background: 'rgba(16, 185, 129, 0.08)',
+                              border: '1px solid rgba(16, 185, 129, 0.3)',
+                              borderRadius: '10px',
+                              padding: '1rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '1rem'
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                <CheckCircle size={22} style={{ color: '#10b981' }} />
+                                <div>
+                                  <div style={{ color: '#10b981', fontWeight: 700, fontSize: '0.9rem' }}>
+                                    Payment Ready for {m.billingMonth}
+                                  </div>
+                                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                                    All 11 enterprise payment-eligibility rules passed. This record can be included in a payment batch.
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                className="btn btn-secondary"
+                                onClick={() => navigate(`/payments?billingPeriod=${encodeURIComponent(m.billingMonth)}`)}
+                                style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem', whiteSpace: 'nowrap' }}
+                              >
+                                Go to Payment Control Center →
+                              </button>
+                            </div>
+                          )}
+
+                          {/* If PAID: Settlement Info */}
+                          {mStatus === 'PAID' && (
+                            <div style={{
+                              background: 'rgba(5, 150, 105, 0.1)',
+                              border: '1px solid rgba(5, 150, 105, 0.3)',
+                              borderRadius: '10px',
+                              padding: '1rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.75rem'
+                            }}>
+                              <CheckCircle size={22} style={{ color: '#059669' }} />
+                              <div>
+                                <div style={{ color: '#059669', fontWeight: 700, fontSize: '0.9rem' }}>
+                                  Payment Settled & Disbursed
+                                </div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
+                                  Payment settled in Batch #{m.batchInfo?.batchNumber || '—'} on {m.batchInfo?.processedAt ? String(m.batchInfo.processedAt).substring(0, 10) : '—'}. Total: LKR {Number(m.financials?.totalPayable || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}.
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Side-by-Side Comparison Table */}
+                          <div style={{ border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', overflow: 'hidden' }}>
+                            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white', textTransform: 'uppercase' }}>
+                                Side-by-Side Comparison: Master Data vs Uploaded Source ({m.billingMonth})
+                              </span>
+                              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                                Evaluated in snapshot #{m.snapshotId}
+                              </span>
+                            </div>
+                            <table className="custom-table" style={{ margin: 0 }}>
+                              <thead>
+                                <tr>
+                                  <th>FIELD</th>
+                                  <th>MASTER DATA VALUE</th>
+                                  <th>UPLOADED / BILLING VALUE</th>
+                                  <th style={{ textAlign: 'center' }}>STATUS</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {(m.comparisons || []).map((c, idx) => {
+                                  const isMism = c.isMismatch;
+                                  return (
+                                    <tr key={idx} style={{ background: isMism ? 'rgba(239, 68, 68, 0.04)' : undefined }}>
+                                      <td style={{ fontWeight: 600, color: 'white' }}>{c.field}</td>
+                                      <td style={{ color: 'var(--text-secondary)' }}>{String(c.masterValue || '—')}</td>
+                                      <td style={{ color: isMism ? '#f87171' : 'var(--text-secondary)', fontWeight: isMism ? 600 : 400 }}>
+                                        {String(c.sourceValue || '—')}
+                                      </td>
+                                      <td style={{ textAlign: 'center' }}>
+                                        {isMism ? (
+                                          <span className="badge danger" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
+                                            MISMATCH
+                                          </span>
+                                        ) : (
+                                          <span className="badge success" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
+                                            MATCH
+                                          </span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Missing Fields Checklist */}
+                          {(m.missingFields || []).length > 0 && (
+                            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.4rem' }}>
+                                Missing Required Information for this Month:
+                              </div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                                {m.missingFields.map((f, idx) => (
+                                  <span key={idx} style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                    {f}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })() : (
+                      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                        No monthly billing snapshots found for this customer.
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Batch History Table */}
+                  {dossier.batchHistory && dossier.batchHistory.length > 0 && (
+                    <div className="card" style={{ backgroundColor: 'var(--bg-primary)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <History size={15} style={{ color: '#818cf8' }} />
+                        <span>Payment Batch History</span>
+                      </h4>
+                      <div className="table-container" style={{ margin: 0 }}>
+                        <table className="custom-table" style={{ margin: 0 }}>
+                          <thead>
+                            <tr>
+                              <th>BATCH NUMBER</th>
+                              <th>BILLING PERIOD</th>
+                              <th>SETTLED AMOUNT</th>
+                              <th>STATUS</th>
+                              <th>CREATED DATE</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dossier.batchHistory.map((bh, idx) => (
+                              <tr key={idx}>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#38bdf8' }}>{bh.batchNumber}</td>
+                                <td>{bh.billingPeriod}</td>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#10b981' }}>
+                                  LKR {Number(bh.totalPayable || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td>
+                                  <span className="badge" style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
+                                    {bh.paymentStatus}
+                                  </span>
+                                </td>
+                                <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                                  {bh.createdAt ? String(bh.createdAt).substring(0, 10) : '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
           </div>
         )}
       </div>
+
+      {/* Resolve Issue & Re-evaluate Modal */}
+      {resolveModalOpen && resolveTargetMonth && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1250, padding: '1.5rem' }}>
+          <div className="neon-card animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.75rem', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.85rem', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', margin: 0 }}>
+                  Resolve Payment Issue — {resolveTargetMonth.billingMonth}
+                </h3>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                  Account: <strong style={{ color: '#38bdf8' }}>{selectedCustomer?.accountNo}</strong> • Target Snapshot: #{resolveTargetMonth.snapshotId}
+                </div>
+              </div>
+              <button
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                onClick={() => setResolveModalOpen(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '65vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
+              <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#bae6fd' }}>
+                💡 <strong>Automatic Re-validation:</strong> Correcting these values updates the archived {resolveTargetMonth.billingMonth} dataset and immediately re-evaluates all 11 enterprise payment eligibility checks. If all issues are resolved, the payment status automatically promotes to <strong>READY</strong>.
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Customer Name</label>
+                <input
+                  type="text"
+                  className="login-form-input"
+                  value={resolveForm.customerName || ''}
+                  onChange={(e) => setResolveForm({ ...resolveForm, customerName: e.target.value })}
+                  placeholder="Enter correct customer name"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Solar Net Type</label>
+                  <select
+                    className="login-form-input"
+                    value={resolveForm.solarType || 'Net Plus'}
+                    onChange={(e) => setResolveForm({ ...resolveForm, solarType: e.target.value })}
+                    style={{ appearance: 'auto' }}
+                  >
+                    <option value="Net Metering">Net Metering</option>
+                    <option value="Net Accounting">Net Accounting</option>
+                    <option value="Net Plus">Net Plus</option>
+                    <option value="Net Plus Plus">Net Plus Plus</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Unit Rate (LKR)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    className="login-form-input"
+                    value={resolveForm.unitRate ?? ''}
+                    onChange={(e) => setResolveForm({ ...resolveForm, unitRate: e.target.value })}
+                    placeholder="e.g. 22.00"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Bank Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={resolveForm.bankCode || ''}
+                    onChange={(e) => setResolveForm({ ...resolveForm, bankCode: e.target.value })}
+                    placeholder="e.g. 7010"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Branch Code</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={resolveForm.branchCode || ''}
+                    onChange={(e) => setResolveForm({ ...resolveForm, branchCode: e.target.value })}
+                    placeholder="e.g. 001"
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Bank Account Number</label>
+                <input
+                  type="text"
+                  className="login-form-input"
+                  value={resolveForm.bankAccountNo || ''}
+                  onChange={(e) => setResolveForm({ ...resolveForm, bankAccountNo: e.target.value })}
+                  placeholder="Enter bank account number"
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label">Mobile Number</label>
+                  <input
+                    type="text"
+                    className="login-form-input"
+                    value={resolveForm.mobileNo || ''}
+                    onChange={(e) => setResolveForm({ ...resolveForm, mobileNo: e.target.value })}
+                    placeholder="e.g. 0771234567"
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Agreement Date</label>
+                  <input
+                    type="date"
+                    className="login-form-input"
+                    value={resolveForm.agreementDate || ''}
+                    onChange={(e) => setResolveForm({ ...resolveForm, agreementDate: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setResolveModalOpen(false)}
+                disabled={resolveLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveCorrection}
+                disabled={resolveLoading}
+                style={{ background: '#10b981', color: 'white', fontWeight: 700, border: 'none' }}
+              >
+                {resolveLoading ? 'Re-evaluating...' : 'Save & Re-evaluate Eligibility'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bill Edit Modal */}
       {editingBill && (

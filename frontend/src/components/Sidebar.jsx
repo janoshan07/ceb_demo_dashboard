@@ -7,7 +7,8 @@ import {
   ShieldAlert, 
   LogOut, 
   Zap,
-  Archive 
+  Archive,
+  CreditCard 
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import edlLogo from '../assets/edl_logo.jpg';
@@ -76,15 +77,27 @@ const Sidebar = () => {
           {/* Billing Officer & Admin — single entry point for all billing uploads:
               Monthly Directory → Billing Month → Division → Upload Billing */}
           {(user.role === 'ADMIN' || user.role === 'OFFICER') && (
-            <li>
-              <NavLink 
-                to="/monthly-directory" 
-                className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-              >
-                <Archive size={20} />
-                <span>Monthly Directory</span>
-              </NavLink>
-            </li>
+            <>
+              <li>
+                <NavLink 
+                  to="/monthly-directory" 
+                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                >
+                  <Archive size={20} />
+                  <span>Monthly Directory</span>
+                </NavLink>
+              </li>
+
+              <li>
+                <NavLink 
+                  to="/payments" 
+                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                >
+                  <CreditCard size={20} />
+                  <span>Payment Control</span>
+                </NavLink>
+              </li>
+            </>
           )}
 
           {/* Admin only */}

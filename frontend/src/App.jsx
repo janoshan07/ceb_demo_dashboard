@@ -10,6 +10,7 @@ import CustomerDetails from './pages/CustomerDetails';
 import Reports from './pages/Reports';
 import UploadPage from './pages/UploadPage';
 import MonthlyCustomerDirectory from './pages/MonthlyCustomerDirectory';
+import PaymentControlCenter from './pages/PaymentControlCenter';
 import Admin from './pages/Admin';
 
 const ProtectedLayout = ({ children }) => {
@@ -99,6 +100,18 @@ const App = () => {
             <ProtectedLayout>
               <RoleGuard allowedRoles={['ADMIN', 'OFFICER']}>
                 <MonthlyCustomerDirectory />
+              </RoleGuard>
+            </ProtectedLayout>
+          } 
+        />
+
+        {/* Payment Control Center */}
+        <Route 
+          path="/payments" 
+          element={
+            <ProtectedLayout>
+              <RoleGuard allowedRoles={['ADMIN', 'OFFICER']}>
+                <PaymentControlCenter />
               </RoleGuard>
             </ProtectedLayout>
           } 

@@ -384,15 +384,15 @@ const CustomerDetails = () => {
   const [billEditError, setBillEditError] = useState(null);
   const [billEditSuccess, setBillEditSuccess] = useState(null);
 
-  const fetchSummaryStats = async () => {
+  const fetchSummaryStats = async (loc = locationFilter, bm = selectedBillingMonth) => {
     try {
       let url = '/api/officer/customers/summary';
       const params = [];
-      if (selectedBillingMonth && selectedBillingMonth !== 'ALL') {
-        params.push(`billingMonth=${encodeURIComponent(selectedBillingMonth)}`);
+      if (bm && bm !== 'ALL') {
+        params.push(`billingMonth=${encodeURIComponent(bm)}`);
       }
-      if (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') {
-        params.push(`location=${encodeURIComponent(locationFilter.trim())}`);
+      if (loc && loc.trim().toUpperCase() !== 'ALL') {
+        params.push(`location=${encodeURIComponent(loc.trim())}`);
       }
       if (params.length > 0) {
         url += `?${params.join('&')}`;
@@ -413,16 +413,21 @@ const CustomerDetails = () => {
           rejectedCount: data.rejected ?? 0,
           expiredAgreementsCount: data.expired ?? 0,
           expiringSoonAgreementsCount: data.expiringSoon ?? 0,
-          locationsCount: DIRECTORY_DIVISIONS.length
+          locationsCount: (loc && loc.trim().toUpperCase() !== 'ALL') ? 1 : DIRECTORY_DIVISIONS.length
         });
         return;
       }
       
+      let fallbackParams = [];
+      if (bm && bm !== 'ALL') fallbackParams.push(`billingMonth=${encodeURIComponent(bm)}`);
+      if (loc && loc.trim().toUpperCase() !== 'ALL') fallbackParams.push(`location=${encodeURIComponent(loc.trim())}`);
+      const extraQuery = fallbackParams.length > 0 ? `&${fallbackParams.join('&')}` : '';
+
       const [totalRes, completeRes, missingRes, errorRes] = await Promise.all([
-        authFetch('/api/officer/customers?page=0&size=1'),
-        authFetch('/api/officer/customers?page=0&size=1&completeness=COMPLETE'),
-        authFetch('/api/officer/customers?page=0&size=1000&completeness=MISSING'),
-        authFetch('/api/officer/customers?page=0&size=1&validationStatus=ERROR')
+        authFetch(`/api/officer/customers?page=0&size=1${extraQuery}`),
+        authFetch(`/api/officer/customers?page=0&size=1&completeness=COMPLETE${extraQuery}`),
+        authFetch(`/api/officer/customers?page=0&size=1000&completeness=MISSING${extraQuery}`),
+        authFetch(`/api/officer/customers?page=0&size=1&validationStatus=ERROR${extraQuery}`)
       ]);
       
       let total = 0, complete = 0, missing = 0, errors = 0;
@@ -449,7 +454,7 @@ const CustomerDetails = () => {
         completeCustomers: total - missing > 0 ? total - missing : complete,
         missingCustomers: missing,
         validationErrorsCount: errors,
-        locationsCount: DIRECTORY_DIVISIONS.length
+        locationsCount: (loc && loc.trim().toUpperCase() !== 'ALL') ? 1 : DIRECTORY_DIVISIONS.length
       }));
     } catch (e) {
       console.error('Failed to load summary stats:', e);
@@ -508,7 +513,7 @@ const CustomerDetails = () => {
       setCustomers(data.content || []);
       setTotalPages(data.totalPages || 0);
       setTotalElements(data.totalElements || 0);
-      fetchSummaryStats();
+      fetchSummaryStats(locationFilter, selectedBillingMonth);
     } catch (err) {
       setError(err.message || 'Error occurred while loading customers.');
     } finally {
@@ -518,35 +523,56 @@ const CustomerDetails = () => {
 
   const fetchLookups = async () => {
     try {
-      const [ccRes, ntRes, ecRes, monthsRes] = await Promise.all([
+      const [ccRes, ntRes, ecRes, monthsRes, pcMonthsRes] = await Promise.all([
         authFetch('/api/lookup/cost-codes'),
         authFetch('/api/lookup/net-types'),
         authFetch('/api/lookup/expense-codes'),
-        authFetch('/api/officer/monthly-directory/months')
+        authFetch('/api/officer/monthly-directory/months'),
+        authFetch('/api/payment-control/months')
       ]);
       if (ccRes.ok) setCostCodesList(await ccRes.json());
       if (ntRes.ok) setNetTypesList(await ntRes.json());
       if (ecRes.ok) setExpenseCodesList(await ecRes.json());
+      
+      const monthSet = new Set();
       if (monthsRes.ok) {
         const mData = await monthsRes.json();
         if (mData && mData.months) {
-          const list = mData.months.map(m => m.billingMonth).filter(Boolean);
-          const uniqueMonths = Array.from(new Set(list));
-          setBillingMonths(uniqueMonths);
-          if (uniqueMonths.length > 0) {
-            setSelectedBillingMonth(uniqueMonths[0]);
-          }
+          mData.months.forEach(m => {
+            if (m.billingMonth && m.billingMonth.trim()) monthSet.add(m.billingMonth.trim());
+          });
         }
       }
+      if (pcMonthsRes && pcMonthsRes.ok) {
+        const pcMonths = await pcMonthsRes.json();
+        if (Array.isArray(pcMonths)) {
+          pcMonths.forEach(m => {
+            if (m && typeof m === 'string' && m.trim()) monthSet.add(m.trim());
+          });
+        }
+      }
+      const uniqueMonths = Array.from(monthSet);
+      setBillingMonths(uniqueMonths);
+      setSelectedBillingMonth(prev => {
+        if (prev && prev !== 'ALL' && uniqueMonths.includes(prev)) {
+          return prev;
+        }
+        return uniqueMonths.length > 0 ? uniqueMonths[0] : 'ALL';
+      });
     } catch (e) {
       console.error('Failed to load lookup lists:', e);
     }
   };
 
+  // Mount-only fetch for lookup options
+  useEffect(() => {
+    fetchLookups();
+  }, []);
+
+  // Filter effect for customer listing and summary stats
   useEffect(() => {
     fetchCustomers(currentPage, appliedQuery);
-    fetchLookups();
-    fetchSummaryStats();
+    fetchSummaryStats(locationFilter, selectedBillingMonth);
   }, [currentPage, appliedQuery, statusFilter, locationFilter, completenessFilter, selectedBillingMonth, agreementStatusFilter, netTypeFilter, sortBy, sortDir, pageSize]);
 
   // Handle URL query parameters to open Customer 360 & Payment Control directly (e.g. from Payment Control Center)
@@ -1249,10 +1275,16 @@ const CustomerDetails = () => {
               <User size={24} color="#818cf8" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Customers</div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL' ? `Total (${locationFilter})` : 'Total Customers'}
+              </div>
               <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.totalCustomers.toLocaleString()}</div>
-              <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                <span>↑ 12.5% from last month</span>
+              <div style={{ fontSize: '0.72rem', color: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#38bdf8' : '#10b981', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? (
+                  <span>📍 {locationFilter} Division active</span>
+                ) : (
+                  <span>All 5 Eastern Province divisions</span>
+                )}
               </div>
             </div>
           </div>
@@ -1300,20 +1332,58 @@ const CustomerDetails = () => {
         </div>
 
         {/* Locations */}
-        <div className="card" style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)' }}>
+        <div 
+          className="card" 
+          onClick={() => {
+            if (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') {
+              setLocationFilter('ALL');
+              setCurrentPage(0);
+              fetchSummaryStats('ALL', selectedBillingMonth);
+            }
+          }}
+          style={{ 
+            padding: '1.25rem', 
+            borderRadius: '12px', 
+            border: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '1px solid rgba(56,189,248,0.6)' : '1px solid var(--border-color)', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            background: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? 'rgba(56,189,248,0.08)' : 'rgba(30,41,59,0.2)',
+            cursor: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? 'pointer' : 'default',
+            boxShadow: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '0 0 12px rgba(56,189,248,0.15)' : 'none',
+            transition: 'all 0.2s ease'
+          }}
+          title={(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? 'Click to reset to All Locations' : 'Locations'}
+        >
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <MapPin size={24} color="#38bdf8" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Locations</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.locationsCount}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>Eastern Province</div>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? `Location: ${locationFilter}` : 'Locations'}
+              </div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>
+                {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? summaryStats.totalCustomers.toLocaleString() : summaryStats.locationsCount}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#38bdf8' : 'var(--text-muted)', marginTop: '0.15rem' }}>
+                {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? `${locationFilter} Customers (Click to reset)` : 'Eastern Province'}
+              </div>
             </div>
           </div>
-          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-            <MoreVertical size={16} />
-          </button>
+          {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? (
+            <button 
+              onClick={(e) => { e.stopPropagation(); setLocationFilter('ALL'); setCurrentPage(0); fetchSummaryStats('ALL', selectedBillingMonth); }}
+              title="Reset location filter"
+              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 600 }}
+            >
+              <X size={12} /> All
+            </button>
+          ) : (
+            <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <MoreVertical size={16} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -1632,7 +1702,12 @@ const CustomerDetails = () => {
             <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Billing Month:</label>
             <select
               value={selectedBillingMonth}
-              onChange={(e) => { setSelectedBillingMonth(e.target.value); setCurrentPage(0); }}
+              onChange={(e) => { 
+                const newMonth = e.target.value;
+                setSelectedBillingMonth(newMonth); 
+                setCurrentPage(0); 
+                fetchSummaryStats(locationFilter, newMonth);
+              }}
               className="form-input"
               style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
             >
@@ -1685,38 +1760,32 @@ const CustomerDetails = () => {
                 <button
                   key={loc}
                   type="button"
-                  onClick={() => { setLocationFilter(loc); setCurrentPage(0); }}
+                  onClick={() => { 
+                    setLocationFilter(loc); 
+                    setCurrentPage(0);
+                    fetchSummaryStats(loc, selectedBillingMonth);
+                  }}
                   style={{
-                    padding: '0.35rem 0.95rem',
+                    padding: '0.38rem 0.95rem',
                     fontSize: '0.78rem',
-                    fontWeight: 600,
+                    fontWeight: active ? 700 : 600,
                     borderRadius: '6px',
                     cursor: 'pointer',
                     border: active ? '1px solid #3b82f6' : '1px solid var(--border-color)',
-                    background: active ? 'rgba(59,130,246,0.12)' : '#111827',
+                    background: active ? 'rgba(59,130,246,0.18)' : '#111827',
                     color: active ? '#60a5fa' : 'var(--text-secondary)',
-                    transition: 'all 0.2s ease',
+                    boxShadow: active ? '0 0 10px rgba(59,130,246,0.25)' : 'none',
+                    transition: 'all 0.15s ease',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
                   }}
                 >
-                  {loc === 'ALL' ? 'All Locations' : loc}
+                  {active && loc !== 'ALL' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', display: 'inline-block' }} />}
+                  <span>{loc === 'ALL' ? 'All Locations' : loc}</span>
                 </button>
               );
             })}
-            <button
-              type="button"
-              style={{
-                padding: '0.35rem 0.65rem',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                borderRadius: '6px',
-                border: '1px solid var(--border-color)',
-                background: '#111827',
-                color: '#60a5fa',
-                cursor: 'pointer'
-              }}
-            >
-              +2
-            </button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

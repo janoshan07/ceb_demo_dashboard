@@ -1632,29 +1632,50 @@ public class PaymentControlService {
         boolean hasBp = !bp.isEmpty() && !"ALL".equalsIgnoreCase(bp);
         boolean hasDiv = !div.isEmpty() && !"ALL".equalsIgnoreCase(div);
 
-        List<MonthlyDirectorySnapshot> snapshots = Collections.emptyList();
+        List<MonthlyDirectorySnapshot> raw;
         if (hasBp && hasDiv) {
-            snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, div, "APPROVED");
-            if (snapshots.isEmpty()) {
-                snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(bp, div);
+            raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(bp, div);
+            if (raw.isEmpty()) {
+                raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, div, "APPROVED");
             }
         } else if (hasBp) {
-            snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bp, "APPROVED");
-            if (snapshots.isEmpty()) {
-                snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bp);
+            raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bp);
+            if (raw.isEmpty()) {
+                raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bp, "APPROVED");
             }
         } else if (hasDiv) {
-            snapshots = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(div, "APPROVED");
-            if (snapshots.isEmpty()) {
-                snapshots = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCase(div);
+            raw = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCase(div);
+            if (raw.isEmpty()) {
+                raw = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(div, "APPROVED");
             }
         } else {
-            snapshots = monthlyDirectorySnapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
-            if (snapshots.isEmpty()) {
-                snapshots = monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc();
+            raw = monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc();
+        }
+
+        List<MonthlyDirectorySnapshot> snapshots = new ArrayList<>(raw);
+        snapshots.sort((a, b) -> {
+            java.time.LocalDateTime tA = a.getCreatedDate() != null ? a.getCreatedDate() : java.time.LocalDateTime.MIN;
+            java.time.LocalDateTime tB = b.getCreatedDate() != null ? b.getCreatedDate() : java.time.LocalDateTime.MIN;
+            int cmp = tB.compareTo(tA);
+            if (cmp != 0) return cmp;
+            Long idA = a.getId() != null ? a.getId() : 0L;
+            Long idB = b.getId() != null ? b.getId() : 0L;
+            return idB.compareTo(idA);
+        });
+
+        Map<String, MonthlyDirectorySnapshot> byDiv = new LinkedHashMap<>();
+        List<MonthlyDirectorySnapshot> unassigned = new ArrayList<>();
+        for (MonthlyDirectorySnapshot s : snapshots) {
+            String d = s.getDivision() != null ? s.getDivision().trim().toLowerCase() : "";
+            if (!d.isEmpty()) {
+                byDiv.putIfAbsent(d, s);
+            } else {
+                unassigned.add(s);
             }
         }
-        return snapshots;
+        List<MonthlyDirectorySnapshot> result = new ArrayList<>(byDiv.values());
+        result.addAll(unassigned);
+        return result;
     }
 
     public List<String> getAvailableBillingMonths() {

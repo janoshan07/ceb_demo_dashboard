@@ -45,7 +45,12 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
            "(:status IS NULL OR c.validationStatus = :status) AND " +
            "(:location IS NULL OR " +
            "(c.division IS NOT NULL AND TRIM(c.division) <> '' AND LOWER(TRIM(c.division)) = LOWER(TRIM(:location))) OR " +
-           "(c.branchCode IS NOT NULL AND TRIM(c.branchCode) <> '' AND LOWER(TRIM(c.branchCode)) = LOWER(TRIM(:location))))")
+           "(c.branchCode IS NOT NULL AND TRIM(c.branchCode) <> '' AND LOWER(TRIM(c.branchCode)) = LOWER(TRIM(:location))) OR " +
+           "(LOWER(TRIM(:location)) = 'ampara' AND (c.accountNo LIKE '24%' OR LOWER(TRIM(c.division)) LIKE '%ampara%')) OR " +
+           "(LOWER(TRIM(:location)) = 'kalmunai' AND (c.accountNo LIKE '69%' OR LOWER(TRIM(c.division)) LIKE '%kalmunai%')) OR " +
+           "(LOWER(TRIM(:location)) = 'valaichenai' AND (c.accountNo LIKE '56%' OR LOWER(TRIM(c.division)) LIKE '%valai%')) OR " +
+           "(LOWER(TRIM(:location)) = 'batticaloa' AND (c.accountNo LIKE '32%' OR LOWER(TRIM(c.division)) LIKE '%batti%')) OR " +
+           "(LOWER(TRIM(:location)) = 'trincomalee' AND (c.accountNo LIKE '34%' OR LOWER(TRIM(c.division)) LIKE '%trinco%')))")
     Page<Customer> searchCustomersFiltered(@Param("query") String query,
                                            @Param("status") String status,
                                            @Param("location") String location,

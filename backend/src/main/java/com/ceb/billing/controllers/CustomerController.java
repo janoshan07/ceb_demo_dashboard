@@ -118,36 +118,49 @@ public class CustomerController {
         return null;
     }
 
+    public static String canonicalDivision(String div) {
+        return com.ceb.billing.utils.BranchDetector.canonicalDivision(div);
+    }
+
     public static String resolveLocation(Map<String, Object> dto) {
         if (dto == null) return "";
+
+        // 1. Direct snapshotDivision (e.g. from MonthlyDirectorySnapshot)
+        Object snapDiv = dto.get("snapshotDivision");
+        if (snapDiv != null) {
+            String canon = canonicalDivision(snapDiv.toString());
+            if (!canon.isEmpty()) return canon;
+        }
+
+        // 2. Direct division
         Object divObj = dto.get("division");
-        if (divObj != null && !divObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(divObj.toString().trim())) {
-            return divObj.toString().trim();
+        if (divObj != null) {
+            String canon = canonicalDivision(divObj.toString());
+            if (!canon.isEmpty()) return canon;
         }
-        Object branchObj = dto.get("branchCode");
-        if (branchObj != null && !branchObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(branchObj.toString().trim())) {
-            return branchObj.toString().trim();
-        }
+
+        // 3. From directory record if nested
         Object dirObj = dto.get("directory");
         if (dirObj instanceof Map) {
             Map<?, ?> dir = (Map<?, ?>) dirObj;
+            Object dSnap = dir.get("snapshotDivision");
+            if (dSnap != null) {
+                String canon = canonicalDivision(dSnap.toString());
+                if (!canon.isEmpty()) return canon;
+            }
             Object dDiv = dir.get("division");
-            if (dDiv != null && !dDiv.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dDiv.toString().trim())) {
-                return dDiv.toString().trim();
+            if (dDiv != null) {
+                String canon = canonicalDivision(dDiv.toString());
+                if (!canon.isEmpty()) return canon;
             }
             Object dLoc = dir.get("location");
-            if (dLoc != null && !dLoc.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dLoc.toString().trim())) {
-                return dLoc.toString().trim();
-            }
-            Object dBranch = dir.get("branchCode");
-            if (dBranch != null && !dBranch.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dBranch.toString().trim())) {
-                return dBranch.toString().trim();
-            }
-            Object dMasterBranch = dir.get("masterBranchCode");
-            if (dMasterBranch != null && !dMasterBranch.toString().trim().isEmpty() && !"null".equalsIgnoreCase(dMasterBranch.toString().trim())) {
-                return dMasterBranch.toString().trim();
+            if (dLoc != null) {
+                String canon = canonicalDivision(dLoc.toString());
+                if (!canon.isEmpty()) return canon;
             }
         }
+
+        // 4. From Account Number prefix (Ceylon Electricity Board standard: 34=Trincomalee, 24=Ampara, 32=Batticaloa, 56=Valaichenai, 69=Kalmunai)
         Object accObj = dto.get("accountNo");
         if (accObj != null) {
             String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accObj.toString().trim());
@@ -155,6 +168,19 @@ public class CustomerController {
                 return detected.trim();
             }
         }
+
+        // 5. From branchCode ONLY if it represents a known CEB division
+        Object branchObj = dto.get("branchCode");
+        if (branchObj != null) {
+            String canon = canonicalDivision(branchObj.toString());
+            if (!canon.isEmpty()) return canon;
+        }
+
+        // 6. If division is a raw non-empty string that didn't match canonical list, return trimmed
+        if (divObj != null && !divObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(divObj.toString().trim()) && !"—".equals(divObj.toString().trim())) {
+            return divObj.toString().trim();
+        }
+
         return "";
     }
 
@@ -164,6 +190,11 @@ public class CustomerController {
         }
         if (customerLoc == null || customerLoc.trim().isEmpty()) {
             return false;
+        }
+        String canonTarget = canonicalDivision(targetLoc);
+        String canonCust = canonicalDivision(customerLoc);
+        if (!canonTarget.isEmpty() && !canonCust.isEmpty()) {
+            return canonTarget.equalsIgnoreCase(canonCust);
         }
         return customerLoc.trim().equalsIgnoreCase(targetLoc.trim());
     }
@@ -241,18 +272,29 @@ public class CustomerController {
         dto.put("validationErrors", record.get("errors"));
         dto.put("directory", record);
         
-        String recDiv = str(record, "division", "location", "branchCode", "masterBranchCode");
-        if (recDiv == null || recDiv.trim().isEmpty()) {
-            Object snapDiv = record.get("snapshotDivision");
-            if (snapDiv != null && !snapDiv.toString().trim().isEmpty()) {
-                recDiv = snapDiv.toString().trim();
-            }
+        // Resolve division: Priority 1: snapshotDivision, Priority 2: canonical division/location, Priority 3: BranchDetector from accountNo
+        String recDiv = "";
+        Object snapDiv = record.get("snapshotDivision");
+        if (snapDiv != null) {
+            recDiv = canonicalDivision(snapDiv.toString());
         }
-        if ((recDiv == null || recDiv.trim().isEmpty()) && accountNo != null) {
+        if (recDiv.isEmpty()) {
+            recDiv = canonicalDivision(str(record, "division", "location"));
+        }
+        if (recDiv.isEmpty() && accountNo != null) {
             String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
             if (detected != null) recDiv = detected;
         }
-        dto.put("division", recDiv != null ? recDiv.trim() : "");
+        if (recDiv.isEmpty()) {
+            recDiv = canonicalDivision(str(record, "branchCode", "masterBranchCode"));
+        }
+        if (recDiv.isEmpty()) {
+            String rawDiv = str(record, "division", "location");
+            if (rawDiv != null && !rawDiv.trim().isEmpty() && !"—".equals(rawDiv.trim()) && !"null".equalsIgnoreCase(rawDiv.trim())) {
+                recDiv = rawDiv.trim();
+            }
+        }
+        dto.put("division", recDiv != null ? recDiv : "");
         
         List<String> missingFields = new ArrayList<>();
         String name = (String) dto.get("customerName");
@@ -488,17 +530,20 @@ public class CustomerController {
             dto.put("validationStatus", c.getValidationStatus());
             dto.put("validationErrors", c.getValidationErrors());
 
-            String div = c.getDivision();
-            if ((div == null || div.trim().isEmpty()) && dirMap != null) {
-                div = str(dirMap, "division", "location", "branchCode", "masterBranchCode");
+            String div = canonicalDivision(c.getDivision());
+            if (div.isEmpty() && dirMap != null) {
+                div = canonicalDivision(str(dirMap, "snapshotDivision", "division", "location"));
             }
-            if (div == null || div.trim().isEmpty()) {
-                div = c.getBranchCode();
-            }
-            if ((div == null || div.trim().isEmpty()) && c.getAccountNo() != null) {
+            if (div.isEmpty() && c.getAccountNo() != null) {
                 div = com.ceb.billing.utils.BranchDetector.detectBranch(c.getAccountNo().trim());
             }
-            dto.put("division",        div != null ? div.trim() : "");
+            if (div.isEmpty()) {
+                div = canonicalDivision(c.getBranchCode());
+            }
+            if (div.isEmpty() && c.getDivision() != null && !c.getDivision().trim().isEmpty() && !"—".equals(c.getDivision().trim())) {
+                div = c.getDivision().trim();
+            }
+            dto.put("division",        div != null ? div : "");
             dto.put("directory", directory);
 
             // Compute Completeness (Complete Details vs Missing Details)
@@ -604,27 +649,101 @@ public class CustomerController {
         if (billingMonthStr == null || billingMonthStr.trim().isEmpty()) {
             return null;
         }
+        String clean = billingMonthStr.trim();
         try {
-            String[] parts = billingMonthStr.trim().split("\\s+");
+            String[] parts = clean.split("\\s+");
             if (parts.length == 2) {
-                String monthName = parts[0].toUpperCase();
+                String monthPart = parts[0].toUpperCase();
                 int year = Integer.parseInt(parts[1]);
-                Month month = Month.valueOf(monthName);
-                LocalDate start = LocalDate.of(year, month, 1);
-                LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-                return new LocalDate[]{start, end};
+                Month month = null;
+                for (Month m : Month.values()) {
+                    if (m.name().equalsIgnoreCase(monthPart) || m.name().startsWith(monthPart)) {
+                        month = m;
+                        break;
+                    }
+                }
+                if (month != null) {
+                    LocalDate start = LocalDate.of(year, month, 1);
+                    LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+                    return new LocalDate[]{start, end};
+                }
             }
-        } catch (Exception e) {
-            try {
-                DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-                LocalDate start = LocalDate.parse(billingMonthStr.trim() + "-01", fmt);
-                LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
-                return new LocalDate[]{start, end};
-            } catch (Exception ex) {
-                // Ignore
+        } catch (Exception ignored) {}
+        try {
+            DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            LocalDate start = LocalDate.parse(clean + "-01", fmt);
+            LocalDate end = start.withDayOfMonth(start.lengthOfMonth());
+            return new LocalDate[]{start, end};
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    public static boolean isSameMonth(String m1, String m2) {
+        if (m1 == null || m2 == null) return false;
+        String s1 = m1.trim();
+        String s2 = m2.trim();
+        if (s1.equalsIgnoreCase(s2)) return true;
+
+        LocalDate[] r1 = getBillingMonthRange(s1);
+        LocalDate[] r2 = getBillingMonthRange(s2);
+        if (r1 != null && r2 != null) {
+            return r1[0].equals(r2[0]);
+        }
+        return false;
+    }
+
+    private List<com.ceb.billing.entities.MonthlyDirectorySnapshot> getSnapshotsForBillingMonth(String billingMonth) {
+        if (billingMonth == null || billingMonth.trim().isEmpty() || "ALL".equalsIgnoreCase(billingMonth.trim())) {
+            return Collections.emptyList();
+        }
+        String bmTrim = billingMonth.trim();
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snaps =
+                new ArrayList<>(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bmTrim));
+
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> all =
+                monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc();
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot s : all) {
+            String sMonth = s.getBillingMonth() != null ? s.getBillingMonth().trim() : "";
+            if (!sMonth.isEmpty() && isSameMonth(sMonth, bmTrim)) {
+                boolean alreadyPresent = false;
+                for (com.ceb.billing.entities.MonthlyDirectorySnapshot existing : snaps) {
+                    if (Objects.equals(existing.getId(), s.getId())) {
+                        alreadyPresent = true;
+                        break;
+                    }
+                }
+                if (!alreadyPresent) {
+                    snaps.add(s);
+                }
             }
         }
-        return null;
+
+        // Sort newest first
+        snaps.sort((a, b) -> {
+            java.time.LocalDateTime tA = a.getCreatedDate() != null ? a.getCreatedDate() : java.time.LocalDateTime.MIN;
+            java.time.LocalDateTime tB = b.getCreatedDate() != null ? b.getCreatedDate() : java.time.LocalDateTime.MIN;
+            int cmp = tB.compareTo(tA);
+            if (cmp != 0) return cmp;
+            Long idA = a.getId() != null ? a.getId() : 0L;
+            Long idB = b.getId() != null ? b.getId() : 0L;
+            return idB.compareTo(idA);
+        });
+
+        // Retain newest snapshot per division slot
+        Map<String, com.ceb.billing.entities.MonthlyDirectorySnapshot> byDivision = new LinkedHashMap<>();
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> unassigned = new ArrayList<>();
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot s : snaps) {
+            String div = canonicalDivision(s.getDivision());
+            if (!div.isEmpty()) {
+                byDivision.putIfAbsent(div.toLowerCase(), s);
+            } else {
+                unassigned.add(s);
+            }
+        }
+
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> result = new ArrayList<>(byDivision.values());
+        result.addAll(unassigned);
+        return result;
     }
 
     public static String getAgreementStatus(LocalDate agreementDate, LocalDate start, LocalDate end) {
@@ -653,11 +772,7 @@ public class CustomerController {
             String loc = (location != null) ? location.trim() : "";
 
             if (isSpecificMonth) {
-                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots =
-                        monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bmTrim, "APPROVED");
-                if (snapshots.isEmpty()) {
-                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bmTrim);
-                }
+                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(bmTrim);
 
                 Set<String> seenAccounts = new HashSet<>();
                 for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
@@ -672,7 +787,10 @@ public class CustomerController {
                                         continue;
                                     }
                                     if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
-                                        rec.putIfAbsent("snapshotDivision", snap.getDivision().trim());
+                                        rec.put("snapshotDivision", snap.getDivision().trim());
+                                    }
+                                    if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
+                                        rec.put("billingMonth", snap.getBillingMonth().trim());
                                     }
                                     seenAccounts.add(acc);
                                     rawRecords.add(rec);
@@ -680,6 +798,25 @@ public class CustomerController {
                             }
                         } catch (Exception e) {
                             log.warning("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
+                        }
+                    }
+                }
+
+                if (rawRecords.isEmpty()) {
+                    List<Customer> allCustomers = customerRepository.findAll();
+                    for (Customer c : allCustomers) {
+                        if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                            try {
+                                Map<String, Object> dir = objectMapper.readValue(c.getDirectoryJson(),
+                                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                                String cMonth = str(dir, "billingMonth");
+                                if (cMonth != null && (cMonth.equalsIgnoreCase(bmTrim) || isSameMonth(cMonth, bmTrim))) {
+                                    if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
+                                        dir.put("snapshotDivision", c.getDivision().trim());
+                                    }
+                                    rawRecords.add(dir);
+                                }
+                            } catch (Exception ignored) {}
                         }
                     }
                 }
@@ -867,11 +1004,7 @@ public class CustomerController {
             boolean isSpecificMonth = !bmTrim.isEmpty() && !"ALL".equalsIgnoreCase(bmTrim);
 
             if (isSpecificMonth) {
-                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots =
-                        monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bmTrim, "APPROVED");
-                if (snapshots.isEmpty()) {
-                    snapshots = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bmTrim);
-                }
+                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(bmTrim);
 
                 List<Map<String, Object>> rawRecords = new ArrayList<>();
                 Set<String> seenAccounts = new HashSet<>();
@@ -887,7 +1020,10 @@ public class CustomerController {
                                         continue;
                                     }
                                     if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
-                                        rec.putIfAbsent("snapshotDivision", snap.getDivision().trim());
+                                        rec.put("snapshotDivision", snap.getDivision().trim());
+                                    }
+                                    if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
+                                        rec.put("billingMonth", snap.getBillingMonth().trim());
                                     }
                                     seenAccounts.add(acc);
                                     rawRecords.add(rec);
@@ -895,6 +1031,25 @@ public class CustomerController {
                             }
                         } catch (Exception e) {
                             log.warning("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
+                        }
+                    }
+                }
+
+                if (rawRecords.isEmpty()) {
+                    List<Customer> allCustomers = customerRepository.findAll();
+                    for (Customer c : allCustomers) {
+                        if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                            try {
+                                Map<String, Object> dir = objectMapper.readValue(c.getDirectoryJson(),
+                                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                                String cMonth = str(dir, "billingMonth");
+                                if (cMonth != null && (cMonth.equalsIgnoreCase(bmTrim) || isSameMonth(cMonth, bmTrim))) {
+                                    if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
+                                        dir.put("snapshotDivision", c.getDivision().trim());
+                                    }
+                                    rawRecords.add(dir);
+                                }
+                            } catch (Exception ignored) {}
                         }
                     }
                 }

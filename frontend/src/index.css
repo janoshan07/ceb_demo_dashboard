@@ -2247,8 +2247,59 @@ textarea:focus {
 }
 
 /* Custom override to prevent global input focus styling on the search bar input */
-input.search-bar-input-override:focus {
+input.search-bar-input-override:focus,
+input.pcc-search-input:focus {
   border: none !important;
   box-shadow: none !important;
   outline: none !important;
+}
+
+/* Payment Control Center Search Box Neon Glow */
+.pcc-search-box {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.pcc-search-box:focus-within {
+  border-color: #22d3ee !important;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.4), inset 0 0 8px rgba(34, 211, 238, 0.1) !important;
+}
+
+.pcc-search-box:focus-within svg.pcc-search-icon {
+  color: #22d3ee !important;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.6)) !important;
+}
+
+/* Universal Modal Close Icon Button */
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.18) !important;
+  color: #f1f5f9 !important;
+  border-radius: 8px !important;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  padding: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3) !important;
+}
+
+.modal-close-btn:hover {
+  background: rgba(239, 68, 68, 0.2) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  color: #fca5a5 !important;
+  transform: scale(1.06) !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.35) !important;
+}
+
+.modal-close-btn svg {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  stroke: currentColor !important;
+  stroke-width: 2.2 !important;
 }

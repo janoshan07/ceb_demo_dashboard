@@ -58,6 +58,7 @@ const PaymentControlCenter = () => {
   const [netTypeFilter, setNetTypeFilter] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(0);
   const [pageSize] = useState(15);
+  const [searchFocused, setSearchFocused] = useState(false);
 
   // ── Canonical Data State ───────────────────────────────────────────
   const [summary, setSummary] = useState({
@@ -913,17 +914,61 @@ const PaymentControlCenter = () => {
           </div>
 
           {/* Search Box */}
-          <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-card)', borderRadius: '8px', padding: '0.45rem 0.85rem', border: '1px solid var(--border-color)', minWidth: '280px' }}>
-            <Search size={16} style={{ color: 'var(--text-muted)', marginRight: '0.5rem' }} />
+          <div
+            className="pcc-search-box"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              background: searchFocused ? 'rgba(15, 23, 42, 0.95)' : 'var(--bg-card)',
+              borderRadius: '8px',
+              padding: '0.45rem 0.85rem',
+              border: searchFocused ? '1.5px solid #22d3ee' : '1px solid var(--border-color)',
+              boxShadow: searchFocused
+                ? '0 0 16px rgba(34, 211, 238, 0.4), inset 0 0 8px rgba(34, 211, 238, 0.1)'
+                : 'none',
+              minWidth: '280px',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+          >
+            <Search
+              size={16}
+              className="pcc-search-icon"
+              style={{
+                color: searchFocused ? '#22d3ee' : 'var(--text-muted)',
+                marginRight: '0.5rem',
+                filter: searchFocused ? 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.6))' : 'none',
+                transition: 'all 0.25s ease'
+              }}
+            />
             <input
               type="text"
+              className="search-bar-input-override pcc-search-input"
               placeholder="Search Account No or Customer Name..."
               value={searchQuery}
               onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(0); }}
-              style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: '0.85rem', width: '100%' }}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                boxShadow: 'none',
+                color: 'var(--text-primary)',
+                fontSize: '0.85rem',
+                width: '100%',
+                padding: 0
+              }}
             />
             {searchQuery && (
-              <X size={14} style={{ color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => setSearchQuery('')} />
+              <X
+                size={14}
+                style={{
+                  color: searchFocused ? '#22d3ee' : 'var(--text-muted)',
+                  cursor: 'pointer',
+                  transition: 'color 0.2s ease'
+                }}
+                onClick={() => setSearchQuery('')}
+              />
             )}
           </div>
         </div>
@@ -2007,9 +2052,10 @@ const PaymentControlCenter = () => {
 
               <button
                 onClick={() => setDetailsModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '0.35rem' }}
+                className="modal-close-btn"
+                title="Close modal"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
@@ -2636,8 +2682,12 @@ const PaymentControlCenter = () => {
                   Confirm Payment Batch Creation
                 </h3>
               </div>
-              <button onClick={() => setBatchReviewModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={20} />
+              <button
+                onClick={() => setBatchReviewModalOpen(false)}
+                className="modal-close-btn"
+                title="Close modal"
+              >
+                <X size={18} />
               </button>
             </div>
 
@@ -2760,8 +2810,12 @@ const PaymentControlCenter = () => {
                   Period: <strong>{selectedBatchDetails.batch?.billingPeriod}</strong> • Total: <strong style={{ color: '#10b981' }}>{formatLKR(selectedBatchDetails.batch?.totalPayableAmount)}</strong> • Status: <strong>{selectedBatchDetails.batch?.status}</strong>
                 </div>
               </div>
-              <button onClick={() => setBatchDetailsModalOpen(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={20} />
+              <button
+                onClick={() => setBatchDetailsModalOpen(false)}
+                className="modal-close-btn"
+                title="Close modal"
+              >
+                <X size={18} />
               </button>
             </div>
 
@@ -3039,23 +3093,8 @@ const PaymentControlCenter = () => {
 
                 <button
                   onClick={() => setSummaryModalCard(null)}
-                  className="btn"
+                  className="modal-close-btn"
                   title="Close modal"
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid var(--border-color)',
-                    color: 'var(--text-muted)',
-                    borderRadius: '8px',
-                    width: '36px',
-                    height: '36px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
                 >
                   <X size={18} />
                 </button>

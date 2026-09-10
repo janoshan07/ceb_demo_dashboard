@@ -1475,6 +1475,8 @@ public class PaymentControlService {
         String divFilter = division != null ? division.trim() : "";
         boolean hasBp = !bp.isEmpty() && !"ALL".equalsIgnoreCase(bp);
         boolean hasDiv = !divFilter.isEmpty() && !"ALL".equalsIgnoreCase(divFilter);
+        String canonDivFilter = hasDiv ? com.ceb.billing.utils.BranchDetector.canonicalDivision(divFilter) : "";
+        if (canonDivFilter.isEmpty() && hasDiv) canonDivFilter = divFilter;
 
         List<MonthlyDirectorySnapshot> snapshots = getSnapshots(bp, divFilter);
         List<Map<String, Object>> result = new ArrayList<>();
@@ -1494,18 +1496,25 @@ public class PaymentControlService {
                             bMonth = snap.getDatasetName() != null && !snap.getDatasetName().trim().isEmpty() ? snap.getDatasetName().trim() : "CURRENT";
                         }
                         String snapDiv = snap.getDivision() != null && !snap.getDivision().trim().isEmpty()
-                                ? snap.getDivision().trim() : strVal(rec.get("division"));
+                                ? snap.getDivision().trim() : strVal(rec.get("snapshotDivision"));
                         if (snapDiv.isEmpty()) {
-                            snapDiv = strVal(rec.get("branchCode"));
+                            snapDiv = strVal(rec.get("division"));
+                        }
+                        if (snapDiv.isEmpty()) {
+                            snapDiv = strVal(rec.get("location"));
                         }
 
                         // Filter by billingPeriod if specified
-                        if (hasBp && !bp.equalsIgnoreCase(bMonth)) {
+                        if (hasBp && !bp.equalsIgnoreCase(bMonth) && !com.ceb.billing.controllers.CustomerController.isSameMonth(bp, bMonth)) {
                             continue;
                         }
                         // Filter by division if specified
-                        if (hasDiv && !divFilter.equalsIgnoreCase(snapDiv)) {
-                            continue;
+                        if (hasDiv) {
+                            String recCanonDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(snapDiv);
+                            if (recCanonDiv.isEmpty() && !snapDiv.isEmpty()) recCanonDiv = snapDiv.trim();
+                            if (recCanonDiv.isEmpty() || !canonDivFilter.equalsIgnoreCase(recCanonDiv)) {
+                                continue;
+                            }
                         }
 
                         String key = acc + "::" + bMonth;
@@ -1556,18 +1565,30 @@ public class PaymentControlService {
                                 bMonth = "February 2026";
                             }
 
-                            String div = strVal(dirRec.get("division"));
-                            if (div.isEmpty()) {
-                                div = c.getDivision() != null && !c.getDivision().trim().isEmpty() ? c.getDivision().trim() : (c.getBranchCode() != null ? c.getBranchCode().trim() : "");
+                            // Filter by billingPeriod if specified
+                            if (hasBp && !bp.equalsIgnoreCase(bMonth) && !com.ceb.billing.controllers.CustomerController.isSameMonth(bp, bMonth)) {
+                                continue;
                             }
 
-                            // Filter by billingPeriod if specified
-                            if (hasBp && !bp.equalsIgnoreCase(bMonth)) {
-                                continue;
+                            // Strictly check uploaded division data (NOT bank branch code or auto-derived branch code)
+                            String div = strVal(dirRec.get("snapshotDivision"));
+                            if (div.isEmpty()) {
+                                div = strVal(dirRec.get("division"));
                             }
+                            if (div.isEmpty()) {
+                                div = c.getDivision() != null && !c.getDivision().trim().isEmpty() ? c.getDivision().trim() : "";
+                            }
+                            if (div.isEmpty()) {
+                                div = strVal(dirRec.get("location"));
+                            }
+
                             // Filter by division if specified
-                            if (hasDiv && !divFilter.equalsIgnoreCase(div) && (c.getBranchCode() == null || !divFilter.equalsIgnoreCase(c.getBranchCode()))) {
-                                continue;
+                            if (hasDiv) {
+                                String custCanonDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(div);
+                                if (custCanonDiv.isEmpty() && !div.isEmpty()) custCanonDiv = div.trim();
+                                if (custCanonDiv.isEmpty() || !canonDivFilter.equalsIgnoreCase(custCanonDiv)) {
+                                    continue;
+                                }
                             }
 
                             String key = acc + "::" + bMonth;
@@ -1631,28 +1652,48 @@ public class PaymentControlService {
         String div = division != null ? division.trim() : "";
         boolean hasBp = !bp.isEmpty() && !"ALL".equalsIgnoreCase(bp);
         boolean hasDiv = !div.isEmpty() && !"ALL".equalsIgnoreCase(div);
+        String canonDiv = hasDiv ? com.ceb.billing.utils.BranchDetector.canonicalDivision(div) : "";
+        if (canonDiv.isEmpty() && hasDiv) canonDiv = div;
 
-        List<MonthlyDirectorySnapshot> raw;
+        List<MonthlyDirectorySnapshot> raw = new ArrayList<>();
         if (hasBp && hasDiv) {
-            raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(bp, div);
+            raw.addAll(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(bp, div));
+            if (!canonDiv.equalsIgnoreCase(div)) {
+                raw.addAll(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(bp, canonDiv));
+            }
             if (raw.isEmpty()) {
-                raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, div, "APPROVED");
+                raw.addAll(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, div, "APPROVED"));
+                if (!canonDiv.equalsIgnoreCase(div)) {
+                    raw.addAll(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndDivisionIgnoreCaseAndStatus(bp, canonDiv, "APPROVED"));
+                }
             }
         } else if (hasBp) {
-            raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bp);
+            raw.addAll(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCase(bp));
             if (raw.isEmpty()) {
-                raw = monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bp, "APPROVED");
+                raw.addAll(monthlyDirectorySnapshotRepository.findByBillingMonthIgnoreCaseAndStatus(bp, "APPROVED"));
             }
         } else if (hasDiv) {
-            raw = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCase(div);
+            raw.addAll(monthlyDirectorySnapshotRepository.findByDivisionIgnoreCase(div));
+            if (!canonDiv.equalsIgnoreCase(div)) {
+                raw.addAll(monthlyDirectorySnapshotRepository.findByDivisionIgnoreCase(canonDiv));
+            }
             if (raw.isEmpty()) {
-                raw = monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(div, "APPROVED");
+                raw.addAll(monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(div, "APPROVED"));
+                if (!canonDiv.equalsIgnoreCase(div)) {
+                    raw.addAll(monthlyDirectorySnapshotRepository.findByDivisionIgnoreCaseAndStatus(canonDiv, "APPROVED"));
+                }
             }
         } else {
-            raw = monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc();
+            raw.addAll(monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc());
         }
 
-        List<MonthlyDirectorySnapshot> snapshots = new ArrayList<>(raw);
+        Map<Long, MonthlyDirectorySnapshot> uniqueMap = new LinkedHashMap<>();
+        for (MonthlyDirectorySnapshot s : raw) {
+            if (s.getId() != null) {
+                uniqueMap.putIfAbsent(s.getId(), s);
+            }
+        }
+        List<MonthlyDirectorySnapshot> snapshots = new ArrayList<>(uniqueMap.values());
         snapshots.sort((a, b) -> {
             java.time.LocalDateTime tA = a.getCreatedDate() != null ? a.getCreatedDate() : java.time.LocalDateTime.MIN;
             java.time.LocalDateTime tB = b.getCreatedDate() != null ? b.getCreatedDate() : java.time.LocalDateTime.MIN;
@@ -1666,13 +1707,27 @@ public class PaymentControlService {
         Map<String, MonthlyDirectorySnapshot> byDiv = new LinkedHashMap<>();
         List<MonthlyDirectorySnapshot> unassigned = new ArrayList<>();
         for (MonthlyDirectorySnapshot s : snapshots) {
-            String d = s.getDivision() != null ? s.getDivision().trim().toLowerCase() : "";
-            if (!d.isEmpty()) {
-                byDiv.putIfAbsent(d, s);
+            String d = s.getDivision() != null ? s.getDivision().trim() : "";
+            String dCanon = com.ceb.billing.utils.BranchDetector.canonicalDivision(d);
+            if (dCanon.isEmpty() && !d.isEmpty()) dCanon = d;
+
+            if (!dCanon.isEmpty()) {
+                byDiv.putIfAbsent(dCanon.toLowerCase(), s);
             } else {
                 unassigned.add(s);
             }
         }
+
+        if (hasDiv) {
+            List<MonthlyDirectorySnapshot> result = new ArrayList<>();
+            for (Map.Entry<String, MonthlyDirectorySnapshot> entry : byDiv.entrySet()) {
+                if (entry.getKey().equalsIgnoreCase(canonDiv)) {
+                    result.add(entry.getValue());
+                }
+            }
+            return result;
+        }
+
         List<MonthlyDirectorySnapshot> result = new ArrayList<>(byDiv.values());
         result.addAll(unassigned);
         return result;

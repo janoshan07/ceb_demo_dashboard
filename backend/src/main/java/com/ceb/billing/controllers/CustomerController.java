@@ -26,6 +26,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -807,14 +808,14 @@ public class CustomerController {
                     for (Customer c : allCustomers) {
                         if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
                             try {
-                                Map<String, Object> dir = objectMapper.readValue(c.getDirectoryJson(),
+                                Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
                                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                                String cMonth = str(dir, "billingMonth");
+                                String cMonth = str(dirMap, "billingMonth");
                                 if (cMonth != null && (cMonth.equalsIgnoreCase(bmTrim) || isSameMonth(cMonth, bmTrim))) {
                                     if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
-                                        dir.put("snapshotDivision", c.getDivision().trim());
+                                        dirMap.put("snapshotDivision", c.getDivision().trim());
                                     }
-                                    rawRecords.add(dir);
+                                    rawRecords.add(dirMap);
                                 }
                             } catch (Exception ignored) {}
                         }
@@ -1040,14 +1041,14 @@ public class CustomerController {
                     for (Customer c : allCustomers) {
                         if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
                             try {
-                                Map<String, Object> dir = objectMapper.readValue(c.getDirectoryJson(),
+                                Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
                                         new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                                String cMonth = str(dir, "billingMonth");
+                                String cMonth = str(dirMap, "billingMonth");
                                 if (cMonth != null && (cMonth.equalsIgnoreCase(bmTrim) || isSameMonth(cMonth, bmTrim))) {
                                     if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
-                                        dir.put("snapshotDivision", c.getDivision().trim());
+                                        dirMap.put("snapshotDivision", c.getDivision().trim());
                                     }
-                                    rawRecords.add(dir);
+                                    rawRecords.add(dirMap);
                                 }
                             } catch (Exception ignored) {}
                         }

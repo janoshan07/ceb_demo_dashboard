@@ -28,7 +28,10 @@ public class JwtUtils {
 
     public String generateJwtToken(Authentication authentication, String role) {
         String username = authentication.getName();
+        return generateJwtTokenFromUsername(username, role);
+    }
 
+    public String generateJwtTokenFromUsername(String username, String role) {
         return Jwts.builder()
                 .setSubject(username)
                 .claim("role", role)

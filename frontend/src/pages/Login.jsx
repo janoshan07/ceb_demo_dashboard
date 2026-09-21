@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import edlLogo from '../assets/edl_logo.jpg';
 
-/* ─── tiny SVG icons (no heavy lib) ─────────────────────────── */
+/* ─── tiny SVG icons (clean inline SVG, zero external overhead) ─────────────────────────── */
 const IconUser = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
     <circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
@@ -30,14 +30,14 @@ const IconEyeOff = () => (
     <line x1="1" y1="1" x2="23" y2="23" />
   </svg>
 );
-const IconZap = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
-    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-  </svg>
-);
 const IconShield = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+const IconPhone = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+    <rect x="5" y="2" width="14" height="20" rx="2" ry="2" /><line x1="12" y1="18" x2="12.01" y2="18" />
   </svg>
 );
 const IconArrow = () => (
@@ -45,8 +45,23 @@ const IconArrow = () => (
     <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
   </svg>
 );
+const IconArrowLeft = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="15" height="15">
+    <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+  </svg>
+);
+const IconRefresh = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
+  </svg>
+);
+const IconCheckCircle = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+  </svg>
+);
 
-/* ─── Input Field ────────────────────────────────────────────── */
+/* ─── Input Field Component ────────────────────────────────────────────── */
 const Field = ({ id, icon: Icon, type, placeholder, value, onChange, disabled, right }) => {
   const [focused, setFocused] = useState(false);
   return (
@@ -87,21 +102,172 @@ const Field = ({ id, icon: Icon, type, placeholder, value, onChange, disabled, r
 
 /* ─── Main Login Page ────────────────────────────────────────── */
 const Login = () => {
+  // Step: 'CREDENTIALS' | 'OTP'
+  const [step, setStep] = useState('CREDENTIALS');
+
+  // Credentials form state
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [token, setToken]       = useState('');
   const [showPw, setShowPw]     = useState(false);
-  const { login, loading, error, setError } = useAuth();
 
+  // OTP form state
+  const [otpSessionId, setOtpSessionId] = useState('');
+  const [maskedPhone, setMaskedPhone]   = useState('');
+  const [otpDigits, setOtpDigits]       = useState(['', '', '', '', '', '']);
+  const [countdown, setCountdown]       = useState(60);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [otpError, setOtpError]         = useState(null);
+  const [otpSuccess, setOtpSuccess]     = useState(null);
+
+  const digitInputRefs = useRef([]);
+
+  const { login, verifyOtp, resendOtp, loading, error, setError } = useAuth();
+
+  // Clear credentials error
   const clearErr = () => { if (error) setError(null); };
 
-  const handleSubmit = async (e) => {
+  // Countdown timer for OTP resend cooldown
+  useEffect(() => {
+    let timer;
+    if (step === 'OTP' && countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown(prev => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [step, countdown]);
+
+  // Handle Initial Login Credentials Submission
+  const handleCredentialsSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setError('Please enter your Employee ID and password.');
       return;
     }
-    await login(username.trim(), password.trim());
+
+    const result = await login(username.trim(), password.trim());
+
+    if (result && result.otpRequired) {
+      // Transition to OTP verification step
+      setOtpSessionId(result.otpSessionId);
+      setMaskedPhone(result.maskedPhone || '******4567');
+      setCountdown(result.resendCooldownSeconds || 60);
+      setOtpDigits(['', '', '', '', '', '']);
+      setOtpError(null);
+      setOtpSuccess(result.message || 'Verification code sent to your registered phone.');
+      setStep('OTP');
+
+      // Auto-focus first OTP digit after transition
+      setTimeout(() => {
+        if (digitInputRefs.current[0]) {
+          digitInputRefs.current[0].focus();
+        }
+      }, 150);
+    }
+  };
+
+  // Handle individual OTP digit input
+  const handleDigitChange = (index, value) => {
+    // Only accept numeric inputs
+    const cleanVal = value.replace(/[^0-9]/g, '');
+    const newDigits = [...otpDigits];
+
+    if (cleanVal.length > 1) {
+      // Handle paste of full 6-digit code
+      const pasted = cleanVal.slice(0, 6).split('');
+      pasted.forEach((d, i) => {
+        if (i < 6) newDigits[i] = d;
+      });
+      setOtpDigits(newDigits);
+      const nextIndex = Math.min(pasted.length, 5);
+      digitInputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    newDigits[index] = cleanVal ? cleanVal[cleanVal.length - 1] : '';
+    setOtpDigits(newDigits);
+    setOtpError(null);
+
+    // Auto-advance to next input
+    if (cleanVal && index < 5) {
+      digitInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  // Handle Backspace navigation across OTP cells
+  const handleKeyDown = (index, e) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      digitInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Handle OTP paste
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').trim().replace(/[^0-9]/g, '');
+    if (pastedData) {
+      const newDigits = [...otpDigits];
+      const chars = pastedData.slice(0, 6).split('');
+      chars.forEach((c, i) => {
+        if (i < 6) newDigits[i] = c;
+      });
+      setOtpDigits(newDigits);
+      const targetFocus = Math.min(chars.length, 5);
+      digitInputRefs.current[targetFocus]?.focus();
+    }
+  };
+
+  // Handle OTP Verification Submission
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    const code = otpDigits.join('');
+    if (code.length !== 6) {
+      setOtpError('Please enter the full 6-digit verification code.');
+      return;
+    }
+
+    setOtpError(null);
+    const result = await verifyOtp(otpSessionId, code);
+
+    if (result && result.error) {
+      setOtpError(result.error);
+    }
+    // If successful, AuthContext automatically updates user state and App.jsx redirects to Dashboard!
+  };
+
+  // Handle Resend OTP request
+  const handleResend = async () => {
+    if (countdown > 0 || resendLoading) return;
+
+    setResendLoading(true);
+    setOtpError(null);
+    setOtpSuccess(null);
+
+    const result = await resendOtp(otpSessionId);
+    setResendLoading(false);
+
+    if (result.success) {
+      setOtpSessionId(result.otpSessionId);
+      if (result.maskedPhone) setMaskedPhone(result.maskedPhone);
+      setCountdown(result.resendCooldownSeconds || 60);
+      setOtpDigits(['', '', '', '', '', '']);
+      setOtpSuccess(result.message || 'A new 6-digit code has been sent.');
+      setTimeout(() => {
+        digitInputRefs.current[0]?.focus();
+      }, 100);
+    } else {
+      setOtpError(result.error || 'Failed to resend code. Please try again.');
+    }
+  };
+
+  // Reset back to credentials step
+  const handleBackToLogin = () => {
+    setStep('CREDENTIALS');
+    setOtpError(null);
+    setOtpSuccess(null);
+    setError(null);
+    setOtpDigits(['', '', '', '', '', '']);
   };
 
   const ring = (size, opacity, border) => ({
@@ -186,112 +352,299 @@ const Login = () => {
 
           {/* Indicator dots */}
           <div style={{ display: 'flex', gap: '6px', position: 'relative', zIndex: 1 }}>
-            {[true, false, false, false].map((a, i) => (
-              <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', background: a ? '#3b82f6' : 'rgba(255,255,255,0.15)' }} />
+            {[step === 'CREDENTIALS', step === 'OTP', false, false].map((a, i) => (
+              <div key={i} style={{ width: '5px', height: '5px', borderRadius: '50%', background: a ? '#38bdf8' : 'rgba(255,255,255,0.15)', transition: 'background 0.3s ease' }} />
             ))}
           </div>
         </div>
 
         {/* ── Right form panel ── */}
         <div style={{ flex: 1, padding: '48px 40px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          {/* Status badge */}
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            padding: '4px 10px', borderRadius: '999px', alignSelf: 'flex-start',
-            background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
-            fontSize: '9.5px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase',
-            color: '#34d399', marginBottom: '20px',
-          }}>
-            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399', animation: 'edl-blink 1.5s ease-in-out infinite' }} />
-            System Online
-          </div>
+          
+          {step === 'CREDENTIALS' ? (
+            /* ──────────────── STEP 1: CREDENTIALS ──────────────── */
+            <>
+              {/* Status badge */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '4px 10px', borderRadius: '999px', alignSelf: 'flex-start',
+                background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)',
+                fontSize: '9.5px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase',
+                color: '#34d399', marginBottom: '20px',
+              }}>
+                <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#34d399', animation: 'edl-blink 1.5s ease-in-out infinite' }} />
+                System Online
+              </div>
 
-          <p style={{ fontSize: '10px', fontWeight: '700', letterSpacing: '0.22em', textTransform: 'uppercase', color: '#3b82f6', margin: '0 0 8px' }}>
-            Secure Enterprise Access
-          </p>
-          <h2 style={{ fontSize: '26px', fontWeight: '800', color: '#f1f5f9', letterSpacing: '-0.02em', lineHeight: 1.15, margin: '0 0 4px' }}>
-            Welcome Back
-          </h2>
-          <p style={{ fontSize: '12px', color: 'rgba(148,163,184,0.65)', margin: '0 0 28px', lineHeight: 1.5 }}>
-            Sign in to access the EDL operational dashboard
-          </p>
+              <p style={{ fontSize: '10px', fontWeight: '700', letterSpacing: '0.22em', textTransform: 'uppercase', color: '#3b82f6', margin: '0 0 8px' }}>
+                Secure Enterprise Access
+              </p>
+              <h2 style={{ fontSize: '26px', fontWeight: '800', color: '#f1f5f9', letterSpacing: '-0.02em', lineHeight: 1.15, margin: '0 0 4px' }}>
+                Welcome Back
+              </h2>
+              <p style={{ fontSize: '12px', color: 'rgba(148,163,184,0.65)', margin: '0 0 28px', lineHeight: 1.5 }}>
+                Sign in to access the EDL operational dashboard
+              </p>
 
-          {/* Error */}
-          {error && (
-            <div style={{
-              display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 14px',
-              borderRadius: '10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)',
-              color: '#fca5a5', fontSize: '12px', marginBottom: '16px', lineHeight: 1.5,
-            }}>
-              <IconShield /><span>{error}</span>
+              {/* Error */}
+              {error && (
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 14px',
+                  borderRadius: '10px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.22)',
+                  color: '#fca5a5', fontSize: '12px', marginBottom: '16px', lineHeight: 1.5,
+                }}>
+                  <IconShield /><span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleCredentialsSubmit} autoComplete="off">
+                {/* Employee ID */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-username">
+                    Employee ID / Username
+                  </label>
+                  <Field id="edl-username" icon={IconUser} type="text" placeholder="Enter your Employee ID"
+                    value={username} onChange={e => { setUsername(e.target.value); clearErr(); }} disabled={loading} />
+                </div>
+
+                {/* Password */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-password">
+                    Password
+                  </label>
+                  <Field id="edl-password" icon={IconLock} type={showPw ? 'text' : 'password'} placeholder="Enter your password"
+                    value={password} onChange={e => { setPassword(e.target.value); clearErr(); }} disabled={loading}
+                    right={
+                      <button type="button" onClick={() => setShowPw(v => !v)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 0, display: 'flex' }}>
+                        {showPw ? <IconEyeOff /> : <IconEye />}
+                      </button>
+                    }
+                  />
+                </div>
+
+                {/* Security Token */}
+                <div style={{ marginBottom: '14px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-token">
+                    Security Token <span style={{ opacity: 0.4, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+                  </label>
+                  <Field id="edl-token" icon={IconKey} type="text" placeholder="Enter security token"
+                    value={token} onChange={e => setToken(e.target.value)} disabled={loading} />
+                </div>
+
+                {/* Links */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', marginTop: '4px' }}>
+                  <a href="#" style={{ fontSize: '11.5px', color: '#60a5fa', textDecoration: 'none', fontWeight: '500' }}>Forgot Password?</a>
+                  <a href="#" style={{ fontSize: '11.5px', color: '#60a5fa', textDecoration: 'none', fontWeight: '500' }}>Request Access</a>
+                </div>
+
+                {/* Submit */}
+                <button
+                  id="edl-login-btn"
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    width: '100%', height: '50px', border: 'none', borderRadius: '11px',
+                    cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
+                    background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #22d3ee 100%)',
+                    color: '#fff', fontSize: '13px', fontWeight: '700', letterSpacing: '0.08em',
+                    textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                    boxShadow: '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)',
+                    transition: 'all 0.25s ease',
+                  }}
+                  onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 28px rgba(34, 211, 238, 0.6), 0 12px 32px rgba(0,0,0,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'none'; }}
+                >
+                  {loading ? (
+                    <><div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', borderRadius: '50%', animation: 'edl-spin 0.75s linear infinite' }} /><span>Verifying Credentials…</span></>
+                  ) : (
+                    <><span>Sign In With Credentials</span><IconArrow /></>
+                  )}
+                </button>
+              </form>
+            </>
+          ) : (
+            /* ──────────────── STEP 2: OTP VERIFICATION ──────────────── */
+            <div style={{ animation: 'edl-fade-in 0.3s ease-out' }}>
+              {/* Back to credentials button */}
+              <button
+                type="button"
+                onClick={handleBackToLogin}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8',
+                  fontSize: '11.5px', fontWeight: '500', display: 'inline-flex', alignItems: 'center',
+                  gap: '6px', padding: 0, marginBottom: '18px', transition: 'color 0.2s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#38bdf8'}
+                onMouseLeave={e => e.currentTarget.style.color = '#94a3b8'}
+              >
+                <IconArrowLeft />
+                <span>Back to Sign In</span>
+              </button>
+
+              {/* Status badge */}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '4px 10px', borderRadius: '999px', alignSelf: 'flex-start',
+                background: 'rgba(34, 211, 238, 0.1)', border: '1px solid rgba(34, 211, 238, 0.3)',
+                fontSize: '9.5px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase',
+                color: '#22d3ee', marginBottom: '16px',
+              }}>
+                <IconLock />
+                Two-Factor Phone Verification
+              </div>
+
+              <h2 style={{ fontSize: '24px', fontWeight: '800', color: '#f1f5f9', letterSpacing: '-0.02em', lineHeight: 1.15, margin: '0 0 6px' }}>
+                Enter Security Code
+              </h2>
+              <p style={{ fontSize: '12px', color: 'rgba(148,163,184,0.7)', margin: '0 0 20px', lineHeight: 1.5 }}>
+                A 6-digit verification code was sent to your registered number{' '}
+                <span style={{ color: '#38bdf8', fontWeight: '700', padding: '1px 6px', background: 'rgba(56, 189, 248, 0.12)', borderRadius: '6px', letterSpacing: '0.04em' }}>
+                  {maskedPhone}
+                </span>
+              </p>
+
+              {/* Success alert */}
+              {otpSuccess && !otpError && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px',
+                  borderRadius: '10px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)',
+                  color: '#6ee7b7', fontSize: '11.5px', marginBottom: '18px', lineHeight: 1.4,
+                }}>
+                  <IconCheckCircle />
+                  <span>{otpSuccess}</span>
+                </div>
+              )}
+
+              {/* Error alert */}
+              {otpError && (
+                <div style={{
+                  display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '10px 14px',
+                  borderRadius: '10px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)',
+                  color: '#fca5a5', fontSize: '12px', marginBottom: '18px', lineHeight: 1.4,
+                }}>
+                  <IconShield />
+                  <span>{otpError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleOtpSubmit} autoComplete="off">
+                {/* 6 Digit Input Cells */}
+                <div style={{ marginBottom: '22px' }}>
+                  <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '10px', textAlign: 'center' }}>
+                    6-Digit Verification Code
+                  </label>
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }} onPaste={handlePaste}>
+                    {otpDigits.map((digit, idx) => (
+                      <input
+                        key={idx}
+                        ref={el => (digitInputRefs.current[idx] = el)}
+                        id={`edl-otp-digit-${idx}`}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={e => handleDigitChange(idx, e.target.value)}
+                        onKeyDown={e => handleKeyDown(idx, e)}
+                        disabled={loading}
+                        style={{
+                          width: '46px',
+                          height: '52px',
+                          textAlign: 'center',
+                          fontSize: '22px',
+                          fontWeight: '700',
+                          color: '#ffffff',
+                          background: digit ? 'rgba(15, 23, 42, 0.95)' : 'rgba(15, 23, 42, 0.75)',
+                          border: `1.5px solid ${digit ? '#22d3ee' : 'rgba(255,255,255,0.14)'}`,
+                          borderRadius: '11px',
+                          outline: 'none',
+                          boxShadow: digit ? '0 0 14px rgba(34, 211, 238, 0.35)' : 'none',
+                          transition: 'all 0.2s ease',
+                          caretColor: '#22d3ee',
+                        }}
+                        onFocus={e => {
+                          e.target.style.borderColor = '#22d3ee';
+                          e.target.style.boxShadow = '0 0 16px rgba(34, 211, 238, 0.4)';
+                          e.target.select();
+                        }}
+                        onBlur={e => {
+                          if (!e.target.value) {
+                            e.target.style.borderColor = 'rgba(255,255,255,0.14)';
+                            e.target.style.boxShadow = 'none';
+                          }
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Resend OTP button & Countdown timer */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px', padding: '0 4px' }}>
+                  <div style={{ fontSize: '11px', color: 'rgba(148,163,184,0.6)' }}>
+                    Didn't receive the SMS code?
+                  </div>
+                  {countdown > 0 ? (
+                    <div style={{
+                      fontSize: '11px', fontWeight: '600', color: '#94a3b8',
+                      display: 'flex', alignItems: 'center', gap: '5px',
+                    }}>
+                      <div style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#38bdf8' }} />
+                      Resend in <span style={{ color: '#38bdf8', fontWeight: '700', minWidth: '22px' }}>{countdown}s</span>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      id="edl-resend-otp-btn"
+                      onClick={handleResend}
+                      disabled={resendLoading || loading}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        color: '#38bdf8', fontSize: '11.5px', fontWeight: '600',
+                        display: 'flex', alignItems: 'center', gap: '5px', padding: 0,
+                        transition: 'color 0.2s ease',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = '#7dd3fc'}
+                      onMouseLeave={e => e.currentTarget.style.color = '#38bdf8'}
+                    >
+                      {resendLoading ? (
+                        <span>Sending…</span>
+                      ) : (
+                        <>
+                          <IconRefresh />
+                          <span>Resend Code</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                {/* Verify Button */}
+                <button
+                  id="edl-verify-otp-btn"
+                  type="submit"
+                  disabled={loading || otpDigits.join('').length !== 6}
+                  style={{
+                    width: '100%', height: '50px', border: 'none', borderRadius: '11px',
+                    cursor: (loading || otpDigits.join('').length !== 6) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || otpDigits.join('').length !== 6) ? 0.65 : 1,
+                    background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #22d3ee 100%)',
+                    color: '#fff', fontSize: '13px', fontWeight: '700', letterSpacing: '0.08em',
+                    textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                    boxShadow: '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)',
+                    transition: 'all 0.25s ease',
+                  }}
+                  onMouseEnter={e => { if (!loading && otpDigits.join('').length === 6) { e.currentTarget.style.boxShadow = '0 6px 28px rgba(34, 211, 238, 0.6), 0 12px 32px rgba(0,0,0,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
+                  onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'none'; }}
+                >
+                  {loading ? (
+                    <><div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', borderRadius: '50%', animation: 'edl-spin 0.75s linear infinite' }} /><span>Validating OTP Code…</span></>
+                  ) : (
+                    <><span>Verify & Sign In</span><IconArrow /></>
+                  )}
+                </button>
+              </form>
             </div>
           )}
-
-          <form onSubmit={handleSubmit} autoComplete="off">
-            {/* Employee ID */}
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-username">
-                Employee ID / Username
-              </label>
-              <Field id="edl-username" icon={IconUser} type="text" placeholder="Enter your Employee ID"
-                value={username} onChange={e => { setUsername(e.target.value); clearErr(); }} disabled={loading} />
-            </div>
-
-            {/* Password */}
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-password">
-                Password
-              </label>
-              <Field id="edl-password" icon={IconLock} type={showPw ? 'text' : 'password'} placeholder="Enter your password"
-                value={password} onChange={e => { setPassword(e.target.value); clearErr(); }} disabled={loading}
-                right={
-                  <button type="button" onClick={() => setShowPw(v => !v)}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 0, display: 'flex' }}>
-                    {showPw ? <IconEyeOff /> : <IconEye />}
-                  </button>
-                }
-              />
-            </div>
-
-            {/* Security Token */}
-            <div style={{ marginBottom: '14px' }}>
-              <label style={{ display: 'block', fontSize: '10px', fontWeight: '600', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'rgba(148,163,184,0.6)', marginBottom: '7px' }} htmlFor="edl-token">
-                Security Token <span style={{ opacity: 0.4, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
-              </label>
-              <Field id="edl-token" icon={IconKey} type="text" placeholder="Enter security token"
-                value={token} onChange={e => setToken(e.target.value)} disabled={loading} />
-            </div>
-
-            {/* Links */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', marginTop: '4px' }}>
-              <a href="#" style={{ fontSize: '11.5px', color: '#60a5fa', textDecoration: 'none', fontWeight: '500' }}>Forgot Password?</a>
-              <a href="#" style={{ fontSize: '11.5px', color: '#60a5fa', textDecoration: 'none', fontWeight: '500' }}>Request Access</a>
-            </div>
-
-            {/* Submit */}
-            <button
-              id="edl-login-btn"
-              type="submit"
-              disabled={loading}
-              style={{
-                width: '100%', height: '50px', border: 'none', borderRadius: '11px',
-                cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1,
-                background: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 50%, #22d3ee 100%)',
-                color: '#fff', fontSize: '13px', fontWeight: '700', letterSpacing: '0.08em',
-                textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                boxShadow: '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)',
-                transition: 'all 0.25s ease',
-              }}
-              onMouseEnter={e => { if (!loading) { e.currentTarget.style.boxShadow = '0 6px 28px rgba(34, 211, 238, 0.6), 0 12px 32px rgba(0,0,0,0.5)'; e.currentTarget.style.transform = 'translateY(-1px)'; }}}
-              onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.4), 0 8px 24px rgba(0,0,0,0.4)'; e.currentTarget.style.transform = 'none'; }}
-            >
-              {loading ? (
-                <><div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.25)', borderTopColor: '#fff', borderRadius: '50%', animation: 'edl-spin 0.75s linear infinite' }} /><span>Authenticating…</span></>
-              ) : (
-                <><span>Secure Login</span><IconArrow /></>
-              )}
-            </button>
-          </form>
 
           <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '24px 0' }} />
           <div style={{ display: 'flex', gap: '20px', justifyContent: 'center' }}>
@@ -326,6 +679,7 @@ const Login = () => {
         }
         @keyframes edl-spin { to { transform: rotate(360deg); } }
         @keyframes edl-blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+        @keyframes edl-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
       `}</style>
     </div>
   );

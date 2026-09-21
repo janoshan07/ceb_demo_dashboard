@@ -20,6 +20,9 @@ public class User {
     @Column(nullable = false, length = 50)
     private String role; // ADMIN, BILLING_OFFICER, VIEWER
 
+    @Column(name = "phone_number", length = 50)
+    private String phoneNumber;
+
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
@@ -35,6 +38,13 @@ public class User {
         this.username = username;
         this.password = password;
         this.role = role;
+    }
+
+    public User(String username, String password, String role, String phoneNumber) {
+        this.username = username;
+        this.password = password;
+        this.role = role;
+        this.phoneNumber = phoneNumber;
     }
 
     // Getters and Setters
@@ -76,5 +86,13 @@ public class User {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
     }
 }

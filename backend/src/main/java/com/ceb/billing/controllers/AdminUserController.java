@@ -102,6 +102,11 @@ public class AdminUserController {
         user.setUsername(user.getUsername().trim());
         user.setPassword(encoder.encode(user.getPassword().trim()));
         user.setRole(assignedRole);
+        if (user.getPhoneNumber() != null && !user.getPhoneNumber().trim().isEmpty()) {
+            user.setPhoneNumber(user.getPhoneNumber().trim());
+        } else {
+            user.setPhoneNumber("+94771234567");
+        }
         userRepository.save(Objects.requireNonNull(user));
 
         auditLogService.log("USER_CREATED", "Created user: " + user.getUsername() + " with role: " + user.getRole());
@@ -130,6 +135,11 @@ public class AdminUserController {
                         .body(new MessageResponse("Invalid role. Allowed roles: ADMIN, OFFICER, USER"));
             }
             user.setRole(assignedRole);
+        }
+
+        // Update phone number
+        if (userDetails.getPhoneNumber() != null && !userDetails.getPhoneNumber().trim().isEmpty()) {
+            user.setPhoneNumber(userDetails.getPhoneNumber().trim());
         }
 
         userRepository.save(Objects.requireNonNull(user));

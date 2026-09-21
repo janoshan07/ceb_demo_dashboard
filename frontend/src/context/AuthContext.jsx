@@ -34,7 +34,55 @@ export const AuthProvider = ({ children }) => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.message || 'Authentication failed');
+        throw new Error(data.message || 'Authentication failed. Please verify your credentials.');
+      }
+
+      setLoading(false);
+
+      // Handle 2FA OTP requirement
+      if (data.otpRequired) {
+        return {
+          otpRequired: true,
+          otpSessionId: data.otpSessionId,
+          maskedPhone: data.maskedPhone,
+          expiresInSeconds: data.expiresInSeconds || 300,
+          resendCooldownSeconds: data.resendCooldownSeconds || 60,
+          message: data.message
+        };
+      }
+
+      // Fallback in case direct token is returned
+      const userDetails = {
+        username: data.username,
+        role: data.role,
+        token: data.token
+      };
+
+      setUser(userDetails);
+      sessionStorage.setItem('ceb_user', JSON.stringify(userDetails));
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Connection error. Make sure backend is running.');
+      setLoading(false);
+      return { error: err.message || 'Connection error. Make sure backend is running.' };
+    }
+  };
+
+  const verifyOtp = async (otpSessionId, otp) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('http://localhost:8080/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otpSessionId, otp })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Invalid or expired verification code');
       }
 
       const userDetails = {
@@ -46,11 +94,41 @@ export const AuthProvider = ({ children }) => {
       setUser(userDetails);
       sessionStorage.setItem('ceb_user', JSON.stringify(userDetails));
       setLoading(false);
-      return true;
+      return { success: true, user: userDetails };
     } catch (err) {
-      setError(err.message || 'Connection error. Make sure backend is running.');
+      const msg = err.message || 'OTP verification failed';
+      setError(msg);
       setLoading(false);
-      return false;
+      return { error: msg };
+    }
+  };
+
+  const resendOtp = async (otpSessionId) => {
+    setError(null);
+    try {
+      const response = await fetch('http://localhost:8080/api/auth/resend-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ otpSessionId })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to resend verification code');
+      }
+
+      return {
+        success: true,
+        otpSessionId: data.otpSessionId,
+        maskedPhone: data.maskedPhone,
+        expiresInSeconds: data.expiresInSeconds || 300,
+        resendCooldownSeconds: data.resendCooldownSeconds || 60,
+        message: data.message
+      };
+    } catch (err) {
+      const msg = err.message || 'Failed to resend code';
+      return { error: msg };
     }
   };
 
@@ -86,7 +164,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, authFetch, loading, error, setError }}>
+    <AuthContext.Provider value={{ user, login, verifyOtp, resendOtp, logout, authFetch, loading, error, setError }}>
       {children}
     </AuthContext.Provider>
   );

@@ -485,7 +485,8 @@ public class ExcelValidationService {
                 if (changed) {
                     List<?> errs = dirMap.get("errors") instanceof List ? (List<?>) dirMap.get("errors") : Collections.emptyList();
                     List<?> warns = dirMap.get("warnings") instanceof List ? (List<?>) dirMap.get("warnings") : Collections.emptyList();
-                    boolean isDup = Boolean.TRUE.equals(dirMap.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase((String) dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("hasDuplicateSources"));
+                    boolean isMultiPayment = Boolean.TRUE.equals(dirMap.get("isMultiplePayment")) || "MULTIPLE_PAYMENT".equalsIgnoreCase((String) dirMap.get("status"));
+                    boolean isDup = !isMultiPayment && (Boolean.TRUE.equals(dirMap.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase((String) dirMap.get("status")) || Boolean.TRUE.equals(dirMap.get("hasDuplicateSources")));
                     
                     boolean isNameMismatch = "MISMATCH".equals(dirMap.get("nameMatch"));
                     boolean isUnitRateMismatch = "MISMATCH".equals(dirMap.get("unitRateMatch"));
@@ -498,6 +499,8 @@ public class ExcelValidationService {
                         primaryStatus = "ERROR";
                     } else if (!warns.isEmpty() || isNameMismatch || isUnitRateMismatch || isNetTypeMismatch) {
                         primaryStatus = "WARNING";
+                    } else if (isMultiPayment) {
+                        primaryStatus = "MULTIPLE_PAYMENT";
                     } else {
                         primaryStatus = "VALID";
                     }

@@ -736,6 +736,7 @@ public class MultiFileImportService {
         int errorCount = 0;
         int warningCount = 0;
         int duplicateCount = 0;
+        int multiplePaymentCount = 0;
         int validCount = 0;
         for (Map<String, Object> r : rows) {
             String status = (String) r.get("status");
@@ -745,6 +746,9 @@ public class MultiFileImportService {
                 warningCount++;
             } else if ("DUPLICATE".equals(status)) {
                 duplicateCount++;
+            } else if ("MULTIPLE_PAYMENT".equals(status)) {
+                multiplePaymentCount++;
+                validCount++;
             } else if ("VALID".equals(status)) {
                 validCount++;
             }
@@ -757,6 +761,7 @@ public class MultiFileImportService {
         result.put("validCount", validCount);
         result.put("warningCount", warningCount);
         result.put("duplicateCount", duplicateCount);
+        result.put("multiplePaymentCount", multiplePaymentCount);
         result.put("errorCount", errorCount);
         result.put("rows", rows);
         return result;
@@ -1580,12 +1585,41 @@ public class MultiFileImportService {
     }
 
     private void detectDuplicates(List<Map<String, Object>> rows, String stepName) {
+        if ("NGEN".equalsIgnoreCase(stepName) || "NPAY".equalsIgnoreCase(stepName)) {
+            detectDuplicatesPaymentStep(rows, stepName);
+            return;
+        }
+
         Map<String, List<Map<String, Object>>> groups = new LinkedHashMap<>();
         for (Map<String, Object> row : rows) {
             String acc = (String) row.get("accountNo");
             if (acc != null && !acc.trim().isEmpty() && acc.trim().matches("\\d+") && acc.trim().length() == 10) {
                 String cleanAcc = acc.trim();
-                groups.computeIfAbsent(cleanAcc, k -> new ArrayList<>()).add(row);
+                // Duplicate detection rule: Account Number alone is NEVER used as a transaction duplicate identifier.
+                // A payment is only a candidate duplicate when it represents the exact SAME transaction / payment obligation.
+                String dupKey;
+                if ("Master Data".equalsIgnoreCase(stepName)) {
+                    dupKey = cleanAcc;
+                } else {
+                    String period = strVal(row.get("billingPeriod"));
+                    if (period.isEmpty()) period = strVal(row.get("billingMonth"));
+                    if (period.isEmpty()) period = strVal(row.get("currReadingDate"));
+                    if (period.isEmpty()) period = strVal(row.get("fromDate"));
+                    String ref = strVal(row.get("refNo"));
+                    if (!period.isEmpty()) {
+                        dupKey = cleanAcc + "::" + period.toLowerCase().trim();
+                    } else if (!ref.isEmpty()) {
+                        dupKey = cleanAcc + "::ref=" + ref.toLowerCase().trim();
+                    } else {
+                        // Include financial amount fingerprint so distinct obligations under same customer are preserved
+                        Double amt = numOrNull(row, "payment");
+                        if (amt == null) amt = numOrNull(row, "paymentSettled");
+                        if (amt == null) amt = numOrNull(row, "energyPurchase");
+                        if (amt == null) amt = numOrNull(row, "salesAmount");
+                        dupKey = cleanAcc + (amt != null ? "::amt=" + amt : "::row=" + row.get("rowNum"));
+                    }
+                }
+                groups.computeIfAbsent(dupKey, k -> new ArrayList<>()).add(row);
             }
         }
 
@@ -1598,10 +1632,111 @@ public class MultiFileImportService {
                     r.put("status", "DUPLICATE");
                     r.put("isOriginalDuplicate", i == 0);
                     r.put("originalRowNum", firstRowNum);
-                    r.put("duplicateReason", "Duplicate Account Number found in " + stepName + " file (Row #" + firstRowNum + ")");
+                    r.put("duplicateReason", "Duplicate payment obligation found in " + stepName + " file (Row #" + firstRowNum + ")");
                 }
             }
         }
+    }
+
+    private void detectDuplicatesPaymentStep(List<Map<String, Object>> rows, String stepName) {
+        Map<String, List<Map<String, Object>>> accGroups = new LinkedHashMap<>();
+        for (Map<String, Object> row : rows) {
+            String acc = (String) row.get("accountNo");
+            if (acc != null && !acc.trim().isEmpty() && acc.trim().matches("\\d+") && acc.trim().length() == 10) {
+                accGroups.computeIfAbsent(acc.trim(), k -> new ArrayList<>()).add(row);
+            }
+        }
+
+        for (Map.Entry<String, List<Map<String, Object>>> entry : accGroups.entrySet()) {
+            List<Map<String, Object>> accRows = entry.getValue();
+            if (accRows.size() <= 1) {
+                continue;
+            }
+
+            // Cluster rows by identical payment/transaction details
+            List<List<Map<String, Object>>> clusters = new ArrayList<>();
+            for (Map<String, Object> row : accRows) {
+                boolean found = false;
+                for (List<Map<String, Object>> cluster : clusters) {
+                    if (isSamePaymentTransaction(cluster.get(0), row, stepName)) {
+                        cluster.add(row);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    List<Map<String, Object>> newCluster = new ArrayList<>();
+                    newCluster.add(row);
+                    clusters.add(newCluster);
+                }
+            }
+
+            // Genuinely identical payment records (cluster.size() > 1): mark as DUPLICATE ("Duplicate Record")
+            for (List<Map<String, Object>> cluster : clusters) {
+                if (cluster.size() > 1) {
+                    int firstRowNum = (Integer) cluster.get(0).get("rowNum");
+                    for (int i = 0; i < cluster.size(); i++) {
+                        Map<String, Object> r = cluster.get(i);
+                        r.put("status", "DUPLICATE");
+                        r.put("isOriginalDuplicate", i == 0);
+                        r.put("originalRowNum", firstRowNum);
+                        r.put("duplicateReason", "Duplicate Record: identical payment transaction repeated in " + stepName + " file (Row #" + firstRowNum + ")");
+                    }
+                }
+            }
+
+            // Distinct payment obligations under the same account: mark as MULTIPLE_PAYMENT ("Multiple Payment")
+            for (List<Map<String, Object>> cluster : clusters) {
+                if (cluster.size() == 1) {
+                    Map<String, Object> r = cluster.get(0);
+                    StringBuilder otherRowsStr = new StringBuilder();
+                    for (Map<String, Object> other : accRows) {
+                        if (other != r) {
+                            if (otherRowsStr.length() > 0) otherRowsStr.append(", ");
+                            otherRowsStr.append("Row #").append(other.get("rowNum"));
+                        }
+                    }
+                    if (!"ERROR".equals(r.get("status"))) {
+                        r.put("status", "MULTIPLE_PAYMENT");
+                    }
+                    r.put("isMultiplePayment", true);
+                    r.put("multiplePaymentReason", "Multiple Payment: Customer has additional valid payment record in " + stepName + " file (" + otherRowsStr + ")");
+                }
+            }
+        }
+    }
+
+    private boolean isSamePaymentTransaction(Map<String, Object> r1, Map<String, Object> r2, String stepName) {
+        if ("NGEN".equalsIgnoreCase(stepName)) {
+            return isDoubleEqual(r1.get("kwhImport"), r2.get("kwhImport"))
+                && isDoubleEqual(r1.get("kwhExport"), r2.get("kwhExport"))
+                && isDoubleEqual(r1.get("kwhUnitSales"), r2.get("kwhUnitSales"))
+                && isDoubleEqual(r1.get("ngenUnitRate"), r2.get("ngenUnitRate"))
+                && isDoubleEqual(r1.get("retentionMoney"), r2.get("retentionMoney"))
+                && isDoubleEqual(r1.get("billSetOff"), r2.get("billSetOff"))
+                && isDoubleEqual(r1.get("kwhSalesAmount"), r2.get("kwhSalesAmount"))
+                && isDoubleEqual(r1.get("paymentSettled"), r2.get("paymentSettled"))
+                && isDoubleEqual(r1.get("outstandingBalance"), r2.get("outstandingBalance"));
+        } else if ("NPAY".equalsIgnoreCase(stepName)) {
+            return isDoubleEqual(r1.get("energyPurchase"), r2.get("energyPurchase"))
+                && isDoubleEqual(r1.get("billSetOff"), r2.get("billSetOff"))
+                && isDoubleEqual(r1.get("retentionMoney"), r2.get("retentionMoney"))
+                && isDoubleEqual(r1.get("payment"), r2.get("payment"));
+        }
+        return false;
+    }
+
+    private boolean isDoubleEqual(Object o1, Object o2) {
+        if (o1 == null && o2 == null) return true;
+        double d1 = 0.0;
+        double d2 = 0.0;
+        try {
+            if (o1 != null) d1 = Double.parseDouble(String.valueOf(o1));
+            if (o2 != null) d2 = Double.parseDouble(String.valueOf(o2));
+        } catch (Exception ignored) {
+            return Objects.equals(o1, o2);
+        }
+        return Math.abs(d1 - d2) < 0.001;
     }
 
     private void updateSessionStage(ImportSession session) {
@@ -1799,6 +1934,7 @@ public class MultiFileImportService {
         int errorCount = 0;
         int warningCount = 0;
         int duplicateCount = 0;
+        int multiplePaymentCount = 0;
         int validCount = 0;
         for (Map<String, Object> r : rows) {
             String status = (String) r.get("status");
@@ -1808,6 +1944,9 @@ public class MultiFileImportService {
                 warningCount++;
             } else if ("DUPLICATE".equals(status)) {
                 duplicateCount++;
+            } else if ("MULTIPLE_PAYMENT".equals(status)) {
+                multiplePaymentCount++;
+                validCount++;
             } else if ("VALID".equals(status)) {
                 validCount++;
             }
@@ -1820,6 +1959,7 @@ public class MultiFileImportService {
         result.put("validCount", validCount);
         result.put("warningCount", warningCount);
         result.put("duplicateCount", duplicateCount);
+        result.put("multiplePaymentCount", multiplePaymentCount);
         result.put("errorCount", errorCount);
         result.put("rows", rows);
         return result;
@@ -2171,6 +2311,73 @@ public class MultiFileImportService {
         return totalErrorRows;
     }
 
+    private static class PaymentPair {
+        final Map<String, Object> ngen;
+        final Map<String, Object> npay;
+        PaymentPair(Map<String, Object> ngen, Map<String, Object> npay) {
+            this.ngen = ngen;
+            this.npay = npay;
+        }
+    }
+
+    private List<PaymentPair> pairPaymentObligations(List<Map<String, Object>> nList, List<Map<String, Object>> pList) {
+        if (nList.isEmpty() && pList.isEmpty()) {
+            return Collections.singletonList(new PaymentPair(null, null));
+        }
+        if (nList.isEmpty()) {
+            List<PaymentPair> res = new ArrayList<>();
+            for (Map<String, Object> p : pList) res.add(new PaymentPair(null, p));
+            return res;
+        }
+        if (pList.isEmpty()) {
+            List<PaymentPair> res = new ArrayList<>();
+            for (Map<String, Object> n : nList) res.add(new PaymentPair(n, null));
+            return res;
+        }
+
+        List<PaymentPair> pairs = new ArrayList<>();
+        List<Map<String, Object>> remainingP = new ArrayList<>(pList);
+        List<Map<String, Object>> unpairedN = new ArrayList<>();
+
+        // Pass 1: Try to match by financial values (salesAmount/energyPurchase and paymentSettled/payment)
+        for (Map<String, Object> n : nList) {
+            Double nSales = numOrNull(n, "salesAmount");
+            Double nPay = numOrNull(n, "paymentSettled");
+            Map<String, Object> matchedP = null;
+            for (Map<String, Object> p : remainingP) {
+                Double pEnergy = numOrNull(p, "energyPurchase");
+                Double pPay = numOrNull(p, "payment");
+                boolean salesMatch = nSales != null && pEnergy != null && Math.abs(nSales - pEnergy) <= 0.05;
+                boolean payMatch = nPay != null && pPay != null && Math.abs(nPay - pPay) <= 0.05;
+                if (salesMatch || payMatch) {
+                    matchedP = p;
+                    break;
+                }
+            }
+            if (matchedP != null) {
+                remainingP.remove(matchedP);
+                pairs.add(new PaymentPair(n, matchedP));
+            } else {
+                unpairedN.add(n);
+            }
+        }
+
+        // Pass 2: Pair any remaining unpaired by index
+        int matchIdx = 0;
+        while (matchIdx < unpairedN.size() && !remainingP.isEmpty()) {
+            pairs.add(new PaymentPair(unpairedN.get(matchIdx), remainingP.remove(0)));
+            matchIdx++;
+        }
+        while (matchIdx < unpairedN.size()) {
+            pairs.add(new PaymentPair(unpairedN.get(matchIdx), null));
+            matchIdx++;
+        }
+        for (Map<String, Object> p : remainingP) {
+            pairs.add(new PaymentPair(null, p));
+        }
+        return pairs;
+    }
+
     @Transactional
     public void generateMainDataset(Long sessionId) throws Exception {
         ImportSession session = sessionRepository.findById(sessionId.longValue())
@@ -2184,298 +2391,317 @@ public class MultiFileImportService {
         }
 
         List<Map<String, Object>> ngenStaged = loadNgenDataFromStaging(sessionId);
-        Map<String, Map<String, Object>> ngenMap = new HashMap<>();
-        Map<String, Integer> ngenCounts = new HashMap<>();
         Map<String, List<Map<String, Object>>> ngenAll = new LinkedHashMap<>();
         for (Map<String, Object> n : ngenStaged) {
             String acc = (String) n.get("accountNo");
             if (acc != null) {
-                String key = acc.trim();
-                ngenMap.putIfAbsent(key, n);
-                ngenCounts.merge(key, 1, Integer::sum);
-                ngenAll.computeIfAbsent(key, k -> new ArrayList<>()).add(n);
+                ngenAll.computeIfAbsent(acc.trim(), k -> new ArrayList<>()).add(n);
             }
         }
 
         List<Map<String, Object>> npayStaged = loadNpayDataFromStaging(sessionId);
-        Map<String, Map<String, Object>> npayMap = new HashMap<>();
-        Map<String, Integer> npayCounts = new HashMap<>();
         Map<String, List<Map<String, Object>>> npayAll = new LinkedHashMap<>();
         for (Map<String, Object> p : npayStaged) {
             String acc = (String) p.get("accountNo");
             if (acc != null) {
-                String key = acc.trim();
-                npayMap.putIfAbsent(key, p);
-                npayCounts.merge(key, 1, Integer::sum);
-                npayAll.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
+                npayAll.computeIfAbsent(acc.trim(), k -> new ArrayList<>()).add(p);
             }
         }
 
         // Gather all unique account numbers from CEB, NGEN, and NPAY only (no Master Data)
-        Set<String> allAccounts = new HashSet<>();
+        Set<String> allAccounts = new LinkedHashSet<>();
         allAccounts.addAll(cebMap.keySet());
-        allAccounts.addAll(ngenMap.keySet());
-        allAccounts.addAll(npayMap.keySet());
+        allAccounts.addAll(ngenAll.keySet());
+        allAccounts.addAll(npayAll.keySet());
 
         List<Map<String, Object>> mergedList = new ArrayList<>();
         List<Map<String, Object>> rejectedList = new ArrayList<>();
+        Map<String, List<Map<String, Object>>> nDistinctByAcc = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> nDuplicatesByAcc = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> pDistinctByAcc = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> pDuplicatesByAcc = new LinkedHashMap<>();
         int rowIdx = 1;
 
         for (String acc : allAccounts) {
-            Map<String, Object> row = new LinkedHashMap<>();
-            row.put("rowNum", rowIdx++);
-            row.put("accountNo", acc);
+            List<Map<String, Object>> nList = ngenAll.getOrDefault(acc, Collections.emptyList());
+            List<Map<String, Object>> pList = npayAll.getOrDefault(acc, Collections.emptyList());
 
-            // No Master Data lookup in Step 5 — only CEB, NGEN, NPAY
-            row.put("customerName", "—");
-            row.put("customerAddress", "—");
-            row.put("refNo", "—");
-            row.put("costCode", "—");
-            row.put("mobileNo", "—");
-            row.put("panelCapacity", null);
-            row.put("agreementDate", null);
-            row.put("bankCode", "—");
-            row.put("branchCode", "—");
-            row.put("bankAccountNo", "—");
-            row.put("solarType", null);
-            row.put("tariffType", null);
-            row.put("billingMode", null);
-
-            Map<String, Object> ceb = cebMap.get(acc);
-            Map<String, Object> ngen = ngenMap.get(acc);
-            Map<String, Object> npay = npayMap.get(acc);
-            boolean hasCeb = ceb != null;
-            boolean hasNgen = ngen != null;
-            boolean hasNpay = npay != null;
-            row.put("hasCeb", hasCeb);
-            row.put("hasNgen", hasNgen);
-            row.put("hasNpay", hasNpay);
-
-            int ngc = ngenCounts.getOrDefault(acc, 0);
-            int npc = npayCounts.getOrDefault(acc, 0);
-            row.put("ngenSourceCount", ngc);
-            row.put("npaySourceCount", npc);
-
-            // ── 1. CEB Assist fields: Account No, Previous/Current Reading Date ──
-            String prevReadingDate = hasCeb ? (String) ceb.get("prevReadingDate") : null;
-            String currReadingDate = hasCeb ? (String) ceb.get("currReadingDate") : null;
-            row.put("prevReadingDate", prevReadingDate);
-            row.put("currReadingDate", currReadingDate);
-            String cebName = hasCeb ? (String) ceb.get("customerName") : null;
-            row.put("cebName", cebName != null ? cebName : "");
-
-            // ── 2. NGEN fields ──
-            Double kwhImport = numOrNull(ngen, "kwhImport");
-            Double kwhExport = numOrNull(ngen, "kwhExport");
-            Double kwhSales = numOrNull(ngen, "kwhSales");
-            Double ngenUnitRate = numOrNull(ngen, "ngenUnitRate");
-            Double ngenSalesAmount = numOrNull(ngen, "salesAmount");
-            if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && ngenSalesAmount != null && ngenSalesAmount > 0 && kwhSales != null && kwhSales > 0) {
-                ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
-            }
-            if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && acc != null && !acc.trim().isEmpty()) {
-                try {
-                    Optional<Customer> custOpt = customerRepository.findById(acc.trim());
-                    if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
-                        ngenUnitRate = custOpt.get().getUnitRate();
+            // 1. Separate distinct payment obligations vs genuinely identical duplicate records
+            List<Map<String, Object>> nDistinct = new ArrayList<>();
+            List<Map<String, Object>> nDuplicates = new ArrayList<>();
+            for (Map<String, Object> nRow : nList) {
+                boolean isDup = false;
+                for (Map<String, Object> distinctRow : nDistinct) {
+                    if (isSamePaymentTransaction(distinctRow, nRow, "NGEN")) {
+                        isDup = true;
+                        break;
                     }
-                } catch (Exception ignored) {}
-            }
-            Double ngenBillSetOff = numOrNull(ngen, "billSetOff");
-            Double ngenRetentionMoney = numOrNull(ngen, "retentionMoney");
-            Double ngenPaymentSettled = numOrNull(ngen, "paymentSettled");
-            Double ngenOutstandingBalance = numOrNull(ngen, "outstandingBalance");
-            String ngenNetType = hasNgen ? (String) ngen.get("ngenNetType") : null;
-
-            row.put("kwhImport", kwhImport);
-            row.put("kwhExport", kwhExport);
-            row.put("kwhSales", kwhSales);
-            row.put("ngenUnitRate", ngenUnitRate);
-            row.put("unitRate", ngenUnitRate);
-            row.put("ngenBillSetOff", ngenBillSetOff);
-            row.put("ngenRetentionMoney", ngenRetentionMoney);
-            row.put("ngenNetType", ngenNetType);
-            row.put("salesAmount", ngenSalesAmount);
-            row.put("paymentSettled", ngenPaymentSettled);
-            // Carry the NGEN Outstanding Balance through unchanged so it reaches Step 6. It is a
-            // pass-through display value only — never recalculated and not a required validation field.
-            row.put("outstandingBalance", ngenOutstandingBalance);
-
-            // ── 3. NPAY fields ──
-            String npayNetType = hasNpay ? (String) npay.get("npayNetType") : null;
-            String npayName = hasNpay ? (String) npay.get("npayName") : null;
-            Double npayEnergyPurchase = numOrNull(npay, "energyPurchase");
-            Double npayBillSetOff = numOrNull(npay, "billSetOff");
-            Double npayRetentionMoney = numOrNull(npay, "retentionMoney");
-            Double npayPayment = numOrNull(npay, "payment");
-
-            row.put("npayNetType", npayNetType);
-            row.put("npayName", npayName);
-            row.put("npayEnergyPurchase", npayEnergyPurchase);
-            row.put("npayBillSetOff", npayBillSetOff);
-            row.put("npayRetentionMoney", npayRetentionMoney);
-            row.put("npayPayment", npayPayment);
-
-            List<String> errors = new ArrayList<>();
-            List<String> warnings = new ArrayList<>();
-            List<String> missingFields = new ArrayList<>();
-            List<String> mismatchFields = new ArrayList<>();
-
-            // ── 4. Build merged equivalent fields (NGEN vs NPAY) ──
-            Map<String, Object> mergedNetType = buildMergedType(ngenNetType, npayNetType);
-            Map<String, Object> mergedEnergyPurchase = buildMergedNum(ngenSalesAmount, npayEnergyPurchase, hasNgen, hasNpay);
-            Map<String, Object> mergedBillSetOff = buildMergedNum(ngenBillSetOff, npayBillSetOff, hasNgen, hasNpay);
-            Map<String, Object> mergedRetentionMoney = buildMergedNum(ngenRetentionMoney, npayRetentionMoney, hasNgen, hasNpay);
-            Map<String, Object> mergedPayment = buildMergedNum(ngenPaymentSettled, npayPayment, hasNgen, hasNpay);
-            row.put("mergedNetType", mergedNetType);
-            row.put("mergedEnergyPurchase", mergedEnergyPurchase);
-            row.put("mergedBillSetOff", mergedBillSetOff);
-            row.put("mergedRetentionMoney", mergedRetentionMoney);
-            row.put("mergedPayment", mergedPayment);
-
-            // Effective flat values (NPAY preferred when present, else NGEN) for Step 6 / finalize
-            row.put("energyPurchase", effectiveNum(hasNpay, npayEnergyPurchase, ngenSalesAmount));
-            row.put("billSetOff", effectiveNum(hasNpay, npayBillSetOff, ngenBillSetOff));
-            row.put("retentionMoney", effectiveNum(hasNpay, npayRetentionMoney, ngenRetentionMoney));
-            row.put("payment", effectiveNum(hasNpay, npayPayment, ngenPaymentSettled));
-
-            // ── 5. Missing value detection across the three files ──
-            if (!hasCeb) {
-                errors.add("No CEB Assist data found for this account");
-                missingFields.add("CEB Assist record");
-            } else {
-                if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); errors.add("Missing value: Previous Reading Date (CEB)"); }
-                if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); errors.add("Missing value: Current Reading Date (CEB)"); }
-            }
-            if (!hasNgen) {
-                errors.add("No NGEN billing data found for this account");
-                missingFields.add("NGEN record");
-            } else {
-                if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); errors.add("Missing value: kWh Import (NGEN)"); }
-                if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); errors.add("Missing value: kWh Export (NGEN)"); }
-                if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); errors.add("Missing value: kWh Unit Sales (NGEN)"); }
-                if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); errors.add("Missing value: Unit Rate (NGEN)"); }
-                if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); errors.add("Missing value: kWh Sales Amount (NGEN)"); }
-                if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); errors.add("Missing value: Net Type (NGEN)"); }
-            }
-            if (!hasNpay) {
-                errors.add("No NPAY billing data found for this account");
-                missingFields.add("NPAY record");
-            } else {
-                if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); errors.add("Missing value: Name (NPAY)"); }
-                if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); errors.add("Missing value: Net Type (NPAY)"); }
-                if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); errors.add("Missing value: Energy Purchase (NPAY)"); }
-            }
-
-            // ── 6. Mismatch detection on merged fields ──
-            if (Boolean.TRUE.equals(mergedNetType.get("mismatch"))) {
-                mismatchFields.add("Net Type");
-                warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType));
-            }
-            if (Boolean.TRUE.equals(mergedEnergyPurchase.get("mismatch"))) {
-                mismatchFields.add("Energy Purchase / kWh Sales Amount");
-                warnings.add(String.format("Energy Purchase / kWh Sales Amount mismatch: NGEN=%.2f, NPAY=%.2f", ngenSalesAmount, npayEnergyPurchase));
-            }
-            if (Boolean.TRUE.equals(mergedBillSetOff.get("mismatch"))) {
-                mismatchFields.add("Bill Set Off");
-                warnings.add(String.format("Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, npayBillSetOff));
-            }
-            if (Boolean.TRUE.equals(mergedRetentionMoney.get("mismatch"))) {
-                mismatchFields.add("Retention Money");
-                warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney));
-            }
-            if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) {
-                mismatchFields.add("Payment");
-                warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment));
-            }
-
-            // ── 7. Duplicate detection (Account No carried more than once from NGEN/NPAY) ──
-            // The merged row is the single reconciled record for this account. Every duplicate
-            // source occurrence (including the first) is emitted as its own review-only row after
-            // this loop, so the merged row is NOT itself flagged/counted as a duplicate — otherwise
-            // it would double-count against the totals detected in Step 3 (NGEN) and Step 4 (NPAY).
-            // An informational note is kept so reviewers can see it has duplicate source records.
-            boolean isDuplicate = ngc > 1 || npc > 1;
-            if (isDuplicate) {
-                List<String> src = new ArrayList<>();
-                if (ngc > 1) src.add("NGEN (" + ngc + " records)");
-                if (npc > 1) src.add("NPAY (" + npc + " records)");
-                String dupReason = "Duplicate Account No carried from " + String.join(" and ", src)
-                        + " — see the Duplicates list for every source record";
-                row.put("duplicateReason", dupReason);
-                row.put("hasDuplicateSources", true);
-            }
-
-            // ── 8. Errors: missing/invalid Account No ──
-            if (acc == null || acc.trim().isEmpty()) {
-                errors.add("Account No is missing");
-            }
-
-            // ── 9. Incomplete merges (an Account No missing an entire CEB / NGEN / NPAY source
-            //        record) are auto-rejected: removed from the Main Dataset and collected in a
-            //        separate Rejected list for review. They are never carried into Step 6 / import.
-            boolean incomplete = !hasCeb || !hasNgen || !hasNpay;
-            if (incomplete) {
-                List<String> missSrc = new ArrayList<>();
-                if (!hasCeb) missSrc.add("CEB Assist");
-                if (!hasNgen) missSrc.add("NGEN");
-                if (!hasNpay) missSrc.add("NPAY");
-                row.put("rejected", true);
-                row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
-            }
-
-            // ── 10. Status precedence: REJECTED > ERROR > WARNING > VALID ──
-            // Duplicates are represented by dedicated source rows (built below) and are not a
-            // status of the merged row itself, so DUPLICATE is intentionally not in this precedence.
-            String status;
-            if (incomplete) status = "REJECTED";
-            else if (!errors.isEmpty()) status = "ERROR";
-            else if (!warnings.isEmpty()) status = "WARNING";
-            else status = "VALID";
-
-            row.put("errors", errors);
-            row.put("warnings", warnings);
-            row.put("missingFields", missingFields);
-            row.put("mismatchFields", mismatchFields);
-            row.put("status", status);
-
-            if (incomplete) rejectedList.add(row);
-            else mergedList.add(row);
-        }
-
-        // ── Build separate duplicate-record rows so EVERY duplicate occurrence is visible ──
-        // For every source (NGEN / NPAY) that carries an Account No more than once we emit one
-        // review-only row per occurrence, including the first ("original"). This keeps the Step 5
-        // Duplicates section a complete, faithful mirror of the duplicates detected in Step 3
-        // (NGEN) and Step 4 (NPAY): the number of DUPLICATE rows here equals the totals flagged in
-        // those steps, and no occurrence is collapsed into the merged row. These rows are display /
-        // review-only and are NOT carried into Step 6 or the final import (only the merged row is).
-        List<Map<String, Object>> dupEntries = new ArrayList<>();
-        for (String acc : allAccounts) {
-            int ngc = ngenCounts.getOrDefault(acc, 0);
-            int npc = npayCounts.getOrDefault(acc, 0);
-            if (ngc <= 1 && npc <= 1) continue;
-            List<String> src = new ArrayList<>();
-            if (ngc > 1) src.add("NGEN (" + ngc + " records)");
-            if (npc > 1) src.add("NPAY (" + npc + " records)");
-            String dupReason = "Duplicate Account No carried from " + String.join(" and ", src);
-
-            if (ngc > 1) {
-                List<Map<String, Object>> nList = ngenAll.getOrDefault(acc, Collections.emptyList());
-                Object originalRowNum = nList.isEmpty() ? null : nList.get(0).get("rowNum");
-                for (int k = 0; k < nList.size(); k++) {
-                    dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, true, nList.get(k), dupReason,
-                            "NGEN occurrence " + (k + 1) + " of " + nList.size() + (k == 0 ? " (original)" : ""),
-                            k == 0, originalRowNum));
+                }
+                if (isDup) {
+                    nDuplicates.add(nRow);
+                } else {
+                    nDistinct.add(nRow);
                 }
             }
-            if (npc > 1) {
-                List<Map<String, Object>> pList = npayAll.getOrDefault(acc, Collections.emptyList());
-                Object originalRowNum = pList.isEmpty() ? null : pList.get(0).get("rowNum");
-                for (int k = 0; k < pList.size(); k++) {
-                    dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, false, pList.get(k), dupReason,
-                            "NPAY occurrence " + (k + 1) + " of " + pList.size() + (k == 0 ? " (original)" : ""),
-                            k == 0, originalRowNum));
+            nDistinctByAcc.put(acc, nDistinct);
+            nDuplicatesByAcc.put(acc, nDuplicates);
+
+            List<Map<String, Object>> pDistinct = new ArrayList<>();
+            List<Map<String, Object>> pDuplicates = new ArrayList<>();
+            for (Map<String, Object> pRow : pList) {
+                boolean isDup = false;
+                for (Map<String, Object> distinctRow : pDistinct) {
+                    if (isSamePaymentTransaction(distinctRow, pRow, "NPAY")) {
+                        isDup = true;
+                        break;
+                    }
+                }
+                if (isDup) {
+                    pDuplicates.add(pRow);
+                } else {
+                    pDistinct.add(pRow);
+                }
+            }
+            pDistinctByAcc.put(acc, pDistinct);
+            pDuplicatesByAcc.put(acc, pDuplicates);
+
+            // 2. Pair distinct payment obligations so each obligation forms its own merged row
+            List<PaymentPair> pairs = pairPaymentObligations(nDistinct, pDistinct);
+            int totalPairs = pairs.size();
+            boolean isMultiPayment = totalPairs > 1;
+
+            Map<String, Object> ceb = cebMap.get(acc);
+            boolean hasCeb = ceb != null;
+            String prevReadingDate = hasCeb ? (String) ceb.get("prevReadingDate") : null;
+            String currReadingDate = hasCeb ? (String) ceb.get("currReadingDate") : null;
+            String cebName = hasCeb ? (String) ceb.get("customerName") : null;
+
+            for (int pairIdx = 0; pairIdx < totalPairs; pairIdx++) {
+                PaymentPair pair = pairs.get(pairIdx);
+                Map<String, Object> ngen = pair.ngen;
+                Map<String, Object> npay = pair.npay;
+                boolean hasNgen = ngen != null;
+                boolean hasNpay = npay != null;
+
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("rowNum", rowIdx++);
+                row.put("accountNo", acc);
+
+                // No Master Data lookup in Step 5 — only CEB, NGEN, NPAY
+                row.put("customerName", "—");
+                row.put("customerAddress", "—");
+                row.put("refNo", "—");
+                row.put("costCode", "—");
+                row.put("mobileNo", "—");
+                row.put("panelCapacity", null);
+                row.put("agreementDate", null);
+                row.put("bankCode", "—");
+                row.put("branchCode", "—");
+                row.put("bankAccountNo", "—");
+                row.put("solarType", null);
+                row.put("tariffType", null);
+                row.put("billingMode", null);
+
+                row.put("hasCeb", hasCeb);
+                row.put("hasNgen", hasNgen);
+                row.put("hasNpay", hasNpay);
+                row.put("ngenSourceCount", nDistinct.size());
+                row.put("npaySourceCount", pDistinct.size());
+
+                // ── 1. CEB Assist fields ──
+                row.put("prevReadingDate", prevReadingDate);
+                row.put("currReadingDate", currReadingDate);
+                row.put("cebName", cebName != null ? cebName : "");
+
+                // ── 2. NGEN fields ──
+                Double kwhImport = numOrNull(ngen, "kwhImport");
+                Double kwhExport = numOrNull(ngen, "kwhExport");
+                Double kwhSales = numOrNull(ngen, "kwhSales");
+                Double ngenUnitRate = numOrNull(ngen, "ngenUnitRate");
+                Double ngenSalesAmount = numOrNull(ngen, "salesAmount");
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && ngenSalesAmount != null && ngenSalesAmount > 0 && kwhSales != null && kwhSales > 0) {
+                    ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
+                }
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && acc != null && !acc.trim().isEmpty()) {
+                    try {
+                        Optional<Customer> custOpt = customerRepository.findById(acc.trim());
+                        if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                            ngenUnitRate = custOpt.get().getUnitRate();
+                        }
+                    } catch (Exception ignored) {}
+                }
+                Double ngenBillSetOff = numOrNull(ngen, "billSetOff");
+                Double ngenRetentionMoney = numOrNull(ngen, "retentionMoney");
+                Double ngenPaymentSettled = numOrNull(ngen, "paymentSettled");
+                Double ngenOutstandingBalance = numOrNull(ngen, "outstandingBalance");
+                String ngenNetType = hasNgen ? (String) ngen.get("ngenNetType") : null;
+
+                row.put("kwhImport", kwhImport);
+                row.put("kwhExport", kwhExport);
+                row.put("kwhSales", kwhSales);
+                row.put("ngenUnitRate", ngenUnitRate);
+                row.put("unitRate", ngenUnitRate);
+                row.put("ngenBillSetOff", ngenBillSetOff);
+                row.put("ngenRetentionMoney", ngenRetentionMoney);
+                row.put("ngenNetType", ngenNetType);
+                row.put("salesAmount", ngenSalesAmount);
+                row.put("paymentSettled", ngenPaymentSettled);
+                row.put("outstandingBalance", ngenOutstandingBalance);
+
+                // ── 3. NPAY fields ──
+                String npayNetType = hasNpay ? (String) npay.get("npayNetType") : null;
+                String npayName = hasNpay ? (String) npay.get("npayName") : null;
+                Double npayEnergyPurchase = numOrNull(npay, "energyPurchase");
+                Double npayBillSetOff = numOrNull(npay, "billSetOff");
+                Double npayRetentionMoney = numOrNull(npay, "retentionMoney");
+                Double npayPayment = numOrNull(npay, "payment");
+
+                row.put("npayNetType", npayNetType);
+                row.put("npayName", npayName);
+                row.put("npayEnergyPurchase", npayEnergyPurchase);
+                row.put("npayBillSetOff", npayBillSetOff);
+                row.put("npayRetentionMoney", npayRetentionMoney);
+                row.put("npayPayment", npayPayment);
+
+                List<String> errors = new ArrayList<>();
+                List<String> warnings = new ArrayList<>();
+                List<String> missingFields = new ArrayList<>();
+                List<String> mismatchFields = new ArrayList<>();
+
+                // ── 4. Build merged equivalent fields (NGEN vs NPAY) ──
+                Map<String, Object> mergedNetType = buildMergedType(ngenNetType, npayNetType);
+                Map<String, Object> mergedEnergyPurchase = buildMergedNum(ngenSalesAmount, npayEnergyPurchase, hasNgen, hasNpay);
+                Map<String, Object> mergedBillSetOff = buildMergedNum(ngenBillSetOff, npayBillSetOff, hasNgen, hasNpay);
+                Map<String, Object> mergedRetentionMoney = buildMergedNum(ngenRetentionMoney, npayRetentionMoney, hasNgen, hasNpay);
+                Map<String, Object> mergedPayment = buildMergedNum(ngenPaymentSettled, npayPayment, hasNgen, hasNpay);
+                row.put("mergedNetType", mergedNetType);
+                row.put("mergedEnergyPurchase", mergedEnergyPurchase);
+                row.put("mergedBillSetOff", mergedBillSetOff);
+                row.put("mergedRetentionMoney", mergedRetentionMoney);
+                row.put("mergedPayment", mergedPayment);
+
+                // Effective flat values (NPAY preferred when present, else NGEN) for Step 6 / finalize
+                row.put("energyPurchase", effectiveNum(hasNpay, npayEnergyPurchase, ngenSalesAmount));
+                row.put("billSetOff", effectiveNum(hasNpay, npayBillSetOff, ngenBillSetOff));
+                row.put("retentionMoney", effectiveNum(hasNpay, npayRetentionMoney, ngenRetentionMoney));
+                row.put("payment", effectiveNum(hasNpay, npayPayment, ngenPaymentSettled));
+
+                // ── 5. Missing value detection across the three files ──
+                if (!hasCeb) {
+                    errors.add("No CEB Assist data found for this account");
+                    missingFields.add("CEB Assist record");
+                } else {
+                    if (isBlank(prevReadingDate)) { missingFields.add("Previous Reading Date (CEB)"); errors.add("Missing value: Previous Reading Date (CEB)"); }
+                    if (isBlank(currReadingDate)) { missingFields.add("Current Reading Date (CEB)"); errors.add("Missing value: Current Reading Date (CEB)"); }
+                }
+                if (!hasNgen) {
+                    errors.add("No NGEN billing data found for this account");
+                    missingFields.add("NGEN record");
+                } else {
+                    if (kwhImport == null) { missingFields.add("kWh Import (NGEN)"); errors.add("Missing value: kWh Import (NGEN)"); }
+                    if (kwhExport == null) { missingFields.add("kWh Export (NGEN)"); errors.add("Missing value: kWh Export (NGEN)"); }
+                    if (kwhSales == null) { missingFields.add("kWh Unit Sales (NGEN)"); errors.add("Missing value: kWh Unit Sales (NGEN)"); }
+                    if (ngenUnitRate == null) { missingFields.add("Unit Rate (NGEN)"); errors.add("Missing value: Unit Rate (NGEN)"); }
+                    if (ngenSalesAmount == null) { missingFields.add("kWh Sales Amount (NGEN)"); errors.add("Missing value: kWh Sales Amount (NGEN)"); }
+                    if (isBlank(ngenNetType)) { missingFields.add("Net Type (NGEN)"); errors.add("Missing value: Net Type (NGEN)"); }
+                }
+                if (!hasNpay) {
+                    errors.add("No NPAY billing data found for this account");
+                    missingFields.add("NPAY record");
+                } else {
+                    if (isBlank(npayName)) { missingFields.add("Name (NPAY)"); errors.add("Missing value: Name (NPAY)"); }
+                    if (isBlank(npayNetType)) { missingFields.add("Net Type (NPAY)"); errors.add("Missing value: Net Type (NPAY)"); }
+                    if (npayEnergyPurchase == null) { missingFields.add("Energy Purchase (NPAY)"); errors.add("Missing value: Energy Purchase (NPAY)"); }
+                }
+
+                // ── 6. Mismatch detection on merged fields ──
+                if (Boolean.TRUE.equals(mergedNetType.get("mismatch"))) {
+                    mismatchFields.add("Net Type");
+                    warnings.add(String.format("Net Type mismatch: NGEN='%s', NPAY='%s'", ngenNetType, npayNetType));
+                }
+                if (Boolean.TRUE.equals(mergedEnergyPurchase.get("mismatch"))) {
+                    mismatchFields.add("Energy Purchase / kWh Sales Amount");
+                    warnings.add(String.format("Energy Purchase / kWh Sales Amount mismatch: NGEN=%.2f, NPAY=%.2f", ngenSalesAmount, npayEnergyPurchase));
+                }
+                if (Boolean.TRUE.equals(mergedBillSetOff.get("mismatch"))) {
+                    mismatchFields.add("Bill Set Off");
+                    warnings.add(String.format("Bill Set Off mismatch: NGEN=%.2f, NPAY=%.2f", ngenBillSetOff, npayBillSetOff));
+                }
+                if (Boolean.TRUE.equals(mergedRetentionMoney.get("mismatch"))) {
+                    mismatchFields.add("Retention Money");
+                    warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney));
+                }
+                if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) {
+                    mismatchFields.add("Payment");
+                    warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment));
+                }
+
+                // ── 7. Multiple payment classification (distinct obligations are kept as separate valid records) ──
+                if (isMultiPayment) {
+                    row.put("hasMultiplePayments", true);
+                    row.put("isMultiplePayment", true);
+                    row.put("multiplePaymentReason", "Multiple Payment: Customer has " + totalPairs + " distinct payment obligations (Payment Record " + (pairIdx + 1) + " of " + totalPairs + ")");
+                }
+                row.put("isDuplicateEntry", false);
+                row.put("hasDuplicateSources", false);
+
+                // ── 8. Errors: missing/invalid Account No ──
+                if (acc == null || acc.trim().isEmpty()) {
+                    errors.add("Account No is missing");
+                }
+
+                // ── 9. Incomplete merges (missing an entire source file) are auto-rejected ──
+                boolean incomplete = !hasCeb || !hasNgen || !hasNpay;
+                if (incomplete) {
+                    List<String> missSrc = new ArrayList<>();
+                    if (!hasCeb) missSrc.add("CEB Assist");
+                    if (!hasNgen) missSrc.add("NGEN");
+                    if (!hasNpay) missSrc.add("NPAY");
+                    row.put("rejected", true);
+                    row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
+                }
+
+                // ── 10. Status precedence: REJECTED > ERROR > WARNING > MULTIPLE_PAYMENT > VALID ──
+                String status;
+                if (incomplete) status = "REJECTED";
+                else if (!errors.isEmpty()) status = "ERROR";
+                else if (!warnings.isEmpty()) status = "WARNING";
+                else if (isMultiPayment) status = "MULTIPLE_PAYMENT";
+                else status = "VALID";
+
+                row.put("errors", errors);
+                row.put("warnings", warnings);
+                row.put("missingFields", missingFields);
+                row.put("mismatchFields", mismatchFields);
+                row.put("status", status);
+
+                if (incomplete) rejectedList.add(row);
+                else mergedList.add(row);
+            }
+        }
+
+        // ── Build separate duplicate-record rows ONLY for actual duplicate repeats ──
+        List<Map<String, Object>> dupEntries = new ArrayList<>();
+        for (String acc : allAccounts) {
+            List<Map<String, Object>> nDuplicates = nDuplicatesByAcc.getOrDefault(acc, Collections.emptyList());
+            List<Map<String, Object>> pDuplicates = pDuplicatesByAcc.getOrDefault(acc, Collections.emptyList());
+            List<Map<String, Object>> nDistinct = nDistinctByAcc.getOrDefault(acc, Collections.emptyList());
+            List<Map<String, Object>> pDistinct = pDistinctByAcc.getOrDefault(acc, Collections.emptyList());
+
+            if (!nDuplicates.isEmpty()) {
+                Object originalRowNum = nDistinct.isEmpty() ? null : nDistinct.get(0).get("rowNum");
+                for (Map<String, Object> n : nDuplicates) {
+                    dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, true, n,
+                            "Duplicate Record: identical payment transaction repeated in NGEN file (Row #" + n.get("rowNum") + ")",
+                            "NGEN duplicate record", false, originalRowNum));
+                }
+            }
+            if (!pDuplicates.isEmpty()) {
+                Object originalRowNum = pDistinct.isEmpty() ? null : pDistinct.get(0).get("rowNum");
+                for (Map<String, Object> p : pDuplicates) {
+                    dupEntries.add(buildDuplicateEntryRow(rowIdx++, acc, false, p,
+                            "Duplicate Record: identical payment transaction repeated in NPAY file (Row #" + p.get("rowNum") + ")",
+                            "NPAY duplicate record", false, originalRowNum));
                 }
             }
         }
@@ -2936,6 +3162,7 @@ public class MultiFileImportService {
         int errorCount = 0;
         int warningCount = 0;
         int duplicateCount = 0;
+        int multiplePaymentCount = 0;
         int newCustomersCount = 0;
         int existingCustomersCount = 0;
         int missingDetailsCount = 0;
@@ -2987,7 +3214,8 @@ public class MultiFileImportService {
             
             boolean isRejected = "REJECTED".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("rejected"));
             boolean isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
-            boolean isDup = Boolean.TRUE.equals(r.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("hasDuplicateSources"));
+            boolean isMultiPayment = Boolean.TRUE.equals(r.get("isMultiplePayment")) || "MULTIPLE_PAYMENT".equalsIgnoreCase(strVal(r.get("status")));
+            boolean isDup = !isMultiPayment && (Boolean.TRUE.equals(r.get("isDuplicateEntry")) || "DUPLICATE".equalsIgnoreCase(strVal(r.get("status"))) || Boolean.TRUE.equals(r.get("hasDuplicateSources")));
 
             boolean isNameMismatch = "MISMATCH".equals(r.get("nameMatch"));
             boolean isUnitRateMismatch = "MISMATCH".equals(r.get("unitRateMatch"));
@@ -3074,6 +3302,8 @@ public class MultiFileImportService {
                     primaryStatus = "VALID";
                 } else if (!warns.isEmpty()) {
                     primaryStatus = "WARNING";
+                } else if (isMultiPayment) {
+                    primaryStatus = "MULTIPLE_PAYMENT";
                 } else {
                     primaryStatus = "VALID";
                 }
@@ -3081,7 +3311,7 @@ public class MultiFileImportService {
 
             r.put("status", primaryStatus);
 
-            if ("VALID".equals(primaryStatus)) {
+            if ("VALID".equals(primaryStatus) || "MULTIPLE_PAYMENT".equals(primaryStatus)) {
                 if (!isOutstanding) {
                     validCount++;
                 }
@@ -3089,6 +3319,10 @@ public class MultiFileImportService {
             else if ("ERROR".equals(primaryStatus)) errorCount++;
             else if ("WARNING".equals(primaryStatus)) warningCount++;
             else if ("REJECTED".equals(primaryStatus)) rejectedCount++;
+
+            if (isMultiPayment) {
+                multiplePaymentCount++;
+            }
         }
 
         Map<String, Object> m = new LinkedHashMap<>();
@@ -3098,6 +3332,7 @@ public class MultiFileImportService {
         m.put("errorCount", errorCount);
         m.put("warningCount", warningCount);
         m.put("duplicateCount", duplicateCount);
+        m.put("multiplePaymentCount", multiplePaymentCount);
         m.put("newCustomersCount", newCustomersCount);
         m.put("existingCustomersCount", existingCustomersCount);
         m.put("missingDetailsCount", missingDetailsCount);
@@ -3758,15 +3993,12 @@ public class MultiFileImportService {
         if (Boolean.TRUE.equals(mergedRetentionMoney.get("mismatch"))) { mismatchFields.add("Retention Money"); warnings.add(String.format("Retention Money mismatch: NGEN=%.2f, NPAY=%.2f", ngenRetentionMoney, npayRetentionMoney)); }
         if (Boolean.TRUE.equals(mergedPayment.get("mismatch"))) { mismatchFields.add("Payment"); warnings.add(String.format("Payment mismatch: NGEN=%.2f, NPAY=%.2f", ngenPaymentSettled, npayPayment)); }
 
-        boolean isDuplicate = ngc > 1 || npc > 1;
-        if (isDuplicate) {
-            List<String> src = new ArrayList<>();
-            if (ngc > 1) src.add("NGEN (" + ngc + " records)");
-            if (npc > 1) src.add("NPAY (" + npc + " records)");
-            String dupReason = "Duplicate Account No carried from " + String.join(" and ", src)
-                    + " — see the Duplicates list for every source record";
-            row.put("duplicateReason", dupReason);
-            row.put("hasDuplicateSources", true);
+        boolean isMultiPayment = Boolean.TRUE.equals(row.get("isMultiplePayment"))
+                || "MULTIPLE_PAYMENT".equalsIgnoreCase(strVal(row.get("status")));
+        if (isMultiPayment) {
+            row.put("isMultiplePayment", true);
+            row.put("hasMultiplePayments", true);
+            row.put("hasDuplicateSources", false);
         }
 
         if (accountNo == null || accountNo.trim().isEmpty()) errors.add("Account No is missing");
@@ -3786,6 +4018,7 @@ public class MultiFileImportService {
         if (incomplete) status = "REJECTED";
         else if (!errors.isEmpty()) status = "ERROR";
         else if (!warnings.isEmpty()) status = "WARNING";
+        else if (isMultiPayment) status = "MULTIPLE_PAYMENT";
         else status = "VALID";
 
         row.put("errors", errors);

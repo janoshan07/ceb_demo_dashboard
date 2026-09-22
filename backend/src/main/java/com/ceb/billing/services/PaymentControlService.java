@@ -226,9 +226,7 @@ public class PaymentControlService {
             result.setPaymentStatus("READY");
         } else {
             result.setEligible(false);
-            // If flagged for review or duplicate issues, status is REVIEW, otherwise ON_HOLD
-            boolean isDuplicate = Boolean.TRUE.equals(record.get("hasDuplicateSources")) || "DUPLICATE".equalsIgnoreCase(primaryStatus);
-            if (isDuplicate || "REVIEW".equalsIgnoreCase(strVal(record.get("paymentStatus")))) {
+            if ("REVIEW".equalsIgnoreCase(strVal(record.get("paymentStatus")))) {
                 result.setPaymentStatus("REVIEW");
             } else {
                 result.setPaymentStatus("ON_HOLD");
@@ -362,14 +360,39 @@ public class PaymentControlService {
             }
         }
 
+        int multiPaymentCount = 0;
+        int multiPaymentCustomersCount = 0;
+        Map<String, Integer> custPaymentCounts = new HashMap<>();
+        for (Map<String, Object> r : records) {
+            String acc = strVal(r.get("accountNo")).toLowerCase();
+            if (!acc.isEmpty()) {
+                custPaymentCounts.put(acc, custPaymentCounts.getOrDefault(acc, 0) + 1);
+            }
+        }
+        for (int cnt : custPaymentCounts.values()) {
+            if (cnt > 1) {
+                multiPaymentCustomersCount++;
+                multiPaymentCount += cnt;
+            }
+        }
+
+        double totalPending = totalPayable + totalOnHold;
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("totalCustomers", distinctCustomers.size());
         summary.put("customerCount", distinctCustomers.size());
+        summary.put("totalPaymentRecords", records.size());
+        summary.put("multiPaymentCount", multiPaymentCount);
+        summary.put("multiPaymentCustomersCount", multiPaymentCustomersCount);
         summary.put("paymentReadyCount", paymentReadyCount);
         summary.put("onHoldCount", onHoldCount);
         summary.put("reviewCount", reviewCount);
         summary.put("totalPayable", Math.round(totalPayable * 100.0) / 100.0);
         summary.put("totalOnHold", Math.round(totalOnHold * 100.0) / 100.0);
+        summary.put("totalPendingAmount", Math.round(totalPending * 100.0) / 100.0);
+        summary.put("totalReadyAmount", Math.round(totalPayable * 100.0) / 100.0);
+        summary.put("totalOnHoldAmount", Math.round(totalOnHold * 100.0) / 100.0);
+        summary.put("readyAmount", Math.round(totalPayable * 100.0) / 100.0);
+        summary.put("onHoldAmount", Math.round(totalOnHold * 100.0) / 100.0);
         summary.put("billingPeriod", billingPeriod != null ? billingPeriod : "ALL");
         summary.put("division", division != null ? division : "ALL");
 
@@ -378,10 +401,12 @@ public class PaymentControlService {
 
     /**
      * Retrieves evaluated customer list with server-side filtering, search, and pagination.
+     * Groups multiple records under their customer with calculated aggregates and expandable payment details.
      */
     public Map<String, Object> getPaymentCustomers(String billingPeriod, String division, String category,
                                                   String search, String holdReasonFilter,
                                                   String validationStatusFilter, String netTypeFilter,
+                                                  Boolean multiPaymentOnly,
                                                   int page, int size) {
         List<Map<String, Object>> allRecords = loadCanonicalRecords(billingPeriod, division);
         List<Map<String, Object>> processed = new ArrayList<>();
@@ -429,10 +454,18 @@ public class PaymentControlService {
                 }
             }
 
+            // Filter multi-payment only
+            if (Boolean.TRUE.equals(multiPaymentOnly)) {
+                boolean isMulti = Boolean.TRUE.equals(rec.get("hasMultiplePayments"));
+                if (!isMulti) continue;
+            }
+
             // Filter by category: READY vs ON_HOLD vs REVIEW vs PAID vs ALL
             if (!"ALL".equals(cat)) {
                 if ("ON_HOLD".equalsIgnoreCase(cat)) {
                     if (!"ON_HOLD".equalsIgnoreCase(status) && !"REVIEW".equalsIgnoreCase(status)) continue;
+                } else if ("READY".equalsIgnoreCase(cat)) {
+                    if (!"READY".equalsIgnoreCase(status)) continue;
                 } else if (!cat.equalsIgnoreCase(status)) {
                     continue;
                 }
@@ -515,15 +548,127 @@ public class PaymentControlService {
             processed.add(item);
         }
 
-        int totalCount = processed.size();
+        // Group evaluated records by customer Account Number to construct Customer-Level Summaries
+        Map<String, List<Map<String, Object>>> groupsByAccount = new LinkedHashMap<>();
+        for (Map<String, Object> item : processed) {
+            String acc = strVal(item.get("accountNo"));
+            if (acc.isEmpty()) acc = "UNKNOWN";
+            groupsByAccount.computeIfAbsent(acc, k -> new ArrayList<>()).add(item);
+        }
+
+        List<Map<String, Object>> customerGroups = new ArrayList<>();
+        int totalPaymentRecordsAll = 0;
+
+        for (Map.Entry<String, List<Map<String, Object>>> entry : groupsByAccount.entrySet()) {
+            String acc = entry.getKey();
+            List<Map<String, Object>> pList = entry.getValue();
+            totalPaymentRecordsAll += pList.size();
+
+            Map<String, Object> first = pList.get(0);
+            Map<String, Object> group = new LinkedHashMap<>(first);
+
+            double totalPending = 0.0;
+            double readyAmt = 0.0;
+            double onHoldAmt = 0.0;
+            double totalPayableSum = 0.0;
+            int readyCount = 0;
+            int onHoldCount = 0;
+            int paidCount = 0;
+            int processingCount = 0;
+            int reviewCount = 0;
+
+            Set<String> allHoldReasons = new LinkedHashSet<>();
+            Set<String> allBlockingIssues = new LinkedHashSet<>();
+
+            for (Map<String, Object> p : pList) {
+                String pStatus = strVal(p.get("paymentStatus"));
+                double payable = p.get("totalPayable") instanceof Number ? ((Number) p.get("totalPayable")).doubleValue() : 0.0;
+                totalPayableSum += payable;
+
+                @SuppressWarnings("unchecked")
+                List<String> hr = (List<String>) p.get("holdReasons");
+                if (hr != null) allHoldReasons.addAll(hr);
+
+                @SuppressWarnings("unchecked")
+                List<String> bi = (List<String>) p.get("blockingIssues");
+                if (bi != null) allBlockingIssues.addAll(bi);
+
+                if ("PAID".equalsIgnoreCase(pStatus)) {
+                    paidCount++;
+                } else if ("PROCESSING".equalsIgnoreCase(pStatus)) {
+                    processingCount++;
+                    totalPending += payable;
+                } else if ("READY".equalsIgnoreCase(pStatus)) {
+                    readyCount++;
+                    readyAmt += payable;
+                    totalPending += payable;
+                } else if ("REVIEW".equalsIgnoreCase(pStatus)) {
+                    reviewCount++;
+                    onHoldAmt += payable;
+                    totalPending += payable;
+                } else {
+                    onHoldCount++;
+                    onHoldAmt += payable;
+                    totalPending += payable;
+                }
+            }
+
+            // Customer Aggregate Payment Status:
+            // - PAID: all records are PAID
+            // - PROCESSING: any record is in PROCESSING
+            // - READY FOR PAYMENT: all unpaid records are READY (and readyCount > 0)
+            // - PARTIALLY READY: some unpaid are READY and some are ON_HOLD or REVIEW
+            // - ON HOLD: all unpaid records are ON_HOLD or REVIEW
+            String custStatus;
+            if (paidCount == pList.size() && !pList.isEmpty()) {
+                custStatus = "PAID";
+            } else if (processingCount > 0) {
+                custStatus = "PROCESSING";
+            } else if (readyCount > 0 && onHoldCount == 0 && reviewCount == 0) {
+                custStatus = "READY FOR PAYMENT";
+            } else if (readyCount > 0 && (onHoldCount > 0 || reviewCount > 0)) {
+                custStatus = "PARTIALLY READY";
+            } else {
+                custStatus = "ON HOLD";
+            }
+
+            group.put("accountNo", acc);
+            group.put("customerPaymentStatus", custStatus);
+            group.put("paymentStatus", custStatus);
+            group.put("paymentRecordsCount", pList.size());
+            group.put("totalPaymentsForCustomer", pList.size());
+            group.put("hasMultiplePayments", pList.size() > 1);
+            group.put("totalPendingAmount", Math.round(totalPending * 100.0) / 100.0);
+            group.put("totalReadyAmount", Math.round(readyAmt * 100.0) / 100.0);
+            group.put("readyAmount", Math.round(readyAmt * 100.0) / 100.0);
+            group.put("totalOnHoldAmount", Math.round(onHoldAmt * 100.0) / 100.0);
+            group.put("onHoldAmount", Math.round(onHoldAmt * 100.0) / 100.0);
+            group.put("totalPayableAmount", Math.round(totalPayableSum * 100.0) / 100.0);
+            group.put("totalPayable", Math.round(totalPayableSum * 100.0) / 100.0);
+            group.put("cumulativeCustomerPayable", Math.round(totalPayableSum * 100.0) / 100.0);
+            group.put("readyRecordsCount", readyCount);
+            group.put("onHoldRecordsCount", onHoldCount + reviewCount);
+            group.put("paidRecordsCount", paidCount);
+            group.put("isEligible", "READY FOR PAYMENT".equalsIgnoreCase(custStatus));
+            group.put("allHoldReasons", new ArrayList<>(allHoldReasons));
+            group.put("allBlockingIssues", new ArrayList<>(allBlockingIssues));
+            group.put("payments", pList);
+            group.put("paymentRecords", pList);
+
+            customerGroups.add(group);
+        }
+
+        int totalCount = customerGroups.size();
         int totalPages = size > 0 ? (int) Math.ceil((double) totalCount / size) : 1;
         int fromIndex = Math.min(page * size, totalCount);
         int toIndex = Math.min(fromIndex + size, totalCount);
-        List<Map<String, Object>> pagedList = processed.subList(fromIndex, toIndex);
+        List<Map<String, Object>> pagedList = customerGroups.subList(fromIndex, toIndex);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("content", pagedList);
         result.put("totalElements", totalCount);
+        result.put("totalCustomers", totalCount);
+        result.put("totalPaymentRecords", totalPaymentRecordsAll);
         result.put("totalPages", totalPages);
         result.put("currentPage", page);
         result.put("pageSize", size);
@@ -534,7 +679,7 @@ public class PaymentControlService {
     public Map<String, Object> getPaymentCustomers(String billingPeriod, String division, String category,
                                                   String search, String holdReasonFilter,
                                                   int page, int size) {
-        return getPaymentCustomers(billingPeriod, division, category, search, holdReasonFilter, null, null, page, size);
+        return getPaymentCustomers(billingPeriod, division, category, search, holdReasonFilter, null, null, null, page, size);
     }
 
     /**
@@ -542,25 +687,55 @@ public class PaymentControlService {
      * Side-by-side MASTER VALUE vs UPLOADED/SOURCE VALUE.
      */
     public Map<String, Object> getCustomerIssueDetails(String accountNo, String billingPeriod) {
+        return getCustomerIssueDetails(accountNo, billingPeriod, null);
+    }
+
+    public Map<String, Object> getCustomerIssueDetails(String accountNo, String billingPeriod, String recordKey) {
         if (accountNo == null || accountNo.trim().isEmpty()) {
             throw new IllegalArgumentException("Account number is required.");
         }
         List<Map<String, Object>> records = loadCanonicalRecords(billingPeriod, null);
         Map<String, Object> target = null;
-        for (Map<String, Object> r : records) {
+        List<Map<String, Object>> allCustomerPayments = new ArrayList<>();
+
+        // Also fetch all records across all months for this customer
+        List<Map<String, Object>> allMonthsRecords = loadCanonicalRecords(null, null);
+        for (Map<String, Object> r : allMonthsRecords) {
             if (accountNo.trim().equalsIgnoreCase(strVal(r.get("accountNo")))) {
-                if (billingPeriod != null && !billingPeriod.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingPeriod.trim())) {
-                    String bMonth = strVal(r.get("billingMonth"));
-                    if (billingPeriod.trim().equalsIgnoreCase(bMonth)) {
-                        target = r;
-                        break;
-                    }
-                }
-                if (target == null) {
+                allCustomerPayments.add(r);
+            }
+        }
+
+        if (recordKey != null && !recordKey.trim().isEmpty()) {
+            for (Map<String, Object> r : allMonthsRecords) {
+                if (recordKey.trim().equalsIgnoreCase(strVal(r.get("recordKey")))) {
                     target = r;
+                    break;
                 }
             }
         }
+
+        if (target == null) {
+            for (Map<String, Object> r : records) {
+                if (accountNo.trim().equalsIgnoreCase(strVal(r.get("accountNo")))) {
+                    if (billingPeriod != null && !billingPeriod.trim().isEmpty() && !"ALL".equalsIgnoreCase(billingPeriod.trim())) {
+                        String bMonth = strVal(r.get("billingMonth"));
+                        if (billingPeriod.trim().equalsIgnoreCase(bMonth)) {
+                            target = r;
+                            break;
+                        }
+                    }
+                    if (target == null) {
+                        target = r;
+                    }
+                }
+            }
+        }
+
+        if (target == null && !allCustomerPayments.isEmpty()) {
+            target = allCustomerPayments.get(0);
+        }
+
         if (target == null) {
             try {
                 Map<String, Object> dossier = getCustomerMonthWisePaymentDossier(accountNo);
@@ -678,6 +853,13 @@ public class PaymentControlService {
 
         Map<String, Object> details = new LinkedHashMap<>();
         details.put("record", target);
+        details.put("recordKey", target.get("recordKey"));
+        details.put("paymentRecordId", target.get("paymentRecordId"));
+        details.put("snapshotId", target.get("snapshotId"));
+        details.put("snapshotIndex", target.get("snapshotIndex"));
+        details.put("hasMultiplePayments", allCustomerPayments.size() > 1);
+        details.put("totalPaymentsForCustomer", allCustomerPayments.size());
+        details.put("allCustomerPayments", allCustomerPayments);
         details.put("eligibility", elig);
         details.put("customerInfo", customerInfo);
         details.put("billingInfo", billingInfo);
@@ -746,7 +928,7 @@ public class PaymentControlService {
     /**
      * Customer 360: Month-Wise Payment Dossier.
      * Evaluates payment status, diagnostics, and side-by-side comparisons strictly per billing month snapshot.
-     * Guarantees 100% data isolation between months.
+     * Guarantees 100% data isolation between months and supports multiple payments per customer.
      */
     public Map<String, Object> getCustomerMonthWisePaymentDossier(String accountNo) {
         if (accountNo == null || accountNo.trim().isEmpty()) {
@@ -790,15 +972,19 @@ public class PaymentControlService {
 
             try {
                 List<Map<String, Object>> list = objectMapper.readValue(json, LIST_MAP_TYPE);
-                Map<String, Object> match = null;
-                for (Map<String, Object> rec : list) {
+                List<Map<String, Object>> matchingRecords = new ArrayList<>();
+                for (int i = 0; i < list.size(); i++) {
+                    Map<String, Object> rec = list.get(i);
                     if (cleanAcc.equalsIgnoreCase(strVal(rec.get("accountNo")))) {
-                        match = rec;
-                        break;
+                        rec.put("snapshotId", snap.getId());
+                        rec.put("snapshotIndex", i);
+                        rec.put("recordKey", "snap_" + snap.getId() + "_" + i + "_" + cleanAcc.replaceAll("[^a-zA-Z0-9_-]", ""));
+                        matchingRecords.add(rec);
                     }
                 }
 
-                if (match != null) {
+                for (int mIdx = 0; mIdx < matchingRecords.size(); mIdx++) {
+                    Map<String, Object> match = matchingRecords.get(mIdx);
                     String bMonth = snap.getBillingMonth() != null ? snap.getBillingMonth() : strVal(match.get("billingMonth"));
                     String div = snap.getDivision() != null ? snap.getDivision() : strVal(match.get("division"));
                     if (!match.containsKey("billingMonth")) match.put("billingMonth", bMonth);
@@ -850,8 +1036,13 @@ public class PaymentControlService {
 
                     Map<String, Object> dossier = new LinkedHashMap<>();
                     dossier.put("snapshotId", snap.getId());
+                    dossier.put("snapshotIndex", match.get("snapshotIndex"));
+                    dossier.put("recordKey", match.get("recordKey"));
                     dossier.put("datasetName", snap.getDatasetName());
                     dossier.put("billingMonth", bMonth);
+                    dossier.put("paymentNumber", mIdx + 1);
+                    dossier.put("totalPaymentsInMonth", matchingRecords.size());
+                    dossier.put("paymentLabel", matchingRecords.size() > 1 ? "Payment " + (mIdx + 1) + " of " + matchingRecords.size() : bMonth);
                     dossier.put("division", div);
                     dossier.put("approvalDate", snap.getApprovalDate());
                     dossier.put("paymentStatus", finalStatus);
@@ -882,6 +1073,8 @@ public class PaymentControlService {
         // Summary Header construction
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("accountNo", cleanAcc);
+        result.put("totalPayments", monthDossiers.size());
+        result.put("hasMultiplePayments", monthDossiers.size() > 1);
 
         if (latestRecord != null) {
             String cName = strVal(latestRecord.get("customerName"));
@@ -1105,6 +1298,18 @@ public class PaymentControlService {
             }
         }
 
+        Integer snapshotIndex = null;
+        if (corrections.containsKey("snapshotIndex")) {
+            Object sIdx = corrections.get("snapshotIndex");
+            if (sIdx != null && !sIdx.toString().trim().isEmpty()) {
+                try {
+                    snapshotIndex = Integer.parseInt(sIdx.toString().trim());
+                } catch (Exception ignored) {}
+            }
+        }
+
+        String recordKey = strVal(corrections.get("recordKey"));
+
         MonthlyDirectorySnapshot targetSnapshot = null;
         List<Map<String, Object>> snapshotData = null;
         int targetIndex = -1;
@@ -1114,11 +1319,29 @@ public class PaymentControlService {
             if (optSnap.isPresent() && optSnap.get().getFinalDataJson() != null) {
                 targetSnapshot = optSnap.get();
                 List<Map<String, Object>> list = objectMapper.readValue(targetSnapshot.getFinalDataJson(), LIST_MAP_TYPE);
-                for (int i = 0; i < list.size(); i++) {
-                    if (accountNo.trim().equalsIgnoreCase(strVal(list.get(i).get("accountNo")))) {
+                if (snapshotIndex != null && snapshotIndex >= 0 && snapshotIndex < list.size()) {
+                    if (accountNo.trim().equalsIgnoreCase(strVal(list.get(snapshotIndex).get("accountNo")))) {
                         snapshotData = list;
-                        targetIndex = i;
-                        break;
+                        targetIndex = snapshotIndex;
+                    }
+                }
+                if (targetIndex == -1 && !recordKey.isEmpty()) {
+                    for (int i = 0; i < list.size(); i++) {
+                        String rKey = "snap_" + targetSnapshot.getId() + "_" + i + "_" + accountNo.trim().replaceAll("[^a-zA-Z0-9_-]", "");
+                        if (recordKey.equalsIgnoreCase(rKey) || recordKey.equalsIgnoreCase(strVal(list.get(i).get("recordKey")))) {
+                            snapshotData = list;
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+                }
+                if (targetIndex == -1) {
+                    for (int i = 0; i < list.size(); i++) {
+                        if (accountNo.trim().equalsIgnoreCase(strVal(list.get(i).get("accountNo")))) {
+                            snapshotData = list;
+                            targetIndex = i;
+                            break;
+                        }
                     }
                 }
             }
@@ -1131,7 +1354,10 @@ public class PaymentControlService {
                 if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
                     List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
                     for (int i = 0; i < list.size(); i++) {
-                        if (accountNo.trim().equalsIgnoreCase(strVal(list.get(i).get("accountNo")))) {
+                        String rKey = "snap_" + snap.getId() + "_" + i + "_" + accountNo.trim().replaceAll("[^a-zA-Z0-9_-]", "");
+                        boolean matchesKey = !recordKey.isEmpty() && (recordKey.equalsIgnoreCase(rKey) || recordKey.equalsIgnoreCase(strVal(list.get(i).get("recordKey"))));
+                        boolean matchesAcc = recordKey.isEmpty() && accountNo.trim().equalsIgnoreCase(strVal(list.get(i).get("accountNo")));
+                        if (matchesKey || matchesAcc) {
                             targetSnapshot = snap;
                             snapshotData = list;
                             targetIndex = i;
@@ -1151,7 +1377,7 @@ public class PaymentControlService {
 
         // Apply edits to record
         corrections.forEach((k, v) -> {
-            if ("snapshotId".equalsIgnoreCase(k)) return;
+            if ("snapshotId".equalsIgnoreCase(k) || "snapshotIndex".equalsIgnoreCase(k) || "recordKey".equalsIgnoreCase(k)) return;
             if (v != null && !v.toString().trim().isEmpty() && !"—".equals(v.toString().trim())) {
                 record.put(k, v);
                 if ("customerName".equalsIgnoreCase(k)) record.put("masterName", v);
@@ -1245,6 +1471,286 @@ public class PaymentControlService {
     }
 
     /**
+     * Customer-Level Payment Release:
+     * When customer-level issues are resolved, releases holds and re-evaluates all accumulated unpaid payments,
+     * transitioning eligible records to READY while preserving individual payment records, months, and history.
+     */
+    @Transactional
+    public Map<String, Object> releaseCustomerPayments(String accountNo, String username) throws Exception {
+        if (accountNo == null || accountNo.trim().isEmpty()) {
+            throw new IllegalArgumentException("Account number is required.");
+        }
+        String cleanAcc = accountNo.trim();
+
+        Customer cust = customerRepository != null ? customerRepository.findById(cleanAcc).orElse(null) : null;
+        List<MonthlyDirectorySnapshot> snapshots = monthlyDirectorySnapshotRepository != null
+                ? monthlyDirectorySnapshotRepository.findAll() : Collections.emptyList();
+
+        int updatedRecordsCount = 0;
+        int releasedToReadyCount = 0;
+        double totalReleasedAmount = 0.0;
+        List<String> releasedMonths = new ArrayList<>();
+
+        for (MonthlyDirectorySnapshot snap : snapshots) {
+            String json = snap.getFinalDataJson();
+            if (json == null || json.trim().isEmpty() || !json.contains(cleanAcc)) {
+                continue;
+            }
+            try {
+                List<Map<String, Object>> list = objectMapper.readValue(json, LIST_MAP_TYPE);
+                boolean snapModified = false;
+
+                for (int i = 0; i < list.size(); i++) {
+                    Map<String, Object> rec = list.get(i);
+                    if (cleanAcc.equalsIgnoreCase(strVal(rec.get("accountNo")))) {
+                        // Clear payment hold
+                        rec.put("paymentHold", false);
+                        rec.remove("paymentHoldReason");
+
+                        // Synchronize customer profile fields if customer entity exists
+                        if (cust != null) {
+                            if (cust.getCustomerName() != null && !cust.getCustomerName().trim().isEmpty()) {
+                                rec.put("customerName", cust.getCustomerName());
+                                rec.put("masterName", cust.getCustomerName());
+                            }
+                            if (cust.getCustomerAddress() != null && !cust.getCustomerAddress().trim().isEmpty()) {
+                                rec.put("customerAddress", cust.getCustomerAddress());
+                                rec.put("masterAddress", cust.getCustomerAddress());
+                            }
+                            if (cust.getMobileNo() != null && !cust.getMobileNo().trim().isEmpty()) {
+                                rec.put("mobileNo", cust.getMobileNo());
+                                rec.put("masterMobile", cust.getMobileNo());
+                            }
+                            if (cust.getBankCode() != null && !cust.getBankCode().trim().isEmpty()) {
+                                rec.put("bankCode", cust.getBankCode());
+                                rec.put("masterBankCode", cust.getBankCode());
+                            }
+                            if (cust.getBranchCode() != null && !cust.getBranchCode().trim().isEmpty()) {
+                                rec.put("branchCode", cust.getBranchCode());
+                                rec.put("masterBranchCode", cust.getBranchCode());
+                            }
+                            if (cust.getBankAccountNo() != null && !cust.getBankAccountNo().trim().isEmpty()) {
+                                rec.put("bankAccountNo", cust.getBankAccountNo());
+                                rec.put("masterBankAccountNo", cust.getBankAccountNo());
+                            }
+                            if (cust.getSolarType() != null && !cust.getSolarType().trim().isEmpty()) {
+                                rec.put("solarType", cust.getSolarType());
+                                rec.put("masterNetType", cust.getSolarType());
+                            }
+                            if (cust.getUnitRate() != null && cust.getUnitRate() > 0) {
+                                rec.put("unitRate", cust.getUnitRate());
+                                rec.put("masterUnitRate", cust.getUnitRate());
+                            }
+                            if (cust.getPanelCapacity() != null && cust.getPanelCapacity() > 0) {
+                                rec.put("panelCapacity", cust.getPanelCapacity());
+                                rec.put("masterPanelCapacity", cust.getPanelCapacity());
+                            }
+                        }
+
+                        // Revalidate record in-place
+                        multiFileImportService.revalidateDirectoryRecord(rec);
+
+                        // Re-evaluate payment eligibility
+                        PaymentEligibilityResult elig = canPay(rec);
+                        rec.put("paymentStatus", elig.getPaymentStatus());
+                        rec.put("isEligible", elig.isEligible());
+
+                        if (elig.isEligible()) {
+                            releasedToReadyCount++;
+                            double payable = elig.getFinancials().getOrDefault("totalPayable", 0.0);
+                            totalReleasedAmount += payable;
+                            String bMonth = snap.getBillingMonth() != null ? snap.getBillingMonth() : strVal(rec.get("billingMonth"));
+                            if (bMonth.isEmpty()) bMonth = "Record " + (i + 1);
+                            releasedMonths.add(bMonth);
+                        }
+
+                        list.set(i, rec);
+                        snapModified = true;
+                        updatedRecordsCount++;
+                    }
+                }
+
+                if (snapModified) {
+                    snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+                    monthlyDirectorySnapshotRepository.save(snap);
+                }
+            } catch (Exception e) {
+                log.warning("Failed releasing payments in snapshot " + snap.getId() + ": " + e.getMessage());
+            }
+        }
+
+        auditLogService.log("CUSTOMER_PAYMENT_RELEASE", "User " + username + " released accumulated payments for customer "
+                + cleanAcc + ". Released records: " + releasedToReadyCount + " of " + updatedRecordsCount + " (Total: LKR " + totalReleasedAmount + ")");
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("success", true);
+        resp.put("accountNo", cleanAcc);
+        resp.put("updatedRecordsCount", updatedRecordsCount);
+        resp.put("releasedToReadyCount", releasedToReadyCount);
+        resp.put("totalReleasedAmount", Math.round(totalReleasedAmount * 100.0) / 100.0);
+        resp.put("releasedMonths", releasedMonths);
+        resp.put("message", "Customer payment release processed. " + releasedToReadyCount + " payment records are now READY FOR PAYMENT.");
+        return resp;
+    }
+
+    /**
+     * Seeds Test Case for Account 12345:
+     * Payment 1: January 2026, LKR 10,000, ON HOLD (Missing Details)
+     * Payment 2: February 2026, LKR 12,000, ON HOLD (Name Mismatch)
+     * Payment 3: March 2026, LKR 15,000, READY
+     * Total Pending = LKR 37,000 | On Hold = LKR 22,000 | Ready = LKR 15,000
+     */
+    @Transactional
+    public Map<String, Object> seedTestCase12345() throws Exception {
+        String testAcc = "12345";
+        String div = "Batticaloa";
+
+        // Seed customer in repository
+        if (customerRepository != null) {
+            Customer c = customerRepository.findById(testAcc).orElse(new Customer());
+            c.setAccountNo(testAcc);
+            c.setCustomerName("ABC Company");
+            c.setCustomerAddress("123 Solar Street, Batticaloa");
+            c.setMobileNo("0771234567");
+            c.setBankCode("7010");
+            c.setBranchCode("001");
+            c.setBankAccountNo("1234567890");
+            c.setSolarType("Net Plus");
+            c.setUnitRate(34.50);
+            c.setPanelCapacity(10.0);
+            c.setDivision(div);
+            c.setAgreementDate(java.time.LocalDate.of(2024, 1, 1));
+            customerRepository.save(c);
+        }
+
+        // Payment 1: January 2026, LKR 10,000, ON HOLD (Reason: Missing Details)
+        Map<String, Object> janRec = new LinkedHashMap<>();
+        janRec.put("accountNo", testAcc);
+        janRec.put("customerName", "ABC Company");
+        janRec.put("customerAddress", ""); // Missing Address triggers Missing Details
+        janRec.put("mobileNo", "0771234567");
+        janRec.put("bankCode", "7010");
+        janRec.put("branchCode", "001");
+        janRec.put("bankAccountNo", "1234567890");
+        janRec.put("solarType", "Net Plus");
+        janRec.put("unitRate", 34.50);
+        janRec.put("panelCapacity", 10.0);
+        janRec.put("division", div);
+        janRec.put("billingMonth", "January 2026");
+        janRec.put("billingPeriod", "2026-01-01 to 2026-01-31");
+        janRec.put("currentPayment", 10000.0);
+        janRec.put("energyPurchase", 10000.0);
+        janRec.put("salesAmount", 10000.0);
+        janRec.put("payment", 10000.0);
+        janRec.put("paymentSettled", 10000.0);
+        janRec.put("totalPayable", 10000.0);
+        janRec.put("billSetOff", 0.0);
+        janRec.put("retentionMoney", 0.0);
+        janRec.put("outstandingBalance", 0.0);
+        janRec.put("status", "WARNING");
+
+        // Payment 2: February 2026, LKR 12,000, ON HOLD (Reason: Name Mismatch)
+        Map<String, Object> febRec = new LinkedHashMap<>();
+        febRec.put("accountNo", testAcc);
+        febRec.put("customerName", "ABC Company");
+        febRec.put("masterName", "ABC Company Ltd");
+        febRec.put("npayName", "ABC Enterprises");
+        febRec.put("nameMatch", "MISMATCH");
+        febRec.put("nameApproved", false);
+        febRec.put("customerAddress", "123 Solar Street, Batticaloa");
+        febRec.put("mobileNo", "0771234567");
+        febRec.put("bankCode", "7010");
+        febRec.put("branchCode", "001");
+        febRec.put("bankAccountNo", "1234567890");
+        febRec.put("solarType", "Net Plus");
+        febRec.put("unitRate", 34.50);
+        febRec.put("panelCapacity", 10.0);
+        febRec.put("division", div);
+        febRec.put("billingMonth", "February 2026");
+        febRec.put("billingPeriod", "2026-02-01 to 2026-02-28");
+        febRec.put("currentPayment", 12000.0);
+        febRec.put("energyPurchase", 12000.0);
+        febRec.put("salesAmount", 12000.0);
+        febRec.put("payment", 12000.0);
+        febRec.put("paymentSettled", 12000.0);
+        febRec.put("totalPayable", 12000.0);
+        febRec.put("billSetOff", 0.0);
+        febRec.put("retentionMoney", 0.0);
+        febRec.put("outstandingBalance", 0.0);
+        febRec.put("status", "WARNING");
+
+        // Payment 3: March 2026, LKR 15,000, READY
+        Map<String, Object> marRec = new LinkedHashMap<>();
+        marRec.put("accountNo", testAcc);
+        marRec.put("customerName", "ABC Company");
+        marRec.put("masterName", "ABC Company");
+        marRec.put("npayName", "ABC Company");
+        marRec.put("nameMatch", "MATCH");
+        marRec.put("nameApproved", true);
+        marRec.put("customerAddress", "123 Solar Street, Batticaloa");
+        marRec.put("mobileNo", "0771234567");
+        marRec.put("bankCode", "7010");
+        marRec.put("branchCode", "001");
+        marRec.put("bankAccountNo", "1234567890");
+        marRec.put("solarType", "Net Plus");
+        marRec.put("unitRate", 34.50);
+        marRec.put("panelCapacity", 10.0);
+        marRec.put("division", div);
+        marRec.put("billingMonth", "March 2026");
+        marRec.put("billingPeriod", "2026-03-01 to 2026-03-31");
+        marRec.put("currentPayment", 15000.0);
+        marRec.put("energyPurchase", 15000.0);
+        marRec.put("salesAmount", 15000.0);
+        marRec.put("payment", 15000.0);
+        marRec.put("paymentSettled", 15000.0);
+        marRec.put("totalPayable", 15000.0);
+        marRec.put("billSetOff", 0.0);
+        marRec.put("retentionMoney", 0.0);
+        marRec.put("outstandingBalance", 0.0);
+        marRec.put("status", "VALID");
+
+        upsertSnapshotWithRecord("January 2026", div, janRec);
+        upsertSnapshotWithRecord("February 2026", div, febRec);
+        upsertSnapshotWithRecord("March 2026", div, marRec);
+
+        return Map.of(
+            "success", true,
+            "accountNo", testAcc,
+            "message", "Account 12345 seeded with 3 payments: Jan (LKR 10,000 ON HOLD), Feb (LKR 12,000 ON HOLD), Mar (LKR 15,000 READY)"
+        );
+    }
+
+    private void upsertSnapshotWithRecord(String billingMonth, String division, Map<String, Object> rec) throws Exception {
+        if (monthlyDirectorySnapshotRepository == null) return;
+        List<MonthlyDirectorySnapshot> existing = monthlyDirectorySnapshotRepository
+                .findByBillingMonthIgnoreCaseAndDivisionIgnoreCase(billingMonth, division);
+        MonthlyDirectorySnapshot snap;
+        List<Map<String, Object>> list = new ArrayList<>();
+        if (!existing.isEmpty()) {
+            snap = existing.get(0);
+            if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
+                list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
+            }
+        } else {
+            snap = new MonthlyDirectorySnapshot();
+            snap.setBillingMonth(billingMonth);
+            snap.setDivision(division);
+            snap.setDatasetName(billingMonth + " Billing - " + division);
+            snap.setApprovedBy("system");
+            snap.setApprovalDate(LocalDateTime.now());
+            snap.setStatus("APPROVED");
+        }
+
+        String acc = strVal(rec.get("accountNo"));
+        list.removeIf(r -> acc.equalsIgnoreCase(strVal(r.get("accountNo"))));
+        list.add(rec);
+
+        snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+        snap.setTotalRecords(list.size());
+        monthlyDirectorySnapshotRepository.save(snap);
+    }
+
+    /**
      * Create a Payment Batch.
      * STRICT BACKEND ENFORCEMENT: Only eligible READY customers can enter a payment batch!
      * Direct API calls attempting to batch ON_HOLD / ineligible customers are rejected.
@@ -1252,22 +1758,48 @@ public class PaymentControlService {
     @Transactional
     public PaymentBatch createPaymentBatch(String billingPeriod, String division,
                                           List<String> selectedAccountNos, String username) throws Exception {
+        return createPaymentBatch(billingPeriod, division, selectedAccountNos, null, username);
+    }
+
+    @Transactional
+    public PaymentBatch createPaymentBatch(String billingPeriod, String division,
+                                          List<String> selectedAccountNos, List<String> selectedRecordKeys, String username) throws Exception {
         if (billingPeriod == null || billingPeriod.trim().isEmpty()) {
             throw new IllegalArgumentException("Billing period is required to create a payment batch.");
         }
 
         List<Map<String, Object>> allRecords = loadCanonicalRecords(billingPeriod, division);
-        Map<String, Map<String, Object>> recordMap = new HashMap<>();
+        Map<String, Map<String, Object>> recordByKey = new HashMap<>();
+        Map<String, List<Map<String, Object>>> recordsByAccount = new HashMap<>();
         for (Map<String, Object> r : allRecords) {
             String acc = strVal(r.get("accountNo"));
-            if (!acc.isEmpty()) recordMap.put(acc, r);
+            String rKey = strVal(r.get("recordKey"));
+            if (!rKey.isEmpty()) recordByKey.put(rKey, r);
+            if (!acc.isEmpty()) {
+                recordsByAccount.computeIfAbsent(acc.toLowerCase(), k -> new ArrayList<>()).add(r);
+                recordByKey.put(acc, r);
+            }
         }
 
         List<Map<String, Object>> candidateRecords = new ArrayList<>();
-        if (selectedAccountNos != null && !selectedAccountNos.isEmpty()) {
+        if (selectedRecordKeys != null && !selectedRecordKeys.isEmpty()) {
+            for (String key : selectedRecordKeys) {
+                Map<String, Object> r = recordByKey.get(key);
+                if (r != null && !candidateRecords.contains(r)) candidateRecords.add(r);
+            }
+        } else if (selectedAccountNos != null && !selectedAccountNos.isEmpty()) {
             for (String acc : selectedAccountNos) {
-                Map<String, Object> r = recordMap.get(acc);
-                if (r != null) candidateRecords.add(r);
+                Map<String, Object> byKey = recordByKey.get(acc);
+                if (byKey != null && !candidateRecords.contains(byKey)) {
+                    candidateRecords.add(byKey);
+                } else {
+                    List<Map<String, Object>> forAcc = recordsByAccount.get(acc.toLowerCase());
+                    if (forAcc != null) {
+                        for (Map<String, Object> r : forAcc) {
+                            if (!candidateRecords.contains(r)) candidateRecords.add(r);
+                        }
+                    }
+                }
             }
         } else {
             // Batch all ready customers
@@ -1297,7 +1829,8 @@ public class PaymentControlService {
         }
 
         // If specific customers were selected and any are ineligible, strictly REJECT the request!
-        if (selectedAccountNos != null && !selectedAccountNos.isEmpty() && !rejectedIneligible.isEmpty()) {
+        if ((selectedRecordKeys != null && !selectedRecordKeys.isEmpty() || selectedAccountNos != null && !selectedAccountNos.isEmpty())
+                && !rejectedIneligible.isEmpty()) {
             throw new IllegalArgumentException("Server Security Violation: The following customers are NOT PAYMENT READY and cannot enter a payment batch: "
                     + String.join("; ", rejectedIneligible));
         }
@@ -1480,14 +2013,16 @@ public class PaymentControlService {
 
         List<MonthlyDirectorySnapshot> snapshots = getSnapshots(bp, divFilter);
         List<Map<String, Object>> result = new ArrayList<>();
-        Set<String> seenRecords = new HashSet<>();
+        Set<String> seenSnapshotItems = new HashSet<>();
+        Set<String> seenAccountsInSnapshots = new HashSet<>();
 
         // 1. Process month-wise directory snapshots
         for (MonthlyDirectorySnapshot snap : snapshots) {
             if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
                 try {
                     List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
-                    for (Map<String, Object> rec : list) {
+                    for (int i = 0; i < list.size(); i++) {
+                        Map<String, Object> rec = list.get(i);
                         String acc = strVal(rec.get("accountNo"));
                         if (acc.isEmpty()) continue;
                         String bMonth = snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()
@@ -1517,16 +2052,20 @@ public class PaymentControlService {
                             }
                         }
 
-                        String key = acc + "::" + bMonth;
-                        if (seenRecords.contains(key)) continue;
-                        seenRecords.add(key);
+                        Long sId = snap.getId() != null ? snap.getId() : 0L;
+                        String itemKey = sId + "::" + i + "::" + acc;
+                        if (seenSnapshotItems.contains(itemKey)) continue;
+                        seenSnapshotItems.add(itemKey);
+                        seenAccountsInSnapshots.add(acc.toLowerCase());
 
+                        String recordKey = "snap_" + sId + "_" + i + "_" + acc.replaceAll("[^a-zA-Z0-9_-]", "");
+                        rec.put("recordKey", recordKey);
+                        rec.put("paymentRecordId", recordKey);
+                        rec.put("snapshotId", sId);
+                        rec.put("snapshotIndex", i);
                         rec.put("billingMonth", bMonth);
                         if (!snapDiv.isEmpty()) {
                             rec.put("division", snapDiv);
-                        }
-                        if (snap.getId() != null) {
-                            rec.put("snapshotId", snap.getId());
                         }
                         if (snap.getDatasetName() != null) {
                             rec.put("datasetName", snap.getDatasetName());
@@ -1548,7 +2087,7 @@ public class PaymentControlService {
             }
         }
 
-        // 2. Process customerRepository (Customer 360 source of truth) for any directory records
+        // 2. Process customerRepository (Customer 360 source of truth) for any directory records not present in snapshots
         if (customerRepository != null) {
             try {
                 List<Customer> allCusts = customerRepository.findAll();
@@ -1559,6 +2098,11 @@ public class PaymentControlService {
                             String acc = strVal(dirRec.get("accountNo"));
                             if (acc.isEmpty()) acc = c.getAccountNo();
                             if (acc.isEmpty()) continue;
+
+                            // If this account was already loaded from snapshots, skip fallback
+                            if (seenAccountsInSnapshots.contains(acc.toLowerCase())) {
+                                continue;
+                            }
 
                             String bMonth = strVal(dirRec.get("billingMonth"));
                             if (bMonth.isEmpty()) {
@@ -1591,10 +2135,9 @@ public class PaymentControlService {
                                 }
                             }
 
-                            String key = acc + "::" + bMonth;
-                            if (seenRecords.contains(key)) continue;
-                            seenRecords.add(key);
-
+                            String recordKey = "cust_" + acc.replaceAll("[^a-zA-Z0-9_-]", "") + "_" + bMonth.replaceAll("[^a-zA-Z0-9_-]", "");
+                            dirRec.put("recordKey", recordKey);
+                            dirRec.put("paymentRecordId", recordKey);
                             dirRec.put("accountNo", acc);
                             dirRec.put("billingMonth", bMonth);
                             if (!div.isEmpty()) {
@@ -1641,6 +2184,63 @@ public class PaymentControlService {
                     }
                 }
             } catch (Exception ignored) {}
+        }
+
+        // Group by account to count payments, calculate cumulative payable, and assign visual styling tokens
+        Map<String, List<Map<String, Object>>> byAccount = new LinkedHashMap<>();
+        for (Map<String, Object> r : result) {
+            String acc = strVal(r.get("accountNo")).toLowerCase();
+            byAccount.computeIfAbsent(acc, k -> new ArrayList<>()).add(r);
+        }
+
+        String[] PALETTE_COLORS = new String[] {
+            "#818cf8", // Indigo / Purple
+            "#38bdf8", // Sky / Cyan
+            "#fbbf24", // Amber / Warm Yellow
+            "#f472b6", // Pink / Rose
+            "#60a5fa", // Blue
+            "#34d399", // Emerald
+            "#2dd4bf", // Teal
+            "#fb923c"  // Orange
+        };
+
+        for (List<Map<String, Object>> accountRecords : byAccount.values()) {
+            int totalPayments = accountRecords.size();
+            double cumulativePayable = 0.0;
+            int readyCount = 0;
+            int holdCount = 0;
+
+            for (Map<String, Object> r : accountRecords) {
+                PaymentEligibilityResult elig = canPay(r);
+                double amt = elig.getFinancials().getOrDefault("totalPayable", 0.0);
+                cumulativePayable += amt;
+                if (elig.isEligible()) readyCount++;
+                else holdCount++;
+            }
+
+            for (int pIdx = 0; pIdx < totalPayments; pIdx++) {
+                Map<String, Object> r = accountRecords.get(pIdx);
+                String acc = strVal(r.get("accountNo"));
+                int colorIdx = Math.abs(acc.hashCode()) % PALETTE_COLORS.length;
+                String groupColor = PALETTE_COLORS[colorIdx];
+
+                r.put("totalPaymentsForCustomer", totalPayments);
+                r.put("hasMultiplePayments", totalPayments > 1);
+                r.put("paymentIndex", pIdx + 1);
+                r.put("paymentSequence", pIdx + 1);
+                r.put("customerGroupKey", acc);
+                r.put("customerGroupColor", groupColor);
+                r.put("cumulativeCustomerPayable", Math.round(cumulativePayable * 100.0) / 100.0);
+                r.put("customerReadyPaymentsCount", readyCount);
+                r.put("customerHoldPaymentsCount", holdCount);
+
+                if (totalPayments > 1) {
+                    boolean isHold = Boolean.TRUE.equals(r.get("paymentHold")) || !canPay(r).isEligible();
+                    String tag = isHold ? "Hold Payment" : (pIdx == 0 ? "Previous / Backlog" : "Current Cycle");
+                    r.put("paymentLabel", "Payment " + (pIdx + 1) + " of " + totalPayments);
+                    r.put("paymentTag", tag);
+                }
+            }
         }
 
         return result;
@@ -1704,31 +2304,35 @@ public class PaymentControlService {
             return idB.compareTo(idA);
         });
 
-        Map<String, MonthlyDirectorySnapshot> byDiv = new LinkedHashMap<>();
+        Map<String, MonthlyDirectorySnapshot> byMonthAndDiv = new LinkedHashMap<>();
         List<MonthlyDirectorySnapshot> unassigned = new ArrayList<>();
         for (MonthlyDirectorySnapshot s : snapshots) {
+            String m = s.getBillingMonth() != null ? s.getBillingMonth().trim() : "";
+            if (m.isEmpty() && s.getDatasetName() != null) m = s.getDatasetName().trim();
             String d = s.getDivision() != null ? s.getDivision().trim() : "";
             String dCanon = com.ceb.billing.utils.BranchDetector.canonicalDivision(d);
             if (dCanon.isEmpty() && !d.isEmpty()) dCanon = d;
 
-            if (!dCanon.isEmpty()) {
-                byDiv.putIfAbsent(dCanon.toLowerCase(), s);
+            if (hasDiv) {
+                if (!dCanon.isEmpty() && !canonDiv.equalsIgnoreCase(dCanon) && !canonDiv.equalsIgnoreCase(d)) {
+                    continue;
+                }
+            }
+            if (hasBp) {
+                if (!m.isEmpty() && !bp.equalsIgnoreCase(m) && !com.ceb.billing.controllers.CustomerController.isSameMonth(bp, m)) {
+                    continue;
+                }
+            }
+
+            String key = m.toLowerCase() + "::" + dCanon.toLowerCase();
+            if (!key.equals("::")) {
+                byMonthAndDiv.putIfAbsent(key, s);
             } else {
                 unassigned.add(s);
             }
         }
 
-        if (hasDiv) {
-            List<MonthlyDirectorySnapshot> result = new ArrayList<>();
-            for (Map.Entry<String, MonthlyDirectorySnapshot> entry : byDiv.entrySet()) {
-                if (entry.getKey().equalsIgnoreCase(canonDiv)) {
-                    result.add(entry.getValue());
-                }
-            }
-            return result;
-        }
-
-        List<MonthlyDirectorySnapshot> result = new ArrayList<>(byDiv.values());
+        List<MonthlyDirectorySnapshot> result = new ArrayList<>(byMonthAndDiv.values());
         result.addAll(unassigned);
         return result;
     }

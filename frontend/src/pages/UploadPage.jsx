@@ -402,6 +402,9 @@ const StatusBadge = ({ status }) => {
     VALID: { bg: 'rgba(16,185,129,0.15)', color: '#10b981', label: 'Valid' },
     ERROR: { bg: 'rgba(239,68,68,0.15)', color: '#ef4444', label: 'Error' },
     WARNING: { bg: 'rgba(245,158,11,0.15)', color: '#f59e0b', label: 'Warning' },
+    MULTIPLE_PAYMENT: { bg: 'rgba(99,102,241,0.15)', color: '#818cf8', label: 'Multiple Payment' },
+    DUPLICATE: { bg: 'rgba(236,72,153,0.15)', color: '#ec4899', label: 'Duplicate Record' },
+    DUPLICATE_RECORD: { bg: 'rgba(236,72,153,0.15)', color: '#ec4899', label: 'Duplicate Record' },
   }[status] || { bg: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)', label: status };
   return (
     <span style={{ display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, background: cfg.bg, color: cfg.color }}>
@@ -1146,13 +1149,14 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(true);
 
-  const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
+  const isValidRecord = r => (r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT') && (!r.warnings || r.warnings.length === 0);
 
   const allCount = rows.length;
   const validCount = rows.filter(isValidRecord).length;
   const errorCount = rows.filter(r => r.status === 'ERROR').length;
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+  const multiplePaymentCount = rows.filter(r => r.status === 'MULTIPLE_PAYMENT').length;
 
   const searchedRows = rows.filter(r => {
     if (!searchText || searchText.trim() === '') return true;
@@ -1168,6 +1172,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       return filterErrors ? r.status === 'ERROR' : true;
     }
     if (activeFilter === 'VALID') return isValidRecord(r);
+    if (activeFilter === 'MULTIPLE_PAYMENT') return r.status === 'MULTIPLE_PAYMENT';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
     if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
@@ -1202,9 +1207,10 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
         {[
           { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
           { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
+          { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentCount, color: '#818cf8' },
           { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
           { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
-          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+          { key: 'DUPLICATE', label: 'Duplicate Records', count: duplicateCount, color: '#ec4899' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -1421,14 +1427,20 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       </div>
                     </td>
                   </tr>
-                  {expandedRow === i && (row.status === 'DUPLICATE' || row.errors?.length > 0 || row.warnings?.length > 0) && (
+                  {expandedRow === i && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
                       <td colSpan={17} style={{ padding: '1rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                           {row.status === 'DUPLICATE' && (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                              <AlertTriangle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                              <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Account Number found'}</span>
+                              <AlertTriangle size={13} color="#ec4899" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#ec4899', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Record: identical transaction repeated in NGEN file'}</span>
+                            </div>
+                          )}
+                          {row.status === 'MULTIPLE_PAYMENT' && (
+                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <Info size={13} color="#818cf8" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#818cf8', fontSize: '0.76rem' }}>{row.multiplePaymentReason || 'Multiple Payment: Customer has additional valid payment record in NGEN file'}</span>
                             </div>
                           )}
                           {row.errors?.length > 0 && (
@@ -1470,13 +1482,14 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(true);
 
-  const isValidRecord = r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0);
+  const isValidRecord = r => (r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT') && (!r.warnings || r.warnings.length === 0);
 
   const allCount = rows.length;
   const validCount = rows.filter(isValidRecord).length;
   const errorCount = rows.filter(r => r.status === 'ERROR').length;
   const warningCount = rows.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
   const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+  const multiplePaymentCount = rows.filter(r => r.status === 'MULTIPLE_PAYMENT').length;
 
   const searchedRows = rows.filter(r => {
     if (!searchText || searchText.trim() === '') return true;
@@ -1492,6 +1505,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       return filterErrors ? r.status === 'ERROR' : true;
     }
     if (activeFilter === 'VALID') return isValidRecord(r);
+    if (activeFilter === 'MULTIPLE_PAYMENT') return r.status === 'MULTIPLE_PAYMENT';
     if (activeFilter === 'ERROR') return r.status === 'ERROR';
     if (activeFilter === 'WARNING') return r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR');
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
@@ -1526,9 +1540,10 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
         {[
           { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
           { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
+          { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentCount, color: '#818cf8' },
           { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
           { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
-          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+          { key: 'DUPLICATE', label: 'Duplicate Records', count: duplicateCount, color: '#ec4899' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -1733,14 +1748,20 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       </div>
                     </td>
                   </tr>
-                  {expandedRow === i && (row.status === 'DUPLICATE' || row.errors?.length > 0 || row.warnings?.length > 0) && (
+                  {expandedRow === i && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
                       <td colSpan={11} style={{ padding: '1rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                           {row.status === 'DUPLICATE' && (
                             <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
-                              <AlertTriangle size={13} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                              <span style={{ color: '#ef4444', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Account Number found'}</span>
+                              <AlertTriangle size={13} color="#ec4899" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#ec4899', fontSize: '0.76rem' }}>{row.duplicateReason || 'Duplicate Record: identical transaction repeated in NPAY file'}</span>
+                            </div>
+                          )}
+                          {row.status === 'MULTIPLE_PAYMENT' && (
+                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
+                              <Info size={13} color="#818cf8" style={{ marginTop: 2, flexShrink: 0 }} />
+                              <span style={{ color: '#818cf8', fontSize: '0.76rem' }}>{row.multiplePaymentReason || 'Multiple Payment: Customer has additional valid payment record in NPAY file'}</span>
                             </div>
                           )}
                           {row.errors?.length > 0 && (
@@ -2011,11 +2032,16 @@ const UploadPage = () => {
   const reevaluateDuplicates = (rows, stepName) => {
     const groups = {};
     rows.forEach((row) => {
-      const cleanErrors = (row.errors || []).filter(e => !e.includes("Duplicate") && !e.includes("duplicate"));
+      const cleanErrors = (row.errors || []).filter(e => !e.toLowerCase().includes("duplicate"));
       row.errors = cleanErrors;
-      if (row.status === 'DUPLICATE') {
+      if (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT') {
         row.status = cleanErrors.length > 0 ? 'ERROR' : 'VALID';
       }
+      delete row.duplicateReason;
+      delete row.multiplePaymentReason;
+      delete row.isMultiplePayment;
+      delete row.isOriginalDuplicate;
+      delete row.originalRowNum;
 
       const acc = String(row.accountNo || '').trim();
       if (/^\d{10}$/.test(acc) && !row.keepDuplicate) {
@@ -2024,6 +2050,77 @@ const UploadPage = () => {
       }
     });
 
+    if (stepName === 'NGEN' || stepName === 'NPAY') {
+      const isSameTx = (r1, r2) => {
+        const numEq = (v1, v2) => {
+          const n1 = v1 != null ? Number(v1) : 0;
+          const n2 = v2 != null ? Number(v2) : 0;
+          return Math.abs(n1 - n2) < 0.001;
+        };
+        if (stepName === 'NGEN') {
+          return numEq(r1.kwhImport, r2.kwhImport) &&
+                 numEq(r1.kwhExport, r2.kwhExport) &&
+                 numEq(r1.kwhUnitSales ?? r1.kwhSales, r2.kwhUnitSales ?? r2.kwhSales) &&
+                 numEq(r1.ngenUnitRate, r2.ngenUnitRate) &&
+                 numEq(r1.retentionMoney, r2.retentionMoney) &&
+                 numEq(r1.billSetOff, r2.billSetOff) &&
+                 numEq(r1.kwhSalesAmount ?? r1.salesAmount, r2.kwhSalesAmount ?? r2.salesAmount) &&
+                 numEq(r1.paymentSettled, r2.paymentSettled) &&
+                 numEq(r1.outstandingBalance, r2.outstandingBalance);
+        } else {
+          return numEq(r1.energyPurchase, r2.energyPurchase) &&
+                 numEq(r1.billSetOff, r2.billSetOff) &&
+                 numEq(r1.retentionMoney, r2.retentionMoney) &&
+                 numEq(r1.payment, r2.payment);
+        }
+      };
+
+      Object.keys(groups).forEach(acc => {
+        const group = groups[acc];
+        if (group.length > 1) {
+          const clusters = [];
+          group.forEach(row => {
+            const matched = clusters.find(c => isSameTx(c[0], row));
+            if (matched) {
+              matched.push(row);
+            } else {
+              clusters.push([row]);
+            }
+          });
+
+          // Genuinely identical payment records (repeated transaction)
+          clusters.forEach(cluster => {
+            if (cluster.length > 1) {
+              const firstRowNum = cluster[0].rowNum;
+              cluster.forEach((row, i) => {
+                row.status = 'DUPLICATE';
+                row.isOriginalDuplicate = i === 0;
+                row.originalRowNum = firstRowNum;
+                row.duplicateReason = `Duplicate Record: identical payment transaction repeated in ${stepName} file (Row #${firstRowNum})`;
+              });
+            }
+          });
+
+          // Distinct payment obligations under the same customer account
+          clusters.forEach(cluster => {
+            if (cluster.length === 1) {
+              const row = cluster[0];
+              const otherRows = group.filter(other => other !== row);
+              const otherRowNums = otherRows.map(other => `#${other.rowNum}`).join(', ');
+              if (row.status !== 'ERROR') {
+                row.status = 'MULTIPLE_PAYMENT';
+              }
+              row.isMultiplePayment = true;
+              row.multiplePaymentReason = `Multiple Payment: Customer has additional valid payment record in ${stepName} file (Row ${otherRowNums})`;
+            }
+          });
+        }
+      });
+
+      return rows;
+    }
+
+    // Step 1 (Master Data) and Step 2 (CEB Assist) logic untouched:
     Object.keys(groups).forEach(acc => {
       const group = groups[acc];
       if (group.length > 1) {
@@ -2047,8 +2144,9 @@ const UploadPage = () => {
     const totalRows = reevaluated.length;
     const errorCount = reevaluated.filter(r => r.status === 'ERROR').length;
     const duplicateCount = reevaluated.filter(r => r.status === 'DUPLICATE').length;
+    const multiplePaymentCount = reevaluated.filter(r => r.status === 'MULTIPLE_PAYMENT').length;
     const warningCount = reevaluated.filter(r => r.status === 'WARNING' || (r.warnings?.length > 0 && r.status !== 'ERROR')).length;
-    const validCount = reevaluated.filter(r => r.status === 'VALID' && (!r.warnings || r.warnings.length === 0)).length;
+    const validCount = reevaluated.filter(r => (r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT') && (!r.warnings || r.warnings.length === 0)).length;
 
     setPreview(prev => ({
       ...prev,
@@ -2056,6 +2154,7 @@ const UploadPage = () => {
       totalRows,
       errorCount,
       duplicateCount,
+      multiplePaymentCount,
       warningCount,
       validCount,
       matchedCount: validCount
@@ -3183,10 +3282,11 @@ const UploadPage = () => {
       const rows = Array.isArray(data) ? data : (data.rows || []);
       const errorCount = rows.filter(r => r.status === 'ERROR').length;
       const warningCount = rows.filter(r => r.status === 'WARNING').length;
-      const validCount = rows.filter(r => r.status === 'VALID').length;
-      const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+      const validCount = rows.filter(r => r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT').length;
+      const multiplePaymentCount = rows.filter(r => r.status === 'MULTIPLE_PAYMENT' || r.isMultiplePayment).length;
+      const duplicateCount = rows.filter(r => r.status === 'DUPLICATE' || r.isDuplicateEntry).length;
       const rejectedCount = rows.filter(r => r.status === 'REJECTED').length;
-      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount, rejectedCount });
+      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, multiplePaymentCount, duplicateCount, rejectedCount });
     } catch (e) {
       showToast('Failed to load main dataset: ' + e.message, 'error');
     } finally {
@@ -3248,10 +3348,11 @@ const UploadPage = () => {
       const rows = Array.isArray(data) ? data : (data.rows || []);
       const errorCount = rows.filter(r => r.status === 'ERROR').length;
       const warningCount = rows.filter(r => r.status === 'WARNING').length;
-      const validCount = rows.filter(r => r.status === 'VALID').length;
-      const duplicateCount = rows.filter(r => r.status === 'DUPLICATE').length;
+      const validCount = rows.filter(r => r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT').length;
+      const multiplePaymentCount = rows.filter(r => r.status === 'MULTIPLE_PAYMENT' || r.isMultiplePayment).length;
+      const duplicateCount = rows.filter(r => r.status === 'DUPLICATE' || r.isDuplicateEntry).length;
       const rejectedCount = rows.filter(r => r.status === 'REJECTED').length;
-      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, duplicateCount, rejectedCount });
+      setMainDataset({ rows, totalRecords: rows.length, errorCount, warningCount, validCount, multiplePaymentCount, duplicateCount, rejectedCount });
       if (successMsg) showToast(successMsg, 'success');
     } catch (e) {
       showToast('Revalidation failed: ' + e.message, 'error');
@@ -4260,7 +4361,7 @@ const UploadPage = () => {
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
               <span style={{ color: '#f59e0b', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <AlertTriangle size={14} /> Unresolved errors/duplicates will be kept in Pending status and remain reviewable — you can still proceed.
+                <AlertTriangle size={14} /> Unresolved errors/duplicate records will be kept in Pending status and remain reviewable — you can still proceed.
               </span>
             )}
             <button className="btn" onClick={handleNgenApprove} disabled={approving}
@@ -4295,8 +4396,11 @@ const UploadPage = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
             <StatCard label="Valid" value={preview.validCount ?? preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
+            {(preview.multiplePaymentCount || 0) > 0 && (
+              <StatCard label="Multiple Payments" value={preview.multiplePaymentCount || 0} color="#818cf8" icon={<FileText size={18} />} />
+            )}
             <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+            <StatCard label="Duplicate Records" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#ec4899' : '#10b981'} icon={<AlertTriangle size={18} />} />
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -4351,7 +4455,7 @@ const UploadPage = () => {
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
             {((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) && (
               <span style={{ color: '#f59e0b', fontSize: '0.82rem', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                <AlertTriangle size={14} /> Unresolved errors/duplicates will be kept in Pending status and remain reviewable — you can still proceed.
+                <AlertTriangle size={14} /> Unresolved errors/duplicate records will be kept in Pending status and remain reviewable — you can still proceed.
               </span>
             )}
             <button className="btn" onClick={handleNpayApprove} disabled={approving}
@@ -4379,8 +4483,11 @@ const UploadPage = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
             <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
             <StatCard label="Valid" value={preview.validCount ?? preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
+            {(preview.multiplePaymentCount || 0) > 0 && (
+              <StatCard label="Multiple Payments" value={preview.multiplePaymentCount || 0} color="#818cf8" icon={<FileText size={18} />} />
+            )}
             <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
+            <StatCard label="Duplicate Records" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#ec4899' : '#10b981'} icon={<AlertTriangle size={18} />} />
             <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
@@ -4429,10 +4536,14 @@ const UploadPage = () => {
     });
     const dupCountFor = (row) => (dupEntriesByAcc[String(row.accountNo ?? '—')] || []).length;
     const rowHasDuplicates = (row) => !row.isDuplicateEntry && dupCountFor(row) > 0;
+    const isMultiplePayment = (r) => r.status === 'MULTIPLE_PAYMENT' || r.isMultiplePayment === true;
+    const isDupEntry = (r) => !isMultiplePayment(r) && (r.status === 'DUPLICATE' || r.isDuplicateEntry === true);
+
     // Main records = merged primary + rejected rows only (never the review-only duplicate entries).
     const mainRecords = (rows || []).filter(r => !r.isDuplicateEntry);
     const mainRecordCount = mainRecords.length;
-    const duplicateAccountCount = mainRecords.filter(rowHasDuplicates).length;
+    const duplicateRecordCount = (rows || []).filter(r => r.isDuplicateEntry).length + mainRecords.filter(rowHasDuplicates).length;
+    const multiplePaymentRecordCount = mainRecords.filter(isMultiplePayment).length;
 
     const searchedMainRecords = mainRecords.filter(r => {
       if (!mainSearchText || mainSearchText.trim() === '') return true;
@@ -4445,10 +4556,11 @@ const UploadPage = () => {
 
     const filteredRows = searchedMainRecords.filter(r => {
       if (mainDatasetFilter === 'ALL') return true;
-      if (mainDatasetFilter === 'VALID') return r.status === 'VALID';
+      if (mainDatasetFilter === 'VALID') return r.status === 'VALID' || isMultiplePayment(r);
+      if (mainDatasetFilter === 'MULTIPLE_PAYMENT') return isMultiplePayment(r);
       if (mainDatasetFilter === 'ERROR') return r.status === 'ERROR';
       if (mainDatasetFilter === 'WARNING') return r.status === 'WARNING';
-      if (mainDatasetFilter === 'DUPLICATE') return rowHasDuplicates(r);
+      if (mainDatasetFilter === 'DUPLICATE') return rowHasDuplicates(r) || isDupEntry(r);
       if (mainDatasetFilter === 'REJECTED') return r.status === 'REJECTED';
       return true;
     });
@@ -4624,8 +4736,9 @@ const UploadPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
           <StatCard label="Total Records" value={mainRecordCount} color="white" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
+          <StatCard label="Multiple Payments" value={multiplePaymentRecordCount} color="#818cf8" icon={<Layers size={18} />} />
           <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-          <StatCard label="Duplicate Accounts" value={duplicateAccountCount || 0} color="#ec4899" icon={<Layers size={18} />} />
+          <StatCard label="Duplicate Records" value={duplicateRecordCount || 0} color="#ec4899" icon={<Layers size={18} />} />
           <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
           <StatCard label="Rejected" value={rejectedCount || 0} color={(rejectedCount || 0) > 0 ? '#f43f5e' : '#10b981'} icon={<XCircle size={18} />} />
         </div>
@@ -4652,9 +4765,10 @@ const UploadPage = () => {
             {[
               { key: 'ALL', label: 'All Records', count: mainRecordCount || 0, color: 'var(--text-secondary)' },
               { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
+              { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentRecordCount, color: '#818cf8' },
               { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
               { key: 'WARNING', label: 'Warnings', count: warningCount || 0, color: '#f59e0b' },
-              { key: 'DUPLICATE', label: 'Duplicate Accounts', count: duplicateAccountCount || 0, color: '#ec4899' },
+              { key: 'DUPLICATE', label: 'Duplicate Records', count: duplicateRecordCount || 0, color: '#ec4899' },
               { key: 'REJECTED', label: 'Rejected', count: rejectedCount || 0, color: '#f43f5e' },
             ].map(tab => (
               <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
@@ -4697,11 +4811,11 @@ const UploadPage = () => {
                   const rowKey = row.rowNum ?? row.accountNo ?? i;
                   const expanded = mainExpandedRow === rowKey;
                   const dupMembers = rowHasDuplicates(row) ? dupEntriesByAcc[String(row.accountNo ?? '—')] : null;
-                  const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.rejectionReason || !!dupMembers;
+                  const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.multiplePaymentReason || row.rejectionReason || !!dupMembers;
                   return (
                     <React.Fragment key={rowKey}>
                       <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isMultiplePayment ? '3px solid #818cf8' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                         <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {row.accountNo || '—'}
@@ -4726,9 +4840,9 @@ const UploadPage = () => {
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           <span style={{
                             padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
-                            color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
-                          }}>{row.status}</span>
+                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'MULTIPLE_PAYMENT' ? 'rgba(129,140,248,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
+                            color: row.status === 'VALID' ? '#10b981' : row.status === 'MULTIPLE_PAYMENT' ? '#818cf8' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
+                          }}>{row.status === 'MULTIPLE_PAYMENT' ? 'Multiple Payment' : row.status === 'DUPLICATE' ? 'Duplicate Record' : row.status}</span>
                           {dupMembers && (
                             <span style={{
                               marginLeft: '0.35rem', padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
@@ -4753,6 +4867,11 @@ const UploadPage = () => {
                         <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
                           <td colSpan={16} style={{ padding: '0.75rem 1.25rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
+                              {row.multiplePaymentReason && (
+                                <div style={{ color: '#818cf8', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+                                  <Info size={12} /> <strong>Multiple Payment:</strong> {row.multiplePaymentReason}
+                                </div>
+                              )}
                               {row.rejectionReason && (
                                 <div style={{ color: '#f43f5e', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                                   <XCircle size={12} /> <strong>Rejected:</strong> {row.rejectionReason}
@@ -4891,7 +5010,7 @@ const UploadPage = () => {
         </div>
       );
     }
-    const { rows, totalRecords, errorCount, warningCount, validCount, newCustomersCount, noBillingDataCount, duplicateCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
+    const { rows, totalRecords, errorCount, warningCount, validCount, newCustomersCount, noBillingDataCount, duplicateCount, multiplePaymentCount: backendMultiCount, nameMismatchCount, unitRateMismatchCount, netTypeMismatchCount, matchedCount, mismatchCount, notFoundCount } = masterComparison;
     const hasErrors = (errorCount || 0) > 0;
     const isNewCust = r => r.masterDataFound === false || r.isNewCustomer === true;
     const isPaymentHold = r => r.paymentHold === true;
@@ -4899,7 +5018,10 @@ const UploadPage = () => {
     const isPaymentMismatch = r => r.mergedPayment?.mismatch === true;
     const isRejected = r => r.status === 'REJECTED' || r.rejected === true;
     const isNoBill = r => (isNewCust(r) || isPaymentHold(r) || isNoBillOnly(r) || isPaymentMismatch(r)) && !isRejected(r);
-    const isDup = r => r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true;
+    const isMultiplePayment = r => r.status === 'MULTIPLE_PAYMENT' || r.isMultiplePayment === true;
+    const isDup = r => !isMultiplePayment(r) && (r.status === 'DUPLICATE' || r.hasDuplicateSources === true || r.isDuplicateEntry === true);
+    const multiplePaymentCount = backendMultiCount ?? (rows || []).filter(isMultiplePayment).length;
+    const actualDupCount = duplicateCount ?? (rows || []).filter(isDup).length;
 
     const searchedRows = (rows || []).filter(r => {
       if (!comparisonSearchText || comparisonSearchText.trim() === '') return true;
@@ -4945,7 +5067,8 @@ const UploadPage = () => {
     const agreementActiveCount = agreementRows.filter(r => r.agreementStatus === 'ACTIVE').length;
     const filteredRows = searchedRows.filter(r => {
       if (masterComparisonFilter === 'ALL') return true;
-      if (masterComparisonFilter === 'VALID') return r.status === 'VALID';
+      if (masterComparisonFilter === 'VALID') return r.status === 'VALID' || isMultiplePayment(r);
+      if (masterComparisonFilter === 'MULTIPLE_PAYMENT') return isMultiplePayment(r);
       if (masterComparisonFilter === 'NO_BILLING_DATA') return isNoBill(r);
       if (masterComparisonFilter === 'REJECTED') return r.status === 'REJECTED';
       if (masterComparisonFilter === 'DUPLICATE') return isDup(r);
@@ -4990,8 +5113,9 @@ const UploadPage = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
           <StatCard label="Total Records" value={totalRecords} color="#818cf8" icon={<FileText size={18} />} />
           <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
+          <StatCard label="Multiple Payments" value={multiplePaymentCount || 0} color="#818cf8" icon={<Layers size={18} />} />
           <StatCard label="Outstanding Customers" value={noBillingDataCount || 0} color="#38bdf8" icon={<Clock size={18} />} />
-          <StatCard label="Duplicates" value={duplicateCount || 0} color="#c084fc" icon={<Layers size={18} />} />
+          <StatCard label="Duplicate Records" value={actualDupCount || 0} color="#ec4899" icon={<Layers size={18} />} />
           <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
           <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#fbbf24' : '#10b981'} icon={<AlertTriangle size={18} />} />
           <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#a78bfa' : '#10b981'} icon={<Zap size={18} />} />
@@ -5014,9 +5138,10 @@ const UploadPage = () => {
             {[
               { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
               { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
+              { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentCount || 0, color: '#818cf8' },
               { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', count: noBillingDataCount || 0, color: '#38bdf8' },
               { key: 'REJECTED', label: 'Rejected', count: (rows || []).filter(r => r.status === 'REJECTED').length, color: '#f43f5e' },
-              { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount || 0, color: '#c084fc' },
+              { key: 'DUPLICATE', label: 'Duplicate Records', count: actualDupCount || 0, color: '#ec4899' },
               { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
               { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
               { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#a78bfa' },
@@ -5858,11 +5983,13 @@ const UploadPage = () => {
                   const expanded = comparisonExpandedRow === rowKey;
                   const errorCount = row.errors?.length || 0;
                   const warningCount = row.warnings?.length || 0;
-                  const hasDetail = errorCount + warningCount > 0 || row.status === 'REJECTED';
+                  const isMulti = isMultiplePayment(row);
+                  const isDuplicate = isDup(row);
+                  const hasDetail = errorCount + warningCount > 0 || row.status === 'REJECTED' || !!row.multiplePaymentReason;
                   return (
                     <React.Fragment key={rowKey}>
                       <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : isMulti ? '3px solid #818cf8' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : isMulti ? 'rgba(129,140,248,0.03)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
@@ -5912,9 +6039,9 @@ const UploadPage = () => {
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           <span style={{
                             padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                            background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.08)',
-                            color: row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : row.status === 'REJECTED' ? '#f43f5e' : 'var(--text-muted)'
-                          }}>{row.status}</span>
+                            background: isMulti ? 'rgba(99,102,241,0.15)' : isDuplicate ? 'rgba(236,72,153,0.15)' : row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.08)',
+                            color: isMulti ? '#818cf8' : isDuplicate ? '#ec4899' : row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : row.status === 'REJECTED' ? '#f43f5e' : 'var(--text-muted)'
+                          }}>{isMulti ? 'Multiple Payment' : isDuplicate ? 'Duplicate Record' : row.status}</span>
                         </td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
                           {hasDetail ? (
@@ -5922,12 +6049,12 @@ const UploadPage = () => {
                               title={expanded ? 'Hide validation details' : 'View validation details'}
                               style={{
                                 display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.2rem 0.55rem', borderRadius: 6, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 700,
-                                background: errorCount > 0 ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.12)',
-                                border: errorCount > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(245,158,11,0.3)',
-                                color: errorCount > 0 ? '#ef4444' : '#f59e0b'
+                                background: errorCount > 0 ? 'rgba(239,68,68,0.12)' : warningCount > 0 ? 'rgba(245,158,11,0.12)' : isMulti ? 'rgba(99,102,241,0.12)' : 'rgba(245,158,11,0.12)',
+                                border: errorCount > 0 ? '1px solid rgba(239,68,68,0.3)' : warningCount > 0 ? '1px solid rgba(245,158,11,0.3)' : isMulti ? '1px solid rgba(99,102,241,0.3)' : '1px solid rgba(245,158,11,0.3)',
+                                color: errorCount > 0 ? '#ef4444' : warningCount > 0 ? '#f59e0b' : isMulti ? '#818cf8' : '#f59e0b'
                               }}>
-                              {errorCount > 0 ? <XCircle size={12} /> : <AlertTriangle size={12} />}
-                              {errorCount > 0 ? `${errorCount} Error${errorCount > 1 ? 's' : ''}` : `${warningCount} Warning${warningCount > 1 ? 's' : ''}`}
+                              {errorCount > 0 ? <XCircle size={12} /> : warningCount > 0 ? <AlertTriangle size={12} /> : isMulti ? <Layers size={12} /> : <AlertTriangle size={12} />}
+                              {errorCount > 0 ? `${errorCount} Error${errorCount > 1 ? 's' : ''}` : warningCount > 0 ? `${warningCount} Warning${warningCount > 1 ? 's' : ''}` : isMulti ? 'Multiple Payment' : 'Details'}
                               <span style={{ opacity: 0.7, fontSize: '0.6rem' }}>{expanded ? '▲' : '▼'}</span>
                             </button>
                           ) : <span style={{ color: '#10b981', fontSize: '0.72rem' }}>—</span>}
@@ -5955,6 +6082,14 @@ const UploadPage = () => {
                                   <strong style={{ color: '#f43f5e' }}>Rejection Reason:</strong>
                                   <div style={{ color: '#f43f5e', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
                                     <XCircle size={11} style={{ color: '#f43f5e', flexShrink: 0, marginTop: 2 }} /> {row.rejectionReason}
+                                  </div>
+                                </div>
+                              )}
+                              {row.multiplePaymentReason && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem', marginTop: '0.25rem' }}>
+                                  <strong style={{ color: '#818cf8' }}>Payment Obligation Details:</strong>
+                                  <div style={{ color: '#818cf8', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
+                                    <Layers size={11} style={{ color: '#818cf8', flexShrink: 0, marginTop: 2 }} /> {row.multiplePaymentReason}
                                   </div>
                                 </div>
                               )}

@@ -69,12 +69,13 @@ public class PaymentControlController {
             @RequestParam(value = "holdReason", required = false) String holdReason,
             @RequestParam(value = "validationStatus", required = false) String validationStatus,
             @RequestParam(value = "netType", required = false) String netType,
+            @RequestParam(value = "multiPaymentOnly", required = false) Boolean multiPaymentOnly,
             @RequestParam(value = "page", defaultValue = "0") int page,
             @RequestParam(value = "size", defaultValue = "10") int size) {
         try {
             // Evaluated customer directory with server-side filtering
             return ResponseEntity.ok(paymentControlService.getPaymentCustomers(
-                    billingPeriod, division, category, search, holdReason, validationStatus, netType, page, size));
+                    billingPeriod, division, category, search, holdReason, validationStatus, netType, multiPaymentOnly, page, size));
         } catch (Exception e) {
             return ResponseEntity.internalServerError()
                     .body(new MessageResponse("Failed to load payment customers: " + e.getMessage()));
@@ -89,9 +90,10 @@ public class PaymentControlController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getCustomerDetails(
             @PathVariable String accountNo,
-            @RequestParam(value = "billingPeriod", required = false) String billingPeriod) {
+            @RequestParam(value = "billingPeriod", required = false) String billingPeriod,
+            @RequestParam(value = "recordKey", required = false) String recordKey) {
         try {
-            return ResponseEntity.ok(paymentControlService.getCustomerIssueDetails(accountNo, billingPeriod));
+            return ResponseEntity.ok(paymentControlService.getCustomerIssueDetails(accountNo, billingPeriod, recordKey));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         } catch (Exception e) {
@@ -163,6 +165,41 @@ public class PaymentControlController {
     }
 
     /**
+     * Customer-Level Payment Release:
+     * Releases accumulated held payments together once customer-level issues are resolved,
+     * while preserving individual payment records, months, and history.
+     */
+    @PostMapping("/customers/{accountNo}/release-all")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> releaseAllCustomerPayments(@PathVariable String accountNo) {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        try {
+            return ResponseEntity.ok(paymentControlService.releaseCustomerPayments(accountNo, username));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(new MessageResponse("Failed to release customer payments: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Test Case Helper:
+     * Seeds Account 12345 with 3 payments:
+     * Jan 2026 (10k, ON HOLD), Feb 2026 (12k, ON HOLD), Mar 2026 (15k, READY)
+     */
+    @PostMapping("/test-case/seed-12345")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> seedTestCase12345() {
+        try {
+            return ResponseEntity.ok(paymentControlService.seedTestCase12345());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(new MessageResponse("Failed to seed test case 12345: " + e.getMessage()));
+        }
+    }
+
+    /**
      * Create Payment Batch:
      * BACKEND SECURITY ENFORCEMENT: Rejects immediately if any selected customer is ON_HOLD / ineligible!
      */
@@ -175,9 +212,11 @@ public class PaymentControlController {
             String division = (String) payload.get("division");
             @SuppressWarnings("unchecked")
             List<String> accountNos = (List<String>) payload.get("accountNos");
+            @SuppressWarnings("unchecked")
+            List<String> recordKeys = (List<String>) payload.get("recordKeys");
 
             PaymentBatch batch = paymentControlService.createPaymentBatch(
-                    billingPeriod, division, accountNos, username);
+                    billingPeriod, division, accountNos, recordKeys, username);
             return ResponseEntity.ok(batch);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));

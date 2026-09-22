@@ -19,6 +19,7 @@ import {
   HelpCircle,
   ChevronRight,
   ChevronLeft,
+  ChevronDown,
   Lock,
   Unlock,
   AlertCircle,
@@ -56,14 +57,18 @@ const PaymentControlCenter = () => {
   const [validationFilter, setValidationFilter] = useState('ALL');
   const [holdReasonFilter, setHoldReasonFilter] = useState('ALL');
   const [netTypeFilter, setNetTypeFilter] = useState('ALL');
+  const [multiPaymentFilter, setMultiPaymentFilter] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
-  const [pageSize] = useState(15);
+  const [pageSize, setPageSize] = useState(15);
   const [searchFocused, setSearchFocused] = useState(false);
 
   // ── Canonical Data State ───────────────────────────────────────────
   const [summary, setSummary] = useState({
     totalCustomers: 0,
     customerCount: 0,
+    totalPaymentRecords: 0,
+    multiPaymentCount: 0,
+    multiPaymentCustomersCount: 0,
     paymentReadyCount: 0,
     onHoldCount: 0,
     reviewCount: 0,
@@ -84,8 +89,26 @@ const PaymentControlCenter = () => {
   // ── UI / Selection State ───────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
-  const [selectedAccounts, setSelectedAccounts] = useState(new Set());
+  const [selectedRecords, setSelectedRecords] = useState(new Set());
+  const [expandedCustomers, setExpandedCustomers] = useState(new Set());
   const [toastMessage, setToastMessage] = useState(null);
+
+  const toggleExpandCustomer = (accNo) => {
+    setExpandedCustomers(prev => {
+      const next = new Set(prev);
+      if (next.has(accNo)) next.delete(accNo);
+      else next.add(accNo);
+      return next;
+    });
+  };
+
+  const expandAllCustomers = () => {
+    setExpandedCustomers(new Set(customersData.content.map(c => c.accountNo)));
+  };
+
+  const collapseAllCustomers = () => {
+    setExpandedCustomers(new Set());
+  };
 
   // ── Modals & Drawer State ──────────────────────────────────────────
   const [selectedCustomerDetails, setSelectedCustomerDetails] = useState(null);
@@ -143,6 +166,7 @@ const PaymentControlCenter = () => {
       if (holdReasonFilter !== 'ALL') params.append('holdReason', holdReasonFilter);
       if (validationFilter !== 'ALL') params.append('validationStatus', validationFilter);
       if (netTypeFilter !== 'ALL') params.append('netType', netTypeFilter);
+      if (multiPaymentFilter) params.append('multiPaymentOnly', 'true');
       params.append('page', currentPage);
       params.append('size', pageSize);
 
@@ -156,7 +180,7 @@ const PaymentControlCenter = () => {
     } finally {
       setLoading(false);
     }
-  }, [billingPeriod, division, activeTab, statusFilter, searchQuery, holdReasonFilter, validationFilter, netTypeFilter, currentPage, pageSize, authFetch]);
+  }, [billingPeriod, division, activeTab, statusFilter, searchQuery, holdReasonFilter, validationFilter, netTypeFilter, multiPaymentFilter, currentPage, pageSize, authFetch]);
 
   // ── 3. Load Batches ────────────────────────────────────────────────
   const fetchBatches = useCallback(async () => {
@@ -240,47 +264,126 @@ const PaymentControlCenter = () => {
     setValidationFilter('ALL');
     setHoldReasonFilter('ALL');
     setNetTypeFilter('ALL');
+    setMultiPaymentFilter(false);
     setSearchQuery('');
     setCurrentPage(0);
   };
 
   // ── Selection for Batch (Only READY records permitted) ─────────────
-  const toggleSelectAccount = (accNo, isEligible) => {
+  const toggleSelectRecord = (recordKey, isEligible, accNo) => {
     if (!isEligible) {
-      showToast(`Account ${accNo} cannot be selected: Only PAYMENT READY records can enter a payment batch.`, 'warning');
+      showToast(`Record ${accNo || recordKey} cannot be selected: Only PAYMENT READY records can enter a payment batch.`, 'warning');
       return;
     }
-    const next = new Set(selectedAccounts);
-    if (next.has(accNo)) next.delete(accNo);
-    else next.add(accNo);
-    setSelectedAccounts(next);
+    const next = new Set(selectedRecords);
+    if (next.has(recordKey)) next.delete(recordKey);
+    else next.add(recordKey);
+    setSelectedRecords(next);
+  };
+
+  const toggleSelectCustomer = (customer) => {
+    const pList = Array.isArray(customer.payments) && customer.payments.length > 0 ? customer.payments : [customer];
+    const readyPayments = pList.filter(p => p.paymentStatus === 'READY' || p.isEligible);
+    if (readyPayments.length === 0) {
+      showToast(`Customer ${customer.accountNo} has no PAYMENT READY records to select.`, 'warning');
+      return;
+    }
+    const next = new Set(selectedRecords);
+    const allSelected = readyPayments.every(p => next.has(p.recordKey || p.accountNo));
+    if (allSelected) {
+      readyPayments.forEach(p => next.delete(p.recordKey || p.accountNo));
+      showToast(`Deselected all records for customer ${customer.accountNo}`);
+    } else {
+      readyPayments.forEach(p => next.add(p.recordKey || p.accountNo));
+      showToast(`Selected ${readyPayments.length} ready record(s) for customer ${customer.accountNo}`);
+    }
+    setSelectedRecords(next);
+  };
+
+  const selectCustomerAllRecords = (accountNo) => {
+    const cust = customersData.content.find(c => c.accountNo === accountNo);
+    if (!cust) return;
+    toggleSelectCustomer(cust);
   };
 
   const selectAllEligibleVisible = () => {
-    const readyRows = customersData.content.filter(c => c.paymentStatus === 'READY' || c.isEligible);
-    if (readyRows.length === 0) {
-      showToast('No PAYMENT READY customers available on this page to select.', 'warning');
+    const allReadyPayments = [];
+    customersData.content.forEach(c => {
+      const pList = Array.isArray(c.payments) && c.payments.length > 0 ? c.payments : [c];
+      pList.forEach(p => {
+        if (p.paymentStatus === 'READY' || p.isEligible) {
+          allReadyPayments.push(p);
+        }
+      });
+    });
+
+    if (allReadyPayments.length === 0) {
+      showToast('No PAYMENT READY records available on this page to select.', 'warning');
       return;
     }
-    const allSelected = readyRows.every(c => selectedAccounts.has(c.accountNo));
+    const allSelected = allReadyPayments.every(p => selectedRecords.has(p.recordKey || p.accountNo));
+    const next = new Set(selectedRecords);
     if (allSelected) {
-      const next = new Set(selectedAccounts);
-      readyRows.forEach(c => next.delete(c.accountNo));
-      setSelectedAccounts(next);
+      allReadyPayments.forEach(p => next.delete(p.recordKey || p.accountNo));
     } else {
-      const next = new Set(selectedAccounts);
-      readyRows.forEach(c => next.add(c.accountNo));
-      setSelectedAccounts(next);
+      allReadyPayments.forEach(p => next.add(p.recordKey || p.accountNo));
+    }
+    setSelectedRecords(next);
+  };
+
+  // ── Release All Payments for Customer (Preserving Individual Records) ───
+  const handleReleaseCustomerPayments = async (accountNo) => {
+    if (!window.confirm(`Release all payment holds and approve accumulated payment obligations for customer ${accountNo}?`)) return;
+    setActionLoading(true);
+    try {
+      const res = await authFetch(`/api/payments/customers/${accountNo}/release-all`, {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || `Customer ${accountNo} payments released successfully!`);
+        fetchSummary();
+        fetchCustomers();
+      } else {
+        showToast(data.message || 'Release failed', 'error');
+      }
+    } catch (e) {
+      showToast('Release error: ' + e.message, 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // ── Test Case 12345 One-Click Seeder ────────────────────────────────
+  const handleSeedTestCase = async () => {
+    setActionLoading(true);
+    try {
+      const res = await authFetch('/api/payments/test-case/seed-12345', {
+        method: 'POST'
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast(data.message || 'Test Case 12345 seeded successfully with 3 monthly payments!');
+        fetchSummary();
+        fetchCustomers();
+      } else {
+        showToast(data.message || 'Failed seeding test case', 'error');
+      }
+    } catch (e) {
+      showToast('Seed error: ' + e.message, 'error');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   // ── Open Detail Drawer / Modal ─────────────────────────────────────
-  const openCustomerDetails = async (accountNo, rowBillingMonth, initialTab = 'overview') => {
+  const openCustomerDetails = async (accountNo, rowBillingMonth, initialTab = 'overview', recordKey = null) => {
     setActionLoading(true);
     try {
       const bp = rowBillingMonth || billingPeriod;
       const params = new URLSearchParams();
       if (bp && bp !== 'ALL') params.append('billingPeriod', bp);
+      if (recordKey) params.append('recordKey', recordKey);
       const res = await authFetch(`/api/payments/customers/${accountNo}?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -312,8 +415,9 @@ const PaymentControlCenter = () => {
     if (!selectedCustomerDetails) return;
     setActionLoading(true);
     try {
-      const acc = selectedCustomerDetails.record?.accountNo;
+      const acc = selectedCustomerDetails.record?.accountNo || selectedCustomerDetails.customerInfo?.accountNumber;
       const bp = selectedCustomerDetails.billingInfo?.billingMonth || billingPeriod;
+      const rk = selectedCustomerDetails.recordKey || selectedCustomerDetails.record?.recordKey;
       const params = new URLSearchParams();
       if (bp && bp !== 'ALL') params.append('billingPeriod', bp);
 
@@ -325,7 +429,7 @@ const PaymentControlCenter = () => {
       const data = await res.json();
       if (res.ok) {
         showToast(data.message || 'Correction saved and re-validated successfully!', data.newStatus === 'READY' ? 'success' : 'warning');
-        openCustomerDetails(acc, bp, 'overview');
+        openCustomerDetails(acc, bp, 'overview', rk);
         fetchSummary();
         fetchCustomers();
       } else {
@@ -339,7 +443,7 @@ const PaymentControlCenter = () => {
   };
 
   // ── Toggle Manual Payment Hold ─────────────────────────────────────
-  const handleToggleHold = async (accountNo, currentHold, rowBillingMonth) => {
+  const handleToggleHold = async (accountNo, currentHold, rowBillingMonth, recordKey = null) => {
     const reason = currentHold ? null : prompt(`Enter reason for placing ${accountNo} on payment hold:`);
     if (!currentHold && reason === null) return;
 
@@ -359,7 +463,7 @@ const PaymentControlCenter = () => {
         showToast(`Payment hold ${!currentHold ? 'activated' : 'released'} for ${accountNo}.`);
         fetchSummary();
         fetchCustomers();
-        if (detailsModalOpen) openCustomerDetails(accountNo, bp);
+        if (detailsModalOpen) openCustomerDetails(accountNo, bp, drawerTab, recordKey);
       } else {
         showToast(data.message || 'Action failed', 'error');
       }
@@ -374,16 +478,26 @@ const PaymentControlCenter = () => {
   const handleCreateBatch = async () => {
     setActionLoading(true);
     try {
-      const readyAccounts = Array.from(selectedAccounts).filter(accNo => {
-        const row = customersData.content.find(c => c.accountNo === accNo);
-        return !row || row.paymentStatus === 'READY' || row.isEligible;
+      const allPayments = [];
+      customersData.content.forEach(c => {
+        const pList = Array.isArray(c.payments) && c.payments.length > 0 ? c.payments : [c];
+        pList.forEach(p => {
+          allPayments.push({ ...p, accountNo: c.accountNo });
+        });
       });
 
-      if (readyAccounts.length === 0) {
-        showToast('Cannot create batch: Zero eligible READY customers selected.', 'error');
+      const selectedRows = allPayments.filter(c =>
+        selectedRecords.has(c.recordKey || c.accountNo) && (c.paymentStatus === 'READY' || c.isEligible)
+      );
+
+      if (selectedRows.length === 0) {
+        showToast('Cannot create batch: Zero eligible READY records selected.', 'error');
         setActionLoading(false);
         return;
       }
+
+      const readyAccounts = Array.from(new Set(selectedRows.map(c => c.accountNo)));
+      const readyRecordKeys = selectedRows.map(c => c.recordKey).filter(Boolean);
 
       const res = await authFetch('/api/payments/batches', {
         method: 'POST',
@@ -391,14 +505,15 @@ const PaymentControlCenter = () => {
         body: JSON.stringify({
           billingPeriod: billingPeriod !== 'ALL' ? billingPeriod : (availableMonths[0] || 'Current Period'),
           division: division !== 'ALL' ? division : 'ALL',
-          accountNos: readyAccounts
+          accountNos: readyAccounts,
+          recordKeys: readyRecordKeys
         })
       });
 
       const data = await res.json();
       if (res.ok) {
-        showToast(`Payment Batch ${data.batchNumber} successfully created with ${data.customerCount} customers!`);
-        setSelectedAccounts(new Set());
+        showToast(`Payment Batch ${data.batchNumber} successfully created with ${data.customerCount || selectedRows.length} payment records!`);
+        setSelectedRecords(new Set());
         setBatchReviewModalOpen(false);
         fetchSummary();
         setActiveTab('BATCHES');
@@ -462,7 +577,15 @@ const PaymentControlCenter = () => {
 
   // Calculations for selected items in Ready table
   const selectedFinancials = useMemo(() => {
-    const selRows = customersData.content.filter(c => selectedAccounts.has(c.accountNo));
+    const allPayments = [];
+    customersData.content.forEach(c => {
+      const pList = Array.isArray(c.payments) && c.payments.length > 0 ? c.payments : [c];
+      pList.forEach(p => {
+        allPayments.push({ ...p, accountNo: c.accountNo });
+      });
+    });
+
+    const selRows = allPayments.filter(c => selectedRecords.has(c.recordKey || c.accountNo));
     const eligibleRows = selRows.filter(c => c.paymentStatus === 'READY' || c.isEligible);
     const onHoldRows = selRows.filter(c => c.paymentStatus !== 'READY' && !c.isEligible);
 
@@ -481,7 +604,7 @@ const PaymentControlCenter = () => {
       onHoldAccounts: onHoldRows.map(r => r.accountNo),
       ...totals
     };
-  }, [customersData.content, selectedAccounts]);
+  }, [customersData.content, selectedRecords]);
 
   return (
     <div className="page-wrapper" style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '1.75rem 2rem' }}>
@@ -565,27 +688,50 @@ const PaymentControlCenter = () => {
           </button>
 
           <button
-            onClick={() => setBatchReviewModalOpen(true)}
-            disabled={selectedAccounts.size === 0}
+            onClick={handleSeedTestCase}
+            disabled={loading || actionLoading}
+            title="Seed Test Case: Customer 12345 with 3 monthly payment obligations (Jan Hold 10k, Feb Hold 12k, Mar Ready 15k)"
             className="btn"
             style={{
-              background: selectedAccounts.size > 0 ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.08)',
+              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(99, 102, 241, 0.25))',
+              border: '1px solid rgba(168, 85, 247, 0.45)',
+              color: '#d8b4fe',
+              padding: '0.6rem 1rem',
+              borderRadius: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '0.85rem'
+            }}
+          >
+            <Sparkles size={15} />
+            <span>Seed Test Case (12345)</span>
+          </button>
+
+          <button
+            onClick={() => setBatchReviewModalOpen(true)}
+            disabled={selectedRecords.size === 0}
+            className="btn"
+            style={{
+              background: selectedRecords.size > 0 ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.08)',
               border: 'none',
-              color: selectedAccounts.size > 0 ? '#fff' : 'var(--text-muted)',
+              color: selectedRecords.size > 0 ? '#fff' : 'var(--text-muted)',
               padding: '0.6rem 1.25rem',
               borderRadius: '8px',
               display: 'flex',
               alignItems: 'center',
               gap: '0.55rem',
-              cursor: selectedAccounts.size > 0 ? 'pointer' : 'not-allowed',
+              cursor: selectedRecords.size > 0 ? 'pointer' : 'not-allowed',
               fontWeight: 700,
               fontSize: '0.88rem',
-              boxShadow: selectedAccounts.size > 0 ? '0 4px 14px rgba(16, 185, 129, 0.4)' : 'none',
+              boxShadow: selectedRecords.size > 0 ? '0 4px 14px rgba(16, 185, 129, 0.4)' : 'none',
               transition: 'all 0.2s ease'
             }}
           >
             <Send size={16} />
-            <span>Create Payment Batch ({selectedAccounts.size})</span>
+            <span>Create Payment Batch ({selectedRecords.size})</span>
           </button>
         </div>
       </div>
@@ -848,6 +994,52 @@ const PaymentControlCenter = () => {
             </span>
           </div>
         </div>
+
+        {/* Card 7: Multi-Payment Customers */}
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => setSummaryModalCard('MULTI_PAYMENTS')}
+          onMouseEnter={() => setHoveredCard('MULTI_PAYMENTS')}
+          onMouseLeave={() => setHoveredCard(null)}
+          style={{
+            background: hoveredCard === 'MULTI_PAYMENTS'
+              ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(17, 24, 39, 0.95))'
+              : (multiPaymentFilter
+                  ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(17, 24, 39, 0.9))'
+                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(17, 24, 39, 0.8))'),
+            border: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '1px solid rgba(99, 102, 241, 0.75)' : '1px solid rgba(99, 102, 241, 0.25)',
+            borderRadius: '12px',
+            padding: '1.15rem 1.35rem',
+            cursor: 'pointer',
+            transform: hoveredCard === 'MULTI_PAYMENTS' ? 'translateY(-3px)' : 'none',
+            boxShadow: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '0 10px 24px -4px rgba(99, 102, 241, 0.35)' : 'none',
+            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Multi-Payments
+              </span>
+              <Layers size={18} style={{ color: '#818cf8' }} />
+            </div>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+              {(summary.multiPaymentCustomersCount || 0).toLocaleString()}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+            <span style={{ fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 600 }}>
+              {(summary.multiPaymentCount || 0).toLocaleString()} records
+            </span>
+            <span style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'MULTI_PAYMENTS' ? 1 : 0.65 }}>
+              Details <ChevronRight size={12} />
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* ── 2. FILTER BAR & DIVISION CONTROLS ─────────────────────────── */}
@@ -1057,6 +1249,31 @@ const PaymentControlCenter = () => {
             </select>
           </div>
 
+          {/* Multi-Payment Customers Filter Toggle */}
+          <button
+            onClick={() => { setMultiPaymentFilter(!multiPaymentFilter); setCurrentPage(0); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              background: multiPaymentFilter ? 'rgba(99, 102, 241, 0.25)' : 'var(--bg-card)',
+              border: multiPaymentFilter ? '1.5px solid #818cf8' : '1px solid var(--border-color)',
+              color: multiPaymentFilter ? '#a5b4fc' : 'var(--text-secondary)',
+              padding: '0.35rem 0.75rem',
+              borderRadius: '6px',
+              fontSize: '0.8rem',
+              fontWeight: multiPaymentFilter ? 700 : 500,
+              cursor: 'pointer',
+              boxShadow: multiPaymentFilter ? '0 0 12px rgba(99, 102, 241, 0.35)' : 'none',
+              transition: 'all 0.2s ease'
+            }}
+            title="Show only customers with multiple payment records (e.g. released hold payments + current cycle)"
+          >
+            <Layers size={14} style={{ color: multiPaymentFilter ? '#818cf8' : 'var(--text-muted)' }} />
+            <span>Multi-Payment ({summary.multiPaymentCustomersCount || 0} Customers • {summary.multiPaymentCount || 0} Records)</span>
+            {multiPaymentFilter && <Check size={12} style={{ color: '#818cf8' }} />}
+          </button>
+
           {/* Reset Filters button */}
           <button
             onClick={handleResetFilters}
@@ -1175,7 +1392,7 @@ const PaymentControlCenter = () => {
 
         {/* Tab 5: BATCHES */}
         <button
-          onClick={() => { setActiveTab('BATCHES'); setSelectedAccounts(new Set()); }}
+          onClick={() => { setActiveTab('BATCHES'); setSelectedRecords(new Set()); }}
           style={{
             background: activeTab === 'BATCHES' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
             border: activeTab === 'BATCHES' ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid transparent',
@@ -1197,7 +1414,7 @@ const PaymentControlCenter = () => {
 
         {/* Tab 6: HISTORY */}
         <button
-          onClick={() => { setActiveTab('HISTORY'); setSelectedAccounts(new Set()); }}
+          onClick={() => { setActiveTab('HISTORY'); setSelectedRecords(new Set()); }}
           style={{
             background: activeTab === 'HISTORY' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
             border: activeTab === 'HISTORY' ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid transparent',
@@ -1229,387 +1446,598 @@ const PaymentControlCenter = () => {
             justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: '0.82rem',
-            color: 'var(--text-secondary)'
+            color: 'var(--text-secondary)',
+            flexWrap: 'wrap',
+            gap: '0.75rem'
           }}>
-            <div>
-              Showing {customersData.content.length > 0 ? (currentPage * pageSize + 1) : 0} to{' '}
-              {Math.min((currentPage + 1) * pageSize, customersData.totalElements)} of {customersData.totalElements} records
-              {activeTab === 'READY' && selectedAccounts.size > 0 && (
-                <span style={{ marginLeft: '1rem', color: '#10b981', fontWeight: 600 }}>
-                  ({selectedAccounts.size} selected for batch)
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <span>
+                Showing {customersData.content.length > 0 ? (currentPage * pageSize + 1) : 0} to{' '}
+                {Math.min((currentPage + 1) * pageSize, customersData.totalElements)} of {customersData.totalElements} customers
+                {customersData.totalPaymentRecords ? ` • ${customersData.totalPaymentRecords} total payment obligations across months` : ''}
+              </span>
+              {selectedRecords.size > 0 && (
+                <span style={{ color: '#10b981', fontWeight: 600, background: 'rgba(16, 185, 129, 0.12)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                  {selectedRecords.size} payment obligation(s) selected for batch
                 </span>
               )}
             </div>
 
-            {/* Quick batch button in header */}
-            {activeTab === 'READY' && selectedAccounts.size > 0 && (
+            {/* Quick Actions in Table Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <button
-                onClick={() => setBatchReviewModalOpen(true)}
+                onClick={expandAllCustomers}
                 style={{
-                  background: 'linear-gradient(135deg, #10b981, #059669)',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '0.4rem 0.85rem',
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  padding: '0.35rem 0.75rem',
                   borderRadius: '6px',
-                  fontSize: '0.78rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.35rem'
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
                 }}
               >
-                <Send size={13} />
-                <span>Create Batch ({selectedAccounts.size})</span>
+                Expand All
               </button>
-            )}
+              <button
+                onClick={collapseAllCustomers}
+                style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-secondary)',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Collapse All
+              </button>
+              {activeTab === 'READY' && selectedRecords.size > 0 && (
+                <button
+                  onClick={() => setBatchReviewModalOpen(true)}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981, #059669)',
+                    border: 'none',
+                    color: '#fff',
+                    padding: '0.4rem 0.85rem',
+                    borderRadius: '6px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.35rem'
+                  }}
+                >
+                  <Send size={13} />
+                  <span>Create Batch ({selectedRecords.size})</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Table */}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '0.74rem', letterSpacing: '0.04em' }}>
-                  <th style={{ padding: '0.85rem 0.75rem', width: '40px' }}>
+                <tr style={{ background: 'rgba(255, 255, 255, 0.02)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)', textTransform: 'uppercase', fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+                  <th style={{ padding: '0.85rem 0.75rem', width: '38px' }}>
                     <input
                       type="checkbox"
                       checked={
                         customersData.content.length > 0 &&
-                        customersData.content.filter(c => c.paymentStatus === 'READY' || c.isEligible).length > 0 &&
-                        customersData.content.filter(c => c.paymentStatus === 'READY' || c.isEligible).every(c => selectedAccounts.has(c.accountNo))
+                        customersData.content.some(c => (c.payments || [c]).some(p => p.paymentStatus === 'READY' || p.isEligible)) &&
+                        customersData.content.every(c => {
+                          const readyP = (c.payments || [c]).filter(p => p.paymentStatus === 'READY' || p.isEligible);
+                          return readyP.length === 0 || readyP.every(p => selectedRecords.has(p.recordKey || p.accountNo));
+                        })
                       }
                       onChange={selectAllEligibleVisible}
                       title="Select all PAYMENT READY records on this page"
                       style={{ cursor: 'pointer', accentColor: '#10b981' }}
                     />
                   </th>
+                  <th style={{ padding: '0.85rem 0.4rem', width: '32px' }}></th>
                   <th style={{ padding: '0.85rem 0.75rem' }}>Account No</th>
                   <th style={{ padding: '0.85rem 0.75rem' }}>Customer Name</th>
                   <th style={{ padding: '0.85rem 0.75rem' }}>Net Type</th>
-                  <th style={{ padding: '0.85rem 0.75rem' }}>Billing Month</th>
-                  <th style={{ padding: '0.85rem 0.75rem' }}>Billing Period</th>
-                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>Current Payment</th>
-                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>Outstanding Balance</th>
+                  <th style={{ padding: '0.85rem 0.75rem' }}>Obligations</th>
+                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>Customer Status</th>
+                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>Total Pending</th>
+                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>Ready Amount</th>
+                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>On Hold Amount</th>
                   <th style={{ padding: '0.85rem 0.75rem', textAlign: 'right' }}>Total Payable</th>
-                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>Validation</th>
-                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>Payment Status</th>
-                  <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>Eligibility</th>
-                  <th style={{ padding: '0.85rem 0.75rem' }}>Hold Status & Reason</th>
                   <th style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={14} style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                    <td colSpan={12} style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                       <RefreshCw size={26} className="animate-spin" style={{ margin: '0 auto 0.75rem', color: 'var(--primary)' }} />
-                      <div style={{ fontWeight: 600 }}>Loading month-wise payment records...</div>
+                      <div style={{ fontWeight: 600 }}>Loading customer-level payment records...</div>
                     </td>
                   </tr>
                 ) : customersData.content.length === 0 ? (
                   <tr>
-                    <td colSpan={14} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    <td colSpan={12} style={{ padding: '3.5rem 1rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                       <HelpCircle size={36} style={{ margin: '0 auto 0.75rem', opacity: 0.4 }} />
-                      <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-secondary)' }}>No Payment Records Found</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-secondary)' }}>No Customer Payment Records Found</div>
                       <div style={{ fontSize: '0.82rem', marginTop: '0.35rem' }}>
                         No records match the chosen month, division, or filter criteria. Try selecting "All Approved Months" or resetting filters.
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  customersData.content.map((row) => {
-                    const isSelected = selectedAccounts.has(row.accountNo);
-                    const isReady = row.paymentStatus === 'READY' || row.isEligible;
-                    const isOnHold = row.paymentStatus === 'ON_HOLD' || row.paymentStatus === 'REVIEW';
+                  customersData.content.map((row, idx) => {
+                    const isExpanded = expandedCustomers.has(row.accountNo);
+                    const pList = Array.isArray(row.payments) && row.payments.length > 0 ? row.payments : [row];
+                    const readyPayments = pList.filter(p => p.paymentStatus === 'READY' || p.isEligible);
+                    const hasReady = readyPayments.length > 0;
+                    const isFullySelected = hasReady && readyPayments.every(p => selectedRecords.has(p.recordKey || p.accountNo));
+                    const isPartiallySelected = hasReady && !isFullySelected && readyPayments.some(p => selectedRecords.has(p.recordKey || p.accountNo));
+                    const status = row.customerPaymentStatus || row.paymentStatus || 'ON HOLD';
+
+                    const isStatusReady = status === 'READY FOR PAYMENT' || status === 'READY';
+                    const isStatusPartial = status === 'PARTIALLY READY';
+                    const isStatusHold = status === 'ON HOLD';
+                    const isStatusProcessing = status === 'PROCESSING';
+                    const isStatusPaid = status === 'PAID';
 
                     return (
-                      <tr
-                        key={`${row.accountNo}-${row.billingMonth || row.billingPeriod}`}
-                        style={{
-                          borderBottom: '1px solid var(--border-color)',
-                          background: isSelected ? 'rgba(16, 185, 129, 0.05)' : 'transparent',
-                          transition: 'background 0.15s ease'
-                        }}
-                      >
-                        {/* Checkbox */}
-                        <td style={{ padding: '0.85rem 0.75rem' }}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            disabled={!isReady}
-                            onChange={() => toggleSelectAccount(row.accountNo, isReady)}
-                            title={isReady ? 'Select for payment batch' : 'Ineligible: Only READY records can enter payment batch'}
-                            style={{ cursor: isReady ? 'pointer' : 'not-allowed', accentColor: '#10b981', opacity: isReady ? 1 : 0.3 }}
-                          />
-                        </td>
+                      <React.Fragment key={row.accountNo || `cust-${idx}`}>
+                        {/* ── Customer Summary Row ──────────────────────── */}
+                        <tr
+                          style={{
+                            borderBottom: isExpanded ? 'none' : '1px solid var(--border-color)',
+                            background: isFullySelected
+                              ? 'rgba(16, 185, 129, 0.06)'
+                              : (isExpanded ? 'rgba(59, 130, 246, 0.04)' : 'transparent'),
+                            borderLeft: isStatusReady
+                              ? '4px solid #10b981'
+                              : isStatusPartial
+                                ? '4px solid #fbbf24'
+                                : isStatusPaid
+                                  ? '4px solid #059669'
+                                  : '4px solid #f87171',
+                            transition: 'background 0.15s ease'
+                          }}
+                        >
+                          {/* Checkbox (Batch Selection across ready records) */}
+                          <td style={{ padding: '0.85rem 0.75rem' }}>
+                            <input
+                              type="checkbox"
+                              checked={isFullySelected}
+                              ref={el => { if (el) el.indeterminate = isPartiallySelected; }}
+                              disabled={!hasReady}
+                              onChange={() => toggleSelectCustomer(row)}
+                              title={hasReady ? `Select all ${readyPayments.length} ready payment(s) for customer ${row.accountNo}` : 'No READY records for this customer'}
+                              style={{ cursor: hasReady ? 'pointer' : 'not-allowed', accentColor: '#10b981', opacity: hasReady ? 1 : 0.3 }}
+                            />
+                          </td>
 
-                        {/* Account Number */}
-                        <td style={{ padding: '0.85rem 0.75rem', fontFamily: 'monospace', fontWeight: 700 }}>
-                          <span
-                            onClick={() => navigate(`/customers?accountNo=${row.accountNo}&tab=payment`)}
-                            title="Open Customer 360 in Directory"
-                            style={{ color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '3px' }}
-                          >
-                            {row.accountNo}
-                          </span>
-                        </td>
+                          {/* Caret / Expand Toggle */}
+                          <td style={{ padding: '0.85rem 0.4rem', textAlign: 'center' }}>
+                            <button
+                              onClick={() => toggleExpandCustomer(row.accountNo)}
+                              title={isExpanded ? 'Collapse payment obligations' : `Expand ${row.paymentRecordsCount || pList.length} payment obligation(s)`}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: isExpanded ? '#60a5fa' : 'var(--text-muted)',
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                padding: '0.2rem',
+                                borderRadius: '4px'
+                              }}
+                            >
+                              {isExpanded ? <ChevronDown size={17} /> : <ChevronRight size={17} />}
+                            </button>
+                          </td>
 
-                        {/* Customer Name */}
-                        <td style={{ padding: '0.85rem 0.75rem', fontWeight: 600, color: 'var(--text-primary)', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {row.customerName || row.masterName || '—'}
-                        </td>
-
-                        {/* Net Type */}
-                        <td style={{ padding: '0.85rem 0.75rem', color: 'var(--text-secondary)' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '0.2rem 0.5rem',
-                            borderRadius: '4px',
-                            background: 'rgba(255,255,255,0.06)',
-                            fontSize: '0.76rem',
-                            fontWeight: 500,
-                            whiteSpace: 'nowrap'
-                          }}>
-                            {row.solarType || row.masterNetType || '—'}
-                          </span>
-                        </td>
-
-                        {/* Billing Month */}
-                        <td style={{ padding: '0.85rem 0.75rem', color: '#38bdf8', fontSize: '0.82rem', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {row.billingMonth || billingPeriod || '—'}
-                        </td>
-
-                        {/* Billing Period */}
-                        <td style={{ padding: '0.85rem 0.75rem', color: 'var(--text-secondary)', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
-                          {row.billingPeriod || row.billingMonth || '—'}
-                        </td>
-
-                        {/* Current Payment */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
-                          {formatLKR(row.currentPayment)}
-                        </td>
-
-                        {/* Outstanding Balance */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: Number(row.outstandingBalance) > 0 ? '#f87171' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                          {formatLKR(row.outstandingBalance)}
-                        </td>
-
-                        {/* Total Payable */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#10b981', whiteSpace: 'nowrap' }}>
-                          {formatLKR(row.totalPayable)}
-                        </td>
-
-                        {/* Validation Status */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
-                          <span style={{
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '4px',
-                            fontSize: '0.74rem',
-                            fontWeight: 700,
-                            background: row.validationStatus === 'ERROR'
-                              ? 'rgba(239, 68, 68, 0.15)'
-                              : row.validationStatus === 'WARNING'
-                                ? 'rgba(245, 158, 11, 0.15)'
-                                : 'rgba(16, 185, 129, 0.15)',
-                            color: row.validationStatus === 'ERROR'
-                              ? '#ef4444'
-                              : row.validationStatus === 'WARNING'
-                                ? '#fbbf24'
-                                : '#10b981'
-                          }}>
-                            {row.validationStatus || 'VALID'}
-                          </span>
-                        </td>
-
-                        {/* Payment Status */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
-                          <span style={{
-                            padding: '0.25rem 0.65rem',
-                            borderRadius: '999px',
-                            fontSize: '0.73rem',
-                            fontWeight: 800,
-                            whiteSpace: 'nowrap',
-                            background: row.paymentStatus === 'READY'
-                              ? 'rgba(16, 185, 129, 0.15)'
-                              : row.paymentStatus === 'PAID'
-                                ? 'rgba(16, 185, 129, 0.25)'
-                                : row.paymentStatus === 'PROCESSING' || row.paymentStatus === 'APPROVED'
-                                  ? 'rgba(6, 182, 212, 0.15)'
-                                  : row.paymentStatus === 'REVIEW'
-                                    ? 'rgba(168, 85, 247, 0.15)'
-                                    : 'rgba(245, 158, 11, 0.15)',
-                            color: row.paymentStatus === 'READY' || row.paymentStatus === 'PAID'
-                              ? '#10b981'
-                              : row.paymentStatus === 'PROCESSING' || row.paymentStatus === 'APPROVED'
-                                ? '#38bdf8'
-                                : row.paymentStatus === 'REVIEW'
-                                  ? '#c084fc'
-                                  : '#f59e0b',
-                            border: `1px solid ${
-                              row.paymentStatus === 'READY' || row.paymentStatus === 'PAID'
-                                ? 'rgba(16, 185, 129, 0.3)'
-                                : row.paymentStatus === 'PROCESSING' || row.paymentStatus === 'APPROVED'
-                                  ? 'rgba(6, 182, 212, 0.3)'
-                                  : row.paymentStatus === 'REVIEW'
-                                    ? 'rgba(168, 85, 247, 0.3)'
-                                    : 'rgba(245, 158, 11, 0.3)'
-                            }`
-                          }}>
-                            {row.paymentStatus}
-                          </span>
-                        </td>
-
-                        {/* Payment Eligibility */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
-                          <span style={{
-                            fontSize: '0.73rem',
-                            fontWeight: 800,
-                            padding: '0.2rem 0.55rem',
-                            borderRadius: '4px',
-                            whiteSpace: 'nowrap',
-                            background: isReady
-                              ? 'rgba(16, 185, 129, 0.12)'
-                              : row.paymentStatus === 'REVIEW'
-                                ? 'rgba(168, 85, 247, 0.12)'
-                                : 'rgba(239, 68, 68, 0.12)',
-                            color: isReady
-                              ? '#34d399'
-                              : row.paymentStatus === 'REVIEW'
-                                ? '#c084fc'
-                                : '#f87171'
-                          }}>
-                            {row.paymentEligibility || (isReady ? 'READY' : (row.paymentStatus === 'REVIEW' ? 'REVIEW' : 'ON HOLD'))}
-                          </span>
-                        </td>
-
-                        {/* Month-Specific Hold Status / Diagnostics */}
-                        <td style={{ padding: '0.85rem 0.75rem', minWidth: '170px' }}>
-                          {isReady ? (
-                            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#34d399', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <CheckCircle2 size={13} /> Eligible
+                          {/* Account No */}
+                          <td style={{ padding: '0.85rem 0.75rem', fontFamily: 'monospace', fontWeight: 700 }}>
+                            <span
+                              onClick={() => navigate(`/customers?accountNo=${row.accountNo}&tab=payment`)}
+                              title="Open Customer 360 in Directory"
+                              style={{ color: '#38bdf8', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: '3px' }}
+                            >
+                              {row.accountNo}
                             </span>
-                          ) : row.paymentStatus === 'PAID' ? (
-                            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                              <CheckCircle2 size={13} /> Paid & Settled
-                            </span>
-                          ) : row.paymentStatus === 'PROCESSING' || row.paymentStatus === 'APPROVED' ? (
-                            <span style={{ fontSize: '0.76rem', fontWeight: 600, color: '#38bdf8' }}>
-                              In Payment Batch
-                            </span>
-                          ) : (
+                          </td>
+
+                          {/* Customer Name */}
+                          <td style={{ padding: '0.85rem 0.75rem', maxWidth: '230px' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-                              {/* If mismatches present */}
-                              {row.mismatches && row.mismatches.length > 0 ? (
-                                <div>
-                                  <span style={{ padding: '0.15rem 0.45rem', borderRadius: '3px', background: 'rgba(239,68,68,0.2)', color: '#f87171', fontWeight: 800, fontSize: '0.7rem' }}>
-                                    MISMATCH
-                                  </span>
-                                  <div style={{ fontSize: '0.72rem', color: '#fca5a5', marginTop: '0.15rem' }}>
-                                    {row.mismatches.map(m => m.field).join(', ')}
-                                  </div>
-                                </div>
-                              ) : row.missingFields && row.missingFields.length > 0 ? (
-                                <div>
-                                  <span style={{ padding: '0.15rem 0.45rem', borderRadius: '3px', background: 'rgba(245,158,11,0.2)', color: '#fbbf24', fontWeight: 800, fontSize: '0.7rem' }}>
-                                    MISSING DETAILS
-                                  </span>
-                                  <div style={{ fontSize: '0.72rem', color: '#fde68a', marginTop: '0.15rem' }}>
-                                    {row.missingFields.slice(0, 2).join(', ')}{row.missingFields.length > 2 ? '...' : ''}
-                                  </div>
-                                </div>
-                              ) : Boolean(row.paymentHold) ? (
-                                <div>
-                                  <span style={{ padding: '0.15rem 0.45rem', borderRadius: '3px', background: 'rgba(239,68,68,0.2)', color: '#f87171', fontWeight: 800, fontSize: '0.7rem' }}>
-                                    PAYMENT HOLD
-                                  </span>
-                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                                    {row.paymentHoldReason || 'Manual Hold'}
-                                  </div>
-                                </div>
-                              ) : (
-                                <span style={{ fontSize: '0.74rem', color: '#fbbf24', fontWeight: 600 }}>
-                                  {row.holdStatus || (row.holdReasons && row.holdReasons.length > 0 ? row.holdReasons[0] : 'ON HOLD')}
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {row.customerName || row.masterName || '—'}
+                              </span>
+                              {(row.paymentRecordsCount > 1 || pList.length > 1) && (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '3px',
+                                  fontSize: '0.67rem',
+                                  color: '#a5b4fc',
+                                  fontWeight: 700
+                                }}>
+                                  <Layers size={10} /> {row.paymentRecordsCount || pList.length} Monthly Obligations
                                 </span>
                               )}
                             </div>
-                          )}
-                        </td>
+                          </td>
 
-                        {/* Actions */}
-                        <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem' }}>
-                            {/* View Details button */}
-                            <button
-                              onClick={() => openCustomerDetails(row.accountNo, row.billingMonth, 'overview')}
-                              title="View Customer Financial Dossier & Discrepancies"
+                          {/* Net Type */}
+                          <td style={{ padding: '0.85rem 0.75rem', color: 'var(--text-secondary)' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '0.18rem 0.45rem',
+                              borderRadius: '4px',
+                              background: 'rgba(255,255,255,0.06)',
+                              fontSize: '0.74rem',
+                              fontWeight: 500,
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {row.solarType || row.masterNetType || '—'}
+                            </span>
+                          </td>
+
+                          {/* Obligations count badge */}
+                          <td style={{ padding: '0.85rem 0.75rem' }}>
+                            <span
+                              onClick={() => toggleExpandCustomer(row.accountNo)}
                               style={{
-                                background: 'rgba(255,255,255,0.06)',
-                                border: '1px solid var(--border-color)',
-                                color: 'var(--text-primary)',
-                                padding: '0.35rem 0.65rem',
-                                borderRadius: '6px',
                                 cursor: 'pointer',
-                                display: 'flex',
+                                display: 'inline-flex',
                                 alignItems: 'center',
                                 gap: '0.35rem',
-                                fontSize: '0.78rem',
-                                fontWeight: 600
+                                padding: '0.2rem 0.55rem',
+                                borderRadius: '6px',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                background: 'rgba(99, 102, 241, 0.15)',
+                                color: '#a5b4fc',
+                                border: '1px solid rgba(99, 102, 241, 0.3)'
                               }}
                             >
-                              <Eye size={13} />
-                              <span>Details</span>
-                            </button>
+                              <Layers size={11} />
+                              <span>{row.paymentRecordsCount || pList.length} Records</span>
+                            </span>
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                              <span style={{ color: '#34d399' }}>{row.readyRecordsCount ?? readyPayments.length} Ready</span> •{' '}
+                              <span style={{ color: '#fbbf24' }}>{row.onHoldRecordsCount ?? (pList.length - readyPayments.length)} Hold</span>
+                            </div>
+                          </td>
 
-                            {/* Resolve Issue button for ON_HOLD */}
-                            {isOnHold && (
+                          {/* Customer Payment Status */}
+                          <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.3rem',
+                              padding: '0.25rem 0.7rem',
+                              borderRadius: '999px',
+                              fontSize: '0.72rem',
+                              fontWeight: 800,
+                              whiteSpace: 'nowrap',
+                              background: isStatusReady
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : isStatusPartial
+                                  ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(99, 102, 241, 0.2))'
+                                  : isStatusPaid
+                                    ? 'rgba(16, 185, 129, 0.25)'
+                                    : isStatusProcessing
+                                      ? 'rgba(6, 182, 212, 0.15)'
+                                      : 'rgba(245, 158, 11, 0.15)',
+                              color: isStatusReady || isStatusPaid
+                                ? '#10b981'
+                                : isStatusPartial
+                                  ? '#fbbf24'
+                                  : isStatusProcessing
+                                    ? '#38bdf8'
+                                    : '#f87171',
+                              border: `1px solid ${
+                                isStatusReady || isStatusPaid
+                                  ? 'rgba(16, 185, 129, 0.35)'
+                                  : isStatusPartial
+                                    ? 'rgba(245, 158, 11, 0.4)'
+                                    : 'rgba(245, 158, 11, 0.3)'
+                              }`
+                            }}>
+                              {isStatusReady ? <CheckCircle2 size={12} /> : isStatusPartial ? <AlertTriangle size={12} /> : isStatusPaid ? <Check size={12} /> : <Lock size={12} />}
+                              <span>{status}</span>
+                            </span>
+                          </td>
+
+                          {/* Total Pending Amount */}
+                          <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                            {formatLKR(row.totalPendingAmount ?? row.totalPayableAmount ?? row.totalPayable)}
+                          </td>
+
+                          {/* Ready Amount */}
+                          <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: '#10b981', whiteSpace: 'nowrap' }}>
+                            {formatLKR(row.totalReadyAmount ?? row.readyAmount ?? (isStatusReady ? row.totalPayable : 0))}
+                          </td>
+
+                          {/* On Hold Amount */}
+                          <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: Number(row.totalOnHoldAmount ?? row.onHoldAmount) > 0 ? '#fbbf24' : 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                            {formatLKR(row.totalOnHoldAmount ?? row.onHoldAmount ?? (isStatusHold ? row.totalPayable : 0))}
+                          </td>
+
+                          {/* Total Payable */}
+                          <td style={{ padding: '0.85rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#38bdf8', whiteSpace: 'nowrap' }}>
+                            {formatLKR(row.totalPayableAmount ?? row.totalPayable)}
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ padding: '0.85rem 0.75rem', textAlign: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                              {/* Expand / Collapse records button */}
                               <button
-                                onClick={() => openCustomerDetails(row.accountNo, row.billingMonth, 'resolve')}
-                                title="Resolve Discrepancy & Re-evaluate"
+                                onClick={() => toggleExpandCustomer(row.accountNo)}
+                                title={isExpanded ? 'Collapse records sub-table' : 'Expand all payment obligations'}
                                 style={{
-                                  background: 'rgba(245, 158, 11, 0.15)',
-                                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                                  color: '#fbbf24',
-                                  padding: '0.35rem 0.65rem',
-                                  borderRadius: '6px',
+                                  background: isExpanded ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255,255,255,0.06)',
+                                  border: isExpanded ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid var(--border-color)',
+                                  color: isExpanded ? '#60a5fa' : 'var(--text-primary)',
+                                  padding: '0.3rem 0.55rem',
+                                  borderRadius: '5px',
                                   cursor: 'pointer',
-                                  display: 'flex',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '0.35rem',
-                                  fontSize: '0.78rem',
+                                  gap: '0.25rem',
+                                  fontSize: '0.74rem',
                                   fontWeight: 600
                                 }}
                               >
-                                <Wrench size={13} />
-                                <span>Resolve</span>
+                                {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                <span>{isExpanded ? 'Hide' : 'Records'}</span>
                               </button>
-                            )}
 
-                            {/* Hold / Release toggle */}
-                            {isAdmin && (
+                              {/* Customer-Level Release Payments button */}
+                              {(isStatusPartial || isStatusHold || (row.onHoldRecordsCount > 0)) && (
+                                <button
+                                  onClick={() => handleReleaseCustomerPayments(row.accountNo)}
+                                  title="Release all on-hold payments and re-evaluate accumulated records for this customer"
+                                  style={{
+                                    background: 'rgba(16, 185, 129, 0.15)',
+                                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                                    color: '#10b981',
+                                    padding: '0.3rem 0.55rem',
+                                    borderRadius: '5px',
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '0.25rem',
+                                    fontSize: '0.74rem',
+                                    fontWeight: 700
+                                  }}
+                                >
+                                  <Unlock size={11} />
+                                  <span>Release</span>
+                                </button>
+                              )}
+
+                              {/* View Customer 360 Dossier */}
                               <button
-                                onClick={() => handleToggleHold(row.accountNo, Boolean(row.paymentHold), row.billingMonth)}
-                                title={row.paymentHold ? 'Release Payment Hold' : 'Place on Payment Hold'}
+                                onClick={() => openCustomerDetails(row.accountNo, row.billingMonth, 'overview')}
+                                title="View Customer Dossier & History"
                                 style={{
-                                  background: row.paymentHold ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                                  border: row.paymentHold ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
-                                  color: row.paymentHold ? '#10b981' : '#f87171',
-                                  padding: '0.35rem 0.65rem',
-                                  borderRadius: '6px',
+                                  background: 'rgba(255,255,255,0.06)',
+                                  border: '1px solid var(--border-color)',
+                                  color: 'var(--text-primary)',
+                                  padding: '0.3rem 0.55rem',
+                                  borderRadius: '5px',
                                   cursor: 'pointer',
-                                  display: 'flex',
+                                  display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '0.35rem',
-                                  fontSize: '0.78rem',
+                                  gap: '0.25rem',
+                                  fontSize: '0.74rem',
                                   fontWeight: 600
                                 }}
                               >
-                                {row.paymentHold ? <Unlock size={13} /> : <Lock size={13} />}
-                                <span>{row.paymentHold ? 'Release' : 'Hold'}</span>
+                                <Eye size={11} />
+                                <span>Dossier</span>
                               </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* ── Expanded Nested Payment Obligations Sub-Table ─ */}
+                        {isExpanded && (
+                          <tr style={{ background: 'rgba(15, 23, 42, 0.65)', borderBottom: '2px solid rgba(59, 130, 246, 0.25)' }}>
+                            <td colSpan={12} style={{ padding: '0.85rem 1.25rem 1.25rem 2.5rem' }}>
+                              <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
+                                <div style={{ padding: '0.65rem 1rem', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                                    <Layers size={14} style={{ color: '#818cf8' }} />
+                                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                      Payment Obligations for Customer: <strong style={{ color: '#38bdf8' }}>{row.accountNo}</strong> — {row.customerName || row.masterName}
+                                    </span>
+                                    <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                                      ({pList.length} historical & current payment obligations)
+                                    </span>
+                                  </div>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.76rem' }}>
+                                    <span style={{ color: 'var(--text-muted)' }}>Total Pending: <strong style={{ color: '#f3f4f6' }}>{formatLKR(row.totalPendingAmount || row.totalPayableAmount)}</strong></span>
+                                    <span style={{ color: '#10b981' }}>Ready: <strong>{formatLKR(row.totalReadyAmount)}</strong></span>
+                                    <span style={{ color: '#fbbf24' }}>On Hold: <strong>{formatLKR(row.totalOnHoldAmount)}</strong></span>
+                                  </div>
+                                </div>
+
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.79rem', textAlign: 'left' }}>
+                                  <thead>
+                                    <tr style={{ background: 'rgba(255,255,255,0.015)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.7rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                                      <th style={{ padding: '0.65rem 0.75rem', width: '36px' }}>[ ]</th>
+                                      <th style={{ padding: '0.65rem 0.75rem' }}>Obligation #</th>
+                                      <th style={{ padding: '0.65rem 0.75rem' }}>Billing Month</th>
+                                      <th style={{ padding: '0.65rem 0.75rem' }}>Billing Period</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Current Payment</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Bill Set-Off</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Retention</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Outstanding</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Total Payable</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>Record Status</th>
+                                      <th style={{ padding: '0.65rem 0.75rem' }}>Hold Status & Reason</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>Action</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {pList.map((p, pIdx) => {
+                                      const pKey = p.recordKey || `${row.accountNo}-${p.billingMonth || pIdx}`;
+                                      const isPReady = p.paymentStatus === 'READY' || p.isEligible;
+                                      const isPSelected = selectedRecords.has(pKey);
+                                      const isPHold = p.paymentStatus === 'ON_HOLD' || p.paymentStatus === 'REVIEW';
+
+                                      return (
+                                        <tr
+                                          key={pKey}
+                                          style={{
+                                            borderBottom: pIdx < pList.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                                            background: isPSelected ? 'rgba(16, 185, 129, 0.06)' : 'transparent'
+                                          }}
+                                        >
+                                          {/* Individual Checkbox */}
+                                          <td style={{ padding: '0.65rem 0.75rem' }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={isPSelected}
+                                              disabled={!isPReady}
+                                              onChange={() => toggleSelectRecord(pKey, isPReady, row.accountNo)}
+                                              title={isPReady ? 'Select for payment batch' : 'Only READY records can enter payment batch'}
+                                              style={{ cursor: isPReady ? 'pointer' : 'not-allowed', accentColor: '#10b981', opacity: isPReady ? 1 : 0.3 }}
+                                            />
+                                          </td>
+
+                                          {/* Obligation Number */}
+                                          <td style={{ padding: '0.65rem 0.75rem', fontWeight: 600, color: '#a5b4fc' }}>
+                                            Payment {pIdx + 1} of {pList.length}
+                                          </td>
+
+                                          {/* Billing Month */}
+                                          <td style={{ padding: '0.65rem 0.75rem', fontWeight: 700, color: '#38bdf8' }}>
+                                            {p.billingMonth || '—'}
+                                          </td>
+
+                                          {/* Billing Period */}
+                                          <td style={{ padding: '0.65rem 0.75rem', color: 'var(--text-secondary)' }}>
+                                            {p.billingPeriod || p.billingMonth || '—'}
+                                          </td>
+
+                                          {/* Current Payment */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                                            {formatLKR(p.currentPayment)}
+                                          </td>
+
+                                          {/* Bill Set-Off */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                                            {formatLKR(p.billSetOff)}
+                                          </td>
+
+                                          {/* Retention */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                                            {formatLKR(p.retentionMoney)}
+                                          </td>
+
+                                          {/* Outstanding */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', color: Number(p.outstandingBalance) > 0 ? '#f87171' : 'var(--text-muted)' }}>
+                                            {formatLKR(p.outstandingBalance)}
+                                          </td>
+
+                                          {/* Total Payable */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#10b981' }}>
+                                            {formatLKR(p.totalPayable)}
+                                          </td>
+
+                                          {/* Record Status Badge */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>
+                                            <span style={{
+                                              padding: '0.2rem 0.55rem',
+                                              borderRadius: '999px',
+                                              fontSize: '0.7rem',
+                                              fontWeight: 800,
+                                              background: p.paymentStatus === 'READY'
+                                                ? 'rgba(16, 185, 129, 0.15)'
+                                                : p.paymentStatus === 'PAID'
+                                                  ? 'rgba(16, 185, 129, 0.25)'
+                                                  : p.paymentStatus === 'PROCESSING'
+                                                    ? 'rgba(6, 182, 212, 0.15)'
+                                                    : 'rgba(245, 158, 11, 0.15)',
+                                              color: p.paymentStatus === 'READY' || p.paymentStatus === 'PAID'
+                                                ? '#10b981'
+                                                : p.paymentStatus === 'PROCESSING'
+                                                  ? '#38bdf8'
+                                                  : '#fbbf24',
+                                              border: `1px solid ${p.paymentStatus === 'READY' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                                            }}>
+                                              {p.paymentStatus || 'ON_HOLD'}
+                                            </span>
+                                          </td>
+
+                                          {/* Hold Status & Diagnostics */}
+                                          <td style={{ padding: '0.65rem 0.75rem', maxWidth: '240px' }}>
+                                            {isPReady ? (
+                                              <span style={{ color: '#34d399', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
+                                                <CheckCircle2 size={12} /> Eligible for Payment
+                                              </span>
+                                            ) : p.paymentStatus === 'PAID' ? (
+                                              <span style={{ color: '#10b981', fontWeight: 600, fontSize: '0.75rem' }}>Settled</span>
+                                            ) : (
+                                              <div style={{ fontSize: '0.74rem' }}>
+                                                {p.mismatches && p.mismatches.length > 0 ? (
+                                                  <span style={{ color: '#f87171', fontWeight: 700 }}>
+                                                    Mismatch: {p.mismatches.map(m => m.field).join(', ')}
+                                                  </span>
+                                                ) : p.missingFields && p.missingFields.length > 0 ? (
+                                                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>
+                                                    Missing: {p.missingFields.slice(0, 2).join(', ')}
+                                                  </span>
+                                                ) : (
+                                                  <span style={{ color: '#fbbf24', fontWeight: 600 }}>
+                                                    {p.holdStatus || (p.holdReasons && p.holdReasons.length > 0 ? p.holdReasons[0] : 'ON HOLD')}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            )}
+                                          </td>
+
+                                          {/* Action button */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>
+                                            <button
+                                              onClick={() => openCustomerDetails(row.accountNo, p.billingMonth, isPHold ? 'resolve' : 'overview', pKey)}
+                                              style={{
+                                                background: isPHold ? 'rgba(245, 158, 11, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                                                border: isPHold ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid var(--border-color)',
+                                                color: isPHold ? '#fbbf24' : 'var(--text-primary)',
+                                                padding: '0.25rem 0.55rem',
+                                                borderRadius: '4px',
+                                                fontSize: '0.72rem',
+                                                fontWeight: 600,
+                                                cursor: 'pointer',
+                                                display: 'inline-flex',
+                                                alignItems: 'center',
+                                                gap: '0.25rem'
+                                              }}
+                                            >
+                                              {isPHold ? <Wrench size={11} /> : <Eye size={11} />}
+                                              <span>{isPHold ? 'Resolve' : 'Inspect'}</span>
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })
                 )}
@@ -2048,6 +2476,50 @@ const PaymentControlCenter = () => {
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
                   Account: <strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{selectedCustomerDetails.customerInfo?.accountNumber || selectedCustomerDetails.record?.accountNo}</strong> • {selectedCustomerDetails.customerInfo?.customerName} • Billing Month: <strong style={{ color: '#fbbf24' }}>{selectedCustomerDetails.billingInfo?.billingMonth}</strong>
                 </div>
+
+                {/* Multi-Payment Switcher Tabs */}
+                {selectedCustomerDetails.allCustomerPayments && selectedCustomerDetails.allCustomerPayments.length > 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginTop: '0.65rem', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.76rem', color: '#94a3b8', fontWeight: 600 }}>
+                      Multiple Payments ({selectedCustomerDetails.allCustomerPayments.length}):
+                    </span>
+                    {selectedCustomerDetails.allCustomerPayments.map((p, pIdx) => {
+                      const currentKey = selectedCustomerDetails.recordKey || selectedCustomerDetails.record?.recordKey;
+                      const isCurrent = (p.recordKey && p.recordKey === currentKey) || (!currentKey && pIdx === 0);
+                      const isPReady = p.paymentStatus === 'READY' || p.paymentEligibility === 'READY';
+                      return (
+                        <button
+                          key={p.recordKey || pIdx}
+                          onClick={() => openCustomerDetails(
+                            selectedCustomerDetails.customerInfo?.accountNumber || selectedCustomerDetails.record?.accountNo,
+                            p.billingMonth,
+                            drawerTab,
+                            p.recordKey
+                          )}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '6px',
+                            fontSize: '0.74rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            border: isCurrent ? '1px solid #38bdf8' : '1px solid var(--border-color)',
+                            background: isCurrent ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                            color: isCurrent ? '#38bdf8' : 'var(--text-secondary)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <span>{p.paymentLabel || `Payment ${pIdx + 1}`}</span>
+                          <span style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: isPReady ? '#10b981' : '#f59e0b' }}>
+                            {formatLKR(p.totalPayable != null ? p.totalPayable : p.currentPayment)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
               <button
@@ -2157,6 +2629,82 @@ const PaymentControlCenter = () => {
                           <li key={idx}>{issue}</li>
                         ))}
                       </ul>
+                    </div>
+                  )}
+
+                  {/* Multi-Payment Timeline & Breakdown Banner */}
+                  {selectedCustomerDetails.allCustomerPayments && selectedCustomerDetails.allCustomerPayments.length > 1 && (
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(17, 24, 39, 0.85))',
+                      border: '1px solid rgba(99, 102, 241, 0.35)',
+                      borderRadius: '10px',
+                      padding: '1.15rem 1.25rem'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#a5b4fc', fontWeight: 700, fontSize: '0.92rem' }}>
+                          <Layers size={18} style={{ color: '#818cf8' }} />
+                          <span>Customer Multi-Payment Schedule ({selectedCustomerDetails.allCustomerPayments.length} Active Records)</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                          Combined Customer Total: <strong style={{ color: '#10b981', fontFamily: 'monospace', fontSize: '0.95rem' }}>
+                            {formatLKR(selectedCustomerDetails.allCustomerPayments.reduce((acc, p) => acc + Number(p.totalPayable != null ? p.totalPayable : (p.currentPayment || 0)), 0))}
+                          </strong>
+                        </div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem' }}>
+                        {selectedCustomerDetails.allCustomerPayments.map((p, pIdx) => {
+                          const currentKey = selectedCustomerDetails.recordKey || selectedCustomerDetails.record?.recordKey;
+                          const isCurrent = (p.recordKey && p.recordKey === currentKey) || (!currentKey && pIdx === 0);
+                          const isPReady = p.paymentStatus === 'READY' || p.paymentEligibility === 'READY';
+                          return (
+                            <div
+                              key={p.recordKey || pIdx}
+                              onClick={() => openCustomerDetails(
+                                selectedCustomerDetails.customerInfo?.accountNumber || selectedCustomerDetails.record?.accountNo,
+                                p.billingMonth,
+                                drawerTab,
+                                p.recordKey
+                              )}
+                              style={{
+                                background: isCurrent ? 'rgba(99, 102, 241, 0.22)' : 'rgba(0,0,0,0.25)',
+                                border: isCurrent ? '1.5px solid #818cf8' : '1px solid rgba(255,255,255,0.08)',
+                                borderRadius: '8px',
+                                padding: '0.75rem 0.9rem',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '0.35rem',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: isCurrent ? '#818cf8' : 'var(--text-primary)' }}>
+                                  {p.paymentLabel || `Payment ${pIdx + 1}`}
+                                </span>
+                                <span style={{
+                                  fontSize: '0.68rem',
+                                  padding: '0.1rem 0.45rem',
+                                  borderRadius: '4px',
+                                  fontWeight: 800,
+                                  background: isPReady ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                                  color: isPReady ? '#10b981' : '#fbbf24'
+                                }}>
+                                  {p.paymentStatus || (isPReady ? 'READY' : 'ON HOLD')}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>
+                                Period: <strong style={{ color: 'var(--text-primary)' }}>{p.billingMonth || p.billingPeriod || '—'}</strong>
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.2rem', paddingTop: '0.3rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Payable:</span>
+                                <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#10b981', fontSize: '0.85rem' }}>
+                                  {formatLKR(p.totalPayable != null ? p.totalPayable : p.currentPayment)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
 
@@ -3005,6 +3553,35 @@ const PaymentControlCenter = () => {
                 filterPredicate: (c) => c.paymentStatus === 'ON_HOLD' || c.paymentStatus === 'REVIEW' || (c.holdReasons && c.holdReasons.length > 0)
               };
 
+            case 'MULTI_PAYMENTS':
+              return {
+                title: 'Multi-Payment Customer Records',
+                icon: <Layers size={22} style={{ color: '#818cf8' }} />,
+                color: '#818cf8',
+                gradient: 'linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(17, 24, 39, 0.95))',
+                badgeColor: 'rgba(99, 102, 241, 0.18)',
+                badgeText: '#a5b4fc',
+                badgeBorder: 'rgba(99, 102, 241, 0.35)',
+                stat: (summary.multiPaymentCustomersCount || 0).toLocaleString(),
+                statLabel: 'Customers with Multiple Payments',
+                description: 'Producers with multiple active payment records in this period (e.g. previously held payments released alongside the current billing cycle). Color-coded grouping and sequence tags ensure full payment traceability.',
+                filterTab: 'ALL',
+                filterTabLabel: 'Filter Multi-Payments in Table',
+                onFilterClick: () => {
+                  setMultiPaymentFilter(true);
+                  setActiveTab('ALL');
+                  setCurrentPage(0);
+                  setSummaryModalCard(null);
+                },
+                metrics: [
+                  { label: 'Multi-Pay Customers', value: (summary.multiPaymentCustomersCount || 0).toLocaleString(), color: '#818cf8' },
+                  { label: 'Total Payment Records', value: (summary.multiPaymentCount || 0).toLocaleString(), color: '#a5b4fc' },
+                  { label: 'Hold / Arrears Releases', value: 'Supported & Visualized', color: '#38bdf8' },
+                  { label: 'Grouping Method', value: 'Deterministic Color-Coded', color: '#10b981' }
+                ],
+                filterPredicate: (c) => Boolean(c.hasMultiplePayments)
+              };
+
             default:
               return null;
           }
@@ -3271,7 +3848,7 @@ const PaymentControlCenter = () => {
                                     <button
                                       onClick={() => {
                                         setSummaryModalCard(null);
-                                        openCustomerDetails(c.accountNo, c.billingMonth);
+                                        openCustomerDetails(c.accountNo, c.billingMonth, 'overview', c.recordKey);
                                       }}
                                       title="Inspect payment dossier"
                                       style={{
@@ -3320,9 +3897,13 @@ const PaymentControlCenter = () => {
                   {modalConfig.filterTab && (
                     <button
                       onClick={() => {
-                        setActiveTab(modalConfig.filterTab);
-                        setCurrentPage(0);
-                        setSummaryModalCard(null);
+                        if (typeof modalConfig.onFilterClick === 'function') {
+                          modalConfig.onFilterClick();
+                        } else {
+                          setActiveTab(modalConfig.filterTab);
+                          setCurrentPage(0);
+                          setSummaryModalCard(null);
+                        }
                       }}
                       style={{
                         background: 'rgba(255,255,255,0.08)',

@@ -22,7 +22,15 @@ import {
   Zap,
   TrendingDown,
   CheckCircle,
-  Bell
+  Bell,
+  ChevronRight,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  ShieldCheck,
+  CreditCard,
+  Sparkles,
+  ArrowRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import SVGLineChart from '../components/charts/SVGLineChart';
@@ -47,6 +55,10 @@ const Dashboard = () => {
   // Predictions Module State
   const [predictions, setPredictions] = useState(null);
   const [predictionsLoading, setPredictionsLoading] = useState(true);
+
+  // Ranking view toggle states (Show Top 5 vs All 10)
+  const [showAllExporters, setShowAllExporters] = useState(false);
+  const [showAllConsumers, setShowAllConsumers] = useState(false);
 
   const { showToast } = useToast();
 
@@ -147,10 +159,7 @@ const Dashboard = () => {
         const statsRes = await authFetch(summaryUrl);
         const statsData = statsRes.ok ? await statsRes.json().catch(() => ({})) : null;
         if (!statsRes.ok || !statsData) {
-          throw new Error(statsData?.message || `Failed to load dashboard summary (S                                 , ,. ,<div className="
-            
-            
-            "></div>tatus ${statsRes.status})`);
+          throw new Error(statsData?.message || `Failed to load dashboard summary (Status ${statsRes.status})`);
         }
         setStats(statsData);
 
@@ -203,7 +212,7 @@ const Dashboard = () => {
       style: 'currency',
       currency: 'LKR',
       maximumFractionDigits: 0
-    }).format(val);
+    }).format(val || 0);
   };
 
   const getMonthName = (monthNumber) => {
@@ -214,26 +223,27 @@ const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="page-wrapper animate-fade-in">
+      <div className="page-wrapper animate-fade-in" style={{ maxWidth: '1440px', margin: '0 auto', padding: '2rem 2.5rem' }}>
         {/* Header Skeleton */}
-        <div className="page-header" style={{ marginBottom: '2.5rem' }}>
+        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div className="skeleton" style={{ height: '32px', width: '280px', marginBottom: '8px' }}></div>
-            <div className="skeleton" style={{ height: '16px', width: '450px' }}></div>
+            <div className="skeleton" style={{ height: '32px', width: '320px', borderRadius: 8, marginBottom: '8px' }}></div>
+            <div className="skeleton" style={{ height: '16px', width: '480px', borderRadius: 6 }}></div>
           </div>
+          <div className="skeleton" style={{ height: '36px', width: '180px', borderRadius: 20 }}></div>
         </div>
 
-        {/* summary metrics cards skeleton */}
-        <div className="analytics-grid-4" style={{ marginBottom: '2.5rem' }}>
+        {/* 4 Summary Cards Skeleton */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="metric-card skeleton" style={{ height: '135px' }}></div>
+            <div key={i} className="skeleton" style={{ height: '130px', borderRadius: 14 }}></div>
           ))}
         </div>
 
-        {/* charts grid skeleton */}
-        <div className="analytics-layout" style={{ gridTemplateColumns: '1fr 1fr', marginBottom: '2.5rem' }}>
-          <div className="analytics-widget-card skeleton" style={{ height: '300px' }}></div>
-          <div className="analytics-widget-card skeleton" style={{ height: '300px' }}></div>
+        {/* Charts Grid Skeleton */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem', marginBottom: '2rem' }}>
+          <div className="skeleton" style={{ height: '320px', borderRadius: 14 }}></div>
+          <div className="skeleton" style={{ height: '320px', borderRadius: 14 }}></div>
         </div>
       </div>
     );
@@ -241,12 +251,12 @@ const Dashboard = () => {
 
   if (error) {
     return (
-      <div className="page-wrapper">
-        <div style={{ padding: '2rem', backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--danger)', borderRadius: '12px', display: 'flex', gap: '1rem', alignItems: 'center', color: 'var(--danger)' }}>
+      <div className="page-wrapper" style={{ maxWidth: '1440px', margin: '0 auto', padding: '2rem 2.5rem' }}>
+        <div style={{ padding: '2rem', backgroundColor: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 14, display: 'flex', gap: '1rem', alignItems: 'center', color: '#ef4444' }}>
           <AlertCircle size={32} />
           <div>
-            <h3 style={{ fontWeight: 600, fontSize: '1.1rem', marginBottom: '0.25rem' }}>Dashboard Sync Failed</h3>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{error}</p>
+            <h3 style={{ fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.25rem', color: '#ef4444' }}>Dashboard Sync Failed</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0 }}>{error}</p>
           </div>
         </div>
       </div>
@@ -287,170 +297,421 @@ const Dashboard = () => {
     });
 
     return (
-      <div className="page-wrapper animate-fade-in">
-        {/* Title Header */}
-        <div className="page-header">
+      <div className="page-wrapper animate-fade-in" style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.75rem 2rem' }}>
+        {/* Executive Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.75rem' }}>
           <div>
-            <h1 className="page-title" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <Zap className="text-primary" size={28} />
-              Advanced Analytics Dashboard
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '0.35rem', 
+                fontSize: '0.72rem', 
+                fontWeight: 700, 
+                letterSpacing: '0.06em', 
+                textTransform: 'uppercase', 
+                padding: '0.2rem 0.55rem', 
+                borderRadius: '6px', 
+                backgroundColor: 'rgba(59, 130, 246, 0.12)', 
+                color: '#60a5fa', 
+                border: '1px solid rgba(59, 130, 246, 0.2)' 
+              }}>
+                <Zap size={12} />
+                CEB Grid Operations
+              </span>
+              <span style={{ 
+                display: 'inline-flex', 
+                alignItems: 'center', 
+                gap: '0.35rem', 
+                fontSize: '0.72rem', 
+                fontWeight: 600, 
+                padding: '0.2rem 0.55rem', 
+                borderRadius: '6px', 
+                backgroundColor: 'rgba(16, 185, 129, 0.12)', 
+                color: '#34d399', 
+                border: '1px solid rgba(16, 185, 129, 0.2)' 
+              }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
+                Live Telemetry
+              </span>
+            </div>
+            <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+              Operations & Settlement Dashboard
             </h1>
-            <p className="page-subtitle">
-              Enterprise metrics engine. Aggregating solar data distribution, energy transfers, and ledger flow.
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
+              Eastern Province solar net billing, bulk ingestion metrics, and consumer settlement ledger.
             </p>
           </div>
-          <div>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', padding: '0.5rem 1rem', borderRadius: '50px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Calendar size={14} />
-              Today: {new Date().toLocaleDateString('en-LK', { year: 'numeric', month: 'long', day: 'numeric' })}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <span style={{ 
+              fontSize: '0.82rem', 
+              color: 'var(--text-secondary)', 
+              backgroundColor: 'var(--bg-secondary)', 
+              border: '1px solid rgba(255, 255, 255, 0.08)', 
+              padding: '0.45rem 0.85rem', 
+              borderRadius: '8px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.45rem' 
+            }}>
+              <Calendar size={14} style={{ color: 'var(--primary)' }} />
+              {new Date().toLocaleDateString('en-LK', { year: 'numeric', month: 'short', day: 'numeric' })}
+            </span>
+            <span style={{ 
+              fontSize: '0.82rem', 
+              fontWeight: 600, 
+              color: user?.role === 'ADMIN' ? '#a78bfa' : '#60a5fa', 
+              backgroundColor: user?.role === 'ADMIN' ? 'rgba(167, 139, 250, 0.12)' : 'rgba(96, 165, 250, 0.12)', 
+              border: user?.role === 'ADMIN' ? '1px solid rgba(167, 139, 250, 0.25)' : '1px solid rgba(96, 165, 250, 0.25)', 
+              padding: '0.45rem 0.85rem', 
+              borderRadius: '8px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '0.45rem' 
+            }}>
+              <ShieldCheck size={14} />
+              {user?.role === 'ADMIN' ? 'Admin Executive' : 'Billing Officer'}
             </span>
           </div>
         </div>
 
-        {/* Animated Summary Cards Row */}
-        <div className="analytics-grid-4">
-          <div className="metric-card glow-primary animate-fade-in-up" style={{ animationDelay: '0ms' }}>
-            <div className="metric-info">
-              <span className="metric-label">Registered Customers</span>
-              <span className="metric-value">{stats?.totalCustomers?.toLocaleString() || 0}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Active Grid Accounts</span>
+        {/* 4 Executive Metric Cards */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.15rem', marginBottom: '1.75rem' }}>
+          {/* Card 1: Registered Accounts */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderTop: '3px solid #3b82f6', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Registered Customers
+                </span>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                  {stats?.totalCustomers?.toLocaleString() || 0}
+                </div>
+              </div>
+              <div style={{ 
+                width: '38px', 
+                height: '38px', 
+                borderRadius: '10px', 
+                backgroundColor: 'rgba(59, 130, 246, 0.12)', 
+                color: '#60a5fa', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <Users size={20} />
+              </div>
             </div>
-            <div className="metric-icon-box">
-              <Users size={24} />
-            </div>
-          </div>
-
-          <div className="metric-card glow-success animate-fade-in-up" style={{ animationDelay: '50ms' }}>
-            <div className="metric-info">
-              <span className="metric-label">Total Net Revenue</span>
-              <span className="metric-value" style={{ color: 'var(--success)' }}>{formatLKR(stats?.totalRevenue || 0)}</span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Cumulative Grid Ledger Balance</span>
-            </div>
-            <div className="metric-icon-box" style={{ color: 'var(--success)', backgroundColor: 'var(--success-glow)' }}>
-              <DollarSign size={24} />
-            </div>
-          </div>
-
-          <div className="metric-card glow-warning animate-fade-in-up" style={{ animationDelay: '100ms' }}>
-            <div className="metric-info">
-              <span className="metric-label">Total Import Units</span>
-              <span className="metric-value" style={{ color: 'var(--warning)' }}>
-                {analytics?.totalImportUnits?.toLocaleString() || 0} <span style={{ fontSize: '0.85rem' }}>kWh</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solar Grid Accounts</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                Active Registry
               </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Energy Drawn from Grid</span>
-            </div>
-            <div className="metric-icon-box" style={{ color: 'var(--warning)', backgroundColor: 'var(--warning-glow)' }}>
-              <ArrowDownCircle size={24} />
             </div>
           </div>
 
-          <div className="metric-card glow-teal animate-fade-in-up" style={{ animationDelay: '155ms' }}>
-            <div className="metric-info">
-              <span className="metric-label">Total Export Units</span>
-              <span className="metric-value" style={{ color: 'var(--accent-teal)' }}>
-                {analytics?.totalExportUnits?.toLocaleString() || 0} <span style={{ fontSize: '0.85rem' }}>kWh</span>
-              </span>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solar Energy Exported</span>
+          {/* Card 2: Net Settlement Revenue */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderTop: '3px solid #10b981', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Net Statement Revenue
+                </span>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                  {formatLKR(stats?.totalRevenue || 0)}
+                </div>
+              </div>
+              <div style={{ 
+                width: '38px', 
+                height: '38px', 
+                borderRadius: '10px', 
+                backgroundColor: 'rgba(16, 185, 129, 0.12)', 
+                color: '#34d399', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <DollarSign size={20} />
+              </div>
             </div>
-            <div className="metric-icon-box" style={{ color: 'var(--accent-teal)', backgroundColor: 'var(--accent-teal-glow)' }}>
-              <ArrowUpCircle size={24} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ledger Balance Flow</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                Settlement Net
+              </span>
+            </div>
+          </div>
+
+          {/* Card 3: Total Solar Exports */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderTop: '3px solid #06b6d4', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Total Solar Exports
+                </span>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#22d3ee', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                  {analytics?.totalExportUnits?.toLocaleString() || 0}
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: '0.35rem' }}>kWh</span>
+                </div>
+              </div>
+              <div style={{ 
+                width: '38px', 
+                height: '38px', 
+                borderRadius: '10px', 
+                backgroundColor: 'rgba(6, 182, 212, 0.12)', 
+                color: '#22d3ee', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <ArrowUpCircle size={20} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solar Generation Fed to Grid</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#22d3ee', backgroundColor: 'rgba(6, 182, 212, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                Renewable Feed
+              </span>
+            </div>
+          </div>
+
+          {/* Card 4: Total Grid Imports */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderTop: '3px solid #f59e0b', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem', 
+            display: 'flex', 
+            flexDirection: 'column', 
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  Total Grid Imports
+                </span>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                  {analytics?.totalImportUnits?.toLocaleString() || 0}
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: '0.35rem' }}>kWh</span>
+                </div>
+              </div>
+              <div style={{ 
+                width: '38px', 
+                height: '38px', 
+                borderRadius: '10px', 
+                backgroundColor: 'rgba(245, 158, 11, 0.12)', 
+                color: '#fbbf24', 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center' 
+              }}>
+                <ArrowDownCircle size={20} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consumer Load Drawn</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#fbbf24', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                Grid Consumption
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Smart Alert Engine Panel */}
-        <div className="alerts-card animate-fade-in-up" style={{ animationDelay: '200ms' }}>
-          <div className="alerts-header">
-            <div className="alerts-header-left">
-              <div className="alerts-header-title">
-                <Bell className="text-primary" size={20} />
-                Smart Alert Engine
+        {/* Operational Smart Alert Engine */}
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem', 
+          marginBottom: '1.75rem',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Bell size={18} style={{ color: 'var(--primary)' }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Operational Watchdog & Alerts
+                </h3>
               </div>
-              <div className="alerts-counters-chips">
-                <span className="alert-counter-chip critical">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '50px' }}>
                   {alertCounters.critical} Critical
                 </span>
-                <span className="alert-counter-chip warning">
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '50px' }}>
                   {alertCounters.warning} Warnings
                 </span>
-                <span className="alert-counter-chip info">
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '50px' }}>
                   {alertCounters.info} Info
                 </span>
               </div>
             </div>
-            <div className="alerts-filter-bar">
-              {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map((sev) => (
-                <button
-                  key={sev}
-                  className={`alerts-filter-btn ${severityFilter === sev ? 'active' : ''}`}
-                  onClick={() => setSeverityFilter(sev)}
-                >
-                  {sev}
-                </button>
-              ))}
+
+            {/* Severity Filter Tabs */}
+            <div style={{ display: 'flex', backgroundColor: 'rgba(0, 0, 0, 0.2)', padding: '0.2rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+              {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map((sev) => {
+                const isActive = severityFilter === sev;
+                return (
+                  <button
+                    key={sev}
+                    onClick={() => setSeverityFilter(sev)}
+                    style={{
+                      background: isActive ? 'var(--primary)' : 'transparent',
+                      color: isActive ? '#fff' : 'var(--text-secondary)',
+                      border: 'none',
+                      padding: '0.35rem 0.75rem',
+                      borderRadius: '6px',
+                      fontSize: '0.74rem',
+                      fontWeight: isActive ? 700 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                  >
+                    {sev}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {alertsLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100px' }}>
-              <div style={{ border: '3px solid rgba(255,255,255,0.1)', borderTop: '3px solid var(--primary)', borderRadius: '50%', width: '24px', height: '24px', animation: 'spin 1s linear infinite' }}></div>
-            </div>
-          ) : alerts.length === 0 ? (
-            <div className="alert-empty-state">
-              <CheckCircle className="alert-empty-icon" size={32} />
-              <div>
-                <h4 style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: '0.15rem' }}>No Active Anomalies</h4>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>All customer grid cycles and statement ledger records validate correctly.</p>
+          {/* Alerts Content */}
+          <div style={{ marginTop: '1rem' }}>
+            {alertsLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '90px' }}>
+                <div style={{ border: '2px solid rgba(255, 255, 255, 0.1)', borderTop: '2px solid var(--primary)', borderRadius: '50%', width: '22px', height: '22px', animation: 'spin 1s linear infinite' }}></div>
               </div>
-            </div>
-          ) : (
-            <div className="alerts-list">
-              {alerts.map((alert) => (
-                <div key={alert.alertId} className={`alert-item ${alert.severity.toLowerCase()}`}>
-                  <div className="alert-item-content">
-                    <div className="alert-item-icon-wrapper">
-                      <AlertCircle 
-                        className={
-                          alert.severity === 'CRITICAL' ? 'text-danger' : 
-                          alert.severity === 'WARNING' ? 'text-warning' : 'text-primary'
-                        } 
-                        size={18} 
-                      />
-                    </div>
-                    <div className="alert-item-body">
-                      <div className="alert-item-msg">{alert.message}</div>
-                      <div className="alert-item-meta">
-                        <span className="alert-item-account">Account: {alert.accountNo}</span>
-                        <span className="alert-item-time">
-                          Detected: {new Date(alert.createdAt).toLocaleString('en-LK', { dateStyle: 'short', timeStyle: 'short' })}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <button 
-                    className="alert-resolve-btn"
-                    onClick={() => handleResolveAlert(alert.alertId)}
-                  >
-                    Resolve
-                  </button>
+            ) : alerts.length === 0 ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '1.25rem', backgroundColor: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '10px' }}>
+                <CheckCircle size={22} style={{ color: '#10b981', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>Grid Ledger In Steady State</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>No pending billing anomalies detected across active customer cycles.</div>
                 </div>
-              ))}
-            </div>
-          )}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '280px', overflowY: 'auto' }}>
+                {alerts.map((alert) => {
+                  const isCrit = alert.severity === 'CRITICAL';
+                  const isWarn = alert.severity === 'WARNING';
+                  const borderCol = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#3b82f6';
+                  const bgTint = isCrit ? 'rgba(239, 68, 68, 0.05)' : isWarn ? 'rgba(245, 158, 11, 0.05)' : 'rgba(59, 130, 246, 0.05)';
+
+                  return (
+                    <div 
+                      key={alert.alertId} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'space-between', 
+                        gap: '0.85rem', 
+                        padding: '0.75rem 1rem', 
+                        backgroundColor: bgTint, 
+                        border: '1px solid rgba(255, 255, 255, 0.05)', 
+                        borderLeft: `4px solid ${borderCol}`, 
+                        borderRadius: '8px' 
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
+                        <AlertCircle size={18} style={{ color: borderCol, flexShrink: 0 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {alert.message}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
+                              #{alert.accountNo}
+                            </span>
+                            <span>
+                              {new Date(alert.createdAt).toLocaleString('en-LK', { dateStyle: 'short', timeStyle: 'short' })}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleResolveAlert(alert.alertId)}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          color: 'var(--text-primary)',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '6px',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.35rem',
+                          flexShrink: 0,
+                          transition: 'all 0.15s ease'
+                        }}
+                      >
+                        <CheckCircle size={13} style={{ color: '#10b981' }} />
+                        Resolve
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* First Grid Row: Trend Charts */}
-        <div className="analytics-layout">
-          {/* Revenue Trend Chart */}
-          <div className="analytics-widget-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+        {/* Primary Trend Charts Grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
+          {/* Monthly Net Revenue Trend */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <TrendingUp size={18} className="text-primary" />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                  <TrendingUp size={18} style={{ color: '#3b82f6' }} />
                   Monthly Net Revenue Trend
                 </h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Net payouts and statements generated over billing cycles</p>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                  Settlement statements and ledger revenue totals across cycles
+                </p>
               </div>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                LKR Trend
+              </span>
             </div>
             <SVGLineChart
               data={revenueChartData}
@@ -463,16 +724,27 @@ const Dashboard = () => {
             />
           </div>
 
-          {/* Net Unit Trend Chart */}
-          <div className="analytics-widget-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          {/* Net Energy Flow Trend */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Activity size={18} className="text-primary" />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                  <Activity size={18} style={{ color: '#10b981' }} />
                   Net Energy Flow Trend
                 </h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Monthly Net Units (Export - Import) in kWh</p>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                  Monthly net generation balance (Solar Exports - Grid Imports)
+                </p>
               </div>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+                kWh Balance
+              </span>
             </div>
             <SVGLineChart
               data={netUnitChartData}
@@ -485,34 +757,89 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Second Grid Row: Top 10 Solar Exporters vs Top 10 Consumers */}
-        <div className="analytics-layout" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        {/* Ranks: Top Exporters vs Top Consumers */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
           {/* Top Exporters */}
-          <div className="analytics-widget-card">
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Sun size={18} style={{ color: 'var(--success)' }} />
-              Top 10 Solar Exporters
-            </h3>
-            {analytics?.topExporters?.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No billing export records found.</p>
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sun size={18} style={{ color: '#10b981' }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Top Solar Exporters
+                </h3>
+              </div>
+              {analytics?.topExporters?.length > 5 && (
+                <button
+                  onClick={() => setShowAllExporters(!showAllExporters)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showAllExporters ? 'Show Top 5' : 'Show Top 10'}
+                  {showAllExporters ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+              )}
+            </div>
+
+            {(!analytics?.topExporters || analytics.topExporters.length === 0) ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, padding: '1rem 0' }}>No billing export records found.</p>
             ) : (
-              <div className="top-list-container">
-                {analytics?.topExporters?.map((item, idx) => {
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {analytics.topExporters.slice(0, showAllExporters ? 10 : 5).map((item, idx) => {
                   const percent = (item.totalExport / maxExporterValue) * 100;
+                  const rankBadge = idx === 0 ? { bg: 'rgba(245, 158, 11, 0.15)', col: '#f59e0b' } :
+                                    idx === 1 ? { bg: 'rgba(156, 163, 175, 0.15)', col: '#9ca3af' } :
+                                    idx === 2 ? { bg: 'rgba(217, 119, 6, 0.15)', col: '#d97706' } :
+                                    { bg: 'rgba(255, 255, 255, 0.05)', col: 'var(--text-muted)' };
+
                   return (
-                    <div className="top-list-item" key={item.accountNo}>
-                      <div className="top-list-meta">
-                        <span className="top-list-name">
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', width: '18px' }}>#{idx + 1}</span>
-                          {item.customerName}
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({item.accountNo})</span>
-                        </span>
-                        <span className="top-list-val" style={{ color: 'var(--success)' }}>
+                    <div key={item.accountNo} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0, flex: 1 }}>
+                          <span style={{ 
+                            fontSize: '0.7rem', 
+                            fontWeight: 700, 
+                            color: rankBadge.col, 
+                            backgroundColor: rankBadge.bg, 
+                            width: '20px', 
+                            height: '20px', 
+                            borderRadius: '4px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            #{idx + 1}
+                          </span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.customerName}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                            ({item.accountNo})
+                          </span>
+                        </div>
+                        <span style={{ fontWeight: 700, color: '#34d399', flexShrink: 0, marginLeft: '0.5rem' }}>
                           {item.totalExport.toLocaleString()} kWh
                         </span>
                       </div>
-                      <div className="top-list-bar-track">
-                        <div className="top-list-bar-fill success-teal" style={{ width: `${percent}%` }}></div>
+                      <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(255, 255, 255, 0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ width: `${percent}%`, height: '100%', background: 'linear-gradient(90deg, #10b981, #06b6d4)', borderRadius: '2px' }}></div>
                       </div>
                     </div>
                   );
@@ -522,31 +849,86 @@ const Dashboard = () => {
           </div>
 
           {/* Top Consumers */}
-          <div className="analytics-widget-card">
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <TrendingDown size={18} style={{ color: 'var(--warning)' }} />
-              Top 10 Import Consumers
-            </h3>
-            {analytics?.topConsumers?.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No billing import records found.</p>
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <TrendingDown size={18} style={{ color: '#f59e0b' }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Top Import Consumers
+                </h3>
+              </div>
+              {analytics?.topConsumers?.length > 5 && (
+                <button
+                  onClick={() => setShowAllConsumers(!showAllConsumers)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.3rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {showAllConsumers ? 'Show Top 5' : 'Show Top 10'}
+                  {showAllConsumers ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                </button>
+              )}
+            </div>
+
+            {(!analytics?.topConsumers || analytics.topConsumers.length === 0) ? (
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, padding: '1rem 0' }}>No billing import records found.</p>
             ) : (
-              <div className="top-list-container">
-                {analytics?.topConsumers?.map((item, idx) => {
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                {analytics.topConsumers.slice(0, showAllConsumers ? 10 : 5).map((item, idx) => {
                   const percent = (item.totalImport / maxConsumerValue) * 100;
+                  const rankBadge = idx === 0 ? { bg: 'rgba(245, 158, 11, 0.15)', col: '#f59e0b' } :
+                                    idx === 1 ? { bg: 'rgba(156, 163, 175, 0.15)', col: '#9ca3af' } :
+                                    idx === 2 ? { bg: 'rgba(217, 119, 6, 0.15)', col: '#d97706' } :
+                                    { bg: 'rgba(255, 255, 255, 0.05)', col: 'var(--text-muted)' };
+
                   return (
-                    <div className="top-list-item" key={item.accountNo}>
-                      <div className="top-list-meta">
-                        <span className="top-list-name">
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', width: '18px' }}>#{idx + 1}</span>
-                          {item.customerName}
-                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>({item.accountNo})</span>
-                        </span>
-                        <span className="top-list-val" style={{ color: 'var(--warning)' }}>
+                    <div key={item.accountNo} style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', minWidth: 0, flex: 1 }}>
+                          <span style={{ 
+                            fontSize: '0.7rem', 
+                            fontWeight: 700, 
+                            color: rankBadge.col, 
+                            backgroundColor: rankBadge.bg, 
+                            width: '20px', 
+                            height: '20px', 
+                            borderRadius: '4px', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            #{idx + 1}
+                          </span>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {item.customerName}
+                          </span>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                            ({item.accountNo})
+                          </span>
+                        </div>
+                        <span style={{ fontWeight: 700, color: '#fbbf24', flexShrink: 0, marginLeft: '0.5rem' }}>
                           {item.totalImport.toLocaleString()} kWh
                         </span>
                       </div>
-                      <div className="top-list-bar-track">
-                        <div className="top-list-bar-fill warning-red" style={{ width: `${percent}%` }}></div>
+                      <div style={{ width: '100%', height: '4px', backgroundColor: 'rgba(255, 255, 255, 0.06)', borderRadius: '2px', overflow: 'hidden' }}>
+                        <div style={{ width: `${percent}%`, height: '100%', background: 'linear-gradient(90deg, #f59e0b, #ef4444)', borderRadius: '2px' }}></div>
                       </div>
                     </div>
                   );
@@ -556,19 +938,31 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Third Grid Row: Solar Type Distribution & Branch Analytics */}
-        <div className="analytics-layout" style={{ gridTemplateColumns: '1.1fr 1.9fr', marginTop: '1.5rem' }}>
+        {/* Solar Tariff Distribution Donut & Branch Performance Breakdown */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
           {/* Solar Type Distribution */}
-          <div className="analytics-widget-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Sun size={18} className="text-primary" />
-                Solar Type Distribution
-              </h3>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>Segmentation of registered customers</p>
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Sun size={18} style={{ color: 'var(--primary)' }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Solar Tariff Distribution
+                </h3>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                Segmentation of registered accounts by Net Metering / Net Plus / Net++
+              </p>
             </div>
             
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <SVGDonutChart
                 data={solarDistributionData}
                 colors={['#10b981', '#06b6d4', '#f59e0b', '#8b5cf6']}
@@ -577,38 +971,56 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Branch-wise Analytics */}
-          <div className="analytics-widget-card">
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 600, marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Building size={18} className="text-primary" />
-              Branch-wise Analytics Breakdown
-            </h3>
-            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>Divisional summary of customers, grid loads, and branch revenue contributions</p>
+          {/* Branch-wise Analytics Breakdown */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Building size={18} style={{ color: 'var(--primary)' }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Branch Performance Breakdown
+                </h3>
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                Divisional distribution of customer accounts, power balance, and net revenue
+              </p>
+            </div>
             
-            <div className="table-container" style={{ maxHeight: '320px', overflowY: 'auto' }}>
-              <table className="custom-table" style={{ margin: 0 }}>
+            <div style={{ overflowX: 'auto', maxHeight: '310px' }}>
+              <table className="custom-table" style={{ margin: 0, fontSize: '0.82rem' }}>
                 <thead>
                   <tr>
-                    <th>Branch Code</th>
+                    <th>Branch</th>
                     <th style={{ textAlign: 'right' }}>Customers</th>
-                    <th style={{ textAlign: 'right' }}>Total Imports</th>
-                    <th style={{ textAlign: 'right' }}>Total Exports</th>
-                    <th style={{ textAlign: 'right' }}>Total Revenue</th>
+                    <th style={{ textAlign: 'right' }}>Imports</th>
+                    <th style={{ textAlign: 'right' }}>Exports</th>
+                    <th style={{ textAlign: 'right' }}>Revenue</th>
                   </tr>
                 </thead>
                 <tbody>
                   {analytics?.branchAnalytics?.map((branch) => (
-                    <tr className="branch-row" key={branch.branchCode}>
-                      <td style={{ fontWeight: 600 }}>{branch.branchCode}</td>
+                    <tr key={branch.branchCode}>
+                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                        <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '0.15rem 0.45rem', borderRadius: '4px', fontFamily: 'monospace' }}>
+                          {branch.branchCode}
+                        </span>
+                      </td>
                       <td style={{ textAlign: 'right', fontWeight: 500 }}>{branch.customerCount}</td>
-                      <td style={{ textAlign: 'right', color: 'var(--warning)' }}>{branch.totalImports.toLocaleString()} kWh</td>
-                      <td style={{ textAlign: 'right', color: 'var(--success)' }}>{branch.totalExports.toLocaleString()} kWh</td>
+                      <td style={{ textAlign: 'right', color: '#fbbf24' }}>{branch.totalImports.toLocaleString()} kWh</td>
+                      <td style={{ textAlign: 'right', color: '#34d399' }}>{branch.totalExports.toLocaleString()} kWh</td>
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>{formatLKR(branch.totalRevenue)}</td>
                     </tr>
                   ))}
                   {(!analytics?.branchAnalytics || analytics.branchAnalytics.length === 0) && (
                     <tr>
-                      <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>No branch records found.</td>
+                      <td colSpan="5" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem 0' }}>No branch records found.</td>
                     </tr>
                   )}
                 </tbody>
@@ -619,60 +1031,66 @@ const Dashboard = () => {
 
         {/* EDL Predictor Engine Section */}
         {!isCustomer && predictions && (
-          <div style={{ marginTop: '2.5rem' }}>
-            <h2 style={{ fontSize: '1.25rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '1.25rem' }}>
-              <Zap className="text-primary" size={22} style={{ color: '#a78bfa' }} />
-              EDL Predictor Engine (Linear Regression Model)
-            </h2>
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(167, 139, 250, 0.25)', 
+            borderRadius: '12px', 
+            padding: '1.4rem', 
+            marginBottom: '1.75rem',
+            boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.3)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                  <Sparkles size={18} style={{ color: '#a78bfa' }} />
+                  EDL Predictor Engine
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#a78bfa', backgroundColor: 'rgba(167, 139, 250, 0.15)', border: '1px solid rgba(167, 139, 250, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                    Linear Regression
+                  </span>
+                </h3>
+                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                  Next month forecast calculated from trailing billing cycles & energy load models
+                </p>
+              </div>
+              <span style={{ fontSize: '0.76rem', color: '#a78bfa', fontWeight: 600, backgroundColor: 'rgba(167, 139, 250, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '6px' }}>
+                Forecast Target: {predictions.nextMonthName}
+              </span>
+            </div>
 
-            {/* Predictions Summary Cards Row */}
-            <div className="analytics-grid-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', marginBottom: '1.5rem' }}>
-              <div className="metric-card glow-indigo animate-fade-in-up" style={{ background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.02) 100%)', borderColor: 'rgba(139, 92, 246, 0.2)' }}>
-                <div className="metric-info">
-                  <span className="metric-label" style={{ color: 'var(--text-secondary)' }}>Forecasted Next Month ({predictions.nextMonthName}) Revenue</span>
-                  <span className="metric-value" style={{ color: '#a78bfa' }}>{formatLKR(predictions.nextMonthRevenue)}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Net Revenue Statement</span>
+            {/* 3 Prediction Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Revenue</span>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#a78bfa', marginTop: '0.25rem' }}>
+                  {formatLKR(predictions.nextMonthRevenue)}
                 </div>
-                <div className="metric-icon-box" style={{ color: '#a78bfa', backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
-                  <TrendingUp size={24} />
-                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Next Month Statements</div>
               </div>
 
-              <div className="metric-card glow-teal animate-fade-in-up" style={{ background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(6, 182, 212, 0.02) 100%)', borderColor: 'rgba(20, 184, 166, 0.2)' }}>
-                <div className="metric-info">
-                  <span className="metric-label" style={{ color: 'var(--text-secondary)' }}>Forecasted Next Month ({predictions.nextMonthName}) Exports</span>
-                  <span className="metric-value" style={{ color: 'var(--success)' }}>
-                    {Math.round(predictions.nextMonthExports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Solar Generation Export</span>
+              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Exports</span>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem' }}>
+                  {Math.round(predictions.nextMonthExports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
                 </div>
-                <div className="metric-icon-box" style={{ color: 'var(--success)', backgroundColor: 'var(--success-glow)' }}>
-                  <Sun size={24} />
-                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Solar Generation Export</div>
               </div>
 
-              <div className="metric-card glow-warning animate-fade-in-up" style={{ background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(239, 68, 68, 0.02) 100%)', borderColor: 'rgba(245, 158, 11, 0.2)' }}>
-                <div className="metric-info">
-                  <span className="metric-label" style={{ color: 'var(--text-secondary)' }}>Forecasted Next Month ({predictions.nextMonthName}) Imports</span>
-                  <span className="metric-value" style={{ color: 'var(--warning)' }}>
-                    {Math.round(predictions.nextMonthImports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Estimated Consumer Demand Draw</span>
+              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Imports</span>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.25rem' }}>
+                  {Math.round(predictions.nextMonthImports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
                 </div>
-                <div className="metric-icon-box" style={{ color: 'var(--warning)', backgroundColor: 'var(--warning-glow)' }}>
-                  <ArrowDownCircle size={24} />
-                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Consumer Load Draw</div>
               </div>
             </div>
 
-            {/* Predictions Comparative Charts Row */}
-            <div className="analytics-layout" style={{ gridTemplateColumns: '1fr 1fr', marginTop: '1.5rem' }}>
-              {/* Revenue Comparison Chart */}
-              <div className="analytics-widget-card">
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                  <DollarSign size={18} style={{ color: '#a78bfa' }} />
+            {/* Prediction Charts */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: '1.15rem' }}>
+              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.15rem' }}>
+                <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 1rem 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <DollarSign size={16} style={{ color: '#a78bfa' }} />
                   Revenue: Actual vs Forecast Trend
-                </h3>
+                </h4>
                 <SVGPredictionChart
                   data={predictions.history}
                   actualKey="actualRevenue"
@@ -684,12 +1102,11 @@ const Dashboard = () => {
                 />
               </div>
 
-              {/* Energy Units Comparison Chart */}
-              <div className="analytics-widget-card">
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.25rem' }}>
-                  <Sun size={18} style={{ color: 'var(--success)' }} />
+              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.15rem' }}>
+                <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 1rem 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Sun size={16} style={{ color: '#34d399' }} />
                   Solar Exports: Actual vs Forecast Trend
-                </h3>
+                </h4>
                 <SVGPredictionChart
                   data={predictions.history}
                   actualKey="actualExports"
@@ -703,47 +1120,62 @@ const Dashboard = () => {
           </div>
         )}
 
-        {/* Quick Operations Control & Ingestions Panel */}
-        <div className="analytics-layout" style={{ gridTemplateColumns: '1.8fr 1.2fr', marginTop: '1.5rem' }}>
-          {/* Recent Billing Imports */}
-          <div className="card">
-            <div className="panel-header">
-              <h2 className="panel-title">Recent Billing Imports</h2>
-              <Link to="/monthly-directory" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: '600' }}>Customer Directory</Link>
+        {/* Recent Ingestions & Operations Hub */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem' }}>
+          {/* Recent Ingestions Table */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <FileSpreadsheet size={18} style={{ color: 'var(--primary)' }} />
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                  Recent Billing Ingestions
+                </h3>
+              </div>
+              <Link to="/monthly-directory" style={{ fontSize: '0.78rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
+                Customer Directory →
+              </Link>
             </div>
 
-            <div className="table-container">
-              {stats?.recentUploads?.length === 0 ? (
-                <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  No files have been imported yet.
+            <div style={{ overflowX: 'auto', maxHeight: '250px' }}>
+              {(!stats?.recentUploads || stats.recentUploads.length === 0) ? (
+                <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  No batch files imported yet.
                 </div>
               ) : (
-                <table className="custom-table">
+                <table className="custom-table" style={{ margin: 0, fontSize: '0.8rem' }}>
                   <thead>
                     <tr>
-                      <th>Import Date</th>
+                      <th>Date</th>
                       <th>Filename</th>
-                      <th>Uploaded By</th>
+                      <th>User</th>
                       <th>Status</th>
-                      <th>Bills Saved</th>
+                      <th style={{ textAlign: 'right' }}>Records</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {stats?.recentUploads?.map((upload) => (
+                    {stats.recentUploads.map((upload) => (
                       <tr key={upload.id}>
                         <td>{new Date(upload.uploadTime).toLocaleString('en-LK', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                        <td style={{ fontWeight: 600 }}>{upload.filename}</td>
+                        <td style={{ fontWeight: 600, color: 'var(--text-primary)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {upload.filename}
+                        </td>
                         <td>{upload.uploadedBy}</td>
                         <td>
                           <span className={`badge ${
                             upload.status === 'SUCCESS' ? 'success' : 
                             upload.status === 'PENDING_APPROVAL' ? 'warning' :
                             upload.status === 'COMPLETED_WITH_ERRORS' || upload.status === 'PARTIAL_SUCCESS' ? 'warning' : 'danger'
-                          }`}>
+                          }`} style={{ fontSize: '0.7rem' }}>
                             {upload.status.replaceAll('_', ' ')}
                           </span>
                         </td>
-                        <td>{upload.billingInserted}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{upload.billingInserted}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -752,41 +1184,68 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Quick Actions Operations Widget */}
-          <div className="card">
-            <div className="panel-header">
-              <h2 className="panel-title">Operations Control</h2>
-              <Link to="/monthly-directory" style={{ fontSize: '0.85rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>New Ingestion</Link>
-            </div>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Upload energy billing sheets from the Monthly Customer Directory — pick a Billing Month, then a division, and start the upload there.
+          {/* Operations Hub */}
+          <div style={{ 
+            background: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            borderRadius: '12px', 
+            padding: '1.25rem 1.4rem',
+            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Layers size={18} style={{ color: 'var(--primary)' }} />
+                  <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                    Operations & Registry Control
+                  </h3>
+                </div>
+                <Link to="/monthly-directory" style={{ fontSize: '0.78rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
+                  Upload Data →
+                </Link>
+              </div>
+
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 1rem 0' }}>
+                Import energy billing sheets from the Monthly Customer Directory. Select a Billing Month and branch division to begin reconciliation.
               </p>
-              
+
               {stats?.pendingApprovalsCount > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem', borderRadius: '8px', border: '1px solid var(--warning)', backgroundColor: 'rgba(245,158,11,0.06)', color: 'var(--warning)', animation: 'pulseGlow 2s infinite' }}>
-                  <Clock size={20} />
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.75rem', 
+                  padding: '0.85rem 1rem', 
+                  borderRadius: '8px', 
+                  border: '1px solid rgba(245, 158, 11, 0.3)', 
+                  backgroundColor: 'rgba(245, 158, 11, 0.08)', 
+                  color: '#fbbf24',
+                  marginBottom: '1rem' 
+                }}>
+                  <Clock size={20} style={{ flexShrink: 0 }} />
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>Pending Staging Review</div>
-                    <div style={{ fontSize: '0.75rem' }}>{stats.pendingApprovalsCount} file upload batches are pending admin review.</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.84rem' }}>Pending Staging Review</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {stats.pendingApprovalsCount} file upload batches require administrator review before ledger commit.
+                    </div>
                   </div>
                 </div>
               )}
+            </div>
 
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-secondary)' }}>System Quick Actions</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                  <Link to="/customers" className="btn btn-secondary" style={{ textDecoration: 'none', display: 'flex', justifyContent: 'center' }}>
-                    Customer Registry
-                  </Link>
-                  {user.role === 'ADMIN' && (
-                    <Link to="/admin" className="btn btn-primary" style={{ textDecoration: 'none', display: 'flex', justifyContent: 'center' }}>
-                      Admin Review Center
-                    </Link>
-                  )}
-                </div>
-              </div>
+            <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem', display: 'flex', gap: '0.75rem' }}>
+              <Link to="/customers" className="btn btn-secondary" style={{ flex: 1, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', fontSize: '0.84rem', padding: '0.65rem 1rem' }}>
+                <Users size={15} />
+                Customer Registry
+              </Link>
+              {user.role === 'ADMIN' && (
+                <Link to="/admin" className="btn btn-primary" style={{ flex: 1, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', fontSize: '0.84rem', padding: '0.65rem 1rem' }}>
+                  <ShieldCheck size={15} />
+                  Admin Center
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -794,96 +1253,187 @@ const Dashboard = () => {
     );
   }
 
-  // --- Customer self-service dashboard (Original user view, fully styled) ---
+  // --- Customer self-service dashboard (USER role) ---
   return (
-    <div className="page-wrapper animate-fade-in">
-      <div className="page-header">
+    <div className="page-wrapper animate-fade-in" style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.75rem 2rem' }}>
+      {/* Customer Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.75rem' }}>
         <div>
-          <h1 className="page-title">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.35rem' }}>
+            <span style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '0.35rem', 
+              fontSize: '0.72rem', 
+              fontWeight: 700, 
+              letterSpacing: '0.06em', 
+              textTransform: 'uppercase', 
+              padding: '0.2rem 0.55rem', 
+              borderRadius: '6px', 
+              backgroundColor: 'rgba(59, 130, 246, 0.12)', 
+              color: '#60a5fa', 
+              border: '1px solid rgba(59, 130, 246, 0.2)' 
+            }}>
+              <Zap size={12} />
+              CEB Solar Portal
+            </span>
+            <span className="badge success" style={{ fontSize: '0.72rem' }}>
+              {customerInfo?.solarType || 'Solar Grid'}
+            </span>
+          </div>
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
             Welcome, {customerInfo?.customerName || 'Solar Customer'}
           </h1>
-          <p className="page-subtitle">
-            Self-service solar dashboard. Track your energy generation, consumption, and statement ledger.
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0' }}>
+            Personal solar generation, consumer demand tracking, and billing ledger.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', padding: '0.5rem 1rem', borderRadius: '50px', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Calendar size={14} />
-            Today: {new Date().toLocaleDateString('en-LK', { year: 'numeric', month: 'long', day: 'numeric' })}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+          <span style={{ 
+            fontSize: '0.82rem', 
+            color: 'var(--text-secondary)', 
+            backgroundColor: 'var(--bg-secondary)', 
+            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            padding: '0.45rem 0.85rem', 
+            borderRadius: '8px', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '0.45rem' 
+          }}>
+            <Calendar size={14} style={{ color: 'var(--primary)' }} />
+            {new Date().toLocaleDateString('en-LK', { year: 'numeric', month: 'short', day: 'numeric' })}
           </span>
         </div>
       </div>
 
-      {/* Metrics Summary Cards */}
-      <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-        <div className="metric-card primary">
-          <div className="metric-info">
-            <span className="metric-label">Account No</span>
-            <span className="metric-value" style={{ fontSize: '1.4rem' }}>{user.username}</span>
+      {/* Customer 4 Metric Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.15rem', marginBottom: '1.75rem' }}>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderTop: '3px solid #3b82f6', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+        }}>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Account Number</span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.25rem', fontFamily: 'monospace' }}>
+              {user.username}
+            </div>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Registered Meter ID</span>
           </div>
-          <div className="metric-icon-box">
-            <User size={24} />
-          </div>
-        </div>
-
-        <div className="metric-card success">
-          <div className="metric-info">
-            <span className="metric-label">Net Balance (LKR)</span>
-            <span className="metric-value">{formatLKR(stats?.totalRevenue)}</span>
-          </div>
-          <div className="metric-icon-box">
-            <DollarSign size={24} />
-          </div>
-        </div>
-
-        <div className="metric-card teal">
-          <div className="metric-info">
-            <span className="metric-label">Total Exported</span>
-            <span className="metric-value" style={{ color: 'var(--success)' }}>
-              {stats?.totalExportUnits?.toLocaleString()} <span style={{ fontSize: '0.9rem' }}>kWh</span>
-            </span>
-          </div>
-          <div className="metric-icon-box" style={{ color: 'var(--success)', backgroundColor: 'rgba(16, 185, 129, 0.12)' }}>
-            <ArrowUpCircle size={24} />
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <User size={20} />
           </div>
         </div>
 
-        <div className="metric-card warning">
-          <div className="metric-info">
-            <span className="metric-label">Total Imported</span>
-            <span className="metric-value" style={{ color: 'var(--warning)' }}>
-              {stats?.totalImportUnits?.toLocaleString()} <span style={{ fontSize: '0.9rem' }}>kWh</span>
-            </span>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderTop: '3px solid #10b981', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+        }}>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Net Balance</span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem' }}>
+              {formatLKR(stats?.totalRevenue)}
+            </div>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Statement Balance Flow</span>
           </div>
-          <div className="metric-icon-box" style={{ color: 'var(--warning)', backgroundColor: 'rgba(245, 158, 11, 0.12)' }}>
-            <ArrowDownCircle size={24} />
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <DollarSign size={20} />
+          </div>
+        </div>
+
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderTop: '3px solid #06b6d4', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+        }}>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Generation</span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#22d3ee', marginTop: '0.25rem' }}>
+              {stats?.totalExportUnits?.toLocaleString() || 0} <span style={{ fontSize: '0.85rem' }}>kWh</span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Cumulative Solar Exports</span>
+          </div>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(6, 182, 212, 0.12)', color: '#22d3ee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ArrowUpCircle size={20} />
+          </div>
+        </div>
+
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderTop: '3px solid #f59e0b', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem', 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+        }}>
+          <div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Consumption</span>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.25rem' }}>
+              {stats?.totalImportUnits?.toLocaleString() || 0} <span style={{ fontSize: '0.85rem' }}>kWh</span>
+            </div>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Cumulative Grid Imports</span>
+          </div>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ArrowDownCircle size={20} />
           </div>
         </div>
       </div>
 
-      {/* Customer Chart & Details Section */}
-      <div className="dashboard-grid" style={{ gridTemplateColumns: '1.5fr 1.2fr' }}>
+      {/* Customer Chart & Profile Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
         {/* Customer Chart */}
-        <div className="card">
-          <div className="panel-header">
-            <div>
-              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <TrendingUp size={18} className="text-primary" />
-                Your Solar Export vs Consumption Grid Trend
-              </h2>
-              <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Showing last 6 months energy flow metrics (kWh)
-              </span>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
+              <TrendingUp size={18} style={{ color: 'var(--primary)' }} />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                Solar Export vs Grid Consumption
+              </h3>
             </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: 0 }}>
+              Trailing 6 months generation and consumption performance (kWh)
+            </p>
           </div>
-          
+
           {monthlyTrend.length === 0 ? (
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '250px', color: 'var(--text-muted)' }}>
-              No billing data available yet.
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '220px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+              No billing history available yet.
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <div className="chart-container">
+            <div style={{ marginTop: '1.5rem' }}>
+              <div className="chart-container" style={{ height: '200px' }}>
                 {monthlyTrend.slice(-6).map((item, index) => {
                   const impPct = (item.imports / maxVal) * 100;
                   const expPct = (item.exports / maxVal) * 100;
@@ -891,13 +1441,13 @@ const Dashboard = () => {
                     <div key={index} className="chart-bar-wrapper" style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: '4px' }}>
                       <div 
                         className="chart-bar" 
-                        style={{ height: `${Math.max(impPct, 4)}%`, width: '16px', background: 'linear-gradient(180deg, var(--warning), rgba(245, 158, 11, 0.2))' }}
+                        style={{ height: `${Math.max(impPct, 4)}%`, width: '16px', background: 'linear-gradient(180deg, #f59e0b, rgba(245, 158, 11, 0.2))' }}
                       >
                         <div className="chart-bar-tooltip" style={{ top: '-25px' }}>Grid Import: {item.imports.toLocaleString()} kWh</div>
                       </div>
                       <div 
                         className="chart-bar" 
-                        style={{ height: `${Math.max(expPct, 4)}%`, width: '16px', background: 'linear-gradient(180deg, var(--success), rgba(16, 185, 129, 0.2))' }}
+                        style={{ height: `${Math.max(expPct, 4)}%`, width: '16px', background: 'linear-gradient(180deg, #10b981, rgba(16, 185, 129, 0.2))' }}
                       >
                         <div className="chart-bar-tooltip" style={{ top: '-25px' }}>Solar Export: {item.exports.toLocaleString()} kWh</div>
                       </div>
@@ -908,14 +1458,15 @@ const Dashboard = () => {
                   );
                 })}
               </div>
-              <div style={{ display: 'flex', gap: '1.5rem', marginTop: '2rem', fontSize: '0.85rem', justifyContent: 'center' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ width: '10px', height: '10px', backgroundColor: 'var(--warning)', borderRadius: '2px' }}></span>
-                  Imports (Grid Draw)
+
+              <div style={{ display: 'flex', gap: '1.5rem', marginTop: '2.25rem', fontSize: '0.8rem', justifyContent: 'center' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-secondary)' }}>
+                  <span style={{ width: '8px', height: '8px', backgroundColor: '#f59e0b', borderRadius: '2px' }}></span>
+                  Grid Imports (Draw)
                 </span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                  <span style={{ width: '10px', height: '10px', backgroundColor: 'var(--success)', borderRadius: '2px' }}></span>
-                  Exports (Solar Generation)
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-secondary)' }}>
+                  <span style={{ width: '8px', height: '8px', backgroundColor: '#10b981', borderRadius: '2px' }}></span>
+                  Solar Exports (Generation)
                 </span>
               </div>
             </div>
@@ -923,81 +1474,94 @@ const Dashboard = () => {
         </div>
 
         {/* Connection Profile */}
-        <div className="card" style={{ backgroundColor: 'var(--bg-secondary)' }}>
-          <div className="panel-header" style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
-            <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Activity size={18} className="text-primary" />
-              Connection Profile
-            </h2>
-            <span className="badge success">{customerInfo?.solarType || 'Solar Grid'}</span>
+        <div style={{ 
+          background: 'var(--bg-secondary)', 
+          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          borderRadius: '12px', 
+          padding: '1.25rem 1.4rem',
+          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Activity size={18} style={{ color: 'var(--primary)' }} />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                Connection Profile
+              </h3>
+            </div>
+            <span className="badge success" style={{ fontSize: '0.72rem' }}>
+              {customerInfo?.solarType || 'Solar Grid'}
+            </span>
           </div>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.15rem' }}>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <User size={16} className="text-muted" />
+              <User size={16} style={{ color: 'var(--text-muted)' }} />
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Account Name</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{customerInfo?.customerName}</div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Account Name</div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>{customerInfo?.customerName}</div>
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <MapPin size={16} className="text-muted" />
+              <MapPin size={16} style={{ color: 'var(--text-muted)' }} />
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Service Location</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{customerInfo?.customerAddress || 'Ceylon Electricity Board, Grid'}</div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Service Location</div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-primary)' }}>{customerInfo?.customerAddress || 'Ceylon Electricity Board, Grid'}</div>
               </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-              <Phone size={16} className="text-muted" />
+              <Phone size={16} style={{ color: 'var(--text-muted)' }} />
               <div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Contact Phone</div>
-                <div style={{ fontSize: '0.9rem', fontWeight: 500 }}>{customerInfo?.mobileNo || '—'}</div>
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Contact Phone</div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 500, color: 'var(--text-primary)' }}>{customerInfo?.mobileNo || '—'}</div>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.15rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem' }}>
               <div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
-                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)', marginTop: '0.15rem' }}>
                   {customerInfo?.panelCapacity ? `${customerInfo.panelCapacity} kW` : '—'}
                 </div>
               </div>
               <div>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Agreement Date</span>
-                <div style={{ fontWeight: 600, fontSize: '0.95rem' }}>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Agreement Date</span>
+                <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)', marginTop: '0.15rem' }}>
                   {customerInfo?.agreementDate ? new Date(customerInfo.agreementDate).toLocaleDateString('en-LK') : '—'}
                 </div>
               </div>
             </div>
 
             {customerInfo?.isComplete ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.15rem', fontSize: '0.8rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem', fontSize: '0.78rem' }}>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Bank</span>
-                  <div style={{ fontWeight: 500 }}>{customerInfo?.bankCode || '—'}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.15rem' }}>{customerInfo?.bankCode || '—'}</div>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Branch</span>
-                  <div style={{ fontWeight: 500 }}>{customerInfo?.branchCode || '—'}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.15rem' }}>{customerInfo?.branchCode || '—'}</div>
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Bank A/C</span>
-                  <div style={{ fontWeight: 500 }}>{customerInfo?.bankAccountNo || '—'}</div>
+                  <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.15rem' }}>{customerInfo?.bankAccountNo || '—'}</div>
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.15rem', fontSize: '0.8rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem', fontSize: '0.78rem' }}>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Outstanding Balance</span>
-                  <div style={{ fontWeight: 700, color: 'var(--danger)' }}>
+                  <div style={{ fontWeight: 800, color: '#ef4444', marginTop: '0.15rem' }}>
                     {customerInfo?.directory?.outstandingBalance != null ? formatLKR(customerInfo.directory.outstandingBalance) : '—'}
                   </div>
                 </div>
                 <div>
-                  <span style={{ color: 'var(--text-secondary)' }}>Payment Amount</span>
-                  <div style={{ fontWeight: 700, color: 'var(--success)' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Settled Payment</span>
+                  <div style={{ fontWeight: 800, color: '#34d399', marginTop: '0.15rem' }}>
                     {customerInfo?.directory?.payment != null ? formatLKR(customerInfo.directory.payment) : (customerInfo?.directory?.paymentSettled != null ? formatLKR(customerInfo.directory.paymentSettled) : '—')}
                   </div>
                 </div>
@@ -1007,22 +1571,28 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Customer statement ledger */}
-      <div className="card" style={{ marginTop: '1.5rem' }}>
-        <div className="panel-header">
-          <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <FileSpreadsheet className="text-primary" size={18} />
+      {/* Customer Statements Ledger Table */}
+      <div style={{ 
+        background: 'var(--bg-secondary)', 
+        border: '1px solid rgba(255, 255, 255, 0.08)', 
+        borderRadius: '12px', 
+        padding: '1.25rem 1.4rem',
+        boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.15rem' }}>
+          <FileSpreadsheet size={18} style={{ color: 'var(--primary)' }} />
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
             Personal Monthly Statements Ledger
-          </h2>
+          </h3>
         </div>
 
-        <div className="table-container">
+        <div style={{ overflowX: 'auto' }}>
           {monthlyTrend.length === 0 ? (
-            <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <div style={{ padding: '2rem 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
               No statements found for your account.
             </div>
           ) : (
-            <table className="custom-table">
+            <table className="custom-table" style={{ margin: 0, fontSize: '0.82rem' }}>
               <thead>
                 <tr>
                   <th>Billing Cycle</th>
@@ -1030,7 +1600,7 @@ const Dashboard = () => {
                   <th>Imports (kWh)</th>
                   <th>Exports (kWh)</th>
                   <th>Net Balance Flow</th>
-                  <th>Statement Value</th>
+                  <th style={{ textAlign: 'right' }}>Statement Value</th>
                 </tr>
               </thead>
               <tbody>
@@ -1041,23 +1611,23 @@ const Dashboard = () => {
                       <td style={{ fontWeight: 600 }}>
                         {getMonthName(bill.month)} {bill.year}
                       </td>
-                      <td style={{ fontWeight: 600, color: 'var(--primary)' }}>{bill.refNo}</td>
+                      <td style={{ fontWeight: 600, color: 'var(--primary)', fontFamily: 'monospace' }}>{bill.refNo}</td>
                       <td>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--warning)' }}>
-                          <ArrowDownCircle size={12} />
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#fbbf24' }}>
+                          <ArrowDownCircle size={13} />
                           {bill.imports.toLocaleString()}
                         </span>
                       </td>
                       <td>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--success)' }}>
-                          <ArrowUpCircle size={12} />
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#34d399' }}>
+                          <ArrowUpCircle size={13} />
                           {bill.exports.toLocaleString()}
                         </span>
                       </td>
-                      <td style={{ fontWeight: 600, color: netUnits >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+                      <td style={{ fontWeight: 600, color: netUnits >= 0 ? '#34d399' : '#ef4444' }}>
                         {netUnits > 0 ? `+${netUnits.toLocaleString()}` : netUnits.toLocaleString()} kWh
                       </td>
-                      <td style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>
                         {formatLKR(bill.revenue)}
                       </td>
                     </tr>

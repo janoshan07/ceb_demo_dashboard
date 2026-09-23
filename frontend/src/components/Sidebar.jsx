@@ -1,20 +1,25 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Users, 
-  TrendingUp, 
-  ShieldAlert, 
+  FileSpreadsheet, 
+  UploadCloud, 
+  ShieldCheck, 
+  CreditCard, 
+  BarChart3, 
+  Settings, 
   LogOut, 
-  Zap,
-  Archive,
-  CreditCard 
+  ChevronLeft, 
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import edlLogo from '../assets/edl_logo.jpg';
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const location = useLocation();
 
   if (!user) return null;
 
@@ -28,106 +33,207 @@ const Sidebar = () => {
     }
   };
 
+  const toggleCollapse = () => {
+    setIsCollapsed(prev => !prev);
+  };
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+      {/* 4. BRANDING */}
       <div className="sidebar-header">
-        <div className="sidebar-logo-icon" style={{ overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', border: '1.5px solid rgba(255, 255, 255, 0.15)', width: '32px', height: '32px', padding: 0 }}>
-          <img src={edlLogo} alt="EDL Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        </div>
-        <div className="sidebar-title">EDL Billing</div>
-      </div>
-      
-      <nav style={{ flex: 1 }}>
-        <ul className="sidebar-menu">
-          <li>
-            <NavLink 
-              to="/" 
-              className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-            >
-              <LayoutDashboard size={20} />
-              <span>Dashboard</span>
-            </NavLink>
-          </li>
-          
-          {/* Officers and Admins only */}
-          {user.role !== 'USER' && (
-            <>
-              <li>
-                <NavLink 
-                  to="/customers" 
-                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                >
-                  <Users size={20} />
-                  <span>Customers</span>
-                </NavLink>
-              </li>
-
-              <li>
-                <NavLink 
-                  to="/reports" 
-                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                >
-                  <TrendingUp size={20} />
-                  <span>Reports</span>
-                </NavLink>
-              </li>
-            </>
+        <div className="sidebar-brand-wrapper">
+          <div className="sidebar-logo-box">
+            <img src={edlLogo} alt="EDL Logo" className="sidebar-logo-img" />
+          </div>
+          {!isCollapsed && (
+            <div className="sidebar-brand-text">
+              <span className="sidebar-brand-title">
+                EDL
+                <span 
+                  style={{ 
+                    display: 'inline-block', 
+                    width: '6px', 
+                    height: '6px', 
+                    borderRadius: '50%', 
+                    backgroundColor: '#16A34A' 
+                  }} 
+                  title="Live Grid Connected" 
+                />
+              </span>
+              <span className="sidebar-brand-subtitle">Smart Solar Dashboard</span>
+            </div>
           )}
+        </div>
 
-          {/* Billing Officer & Admin — single entry point for all billing uploads:
-              Monthly Directory → Billing Month → Division → Upload Billing */}
-          {(user.role === 'ADMIN' || user.role === 'OFFICER') && (
-            <>
+        <button 
+          className="sidebar-collapse-btn" 
+          onClick={toggleCollapse}
+          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </div>
+
+      {/* 3. SIDEBAR STRUCTURE & NAVIGATION ITEMS */}
+      <div className="sidebar-content">
+        {/* MAIN GROUP */}
+        <div className="sidebar-group">
+          <div className="sidebar-group-header">MAIN</div>
+          {isCollapsed && <div className="sidebar-group-divider" />}
+
+          <ul className="sidebar-menu">
+            <li>
+              <NavLink 
+                to="/" 
+                className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                title="Dashboard"
+              >
+                <LayoutDashboard size={19} className="sidebar-icon" />
+                <span>Dashboard</span>
+                {location.pathname === '/' && <span className="active-green-dot" />}
+              </NavLink>
+            </li>
+
+            {user.role !== 'USER' && (
+              <>
+                <li>
+                  <NavLink 
+                    to="/customers" 
+                    className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                    title="Customer Directory"
+                  >
+                    <Users size={19} className="sidebar-icon" />
+                    <span>Customer Directory</span>
+                    {location.pathname === '/customers' && <span className="active-green-dot" />}
+                  </NavLink>
+                </li>
+
+                <li>
+                  <NavLink 
+                    to="/monthly-directory" 
+                    className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                    title="Monthly Billing"
+                  >
+                    <FileSpreadsheet size={19} className="sidebar-icon" />
+                    <span>Monthly Billing</span>
+                    {location.pathname === '/monthly-directory' && <span className="active-green-dot" />}
+                  </NavLink>
+                </li>
+              </>
+            )}
+          </ul>
+        </div>
+
+        {/* OPERATIONS GROUP */}
+        {user.role !== 'USER' && (
+          <div className="sidebar-group">
+            <div className="sidebar-group-header">OPERATIONS</div>
+            {isCollapsed && <div className="sidebar-group-divider" />}
+
+            <ul className="sidebar-menu">
               <li>
                 <NavLink 
-                  to="/monthly-directory" 
+                  to="/upload" 
                   className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                  title="File Upload"
                 >
-                  <Archive size={20} />
-                  <span>Monthly Directory</span>
+                  <UploadCloud size={19} className="sidebar-icon" />
+                  <span>File Upload</span>
+                  {location.pathname === '/upload' && <span className="active-green-dot" />}
                 </NavLink>
               </li>
+
+              {user.role === 'ADMIN' && (
+                <li>
+                  <NavLink 
+                    to="/admin" 
+                    className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                    title="Import Approvals"
+                  >
+                    <ShieldCheck size={19} className="sidebar-icon" />
+                    <span>Import Approvals</span>
+                    {location.pathname === '/admin' && <span className="active-green-dot" />}
+                  </NavLink>
+                </li>
+              )}
 
               <li>
                 <NavLink 
                   to="/payments" 
                   className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                  title="Payment Control Center"
                 >
-                  <CreditCard size={20} />
-                  <span>Payment Control</span>
+                  <CreditCard size={19} className="sidebar-icon" />
+                  <span>Payment Control Center</span>
+                  {location.pathname === '/payments' && <span className="active-green-dot" />}
                 </NavLink>
               </li>
-            </>
-          )}
+            </ul>
+          </div>
+        )}
 
-          {/* Admin only */}
-          {user.role === 'ADMIN' && (
-            <li>
-              <NavLink 
-                to="/admin" 
-                className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-              >
-                <ShieldAlert size={20} />
-                <span>Admin Panel</span>
-              </NavLink>
-            </li>
-          )}
-        </ul>
-      </nav>
+        {/* ANALYTICS GROUP */}
+        {user.role !== 'USER' && (
+          <div className="sidebar-group">
+            <div className="sidebar-group-header">ANALYTICS</div>
+            {isCollapsed && <div className="sidebar-group-divider" />}
 
+            <ul className="sidebar-menu">
+              <li>
+                <NavLink 
+                  to="/reports" 
+                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
+                  title="Reports"
+                >
+                  <BarChart3 size={19} className="sidebar-icon" />
+                  <span>Reports</span>
+                  {location.pathname === '/reports' && <span className="active-green-dot" />}
+                </NavLink>
+              </li>
+            </ul>
+          </div>
+        )}
+
+        {/* SYSTEM GROUP */}
+        {user.role === 'ADMIN' && (
+          <div className="sidebar-group">
+            <div className="sidebar-group-header">SYSTEM</div>
+            {isCollapsed && <div className="sidebar-group-divider" />}
+
+            <ul className="sidebar-menu">
+              <li>
+                <NavLink 
+                  to="/admin" 
+                  className={({ isActive }) => `sidebar-item-link ${location.pathname === '/admin' ? 'active' : ''}`}
+                  title="Settings"
+                >
+                  <Settings size={19} className="sidebar-icon" />
+                  <span>Settings</span>
+                  {location.pathname === '/admin' && <span className="active-green-dot" />}
+                </NavLink>
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* 10. USER PROFILE AREA */}
       <div className="sidebar-footer">
-        <div className="user-profile-widget">
+        <div className="user-profile-widget" title={`${user.username} (${getRoleLabel(user.role)})`}>
           <div className="user-avatar">
             {user.username.substring(0, 2).toUpperCase()}
           </div>
-          <div className="user-info">
-            <span className="user-name">{user.username}</span>
-            <span className="user-role-badge">{getRoleLabel(user.role)}</span>
-          </div>
+          {!isCollapsed && (
+            <div className="user-info">
+              <span className="user-name">{user.username}</span>
+              <span className="user-role-badge">{getRoleLabel(user.role)}</span>
+            </div>
+          )}
         </div>
-        <button className="btn-logout" onClick={logout}>
+
+        <button className="btn-logout" onClick={logout} title="Logout">
           <LogOut size={16} />
-          <span>Logout</span>
+          {!isCollapsed && <span>Logout</span>}
         </button>
       </div>
     </aside>

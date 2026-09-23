@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import {
   CreditCard,
   CheckCircle2,
@@ -46,6 +47,7 @@ const formatLKR = (val) => {
 const PaymentControlCenter = () => {
   const navigate = useNavigate();
   const { user, authFetch } = useAuth();
+  const { showToast, showConfirm, showPrompt } = useToast();
   const isAdmin = user?.role === 'ADMIN';
 
   // ── Filters & Navigation State ─────────────────────────────────────
@@ -91,7 +93,6 @@ const PaymentControlCenter = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [selectedRecords, setSelectedRecords] = useState(new Set());
   const [expandedCustomers, setExpandedCustomers] = useState(new Set());
-  const [toastMessage, setToastMessage] = useState(null);
 
   const toggleExpandCustomer = (accNo) => {
     setExpandedCustomers(prev => {
@@ -120,11 +121,6 @@ const PaymentControlCenter = () => {
   const [batchDetailsModalOpen, setBatchDetailsModalOpen] = useState(false);
   const [summaryModalCard, setSummaryModalCard] = useState(null);
   const [hoveredCard, setHoveredCard] = useState(null);
-
-  const showToast = (msg, type = 'success') => {
-    setToastMessage({ msg, type });
-    setTimeout(() => setToastMessage(null), 4500);
-  };
 
   // ── 1. Load Canonical Summary (Invariant under table filters) ───────
   const fetchSummary = useCallback(async () => {
@@ -333,7 +329,14 @@ const PaymentControlCenter = () => {
 
   // ── Release All Payments for Customer (Preserving Individual Records) ───
   const handleReleaseCustomerPayments = async (accountNo) => {
-    if (!window.confirm(`Release all payment holds and approve accumulated payment obligations for customer ${accountNo}?`)) return;
+    const confirmed = await showConfirm({
+      title: 'Approve Accumulated Obligations',
+      message: `Release all payment holds and approve accumulated payment obligations for customer ${accountNo}?`,
+      confirmText: 'Release All Holds',
+      cancelText: 'Cancel',
+      type: 'confirm'
+    });
+    if (!confirmed) return;
     setActionLoading(true);
     try {
       const res = await authFetch(`/api/payments/customers/${accountNo}/release-all`, {
@@ -444,8 +447,19 @@ const PaymentControlCenter = () => {
 
   // ── Toggle Manual Payment Hold ─────────────────────────────────────
   const handleToggleHold = async (accountNo, currentHold, rowBillingMonth, recordKey = null) => {
-    const reason = currentHold ? null : prompt(`Enter reason for placing ${accountNo} on payment hold:`);
-    if (!currentHold && reason === null) return;
+    let reason = null;
+    if (!currentHold) {
+      reason = await showPrompt({
+        title: 'Place Customer on Payment Hold',
+        message: `Specify reason for placing account #${accountNo} on payment hold:`,
+        placeholder: 'e.g. Disputed energy units, master data mismatch...',
+        confirmText: 'Activate Hold',
+        cancelText: 'Cancel',
+        type: 'warning',
+        required: false
+      });
+      if (reason === null) return;
+    }
 
     setActionLoading(true);
     try {
@@ -531,7 +545,15 @@ const PaymentControlCenter = () => {
   const handleBatchTransition = async (batchId, action) => {
     let reason = null;
     if (action === 'REJECT') {
-      reason = prompt('Enter rejection reason for this payment batch:');
+      reason = await showPrompt({
+        title: 'Reject Payment Batch',
+        message: 'Provide supervisory rejection reason for this payment batch:',
+        placeholder: 'e.g. Discrepancy in batch total or pending verification...',
+        confirmText: 'Reject Batch',
+        cancelText: 'Cancel',
+        type: 'danger',
+        required: true
+      });
       if (reason === null) return;
     }
 
@@ -608,34 +630,6 @@ const PaymentControlCenter = () => {
 
   return (
     <div className="page-wrapper" style={{ minHeight: '100vh', background: 'var(--bg-primary)', padding: '1.75rem 2rem' }}>
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          top: '1.5rem',
-          right: '1.5rem',
-          zIndex: 99999,
-          padding: '0.85rem 1.4rem',
-          borderRadius: '8px',
-          background: toastMessage.type === 'error'
-            ? 'rgba(239, 68, 68, 0.96)'
-            : toastMessage.type === 'warning'
-              ? 'rgba(245, 158, 11, 0.96)'
-              : 'rgba(16, 185, 129, 0.96)',
-          color: '#ffffff',
-          fontWeight: 600,
-          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.65rem',
-          backdropFilter: 'blur(8px)',
-          animation: 'fadeIn 0.2s ease-out'
-        }}>
-          {toastMessage.type === 'error' ? <XCircle size={18} /> : toastMessage.type === 'warning' ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}
-          <span style={{ fontSize: '0.9rem' }}>{toastMessage.msg}</span>
-        </div>
-      )}
-
       {/* ── HEADER ───────────────────────────────────────────────────── */}
       <div style={{ marginBottom: '1.75rem', display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
         <div>

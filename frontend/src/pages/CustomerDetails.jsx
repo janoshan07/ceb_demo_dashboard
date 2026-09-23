@@ -30,6 +30,7 @@ import {
   Trash2,
   Download,
   ChevronDown,
+  ChevronUp,
   Plus,
   Eye,
   FileText,
@@ -42,7 +43,11 @@ import {
   Tag,
   Code,
   Landmark,
-  Building
+  Building,
+  LayoutGrid,
+  List,
+  RefreshCw,
+  ArrowRight
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 
@@ -269,6 +274,13 @@ const CustomerDetails = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('overview'); // overview, billing, analytics, payment
+
+  // Redesigned Billing History UI State
+  const [billingSearchTerm, setBillingSearchTerm] = useState('');
+  const [billingFilterStatus, setBillingFilterStatus] = useState('ALL'); // ALL, OUTSTANDING, SETTLED, MULTI_PAYMENT
+  const [billingViewMode, setBillingViewMode] = useState('cards'); // cards, table
+  const [billingSortOrder, setBillingSortOrder] = useState('DESC');
+  const [expandedBillIds, setExpandedBillIds] = useState({});
 
   // Payment Control State
   const [paymentDossier, setPaymentDossier] = useState(null);
@@ -3221,170 +3233,794 @@ const CustomerDetails = () => {
             );
           })()}
 
-            {/* TAB CONTENT: BILLING HISTORY */}
-            {activeTab === 'billing' && (
-              <div className="animate-fade-in">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                  <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0, fontSize: '1rem' }}>
-                    <History size={16} className="text-accent" style={{ color: 'var(--accent-teal)' }} />
-                    Monthly Billing Ledger
-                  </h3>
-                  {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      style={{ padding: '0.35rem 0.7rem', fontSize: '0.75rem', background: 'var(--success)', borderColor: 'var(--success)' }}
-                      onClick={openAddBillModal}
-                    >
-                      Add Bill Record
-                    </button>
-                  )}
-                </div>
-                
-                <div style={{ maxHeight: '420px', overflowY: 'auto', overflowX: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
+            {/* TAB CONTENT: BILLING HISTORY (REDESIGNED MODERN UI) */}
+            {activeTab === 'billing' && (() => {
+              // Helper: Format raw date into Month Year (e.g. "March 2026")
+              const getBillMonth = (bill) => {
+                const raw = bill.currReadingDate || bill.fromDate || bill.toDate || bill.prevReadingDate;
+                if (raw) {
+                  const d = new Date(raw);
+                  if (!isNaN(d.getTime())) {
+                    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                  }
+                }
+                if (bill.billCycle) return `Cycle ${bill.billCycle}`;
+                return 'Billing Cycle';
+              };
+
+              // Helper: Determine payment status and styling
+              const getBillPaymentStatus = (bill) => {
+                const settled = Number(bill.paymentSettled != null ? bill.paymentSettled : bill.payment || 0);
+                const outstanding = Number(bill.outstandingBalance || 0);
+                if (settled > 0 && outstanding <= 0) {
+                  return { key: 'SETTLED', label: 'Settled', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)', border: 'rgba(16, 185, 129, 0.3)' };
+                }
+                if (settled > 0 && outstanding > 0) {
+                  return { key: 'PARTIAL', label: 'Partially Settled', color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.12)', border: 'rgba(245, 158, 11, 0.3)' };
+                }
+                if (outstanding > 0) {
+                  return { key: 'OUTSTANDING', label: 'Outstanding Balance', color: '#f43f5e', bg: 'rgba(244, 63, 94, 0.12)', border: 'rgba(244, 63, 94, 0.3)' };
+                }
+                return { key: 'LOGGED', label: 'Logged', color: '#818cf8', bg: 'rgba(129, 140, 248, 0.12)', border: 'rgba(129, 140, 248, 0.3)' };
+              };
+
+              // Map each month to record count to detect multiple payments in that period
+              const monthCounts = {};
+              (billingHistory || []).forEach(b => {
+                const m = getBillMonth(b);
+                monthCounts[m] = (monthCounts[m] || 0) + 1;
+              });
+
+              // Overall KPI Metrics for Billing History
+              const totalBillsCount = (billingHistory || []).length;
+              const totalSettledAmt = (billingHistory || []).reduce((sum, b) => sum + Number(b.paymentSettled != null ? b.paymentSettled : b.payment || 0), 0);
+              const totalGrossSales = (billingHistory || []).reduce((sum, b) => sum + Number(b.energyPurchase != null ? b.energyPurchase : b.totalAmount || 0), 0);
+              const totalExportUnits = (billingHistory || []).reduce((sum, b) => sum + Number(b.kwhExport != null ? b.kwhExport : b.exportUnits || 0), 0);
+              
+              // Latest outstanding balance from the most recent record
+              const latestBill = (billingHistory || [])[0];
+              const latestOutstandingAmt = latestBill ? Number(latestBill.outstandingBalance || 0) : 0;
+              const multiPaymentRecordsCount = Object.entries(monthCounts).filter(([_, cnt]) => cnt > 1).reduce((acc, [_, cnt]) => acc + cnt, 0);
+
+              // Filter & Search
+              let filtered = [...(billingHistory || [])];
+              if (billingSearchTerm.trim()) {
+                const q = billingSearchTerm.trim().toLowerCase();
+                filtered = filtered.filter(b => {
+                  const ref = String(b.refNo || '').toLowerCase();
+                  const m = getBillMonth(b).toLowerCase();
+                  const pDate = String(b.prevReadingDate || '').toLowerCase();
+                  const cDate = String(b.currReadingDate || '').toLowerCase();
+                  return ref.includes(q) || m.includes(q) || pDate.includes(q) || cDate.includes(q);
+                });
+              }
+
+              if (billingFilterStatus === 'OUTSTANDING') {
+                filtered = filtered.filter(b => Number(b.outstandingBalance || 0) > 0);
+              } else if (billingFilterStatus === 'SETTLED') {
+                filtered = filtered.filter(b => Number(b.paymentSettled != null ? b.paymentSettled : b.payment || 0) > 0);
+              } else if (billingFilterStatus === 'MULTI_PAYMENT') {
+                filtered = filtered.filter(b => (monthCounts[getBillMonth(b)] || 0) > 1);
+              }
+
+              // Sort order
+              filtered.sort((a, b) => {
+                const dateA = new Date(a.currReadingDate || a.fromDate || a.prevReadingDate || 0).getTime();
+                const dateB = new Date(b.currReadingDate || b.fromDate || b.prevReadingDate || 0).getTime();
+                return billingSortOrder === 'ASC' ? dateA - dateB : dateB - dateA;
+              });
+
+              // Group bills by month for modern timeline / cards display
+              const monthGroups = [];
+              const monthMap = new Map();
+              filtered.forEach(bill => {
+                const mKey = getBillMonth(bill);
+                if (!monthMap.has(mKey)) {
+                  const grp = {
+                    monthKey: mKey,
+                    bills: [],
+                    totalSettled: 0,
+                    totalSales: 0,
+                    isMultiMonth: (monthCounts[mKey] || 0) > 1
+                  };
+                  monthMap.set(mKey, grp);
+                  monthGroups.push(grp);
+                }
+                const grp = monthMap.get(mKey);
+                grp.bills.push(bill);
+                grp.totalSettled += Number(bill.paymentSettled != null ? bill.paymentSettled : bill.payment || 0);
+                grp.totalSales += Number(bill.energyPurchase != null ? bill.energyPurchase : bill.totalAmount || 0);
+              });
+
+              const toggleExpandDetails = (bId) => {
+                setExpandedBillIds(prev => ({ ...prev, [bId]: !prev[bId] }));
+              };
+
+              return (
+                <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
+                  
+                  {/* Top Header & Action Controls */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <History size={18} color="#818cf8" />
+                      </div>
+                      <div>
+                        <h3 className="panel-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                          Billing & Payment Ledger
+                          <span style={{ fontSize: '0.72rem', background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)', padding: '0.15rem 0.55rem', borderRadius: 20, fontWeight: 700 }}>
+                            {totalBillsCount} Records
+                          </span>
+                        </h3>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>
+                          Customer payment obligations, solar net settlement, and historical ledger audit
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      {/* View Mode Switcher (Cards vs Table) */}
+                      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', padding: '0.2rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <button
+                          type="button"
+                          onClick={() => setBillingViewMode('cards')}
+                          style={{
+                            background: billingViewMode === 'cards' ? 'rgba(99,102,241,0.25)' : 'transparent',
+                            color: billingViewMode === 'cards' ? '#818cf8' : 'var(--text-secondary)',
+                            border: billingViewMode === 'cards' ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                            borderRadius: 6, padding: '0.28rem 0.6rem', fontSize: '0.74rem', fontWeight: 600,
+                            display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', transition: 'all 0.15s ease'
+                          }}
+                          title="Card & Timeline View"
+                        >
+                          <LayoutGrid size={13} /> Cards
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBillingViewMode('table')}
+                          style={{
+                            background: billingViewMode === 'table' ? 'rgba(99,102,241,0.25)' : 'transparent',
+                            color: billingViewMode === 'table' ? '#818cf8' : 'var(--text-secondary)',
+                            border: billingViewMode === 'table' ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                            borderRadius: 6, padding: '0.28rem 0.6rem', fontSize: '0.74rem', fontWeight: 600,
+                            display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', transition: 'all 0.15s ease'
+                          }}
+                          title="Compact Table View"
+                        >
+                          <List size={13} /> Table
+                        </button>
+                      </div>
+
+                      {/* Add Bill Record Button */}
+                      {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{
+                            padding: '0.42rem 0.85rem',
+                            fontSize: '0.78rem',
+                            fontWeight: 600,
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            border: 'none',
+                            borderRadius: 8,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '0.35rem',
+                            cursor: 'pointer'
+                          }}
+                          onClick={openAddBillModal}
+                        >
+                          <Plus size={14} /> Add Bill Record
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* KPI Quick Cards (Summary strip above bills) */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', width: '100%' }}>
+                    {/* Total Settled */}
+                    <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 10, padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Settled</span>
+                        <CheckCircle size={15} color="#10b981" />
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                        {formatLKR(totalSettledAmt)}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        Cumulative payments released
+                      </div>
+                    </div>
+
+                    {/* Current Outstanding */}
+                    <div style={{ background: latestOutstandingAmt > 0 ? 'rgba(245, 158, 11, 0.06)' : 'rgba(16, 185, 129, 0.04)', border: latestOutstandingAmt > 0 ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid rgba(16, 185, 129, 0.15)', borderRadius: 10, padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Current Outstanding</span>
+                        <AlertCircle size={15} color={latestOutstandingAmt > 0 ? '#f59e0b' : '#10b981'} />
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: latestOutstandingAmt > 0 ? '#f59e0b' : '#10b981', letterSpacing: '-0.02em' }}>
+                        {latestOutstandingAmt > 0 ? formatLKR(latestOutstandingAmt) : 'LKR 0.00'}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {latestOutstandingAmt > 0 ? 'Pending bill set-off' : 'Account balance cleared'}
+                      </div>
+                    </div>
+
+                    {/* Total kWh Sales */}
+                    <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 10, padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Solar Generation Sold</span>
+                        <Zap size={15} color="#38bdf8" />
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', letterSpacing: '-0.02em' }}>
+                        {formatLKR(totalGrossSales)}
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        Exported: {totalExportUnits.toLocaleString()} kWh
+                      </div>
+                    </div>
+
+                    {/* Multi-Payment Obligations */}
+                    <div style={{ background: 'rgba(129, 140, 248, 0.05)', border: '1px solid rgba(129, 140, 248, 0.2)', borderRadius: 10, padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                        <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Multiple Payments</span>
+                        <Layers size={15} color="#818cf8" />
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#818cf8', letterSpacing: '-0.02em' }}>
+                        {multiPaymentRecordsCount} <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Obligations</span>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {multiPaymentRecordsCount > 0 ? 'Multiple payments detected' : 'Standard monthly billing'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Search, Filter Tabs & Sort Controls */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.6rem 0.85rem', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                    {/* Search input */}
+                    <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: '320px' }}>
+                      <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        placeholder="Search Ref No, Month, or Date..."
+                        value={billingSearchTerm}
+                        onChange={(e) => setBillingSearchTerm(e.target.value)}
+                        style={{
+                          width: '100%', boxSizing: 'border-box',
+                          background: 'rgba(0,0,0,0.3)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: 7, padding: '0.38rem 0.7rem 0.38rem 2rem',
+                          color: 'white', fontSize: '0.78rem'
+                        }}
+                      />
+                      {billingSearchTerm && (
+                        <button
+                          type="button"
+                          onClick={() => setBillingSearchTerm('')}
+                          style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0 }}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Tabs */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                      {[
+                        { key: 'ALL', label: 'All Bills', count: totalBillsCount },
+                        { key: 'SETTLED', label: 'Settled', count: (billingHistory || []).filter(b => Number(b.paymentSettled || 0) > 0).length },
+                        { key: 'OUTSTANDING', label: 'Has Outstanding', count: (billingHistory || []).filter(b => Number(b.outstandingBalance || 0) > 0).length },
+                        { key: 'MULTI_PAYMENT', label: 'Multiple Payments', count: multiPaymentRecordsCount, highlight: true }
+                      ].map(tab => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setBillingFilterStatus(tab.key)}
+                          style={{
+                            background: billingFilterStatus === tab.key ? (tab.highlight ? 'rgba(129,140,248,0.2)' : 'rgba(255,255,255,0.1)') : 'transparent',
+                            color: billingFilterStatus === tab.key ? (tab.highlight ? '#818cf8' : 'white') : 'var(--text-secondary)',
+                            border: billingFilterStatus === tab.key ? (tab.highlight ? '1px solid rgba(129,140,248,0.4)' : '1px solid rgba(255,255,255,0.18)') : '1px solid transparent',
+                            borderRadius: 6, padding: '0.3rem 0.65rem', fontSize: '0.74rem', fontWeight: 600,
+                            display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <span>{tab.label}</span>
+                          <span style={{
+                            background: billingFilterStatus === tab.key ? (tab.highlight ? '#818cf8' : 'rgba(255,255,255,0.2)') : 'rgba(255,255,255,0.06)',
+                            color: billingFilterStatus === tab.key ? '#000' : 'var(--text-muted)',
+                            fontSize: '0.66rem', fontWeight: 700, padding: '0.05rem 0.35rem', borderRadius: 10
+                          }}>
+                            {tab.count}
+                          </span>
+                        </button>
+                      ))}
+
+                      {/* Sort Order Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => setBillingSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
+                        style={{
+                          background: 'rgba(255,255,255,0.04)',
+                          color: 'var(--text-secondary)',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: 6, padding: '0.3rem 0.6rem', fontSize: '0.74rem', fontWeight: 600,
+                          display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer'
+                        }}
+                        title={billingSortOrder === 'DESC' ? 'Sorted Newest First' : 'Sorted Oldest First'}
+                      >
+                        <ArrowUpDown size={12} /> {billingSortOrder === 'DESC' ? 'Newest' : 'Oldest'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Main Content Area: Loading / Empty / Cards / Table */}
                   {historyLoading ? (
-                    <table className="custom-table" style={{ opacity: 0.8 }}>
-                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                        <tr>
-                          <th>Prev Reading</th>
-                          <th>Curr Reading</th>
-                          <th>Ref No</th>
-                          <th>Yield Perf</th>
-                          <th>kWh Import</th>
-                          <th>kWh Export</th>
-                          <th>kWh Unit Sales</th>
-                          <th>kWh Sales Amt</th>
-                          <th>Set Off</th>
-                          <th>Retention</th>
-                          <th>Settled</th>
-                          <th>Outstanding</th>
-                          <th>Mode</th>
-                          <th style={{ textAlign: 'right' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...Array(5)].map((_, i) => (
-                          <tr key={i}>
-                            <td><div className="skeleton" style={{ height: '16px', width: '70px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '70px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '22px', width: '60px', borderRadius: '4px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '50px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '16px', width: '60px' }}></div></td>
-                            <td><div className="skeleton" style={{ height: '22px', width: '50px', borderRadius: '4px' }}></div></td>
-                            <td style={{ textAlign: 'right' }}><div className="skeleton" style={{ height: '28px', width: '50px', borderRadius: '4px', marginLeft: 'auto' }}></div></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : billingHistory.length === 0 ? (
-                    <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                      No bills logged for this customer.
+                    /* Shimmer Loading Skeleton */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                      {[...Array(3)].map((_, i) => (
+                        <div key={i} className="card skeleton" style={{ height: '140px', borderRadius: 12, border: 'none' }}></div>
+                      ))}
+                    </div>
+                  ) : filtered.length === 0 ? (
+                    /* Empty State */
+                    <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: 'rgba(255,255,255,0.015)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 12 }}>
+                      <History size={36} color="var(--text-muted)" style={{ opacity: 0.4, marginBottom: '0.75rem' }} />
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'white' }}>No Billing Records Found</div>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem', maxWidth: 360, margin: '0.3rem auto 1rem' }}>
+                        {billingSearchTerm || billingFilterStatus !== 'ALL'
+                          ? 'No bills match your current search or filter criteria. Try clearing filters.'
+                          : 'No historical billing ledger records have been logged for this customer account.'}
+                      </div>
+                      {(billingSearchTerm || billingFilterStatus !== 'ALL') ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.75rem', padding: '0.35rem 0.8rem' }}
+                          onClick={() => { setBillingSearchTerm(''); setBillingFilterStatus('ALL'); }}
+                        >
+                          Clear Filters
+                        </button>
+                      ) : (user?.role === 'ADMIN' || user?.role === 'OFFICER') ? (
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          style={{ fontSize: '0.78rem', padding: '0.45rem 1rem' }}
+                          onClick={openAddBillModal}
+                        >
+                          <Plus size={14} /> Add First Bill Record
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : billingViewMode === 'cards' ? (
+                    /* ── CARDS & TIMELINE VIEW (Zero Horizontal Scroll) ── */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+                      {monthGroups.map(grp => (
+                        <div key={grp.monthKey} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+                          
+                          {/* Month Group Header */}
+                          <div style={{
+                            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem',
+                            padding: '0.5rem 0.85rem',
+                            background: grp.isMultiMonth ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)',
+                            border: grp.isMultiMonth ? '1px solid rgba(99,102,241,0.25)' : '1px solid rgba(255,255,255,0.06)',
+                            borderRadius: 10
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                              <Calendar size={15} color={grp.isMultiMonth ? '#818cf8' : '#38bdf8'} />
+                              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'white' }}>{grp.monthKey}</span>
+                              {grp.isMultiMonth && (
+                                <span style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
+                                  fontSize: '0.7rem', fontWeight: 700,
+                                  background: 'rgba(99,102,241,0.18)', color: '#818cf8',
+                                  border: '1px solid rgba(99,102,241,0.35)',
+                                  padding: '0.15rem 0.5rem', borderRadius: 12
+                                }}>
+                                  <Layers size={11} /> Multiple Payments ({grp.bills.length} Records)
+                                </span>
+                              )}
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.76rem' }}>
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                Period Settled: <strong style={{ color: '#10b981' }}>{formatLKR(grp.totalSettled)}</strong>
+                              </span>
+                              <span style={{ color: 'var(--text-muted)' }}>•</span>
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                Gross Sales: <strong style={{ color: '#38bdf8' }}>{formatLKR(grp.totalSales)}</strong>
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Cards for each obligation in this month */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingLeft: grp.isMultiMonth ? '0.75rem' : '0', borderLeft: grp.isMultiMonth ? '2px solid rgba(99,102,241,0.3)' : 'none' }}>
+                            {grp.bills.map((bill, idx) => {
+                              const perf = calculatePerformanceScore(
+                                bill.kwhExport != null ? bill.kwhExport : bill.exportUnits,
+                                selectedCustomer?.panelCapacity
+                              );
+                              const status = getBillPaymentStatus(bill);
+                              const settledAmt = bill.paymentSettled != null ? bill.paymentSettled : bill.payment;
+                              const outstandingAmt = Number(bill.outstandingBalance || 0);
+                              const grossSalesAmt = bill.energyPurchase != null ? bill.energyPurchase : bill.totalAmount;
+                              const isMultiObligation = grp.bills.length > 1;
+                              const isExpanded = !!expandedBillIds[bill.billingId];
+
+                              return (
+                                <div
+                                  key={bill.billingId}
+                                  style={{
+                                    background: 'rgba(255,255,255,0.025)',
+                                    border: isMultiObligation ? '1px solid rgba(129,140,248,0.22)' : '1px solid rgba(255,255,255,0.07)',
+                                    borderLeft: isMultiObligation ? '4px solid #818cf8' : '1px solid rgba(255,255,255,0.07)',
+                                    borderRadius: 12,
+                                    padding: '1rem 1.25rem',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: '0.9rem',
+                                    transition: 'all 0.2s ease',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+                                  }}
+                                >
+                                  {/* Card Top Strip */}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                                      {/* Obligation index pill if multi-payment */}
+                                      {isMultiObligation && (
+                                        <span style={{
+                                          background: idx === 0 ? 'rgba(99,102,241,0.2)' : 'rgba(168,85,247,0.2)',
+                                          color: idx === 0 ? '#818cf8' : '#c084fc',
+                                          border: idx === 0 ? '1px solid rgba(99,102,241,0.35)' : '1px solid rgba(168,85,247,0.35)',
+                                          padding: '0.15rem 0.55rem', borderRadius: 4, fontSize: '0.72rem', fontWeight: 700
+                                        }}>
+                                          Obligation #{idx + 1} of {grp.bills.length} {idx > 0 ? '• Additional Payment' : ''}
+                                        </span>
+                                      )}
+
+                                      {/* Ref No */}
+                                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: 'white', background: 'rgba(255,255,255,0.06)', padding: '0.15rem 0.5rem', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                                        Ref: {bill.refNo || '—'}
+                                      </span>
+
+                                      {/* Payment / Billing Mode badge */}
+                                      <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: 4, background: 'rgba(56,189,248,0.1)', color: '#38bdf8', fontWeight: 600 }}>
+                                        {bill.billingMode || 'Fixed'}
+                                      </span>
+
+                                      {/* Solar Yield Performance Badge */}
+                                      <span className={`badge ${perf.class}`} style={{ textTransform: 'capitalize', fontSize: '0.7rem', fontWeight: 600 }}>
+                                        {perf.text} Yield
+                                      </span>
+
+                                      {/* Status chip */}
+                                      <span style={{
+                                        fontSize: '0.7rem', fontWeight: 700,
+                                        padding: '0.15rem 0.55rem', borderRadius: 12,
+                                        background: status.bg, color: status.color, border: `1px solid ${status.border}`
+                                      }}>
+                                        {status.label}
+                                      </span>
+                                    </div>
+
+                                    {/* Action Buttons */}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary"
+                                        style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem', display: 'flex', alignItems: 'center', gap: '0.3rem', borderRadius: 6 }}
+                                        onClick={() => handleOpenBillEdit(bill)}
+                                      >
+                                        <Edit size={12} /> Edit
+                                      </button>
+                                      {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-primary"
+                                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem', background: 'rgba(239,68,68,0.15)', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', gap: '0.3rem', borderRadius: 6 }}
+                                          onClick={() => handleDeleteBill(bill.billingId)}
+                                        >
+                                          <Trash2 size={12} /> Delete
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Hero Financial Values Strip (The 3 Core Numbers) */}
+                                  <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                    gap: '0.75rem',
+                                    background: 'rgba(0,0,0,0.22)',
+                                    borderRadius: 10,
+                                    padding: '0.85rem 1rem',
+                                    border: '1px solid rgba(255,255,255,0.04)'
+                                  }}>
+                                    {/* 1. Payment Settled (Hero) */}
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                                        <CheckCircle size={13} color="#10b981" /> Payment Settled
+                                      </div>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                                        {settledAmt != null ? formatLKR(settledAmt) : '—'}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                        Disbursed to customer bank
+                                      </div>
+                                    </div>
+
+                                    {/* 2. Outstanding Balance (Hero) */}
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                                        <AlertCircle size={13} color={outstandingAmt > 0 ? '#f59e0b' : '#10b981'} /> Outstanding Balance
+                                      </div>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: outstandingAmt > 0 ? '#f59e0b' : '#10b981', letterSpacing: '-0.02em' }}>
+                                        {formatLKR(outstandingAmt)}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                        {outstandingAmt > 0 ? 'Remaining payable set-off' : 'Nil / Fully cleared'}
+                                      </div>
+                                    </div>
+
+                                    {/* 3. Energy Purchase / Gross Sales */}
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                                        <DollarSign size={13} color="#38bdf8" /> kWh Sales Revenue
+                                      </div>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', letterSpacing: '-0.02em' }}>
+                                        {grossSalesAmt != null ? formatLKR(grossSalesAmt) : '—'}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                        Gross energy purchase amount
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Secondary Metrics Strip: Reading Interval & Solar Generation (4 Columns, Fluid) */}
+                                  <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+                                    gap: '0.6rem',
+                                    fontSize: '0.78rem',
+                                    color: 'var(--text-secondary)'
+                                  }}>
+                                    {/* Reading Period */}
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <Clock size={11} /> Reading Dates
+                                      </div>
+                                      <div style={{ fontWeight: 600, color: 'white', marginTop: '0.2rem', fontSize: '0.74rem' }}>
+                                        {bill.prevReadingDate || '—'} <span style={{ color: 'var(--text-muted)' }}>→</span> {bill.currReadingDate || '—'}
+                                      </div>
+                                    </div>
+
+                                    {/* kWh Export */}
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <TrendingUp size={11} color="#10b981" /> kWh Export
+                                      </div>
+                                      <div style={{ fontWeight: 700, color: '#10b981', marginTop: '0.2rem' }}>
+                                        {(bill.kwhExport != null ? bill.kwhExport : bill.exportUnits || 0).toLocaleString()} kWh
+                                      </div>
+                                    </div>
+
+                                    {/* kWh Import */}
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <TrendingDown size={11} color="#f59e0b" /> kWh Import
+                                      </div>
+                                      <div style={{ fontWeight: 700, color: '#f59e0b', marginTop: '0.2rem' }}>
+                                        {(bill.kwhImport != null ? bill.kwhImport : bill.importUnits || 0).toLocaleString()} kWh
+                                      </div>
+                                    </div>
+
+                                    {/* kWh Sales / Net */}
+                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                                        <Zap size={11} color="#38bdf8" /> Net Unit Sales
+                                      </div>
+                                      <div style={{ fontWeight: 700, color: (bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0) >= 0 ? '#10b981' : '#ef4444', marginTop: '0.2rem' }}>
+                                        {(bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0) > 0 ? '+' : ''}{(bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0).toLocaleString()} kWh
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Deductions & Set-Off Strip (if applicable) */}
+                                  {(bill.billSetOff != null || bill.retentionMoney != null) && (
+                                    <div style={{ display: 'flex', gap: '0.75rem', fontSize: '0.74rem', padding: '0.4rem 0.75rem', background: 'rgba(255,255,255,0.015)', borderRadius: 6, border: '1px solid rgba(255,255,255,0.04)', flexWrap: 'wrap' }}>
+                                      {bill.billSetOff != null && (
+                                        <span>
+                                          <strong style={{ color: 'var(--text-muted)' }}>Bill Set-Off:</strong>{' '}
+                                          <span style={{ color: '#f59e0b', fontWeight: 600 }}>{formatLKR(bill.billSetOff)}</span>
+                                        </span>
+                                      )}
+                                      {bill.retentionMoney != null && (
+                                        <span>
+                                          <strong style={{ color: 'var(--text-muted)' }}>Retention Money:</strong>{' '}
+                                          <span style={{ color: '#c084fc', fontWeight: 600 }}>{formatLKR(bill.retentionMoney)}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Expandable Technical Ledger Details Drawer */}
+                                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleExpandDetails(bill.billingId)}
+                                      style={{
+                                        background: 'transparent', border: 'none', color: 'var(--text-muted)',
+                                        fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer', padding: 0
+                                      }}
+                                    >
+                                      {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                      <span>{isExpanded ? 'Hide Technical Ledger Details' : 'View Technical Ledger Details'}</span>
+                                    </button>
+
+                                    {isExpanded && (
+                                      <div style={{
+                                        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem',
+                                        padding: '0.65rem 0.85rem', background: 'rgba(0,0,0,0.3)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.72rem'
+                                      }}>
+                                        <div>
+                                          <span style={{ color: 'var(--text-muted)', display: 'block' }}>Unit Rate / Tariff:</span>
+                                          <span style={{ color: 'white', fontWeight: 600, fontFamily: 'monospace' }}>{bill.unitCost != null ? formatLKR(bill.unitCost) : '—'}</span>
+                                        </div>
+                                        <div>
+                                          <span style={{ color: 'var(--text-muted)', display: 'block' }}>Billing Cycle:</span>
+                                          <span style={{ color: 'white', fontWeight: 600 }}>{bill.billCycle || '—'}</span>
+                                        </div>
+                                        <div>
+                                          <span style={{ color: 'var(--text-muted)', display: 'block' }}>Upload History ID:</span>
+                                          <span style={{ color: 'white', fontWeight: 600, fontFamily: 'monospace' }}>{bill.uploadHistoryId || 'Manual / Initial'}</span>
+                                        </div>
+                                        <div>
+                                          <span style={{ color: 'var(--text-muted)', display: 'block' }}>Logged Timestamp:</span>
+                                          <span style={{ color: 'white', fontWeight: 600 }}>{bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : '—'}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
-                    <table className="custom-table" style={{ fontSize: '0.85rem' }}>
-                      <thead style={{ position: 'sticky', top: 0, backgroundColor: 'var(--bg-secondary)', zIndex: 1 }}>
-                        <tr>
-                          <th>Prev Reading</th>
-                          <th>Curr Reading</th>
-                          <th>Ref No</th>
-                          <th>Yield Perf</th>
-                          <th>kWh Import</th>
-                          <th>kWh Export</th>
-                          <th>kWh Unit Sales</th>
-                          <th>kWh Sales Amt</th>
-                          <th>Set Off</th>
-                          <th>Retention</th>
-                          <th>Settled</th>
-                          <th>Outstanding</th>
-                          <th>Mode</th>
-                          <th style={{ textAlign: 'right' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {billingHistory.map((bill) => {
-                          const perf = calculatePerformanceScore(
-                            bill.kwhExport != null ? bill.kwhExport : bill.exportUnits,
-                            selectedCustomer.panelCapacity
-                          );
-                          return (
-                            <tr key={bill.billingId}>
-                              <td>{bill.prevReadingDate || '—'}</td>
-                              <td>{bill.currReadingDate || '—'}</td>
-                              <td style={{ fontWeight: 500 }}>{bill.refNo}</td>
-                              <td>
-                                <span className={`badge ${perf.class}`} style={{ textTransform: 'capitalize', fontSize: '0.72rem', fontWeight: 600 }}>
-                                  {perf.text}
-                                </span>
-                              </td>
-                              <td>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--warning)' }}>
-                                  <TrendingDown size={12} />
-                                  {(bill.kwhImport != null ? bill.kwhImport : bill.importUnits).toLocaleString()}
-                                </span>
-                              </td>
-                              <td>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', color: 'var(--success)' }}>
-                                  <TrendingUp size={12} />
-                                  {(bill.kwhExport != null ? bill.kwhExport : bill.exportUnits).toLocaleString()}
-                                </span>
-                              </td>
-                              <td style={{ fontWeight: 600, color: (bill.kwhSales != null ? bill.kwhSales : bill.netUnit) >= 0 ? 'var(--success)' : 'var(--danger)' }}>
-                                {(bill.kwhSales != null ? bill.kwhSales : bill.netUnit) > 0 
-                                  ? `+${(bill.kwhSales != null ? bill.kwhSales : bill.netUnit).toLocaleString()}` 
-                                  : (bill.kwhSales != null ? bill.kwhSales : bill.netUnit).toLocaleString()}
-                              </td>
-                              <td style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                                {bill.energyPurchase != null ? formatLKR(bill.energyPurchase) : '—'}
-                              </td>
-                              <td>
-                                {bill.billSetOff != null ? formatLKR(bill.billSetOff) : '—'}
-                              </td>
-                              <td>
-                                {bill.retentionMoney != null ? formatLKR(bill.retentionMoney) : '—'}
-                              </td>
-                              <td style={{ color: 'var(--success)', fontWeight: 700 }}>
-                                {bill.paymentSettled != null ? formatLKR(bill.paymentSettled) : '—'}
-                              </td>
-                              <td style={{ color: 'var(--warning)', fontWeight: 700 }}>
-                                {bill.outstandingBalance != null ? formatLKR(bill.outstandingBalance) : '—'}
-                              </td>
-                              <td><span className="badge success" style={{ fontSize: '0.65rem' }}>{bill.billingMode || 'Fixed'}</span></td>
-                              <td style={{ textAlign: 'right' }}>
-                                <button 
-                                  type="button"
-                                  className="btn btn-secondary"
-                                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', marginRight: '0.35rem' }}
-                                  onClick={() => handleOpenBillEdit(bill)}
-                                >
-                                  Edit
-                                </button>
-                                {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
-                                  <button 
-                                    type="button"
-                                    className="btn btn-primary"
-                                    style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', background: 'var(--danger)', borderColor: 'var(--danger)' }}
-                                    onClick={() => handleDeleteBill(bill.billingId)}
-                                  >
-                                    Delete
-                                  </button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                    /* ── COMPACT RESPONSIVE TABLE VIEW (Zero Horizontal Scroll) ── */
+                    <div style={{ borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', tableLayout: 'auto' }}>
+                        <thead>
+                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Period & Obligation</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Ref & Mode</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Solar Units (kWh)</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Payment Settled</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Outstanding</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filtered.map((bill, i) => {
+                            const perf = calculatePerformanceScore(
+                              bill.kwhExport != null ? bill.kwhExport : bill.exportUnits,
+                              selectedCustomer?.panelCapacity
+                            );
+                            const status = getBillPaymentStatus(bill);
+                            const m = getBillMonth(bill);
+                            const isMulti = (monthCounts[m] || 0) > 1;
+                            const settledAmt = bill.paymentSettled != null ? bill.paymentSettled : bill.payment;
+                            const outstandingAmt = Number(bill.outstandingBalance || 0);
+
+                            return (
+                              <tr
+                                key={bill.billingId}
+                                style={{
+                                  borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                  borderLeft: isMulti ? '3px solid #818cf8' : '3px solid transparent',
+                                  background: isMulti ? 'rgba(129,140,248,0.02)' : (i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)')
+                                }}
+                              >
+                                {/* Period & Obligation */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                    {m}
+                                    {isMulti && (
+                                      <span style={{ fontSize: '0.65rem', background: 'rgba(99,102,241,0.18)', color: '#818cf8', padding: '0.05rem 0.35rem', borderRadius: 4, fontWeight: 700 }}>
+                                        Multi-Pay
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                    {bill.prevReadingDate || '—'} → {bill.currReadingDate || '—'}
+                                  </div>
+                                </td>
+
+                                {/* Ref & Mode */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ fontFamily: 'monospace', fontWeight: 600, color: 'white' }}>{bill.refNo || '—'}</div>
+                                  <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', marginTop: '0.15rem' }}>
+                                    <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>{bill.billingMode || 'Fixed'}</span>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>•</span>
+                                    <span className={`badge ${perf.class}`} style={{ fontSize: '0.62rem', padding: '0.05rem 0.3rem' }}>
+                                      {perf.text}
+                                    </span>
+                                  </div>
+                                </td>
+
+                                {/* Solar Units */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                    <span style={{ color: '#10b981', fontWeight: 600 }} title="kWh Export">
+                                      +{(bill.kwhExport != null ? bill.kwhExport : bill.exportUnits || 0).toLocaleString()}
+                                    </span>
+                                    <span style={{ color: 'var(--text-muted)' }}>/</span>
+                                    <span style={{ color: '#f59e0b', fontWeight: 600 }} title="kWh Import">
+                                      -{(bill.kwhImport != null ? bill.kwhImport : bill.importUnits || 0).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                                    Net: {(bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0).toLocaleString()} kWh
+                                  </div>
+                                </td>
+
+                                {/* Payment Settled */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 800, color: '#10b981', fontSize: '0.85rem' }}>
+                                    {settledAmt != null ? formatLKR(settledAmt) : '—'}
+                                  </div>
+                                  <span style={{
+                                    fontSize: '0.64rem', fontWeight: 700, padding: '0.05rem 0.35rem', borderRadius: 8,
+                                    background: status.bg, color: status.color, display: 'inline-block', marginTop: '0.15rem'
+                                  }}>
+                                    {status.label}
+                                  </span>
+                                </td>
+
+                                {/* Outstanding */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 700, color: outstandingAmt > 0 ? '#f59e0b' : '#10b981' }}>
+                                    {formatLKR(outstandingAmt)}
+                                  </div>
+                                  <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)' }}>
+                                    {outstandingAmt > 0 ? 'Due' : 'Cleared'}
+                                  </div>
+                                </td>
+
+                                {/* Actions */}
+                                <td style={{ padding: '0.6rem 0.85rem', textAlign: 'right' }}>
+                                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                                    <button
+                                      type="button"
+                                      className="btn btn-secondary"
+                                      style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem' }}
+                                      onClick={() => handleOpenBillEdit(bill)}
+                                    >
+                                      Edit
+                                    </button>
+                                    {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
+                                      <button
+                                        type="button"
+                                        className="btn btn-primary"
+                                        style={{ padding: '0.2rem 0.45rem', fontSize: '0.7rem', background: 'var(--danger)', borderColor: 'var(--danger)' }}
+                                        onClick={() => handleDeleteBill(bill.billingId)}
+                                      >
+                                        Delete
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* TAB CONTENT: ANALYTICS */}
             {activeTab === 'analytics' && (() => {

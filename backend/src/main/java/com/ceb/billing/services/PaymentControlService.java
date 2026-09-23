@@ -1438,36 +1438,59 @@ public class PaymentControlService {
     @Transactional
     public Map<String, Object> togglePaymentHold(String accountNo, String billingPeriod, boolean hold,
                                                 String reason, String username) throws Exception {
+        if (accountNo == null || accountNo.trim().isEmpty()) {
+            throw new IllegalArgumentException("Account number is required.");
+        }
+        String cleanAcc = accountNo.trim();
         List<MonthlyDirectorySnapshot> snapshots = getSnapshots(billingPeriod, null);
+        if (snapshots.isEmpty() && billingPeriod != null && !"ALL".equalsIgnoreCase(billingPeriod)) {
+            snapshots = getSnapshots(null, null);
+        }
+
         for (MonthlyDirectorySnapshot snap : snapshots) {
             if (snap.getFinalDataJson() != null) {
                 List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
                 for (int i = 0; i < list.size(); i++) {
                     Map<String, Object> rec = list.get(i);
-                    if (accountNo.trim().equalsIgnoreCase(strVal(rec.get("accountNo")))) {
+                    if (cleanAcc.equalsIgnoreCase(strVal(rec.get("accountNo")))) {
                         rec.put("paymentHold", hold);
+                        rec.put("manualHold", hold);
+                        rec.put("isHold", hold);
                         rec.put("paymentHoldReason", hold ? (reason != null ? reason : "Manual Hold by " + username) : null);
-                        if (!hold && "Payment Hold Active".equalsIgnoreCase(strVal(rec.get("status")))) {
+                        if (!hold) {
                             rec.remove("paymentHoldReason");
+                            rec.remove("holdReason");
                         }
                         PaymentEligibilityResult elig = canPay(rec);
                         rec.put("paymentStatus", elig.getPaymentStatus());
+                        rec.put("isEligible", elig.isEligible());
                         list.set(i, rec);
 
                         snap.setFinalDataJson(objectMapper.writeValueAsString(list));
                         monthlyDirectorySnapshotRepository.save(snap);
 
-                        auditLogService.log(hold ? "PAYMENT_HOLD_APPLIED" : "PAYMENT_HOLD_RELEASED",
-                                "User " + username + (hold ? " placed hold on " : " released hold for ")
-                                        + accountNo + ". Reason: " + reason);
+                        if (auditLogService != null) {
+                            try {
+                                auditLogService.log(hold ? "PAYMENT_HOLD_APPLIED" : "PAYMENT_HOLD_RELEASED",
+                                        "User " + username + (hold ? " placed hold on " : " released hold for ")
+                                                + cleanAcc + ". Reason: " + reason);
+                            } catch (Exception ex) {
+                                log.warning("Failed to log audit action: " + ex.getMessage());
+                            }
+                        }
 
-                        return Map.of("success", true, "accountNo", accountNo, "paymentStatus", elig.getPaymentStatus(),
-                                "isEligible", elig.isEligible(), "holdReasons", elig.getHoldReasons());
+                        Map<String, Object> resp = new LinkedHashMap<>();
+                        resp.put("success", true);
+                        resp.put("accountNo", cleanAcc);
+                        resp.put("paymentStatus", elig.getPaymentStatus());
+                        resp.put("isEligible", elig.isEligible());
+                        resp.put("holdReasons", elig.getHoldReasons() != null ? elig.getHoldReasons() : Collections.emptyList());
+                        return resp;
                     }
                 }
             }
         }
-        throw new IllegalArgumentException("Customer record not found for account: " + accountNo);
+        throw new IllegalArgumentException("Customer record not found for account: " + cleanAcc);
     }
 
     /**
@@ -1503,9 +1526,12 @@ public class PaymentControlService {
                 for (int i = 0; i < list.size(); i++) {
                     Map<String, Object> rec = list.get(i);
                     if (cleanAcc.equalsIgnoreCase(strVal(rec.get("accountNo")))) {
-                        // Clear payment hold
+                        // Clear payment hold flags
                         rec.put("paymentHold", false);
+                        rec.put("manualHold", false);
+                        rec.put("isHold", false);
                         rec.remove("paymentHoldReason");
+                        rec.remove("holdReason");
 
                         // Synchronize customer profile fields if customer entity exists
                         if (cust != null) {
@@ -1548,7 +1574,13 @@ public class PaymentControlService {
                         }
 
                         // Revalidate record in-place
-                        multiFileImportService.revalidateDirectoryRecord(rec);
+                        if (multiFileImportService != null) {
+                            try {
+                                multiFileImportService.revalidateDirectoryRecord(rec);
+                            } catch (Exception ex) {
+                                log.warning("revalidateDirectoryRecord failed for " + cleanAcc + ": " + ex.getMessage());
+                            }
+                        }
 
                         // Re-evaluate payment eligibility
                         PaymentEligibilityResult elig = canPay(rec);
@@ -1557,7 +1589,8 @@ public class PaymentControlService {
 
                         if (elig.isEligible()) {
                             releasedToReadyCount++;
-                            double payable = elig.getFinancials().getOrDefault("totalPayable", 0.0);
+                            double payable = (elig.getFinancials() != null)
+                                    ? elig.getFinancials().getOrDefault("totalPayable", 0.0) : 0.0;
                             totalReleasedAmount += payable;
                             String bMonth = snap.getBillingMonth() != null ? snap.getBillingMonth() : strVal(rec.get("billingMonth"));
                             if (bMonth.isEmpty()) bMonth = "Record " + (i + 1);
@@ -1579,8 +1612,14 @@ public class PaymentControlService {
             }
         }
 
-        auditLogService.log("CUSTOMER_PAYMENT_RELEASE", "User " + username + " released accumulated payments for customer "
-                + cleanAcc + ". Released records: " + releasedToReadyCount + " of " + updatedRecordsCount + " (Total: LKR " + totalReleasedAmount + ")");
+        if (auditLogService != null) {
+            try {
+                auditLogService.log("CUSTOMER_PAYMENT_RELEASE", "User " + username + " released accumulated payments for customer "
+                        + cleanAcc + ". Released records: " + releasedToReadyCount + " of " + updatedRecordsCount + " (Total: LKR " + totalReleasedAmount + ")");
+            } catch (Exception ex) {
+                log.warning("Failed to log audit action: " + ex.getMessage());
+            }
+        }
 
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("success", true);

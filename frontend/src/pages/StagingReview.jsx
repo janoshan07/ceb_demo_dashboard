@@ -73,7 +73,7 @@ const deriveLCode = (solarType, tariffType) => {
 const STATUS_RANK = { INVALID: 4, DUPLICATE: 3, WARNING: 2, VALID: 1 };
 
 const StagingReview = ({ authFetch, onConfirmAction }) => {
-  const { showToast } = useToast();
+  const { showToast, showPrompt } = useToast();
   const [pendingBatches, setPendingBatches] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -164,7 +164,15 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   };
 
   const handleRejectProposal = async (proposalId) => {
-    const reason = window.prompt("Enter rejection reason for this proposed change:");
+    const reason = await showPrompt({
+      title: 'Reject Proposed Change',
+      message: 'Enter rejection reason for this proposed change:',
+      placeholder: 'e.g. Data verification failed, incorrect value...',
+      confirmText: 'Reject Proposal',
+      cancelText: 'Cancel',
+      type: 'danger',
+      required: true
+    });
     if (reason === null) return;
     
     try {

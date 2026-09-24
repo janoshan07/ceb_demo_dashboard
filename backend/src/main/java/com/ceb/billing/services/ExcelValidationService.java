@@ -54,6 +54,26 @@ public class ExcelValidationService {
         return solarType.trim();
     }
 
+    public static String normalizeTariffType(String tariffType) {
+        if (tariffType == null || tariffType.trim().isEmpty()) {
+            return "";
+        }
+        String tt = tariffType.trim().toUpperCase();
+        if (tt.contains("FIX")) {
+            return "Fix";
+        }
+        if (tt.contains("VAR")) {
+            return "Variable";
+        }
+        if (tt.equals("L5001") || tt.equals("L5002") || tt.equals("L5005")) {
+            return "Fix";
+        }
+        if (tt.equals("L5006")) {
+            return "Variable";
+        }
+        return tariffType.trim();
+    }
+
     public static String deriveLCode(String solarType, String tariffType) {
         if (solarType == null || tariffType == null) {
             return "";
@@ -61,8 +81,8 @@ public class ExcelValidationService {
         String st = normalizeSolarType(solarType);
         String tt = tariffType.trim().toUpperCase();
 
-        boolean isFixed = tt.contains("FIX") || tt.contains("FIXED");
-        boolean isVariable = tt.contains("VAR") || tt.contains("VARIABLE");
+        boolean isFixed = tt.contains("FIX") || tt.contains("FIXED") || tt.equals("L5001") || tt.equals("L5002") || tt.equals("L5005");
+        boolean isVariable = tt.contains("VAR") || tt.contains("VARIABLE") || tt.equals("L5006");
 
         if (isFixed) {
             if ("Net Accounting".equalsIgnoreCase(st)) {
@@ -447,7 +467,7 @@ public class ExcelValidationService {
                         : (dirMap.get("masterName") != null ? (String) dirMap.get("masterName") : null);
                 String customerName = customer.getCustomerName();
                 if ("MISMATCH".equals(dirMap.get("nameMatch")) && customerName != null && npayName != null) {
-                    if (com.ceb.billing.services.MultiFileImportService.namesMatch(customerName, npayName)) {
+                    if (MultiFileImportService.namesMatch(customerName, npayName)) {
                         dirMap.put("nameMatch", "MATCH");
                         changed = true;
                     }

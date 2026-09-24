@@ -46,14 +46,47 @@ public class PreviewService {
                 "kwhin", "units_import", "importkwh", "importunit", "kwhimport"));
         FIELD_ALIASES.put("exports", Arrays.asList("exports", "export", "exportunits", "export_units", "kwhout",
                 "units_export", "solar_export", "exportkwh", "exportunit", "kwhexport"));
-        FIELD_ALIASES.put("unitcost", Arrays.asList("unitcost", "unit_cost", "rate", "cost", "tariff", "price_per_unit",
-                "unitrate", "perunit", "unit_rate", "unitratelkr", "unitcostlkr", "unitraters", "unitcostrs", "unitratekwh", "tariffrate", "sellingrate", "priceperunit", "unitprice", "rateperunit", "costperunit", "unit"));
+        FIELD_ALIASES.put("unitcost", Arrays.asList(
+                "unitcost", "unit_cost", "unitrate", "unit_rate", "rate", "cost",
+                "unitratelkr", "unitcostlkr", "unitraters", "unitcostrs", "unitratekwh", "tariffrate",
+                "sellingrate", "priceperunit", "unitprice", "rateperunit", "costperunit", "unit",
+                "price_per_unit", "perunit", "rates", "lkr/unit", "lkr/kwh", "unitrate(lkr)", "unitcost(lkr)",
+                "rate(rs)", "raters", "sellingprice"
+        ));
         FIELD_ALIASES.put("totalamount", Arrays.asList("totalamount", "total_amount", "total", "amount", "bill_amount",
                 "billamount", "netamount", "kwhsalesamount", "salesamount"));
         FIELD_ALIASES.put("billingmode",
                 Arrays.asList("billingmode", "billing_mode", "expcode", "exportcode", "mode", "type_billing", "exp"));
-        FIELD_ALIASES.put("tarifftype", Arrays.asList("tarifftype", "tariff_type", "tariff", "fixedvariable",
-                "fixed_variable", "fixed/variable", "fixvariable", "fix_variable", "fix/variable"));
+        FIELD_ALIASES.put("tarifftype", Arrays.asList(
+                "tarifftype", "tariff_type", "tariff type",
+                "fixvariable", "fix_variable", "fixedvariable", "fixed_variable", "fixed/variable", "fix/variable",
+                "tarifffixvariable", "tariff_fix_variable", "tariff (fix/variable)", "tariff (fix / variable)", "tariff-fix/variable", "tariff fix/variable", "tariff/fix/variable",
+                "tarifffixedvariable", "tariff_fixed_variable", "tariff (fixed/variable)", "tariff (fixed / variable)", "tariff-fixed/variable", "tariff fixed/variable", "tariff/fixed/variable",
+                "tarifftypefixvariable", "tariff type (fix/variable)", "tariff type (fix / variable)",
+                "tarifftypefixedvariable", "tariff type (fixed/variable)", "tariff type (fixed / variable)",
+                "fixvariabletariff", "fixedvariabletariff", "fix / variable tariff", "fixed / variable tariff",
+                "tariff", "tariffs", "tarif",
+                "fixedorvariable", "fixorvariable", "fixed or variable", "fix or variable",
+                "fixvar", "fixedvar", "fix/var", "fixed/var", "fix / var", "fixed / var",
+                "tarifffixvar", "tariff (fix/var)", "tarifffixedvar", "tariff (fixed/var)",
+                "tariffcategory", "tariff_category", "tariff category",
+                "tariffscheme", "tariff_scheme", "tariff scheme",
+                "tariffmethod", "tariff_method", "tariff method",
+                "tariffmode", "tariff_mode", "tariff mode",
+                "tariffoption", "tariff_option", "tariff option",
+                "tariffplan", "tariff_plan", "tariff plan",
+                "tariffcode", "tariff_code", "tariff code",
+                "tariffmodel", "tariff model",
+                "tariffkind", "tariff kind",
+                "tariffclass", "tariff classification",
+                "tariffdescription", "tariff description",
+                "ratetype", "rate_type", "rate type",
+                "typeoftariff", "type of tariff",
+                "solartariff", "solartarifftype", "solar tariff", "solar tariff type",
+                "billingtariff", "billing tariff",
+                "fv", "f/v", "f / v",
+                "fixed", "variable", "fix", "var"
+        ));
         FIELD_ALIASES.put("costcode", Arrays.asList("costcode", "cost_code", "costcode_id"));
         FIELD_ALIASES.put("bankcode", Arrays.asList("bankcode", "bank_code", "bank", "bankname"));
         FIELD_ALIASES.put("branchcode", Arrays.asList("branchcode", "branch_code", "branch", "branchname"));
@@ -96,7 +129,9 @@ public class PreviewService {
             "cost_code",
             "tarifftype", "exp", "fixvariable", "unitrate", "ref", "kwh", "payment", "outstanding", "setoff", "settled",
             "sales", "tarif", "tariff", "billing", "index", "bi", "kwhsales", "billoutstd", "billoutstanding",
-            "paymentsettled", "fixed", "tax", "totalbill", "retn"));
+            "paymentsettled", "fixed", "tax", "totalbill", "retn",
+            "tarifffixvariable", "tarifffixedvariable", "tarifftypefixvariable", "fixvariabletariff", "fixedvariabletariff",
+            "tariffcategory", "tariffscheme", "ratetype", "fixedvariable", "fixvar", "fixedvar"));
 
     /**
      * Find the header row index by scoring the first 15 rows of the sheet.
@@ -555,11 +590,10 @@ public class PreviewService {
             }
         }
 
-        // Match each logical field to the actual column via alias list
+        // Pass 1: Match each logical field to the actual column via exact alias list
         for (Map.Entry<String, List<String>> entry : FIELD_ALIASES.entrySet()) {
             String fieldName = entry.getKey();
-            // Skip accountno, and only skip bankaccountno if it was already mapped by
-            // duplicate account number detection
+            // Skip accountno, and only skip bankaccountno if it was already mapped by duplicate account number detection
             if ("accountno".equals(fieldName)
                     || ("bankaccountno".equals(fieldName) && colIndices.containsKey("bankaccountno"))) {
                 continue;
@@ -573,18 +607,62 @@ public class PreviewService {
                     break;
                 }
             }
-            // Fallback: substring match
-            if (!colIndices.containsKey(fieldName)) {
-                for (int col = 0; col < colCleanHeaders.size(); col++) {
-                    String clean = colCleanHeaders.get(col);
-                    if (isSubstringMatch(fieldName, clean)) {
-                        colIndices.put(fieldName, col);
-                        break;
+        }
+
+        // Pass 2: Fallback flexible substring / token match for fields not yet mapped
+        for (Map.Entry<String, List<String>> entry : FIELD_ALIASES.entrySet()) {
+            String fieldName = entry.getKey();
+            if (colIndices.containsKey(fieldName)) {
+                continue;
+            }
+
+            for (int col = 0; col < colCleanHeaders.size(); col++) {
+                String clean = colCleanHeaders.get(col);
+                if (clean == null || clean.isEmpty()) continue;
+
+                // Also check raw cell in header row directly
+                String rawCellText = getMergedCellValue(sheet, headerRowIdx, col);
+                String rawClean = rawCellText != null ? rawCellText.toLowerCase().replaceAll("[^a-z0-9]", "") : "";
+
+                boolean matched = isSubstringMatch(fieldName, clean) || isSubstringMatch(fieldName, rawClean);
+                if (!matched) {
+                    for (String alias : entry.getValue()) {
+                        String cleanAlias = alias.toLowerCase().replaceAll("[^a-z0-9]", "");
+                        if (cleanAlias.length() >= 4 && (clean.contains(cleanAlias) || rawClean.contains(cleanAlias))) {
+                            matched = true;
+                            break;
+                        }
                     }
+                }
+
+                // Specific heuristics for tarifftype
+                if (!matched && "tarifftype".equals(fieldName)) {
+                    if ((clean.contains("tariff") && (clean.contains("fix") || clean.contains("var") || clean.contains("type")))
+                            || (clean.contains("fix") && clean.contains("var"))
+                            || clean.contains("fixedvariable") || clean.contains("fixvariable")
+                            || (rawClean.contains("tariff") && (rawClean.contains("fix") || rawClean.contains("var") || rawClean.contains("type")))
+                            || (rawClean.contains("fix") && rawClean.contains("var"))
+                            || rawClean.contains("fixedvariable") || rawClean.contains("fixvariable")) {
+                        matched = true;
+                    }
+                }
+
+                if (matched) {
+                    colIndices.put(fieldName, col);
+                    break;
                 }
             }
         }
-        // Fallback for todate if fromdate is mapped but todate is not
+
+        // Pass 3: Content-based detection for tarifftype if still not mapped
+        if (!colIndices.containsKey("tarifftype")) {
+            int detectedTariffCol = detectTariffTypeByContent(sheet, headerRowIdx, colIndices);
+            if (detectedTariffCol != -1) {
+                colIndices.put("tarifftype", detectedTariffCol);
+            }
+        }
+
+        // Pass 4: Fallback for todate if fromdate is mapped but todate is not
         if (colIndices.containsKey("fromdate") && !colIndices.containsKey("todate")) {
             int fromIdx = colIndices.get("fromdate");
             if (fromIdx + 1 < colCleanHeaders.size()) {
@@ -594,7 +672,67 @@ public class PreviewService {
                 }
             }
         }
+
+        // Pass 5: If tarifftype is still not mapped, but billingmode (Exp Code) is mapped, use it
+        if (!colIndices.containsKey("tarifftype") && colIndices.containsKey("billingmode")) {
+            colIndices.put("tarifftype", colIndices.get("billingmode"));
+        }
+
         return colIndices;
+    }
+
+    /**
+     * Inspects data rows to detect a Tariff Type / Fix-Variable column based on cell values
+     * when header matching fails or is ambiguous.
+     */
+    public int detectTariffTypeByContent(Sheet sheet, int headerRowIdx, Map<String, Integer> colIndices) {
+        Row headerRow = sheet.getRow(headerRowIdx);
+        if (headerRow == null) return -1;
+        int lastCellNum = headerRow.getLastCellNum();
+        boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && isSubHeaderRow(sheet, headerRowIdx + 1);
+        int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+        int maxRow = Math.min(sheet.getLastRowNum(), dataStart + 35);
+
+        // Exclude columns already assigned to primary non-tariff fields
+        Set<Integer> excludedCols = new HashSet<>();
+        for (Map.Entry<String, Integer> e : colIndices.entrySet()) {
+            if (!"tarifftype".equals(e.getKey()) && !"billingmode".equals(e.getKey())) {
+                excludedCols.add(e.getValue());
+            }
+        }
+
+        int bestCol = -1;
+        int maxMatches = 0;
+
+        for (int col = 0; col < lastCellNum; col++) {
+            if (excludedCols.contains(col)) continue;
+
+            int matchCount = 0;
+            int totalChecked = 0;
+
+            for (int r = dataStart; r <= maxRow; r++) {
+                Row row = sheet.getRow(r);
+                if (row == null) continue;
+                Cell cell = row.getCell(col);
+                if (cell == null) continue;
+                String val = getCellValueAsString(cell);
+                if (val == null || val.trim().isEmpty()) continue;
+                totalChecked++;
+                String cleanVal = val.trim().toUpperCase();
+                if (cleanVal.equals("FIX") || cleanVal.equals("FIXED") || cleanVal.equals("VARIABLE") || cleanVal.equals("VAR")
+                        || cleanVal.contains("FIX") || cleanVal.contains("VAR")
+                        || cleanVal.equals("L5001") || cleanVal.equals("L5002") || cleanVal.equals("L5005") || cleanVal.equals("L5006")) {
+                    matchCount++;
+                }
+            }
+
+            if (matchCount > 0 && matchCount >= Math.max(1, totalChecked / 3) && matchCount > maxMatches) {
+                maxMatches = matchCount;
+                bestCol = col;
+            }
+        }
+
+        return bestCol;
     }
 
     public boolean isSubHeaderRow(Sheet sheet, int r) {

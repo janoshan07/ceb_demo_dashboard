@@ -57,6 +57,18 @@ public class MultiFileImportService {
             int headerRowIdx = previewService.findHeaderRowIndex(sheet);
             Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
 
+            // Safety fallback 1: Inspect content if tarifftype not found by header
+            if (!colMap.containsKey("tarifftype")) {
+                int contentCol = previewService.detectTariffTypeByContent(sheet, headerRowIdx, colMap);
+                if (contentCol != -1) {
+                    colMap.put("tarifftype", contentCol);
+                }
+            }
+            // Safety fallback 2: If still not found, check if billingmode (Exp Code) is present to derive it
+            if (!colMap.containsKey("tarifftype") && colMap.containsKey("billingmode")) {
+                colMap.put("tarifftype", colMap.get("billingmode"));
+            }
+
             List<String> missingCols = new ArrayList<>();
             for (String required : Arrays.asList("accountno", "customername", "customeraddress",
                     "mobileno", "panelcapacity", "agreementdate", "bankcode", "bankaccountno",
@@ -64,7 +76,11 @@ public class MultiFileImportService {
                 if (!colMap.containsKey(required)) missingCols.add(required);
             }
             if (!missingCols.isEmpty()) {
-                globalErrors.add("Missing required columns: " + missingCols);
+                List<String> displayNames = new ArrayList<>();
+                for (String col : missingCols) {
+                    displayNames.add(getStep1ColumnDisplayName(col));
+                }
+                globalErrors.add("Missing required columns: " + displayNames);
             }
 
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
@@ -90,7 +106,11 @@ public class MultiFileImportService {
                     rowData.put("branchCode",      strVal(row, colMap.get("branchcode")));
                     rowData.put("bankAccountNo",   strVal(row, colMap.get("bankaccountno")));
                     String solarType = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
-                    String tariffType = strVal(row, colMap.get("tarifftype"));
+                    String rawTariff = strVal(row, colMap.get("tarifftype"));
+                    if ((rawTariff == null || rawTariff.trim().isEmpty()) && colMap.containsKey("billingmode")) {
+                        rawTariff = strVal(row, colMap.get("billingmode"));
+                    }
+                    String tariffType = ExcelValidationService.normalizeTariffType(rawTariff);
                     String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
                     rowData.put("solarType",       solarType);
                     rowData.put("unitRate",        numVal(row, colMap.get("unitcost"))); // maps unitrate/unitcost
@@ -160,6 +180,16 @@ public class MultiFileImportService {
             int headerRowIdx = previewService.findHeaderRowIndex(sheet);
             Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
 
+            if (!colMap.containsKey("tarifftype")) {
+                int contentCol = previewService.detectTariffTypeByContent(sheet, headerRowIdx, colMap);
+                if (contentCol != -1) {
+                    colMap.put("tarifftype", contentCol);
+                }
+            }
+            if (!colMap.containsKey("tarifftype") && colMap.containsKey("billingmode")) {
+                colMap.put("tarifftype", colMap.get("billingmode"));
+            }
+
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
             int lastRow = sheet.getLastRowNum();
@@ -210,7 +240,11 @@ public class MultiFileImportService {
                 String bankAccountNo   = strVal(row, colMap.get("bankaccountno"));
                 String solarType       = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
                 Double unitRate        = numVal(row, colMap.get("unitcost"));
-                String tariffType      = strVal(row, colMap.get("tarifftype"));
+                String rawTariff       = strVal(row, colMap.get("tarifftype"));
+                if ((rawTariff == null || rawTariff.trim().isEmpty()) && colMap.containsKey("billingmode")) {
+                    rawTariff = strVal(row, colMap.get("billingmode"));
+                }
+                String tariffType      = ExcelValidationService.normalizeTariffType(rawTariff);
                 String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
 
                 // Apply remaining corrections (non-accountNo fields)
@@ -230,7 +264,7 @@ public class MultiFileImportService {
                     if (corr.containsKey("unitRate")) {
                         unitRate = parseDouble(corr.get("unitRate"));
                     }
-                    if (corr.containsKey("tariffType"))      tariffType      = (String) corr.get("tariffType");
+                    if (corr.containsKey("tariffType"))      tariffType      = ExcelValidationService.normalizeTariffType((String) corr.get("tariffType"));
                     if (corr.containsKey("costCode"))        costCode        = (String) corr.get("costCode");
                 }
 
@@ -1505,6 +1539,24 @@ public class MultiFileImportService {
         }
         
         return errors;
+    }
+
+    private String getStep1ColumnDisplayName(String colKey) {
+        if (colKey == null) return "";
+        switch (colKey.toLowerCase()) {
+            case "accountno": return "Account No";
+            case "customername": return "Customer Name";
+            case "customeraddress": return "Address";
+            case "mobileno": return "Mobile Number";
+            case "panelcapacity": return "Panel Capacity";
+            case "agreementdate": return "Agreement Date";
+            case "bankcode": return "Bank Code";
+            case "bankaccountno": return "Bank Account No";
+            case "solartype": return "Solar Type";
+            case "unitcost": return "Unit Rate";
+            case "tarifftype": return "Tariff Type (Fix/Variable)";
+            default: return colKey;
+        }
     }
 
     private String strVal(Object val) {

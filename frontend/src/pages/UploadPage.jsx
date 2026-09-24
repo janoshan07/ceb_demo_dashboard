@@ -4003,13 +4003,29 @@ const UploadPage = () => {
       fd.append('correctionsJson', JSON.stringify(mainCorrections));
       const res = await authFetch(`/api/officer/import/${sid}/save-directory`, { method: 'POST', body: fd });
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Failed to save Monthly Directory.', 'error'); setSavingDirectory(false); return; }
-      showToast(`🗂️ "${data.datasetName}" saved to Monthly Customer Directory.`, 'success');
+      if (!res.ok) { 
+        showToast({
+          title: 'Upload Failed',
+          message: data.message || "We couldn't save the customer directory. Please try again.",
+          type: 'error'
+        }); 
+        setSavingDirectory(false); 
+        return; 
+      }
+      showToast({
+        title: 'Monthly Directory Uploaded',
+        message: "The selected month's customer directory was uploaded successfully.",
+        type: 'success'
+      });
       setShowDirectoryNaming(false);
       setSavingDirectory(false);
       handleFinalize(sid);
     } catch (e) {
-      showToast('Failed to save Monthly Directory: ' + e.message, 'error');
+      showToast({
+        title: 'Upload Failed',
+        message: 'Failed to save Monthly Directory: ' + e.message,
+        type: 'error'
+      });
       setSavingDirectory(false);
     }
   };

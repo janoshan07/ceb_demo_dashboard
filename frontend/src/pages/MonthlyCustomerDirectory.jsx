@@ -472,10 +472,21 @@ const MonthlyCustomerDirectory = () => {
       setLoading(true);
       const res = await authFetch('/api/officer/monthly-directory/months');
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Failed to load billing months.', 'error'); return; }
+      if (!res.ok) { 
+        showToast({
+          title: 'Failed to Load Months',
+          message: data.message || 'We could not load the monthly billing directories.',
+          type: 'error'
+        }); 
+        return; 
+      }
       setMonthsData(data);
     } catch (e) {
-      showToast('Failed to load billing months: ' + e.message, 'error');
+      showToast({
+        title: 'Connection Error',
+        message: 'Failed to load billing months: ' + e.message,
+        type: 'error'
+      });
     } finally {
       setLoading(false);
     }
@@ -487,17 +498,36 @@ const MonthlyCustomerDirectory = () => {
     try {
       const res = await authFetch(`/api/admin/monthly-directory/${item.id}/approve`, { method: 'POST' });
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Approval failed.', 'error'); return; }
-      showToast(`✅ "${item.datasetName}" approved & customer details synced to directory.`, 'success');
+      if (!res.ok) { 
+        showToast({
+          title: 'Approval Failed',
+          message: data.message || 'We could not approve the selected monthly directory.',
+          type: 'error'
+        }); 
+        return; 
+      }
+      showToast({
+        title: 'Monthly Directory Approved',
+        message: `"${item.datasetName}" approved and customer details synced to directory.`,
+        type: 'success'
+      });
       loadList();
     } catch (e) {
-      showToast('Approval failed: ' + e.message, 'error');
+      showToast({
+        title: 'Approval Failed',
+        message: 'Could not approve directory: ' + e.message,
+        type: 'error'
+      });
     }
   };
 
   const handleOpen = async (item) => {
     if (!item || !item.id) {
-      showToast('No directory dataset exists for this slot yet. Please upload billing first.', 'warning');
+      showToast({
+        title: 'Directory Not Found',
+        message: 'No directory dataset exists for this slot yet. Please upload billing first.',
+        type: 'warning'
+      });
       return;
     }
     try {
@@ -511,13 +541,25 @@ const MonthlyCustomerDirectory = () => {
       setViewing({ ...item, records: [], validationSummary: null });
       const res = await authFetch(`/api/officer/monthly-directory/${item.id}`);
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Failed to open directory.', 'error'); setViewing(null); return; }
+      if (!res.ok) { 
+        showToast({
+          title: 'Failed to Open Directory',
+          message: data.message || 'Unable to load dataset records.',
+          type: 'error'
+        }); 
+        setViewing(null); 
+        return; 
+      }
       if (data && Array.isArray(data.records)) {
         data.records = data.records.filter(r => !(String(r.status || '').toUpperCase() === 'REJECTED' || r.rejected === true));
       }
       setViewing(data);
     } catch (e) {
-      showToast('Failed to open directory: ' + e.message, 'error');
+      showToast({
+        title: 'Error Opening Directory',
+        message: 'Failed to open directory: ' + e.message,
+        type: 'error'
+      });
       setViewing(null);
     } finally {
       setViewLoading(false);
@@ -532,17 +574,39 @@ const MonthlyCustomerDirectory = () => {
   const handleRename = async () => {
     if (!renaming) return;
     const name = renameValue.trim();
-    if (!name) { showToast('Dataset name cannot be empty.', 'warning'); return; }
+    if (!name) { 
+      showToast({
+        title: 'Invalid Name',
+        message: 'Dataset name cannot be empty.',
+        type: 'warning'
+      }); 
+      return; 
+    }
     try {
       setRenameSaving(true);
       const res = await authFetch(`/api/officer/monthly-directory/${renaming.id}/rename?datasetName=${encodeURIComponent(name)}`, { method: 'PUT' });
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Rename failed.', 'error'); return; }
-      showToast('Dataset renamed.', 'success');
+      if (!res.ok) { 
+        showToast({
+          title: 'Rename Failed',
+          message: data.message || 'We could not rename this directory dataset.',
+          type: 'error'
+        }); 
+        return; 
+      }
+      showToast({
+        title: 'Dataset Renamed',
+        message: `Monthly directory renamed to "${name}" successfully.`,
+        type: 'success'
+      });
       setRenaming(null);
       loadList();
     } catch (e) {
-      showToast('Rename failed: ' + e.message, 'error');
+      showToast({
+        title: 'Rename Failed',
+        message: 'Could not rename dataset: ' + e.message,
+        type: 'error'
+      });
     } finally {
       setRenameSaving(false);
     }
@@ -551,11 +615,11 @@ const MonthlyCustomerDirectory = () => {
   const handleDelete = async (item) => {
     const isAdmin = user?.role === 'ADMIN';
     const ok = await showConfirm({
-      title: isAdmin ? 'Delete Dataset' : 'Submit Deletion Request',
+      title: isAdmin ? 'Delete Monthly Directory' : 'Submit Deletion Request',
       message: isAdmin 
         ? `Permanently delete "${item.datasetName}"? This will delete the monthly snapshot, associated billing records, and automatically delete or update corresponding customer profiles in the Customer Directory.`
         : `Submit deletion request for "${item.datasetName}"? As a Billing Officer, this deletion request will be sent to the Administrator for approval before any data is removed.`,
-      confirmText: isAdmin ? 'Delete' : 'Submit Request',
+      confirmText: isAdmin ? 'Delete Directory' : 'Submit Request',
       cancelText: 'Cancel',
       type: 'danger'
     });
@@ -564,18 +628,37 @@ const MonthlyCustomerDirectory = () => {
       const rolePath = isAdmin ? 'admin' : 'officer';
       const res = await authFetch(`/api/${rolePath}/monthly-directory/${item.id}`, { method: 'DELETE' });
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Delete failed.', 'error'); return; }
+      if (!res.ok) { 
+        showToast({
+          title: 'Deletion Failed',
+          message: data.message || "We couldn't delete the selected monthly directory. Please try again.",
+          type: 'error'
+        }); 
+        return; 
+      }
       
       if (data.status === 'PENDING') {
-        showToast(data.message || 'Deletion request queued for Admin approval.', 'warning');
+        showToast({
+          title: 'Deletion Request Submitted',
+          message: data.message || 'The deletion request has been queued for Administrator approval.',
+          type: 'warning'
+        });
       } else {
-        showToast(data.message || 'Directory deleted successfully.', 'success');
+        showToast({
+          title: 'Monthly Directory Deleted',
+          message: "The selected month's directory and related customer records were successfully removed.",
+          type: 'success'
+        });
       }
       
       if (viewing && viewing.id === item.id) setViewing(null);
       loadList();
     } catch (e) {
-      showToast('Delete failed: ' + e.message, 'error');
+      showToast({
+        title: 'Deletion Failed',
+        message: "We couldn't delete the selected monthly directory. " + e.message,
+        type: 'error'
+      });
     }
   };
 
@@ -584,9 +667,13 @@ const MonthlyCustomerDirectory = () => {
       setDownloadingId(item.id);
       const res = await authFetch(`/api/officer/monthly-directory/${item.id}/download/excel`);
       if (!res.ok) {
-        let msg = 'Download failed.';
+        let msg = "We couldn't export the selected monthly directory dataset.";
         try { const d = await res.json(); msg = d.message || msg; } catch (_) {}
-        showToast(msg, 'error');
+        showToast({
+          title: 'Download Failed',
+          message: msg,
+          type: 'error'
+        });
         return;
       }
       const blob = await res.blob();
@@ -600,7 +687,11 @@ const MonthlyCustomerDirectory = () => {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (e) {
-      showToast('Download failed: ' + e.message, 'error');
+      showToast({
+        title: 'Download Failed',
+        message: 'Export failed: ' + e.message,
+        type: 'error'
+      });
     } finally {
       setDownloadingId(null);
     }
@@ -634,7 +725,14 @@ const MonthlyCustomerDirectory = () => {
         body: JSON.stringify(payload),
       });
       const data = await res.json();
-      if (!res.ok) { showToast(data.message || 'Update failed.', 'error'); return; }
+      if (!res.ok) { 
+        showToast({
+          title: 'Update Failed',
+          message: data.message || 'We could not update the customer record.',
+          type: 'error'
+        }); 
+        return; 
+      }
       // Merge the server's authoritative record + refreshed summary + audit history back into view.
       setViewing(prev => {
         if (!prev) return prev;
@@ -644,13 +742,34 @@ const MonthlyCustomerDirectory = () => {
       });
       setEditing({ index: data.recordIndex, record: data.record });
       setEditForm(pickEditable(data.record));
-      const msg = action === 'approve' ? '✅ Record approved & saved.'
-        : action === 'revalidate' ? '🔄 Record revalidated.'
-        : '💾 Record saved.';
-      showToast(msg, 'success');
-      if (action === 'approve') { setEditing(null); setEditForm({}); }
+      
+      if (action === 'approve') {
+        showToast({
+          title: 'Record Approved',
+          message: 'Customer record approved & synced to directory.',
+          type: 'success'
+        });
+        setEditing(null); 
+        setEditForm({});
+      } else if (action === 'revalidate') {
+        showToast({
+          title: 'Record Revalidated',
+          message: 'Customer record validation completed.',
+          type: 'info'
+        });
+      } else {
+        showToast({
+          title: 'Changes Saved',
+          message: 'Customer record modifications were saved.',
+          type: 'success'
+        });
+      }
     } catch (e) {
-      showToast('Update failed: ' + e.message, 'error');
+      showToast({
+        title: 'Update Failed',
+        message: 'Could not update record: ' + e.message,
+        type: 'error'
+      });
     } finally {
       setRecordSaving(null);
     }

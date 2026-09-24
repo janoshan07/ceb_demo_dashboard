@@ -61,13 +61,36 @@ export const ToastProvider = ({ children }) => {
   }, [modalDialog, promptInput]);
 
   // ── Toast Notification Dispatcher ──────────────────────────────────────
-  const showToast = useCallback((message, type = 'success', duration = 4200, title = null) => {
+  const showToast = useCallback((message, type = 'success', duration = null, title = null) => {
+    let tMessage = '';
+    let tType = 'success';
+    let tTitle = null;
+    let tDuration = null;
+
+    if (typeof message === 'object' && message !== null) {
+      tMessage = message.message || '';
+      tType = message.type || type || 'success';
+      tTitle = message.title || null;
+      tDuration = message.duration || duration || null;
+    } else {
+      tMessage = String(message || '');
+      tType = type || 'success';
+      tTitle = title;
+      tDuration = duration;
+    }
+
+    if (!tDuration) {
+      if (tType === 'error' || tType === 'danger') tDuration = 6500;
+      else if (tType === 'warning') tDuration = 5200;
+      else tDuration = 4200;
+    }
+
     const id = Date.now() + Math.random().toString(36).substring(2, 9);
-    setToasts((prev) => [...prev.slice(-4), { id, message, type, duration, title }]);
+    setToasts((prev) => [...prev.slice(-4), { id, message: tMessage, type: tType, duration: tDuration, title: tTitle }]);
     
     setTimeout(() => {
       removeToast(id);
-    }, duration);
+    }, tDuration);
   }, []);
 
   const removeToast = useCallback((id) => {
@@ -159,53 +182,58 @@ export const ToastProvider = ({ children }) => {
       case 'error':
         return {
           primary: '#ef4444',
-          glow: 'rgba(239, 68, 68, 0.25)',
-          bgTint: 'rgba(239, 68, 68, 0.12)',
-          borderTint: 'rgba(239, 68, 68, 0.3)',
+          glow: 'rgba(239, 68, 68, 0.35)',
+          bgTint: 'rgba(239, 68, 68, 0.16)',
+          borderTint: 'rgba(239, 68, 68, 0.35)',
           icon: <AlertOctagon size={24} style={{ color: '#ef4444' }} />,
           toastIcon: <AlertCircle size={18} style={{ color: '#ef4444' }} />,
+          category: 'ERROR',
           defaultTitle: 'Error Detected'
         };
       case 'warning':
         return {
           primary: '#f59e0b',
-          glow: 'rgba(245, 158, 11, 0.25)',
-          bgTint: 'rgba(245, 158, 11, 0.12)',
-          borderTint: 'rgba(245, 158, 11, 0.3)',
+          glow: 'rgba(245, 158, 11, 0.35)',
+          bgTint: 'rgba(245, 158, 11, 0.16)',
+          borderTint: 'rgba(245, 158, 11, 0.35)',
           icon: <AlertTriangle size={24} style={{ color: '#f59e0b' }} />,
           toastIcon: <AlertTriangle size={18} style={{ color: '#f59e0b' }} />,
+          category: 'WARNING',
           defaultTitle: 'Warning Notice'
         };
       case 'info':
         return {
-          primary: '#3b82f6',
-          glow: 'rgba(59, 130, 246, 0.25)',
-          bgTint: 'rgba(59, 130, 246, 0.12)',
-          borderTint: 'rgba(59, 130, 246, 0.3)',
-          icon: <Info size={24} style={{ color: '#3b82f6' }} />,
-          toastIcon: <Info size={18} style={{ color: '#3b82f6' }} />,
-          defaultTitle: 'Information'
+          primary: '#38bdf8',
+          glow: 'rgba(56, 189, 248, 0.35)',
+          bgTint: 'rgba(56, 189, 248, 0.16)',
+          borderTint: 'rgba(56, 189, 248, 0.35)',
+          icon: <Info size={24} style={{ color: '#38bdf8' }} />,
+          toastIcon: <Info size={18} style={{ color: '#38bdf8' }} />,
+          category: 'INFO',
+          defaultTitle: 'System Notification'
         };
       case 'confirm':
         return {
-          primary: '#6366f1',
-          glow: 'rgba(99, 102, 241, 0.25)',
-          bgTint: 'rgba(99, 102, 241, 0.12)',
-          borderTint: 'rgba(99, 102, 241, 0.3)',
+          primary: '#818cf8',
+          glow: 'rgba(129, 140, 248, 0.35)',
+          bgTint: 'rgba(129, 140, 248, 0.16)',
+          borderTint: 'rgba(129, 140, 248, 0.35)',
           icon: <HelpCircle size={24} style={{ color: '#818cf8' }} />,
           toastIcon: <HelpCircle size={18} style={{ color: '#818cf8' }} />,
-          defaultTitle: 'Confirmation Required'
+          category: 'CONFIRMATION',
+          defaultTitle: 'Action Required'
         };
       case 'success':
       default:
         return {
           primary: '#10b981',
-          glow: 'rgba(16, 185, 129, 0.25)',
-          bgTint: 'rgba(16, 185, 129, 0.12)',
-          borderTint: 'rgba(16, 185, 129, 0.3)',
+          glow: 'rgba(16, 185, 129, 0.35)',
+          bgTint: 'rgba(16, 185, 129, 0.16)',
+          borderTint: 'rgba(16, 185, 129, 0.35)',
           icon: <CheckCircle2 size={24} style={{ color: '#10b981' }} />,
           toastIcon: <CheckCircle2 size={18} style={{ color: '#10b981' }} />,
-          defaultTitle: 'Operation Successful'
+          category: 'SUCCESS',
+          defaultTitle: 'Action Completed'
         };
     }
   };
@@ -219,19 +247,21 @@ export const ToastProvider = ({ children }) => {
         className="toast-container"
         style={{
           position: 'fixed',
-          top: '1.25rem',
-          right: '1.25rem',
+          top: '1.5rem',
+          right: '1.5rem',
           zIndex: 1000001,
           display: 'flex',
           flexDirection: 'column',
-          gap: '0.65rem',
-          maxWidth: '420px',
-          width: 'calc(100vw - 2.5rem)',
+          gap: '0.75rem',
+          maxWidth: '440px',
+          width: 'calc(100vw - 3rem)',
           pointerEvents: 'none'
         }}
       >
         {toasts.map((toast) => {
           const meta = getThemeMeta(toast.type);
+          const title = toast.title || meta.defaultTitle;
+
           return (
             <div 
               key={toast.id} 
@@ -240,25 +270,28 @@ export const ToastProvider = ({ children }) => {
                 pointerEvents: 'auto',
                 background: 'rgba(15, 23, 42, 0.96)',
                 backdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: `1px solid ${meta.borderTint}`,
                 borderLeft: `4px solid ${meta.primary}`,
-                borderRadius: '10px',
-                padding: '0.85rem 1rem 0.95rem 0.95rem',
-                boxShadow: '0 16px 36px -6px rgba(0, 0, 0, 0.55), 0 0 20px -8px ' + meta.glow,
+                borderRadius: '12px',
+                padding: '0.95rem 1.1rem 1rem 1rem',
+                boxShadow: `0 20px 40px -8px rgba(0, 0, 0, 0.65), 0 0 25px -6px ${meta.glow}`,
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: '0.75rem',
+                gap: '0.85rem',
                 position: 'relative',
                 overflow: 'hidden',
-                animation: 'toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                animation: 'toastSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards'
               }}
             >
+              {/* Status Icon */}
               <div 
                 style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '8px',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '9px',
                   backgroundColor: meta.bgTint,
+                  border: `1px solid ${meta.borderTint}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -269,17 +302,49 @@ export const ToastProvider = ({ children }) => {
                 {meta.toastIcon}
               </div>
 
+              {/* Toast Text Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                {toast.title && (
-                  <div style={{ fontSize: '0.84rem', fontWeight: 700, color: '#FFFFFF', marginBottom: '0.15rem' }}>
-                    {toast.title}
+                {/* Category Pill Tag */}
+                <div style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  fontSize: '0.66rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  color: meta.primary,
+                  marginBottom: '0.2rem'
+                }}>
+                  {meta.category}
+                </div>
+
+                {/* Primary Title */}
+                <div style={{ 
+                  fontSize: '0.88rem', 
+                  fontWeight: 700, 
+                  color: '#FFFFFF', 
+                  lineHeight: 1.3,
+                  marginBottom: '0.25rem',
+                  letterSpacing: '-0.01em'
+                }}>
+                  {title}
+                </div>
+
+                {/* Body Message */}
+                {toast.message && (
+                  <div style={{ 
+                    fontSize: '0.82rem', 
+                    color: '#cbd5e1', 
+                    lineHeight: 1.45, 
+                    wordBreak: 'break-word',
+                    fontWeight: 400
+                  }}>
+                    {toast.message}
                   </div>
                 )}
-                <div style={{ fontSize: '0.84rem', color: '#e2e8f0', lineHeight: 1.45, wordBreak: 'break-word' }}>
-                  {toast.message}
-                </div>
               </div>
 
+              {/* Close Button */}
               <button 
                 onClick={() => removeToast(toast.id)}
                 style={{
@@ -287,8 +352,8 @@ export const ToastProvider = ({ children }) => {
                   border: 'none',
                   color: '#94a3b8',
                   cursor: 'pointer',
-                  padding: '0.2rem',
-                  borderRadius: '4px',
+                  padding: '0.3rem',
+                  borderRadius: '6px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -297,7 +362,7 @@ export const ToastProvider = ({ children }) => {
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.color = '#FFFFFF';
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.color = '#94a3b8';
@@ -305,7 +370,7 @@ export const ToastProvider = ({ children }) => {
                 }}
                 aria-label="Close notification"
               >
-                <X size={14} />
+                <X size={15} />
               </button>
 
               {/* Progress Duration Line */}
@@ -315,7 +380,7 @@ export const ToastProvider = ({ children }) => {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: '2.5px',
+                  height: '3px',
                   backgroundColor: 'rgba(255, 255, 255, 0.08)'
                 }}
               >

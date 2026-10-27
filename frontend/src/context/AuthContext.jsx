@@ -51,7 +51,7 @@ export const AuthProvider = ({ children }) => {
         };
       }
 
-      // Fallback in case direct token is returned
+      // Direct login with JWT token
       const userDetails = {
         username: data.username,
         role: data.role,
@@ -60,7 +60,7 @@ export const AuthProvider = ({ children }) => {
 
       setUser(userDetails);
       sessionStorage.setItem('ceb_user', JSON.stringify(userDetails));
-      return { success: true };
+      return { success: true, user: userDetails };
     } catch (err) {
       setError(err.message || 'Connection error. Make sure backend is running.');
       setLoading(false);

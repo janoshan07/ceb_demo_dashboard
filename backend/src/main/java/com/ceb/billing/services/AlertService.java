@@ -43,15 +43,8 @@ public class AlertService {
         LocalDate referenceDate = LocalDate.now();
         LocalDate maxToDate = null;
         try {
-            // Find max toDate dynamically
-            List<BillingRecord> allRecords = billingRecordRepository.findAll();
-            for (BillingRecord r : allRecords) {
-                if (r.getToDate() != null) {
-                    if (maxToDate == null || r.getToDate().isAfter(maxToDate)) {
-                        maxToDate = r.getToDate();
-                    }
-                }
-            }
+            // Find max toDate dynamically in a single query
+            maxToDate = billingRecordRepository.findMaxToDate();
         } catch (Exception e) {
             // Fallback to today
         }

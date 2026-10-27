@@ -279,11 +279,18 @@ public class PaymentControlService {
             currentPayment = totalPayable + billSetOff;
         }
 
+        double settledAmount = totalPayable != null ? totalPayable : 0.0;
+        double stampDuty = settledAmount > 25000.0 ? 25.0 : 0.0;
+        double amountPayable = Math.max(0.0, settledAmount - stampDuty);
+
         fin.put("currentPayment", Math.round(currentPayment * 100.0) / 100.0);
         fin.put("billSetOff", Math.round(billSetOff * 100.0) / 100.0);
         fin.put("retentionMoney", Math.round(retention * 100.0) / 100.0);
         fin.put("outstandingBalance", Math.round(outstanding * 100.0) / 100.0);
-        fin.put("totalPayable", Math.round(totalPayable * 100.0) / 100.0);
+        fin.put("paymentSettled", Math.round(settledAmount * 100.0) / 100.0);
+        fin.put("stampDuty", stampDuty);
+        fin.put("amountPayable", Math.round(amountPayable * 100.0) / 100.0);
+        fin.put("totalPayable", Math.round(amountPayable * 100.0) / 100.0);
 
         return fin;
     }
@@ -537,6 +544,9 @@ public class PaymentControlService {
             item.put("missingFields", extractMissingFields(rec));
             item.put("currentPayment", elig.getFinancials().get("currentPayment"));
             item.put("outstandingBalance", elig.getFinancials().get("outstandingBalance"));
+            item.put("paymentSettled", elig.getFinancials().get("paymentSettled"));
+            item.put("stampDuty", elig.getFinancials().get("stampDuty"));
+            item.put("amountPayable", elig.getFinancials().get("amountPayable"));
             item.put("totalPayable", elig.getFinancials().get("totalPayable"));
             item.put("billSetOff", elig.getFinancials().get("billSetOff"));
             item.put("retentionMoney", elig.getFinancials().get("retentionMoney"));
@@ -1906,6 +1916,7 @@ public class PaymentControlService {
             item.setBillSetOff(fin.getOrDefault("billSetOff", 0.0));
             item.setRetentionMoney(fin.getOrDefault("retentionMoney", 0.0));
             item.setOutstandingBalance(fin.getOrDefault("outstandingBalance", 0.0));
+            item.setStampDuty(fin.getOrDefault("stampDuty", 0.0));
             item.setTotalPayable(payable);
             item.setBankCode(strVal(rec.get("bankCode")));
             item.setBranchCode(strVal(rec.get("branchCode")));

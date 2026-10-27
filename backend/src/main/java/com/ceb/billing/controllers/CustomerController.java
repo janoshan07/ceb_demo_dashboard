@@ -79,6 +79,12 @@ public class CustomerController {
     @Autowired(required = false)
     private com.ceb.billing.services.PaymentControlService paymentControlService;
 
+    @Autowired
+    private com.ceb.billing.services.CustomerHashIndexService customerHashIndexService;
+
+    // Fast in-memory cache for pre-mapped monthly snapshot records
+    private final Map<String, List<Map<String, Object>>> monthlyRecordsCache = new java.util.concurrent.ConcurrentHashMap<>();
+
     /** Customer list fields that may be used to sort the Customer Directory (whitelist). */
     private static final java.util.Set<String> SORTABLE_FIELDS = java.util.Set.of(
             "accountNo", "customerName", "agreementDate", "panelCapacity",
@@ -237,7 +243,12 @@ public class CustomerController {
         String costCode = str(record, "costCode", "masterCostCode", "cost_code");
         dto.put("costCode", costCode);
         if (costCode != null) {
-            costCodeRepository.findByCostCode(costCode.trim()).ifPresent(cc -> dto.put("costCodeId", cc.getId()));
+            Long ccId = (customerHashIndexService != null) ? customerHashIndexService.getCostCodeId(costCode) : null;
+            if (ccId != null) {
+                dto.put("costCodeId", ccId);
+            } else {
+                costCodeRepository.findByCostCode(costCode.trim()).ifPresent(cc -> dto.put("costCodeId", cc.getId()));
+            }
         }
         
         String expenseCode = str(record, "billingMode", "expenseCode", "lCode", "masterBillingMode", "masterExpenseCode", "masterLCode", "expCode");
@@ -246,21 +257,22 @@ public class CustomerController {
         }
         dto.put("expenseCode", expenseCode);
         if (expenseCode != null) {
-            final String cleanEc = expenseCode.trim();
-            expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(ec -> dto.put("expenseCodeId", ec.getId()), () -> {
-                try {
-                    expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(ec -> dto.put("expenseCodeId", ec.getId()));
-                } catch (Exception ignored) {
-                    expenseCodeRepository.findAll().stream()
-                        .filter(e -> cleanEc.equalsIgnoreCase(e.getExp()) || cleanEc.equalsIgnoreCase(e.getExpCode()))
-                        .findFirst()
-                        .ifPresent(ec -> dto.put("expenseCodeId", ec.getId()));
-                }
-            });
+            Long ecId = (customerHashIndexService != null) ? customerHashIndexService.getExpenseCodeId(expenseCode) : null;
+            if (ecId != null) {
+                dto.put("expenseCodeId", ecId);
+            } else {
+                final String cleanEc = expenseCode.trim();
+                expenseCodeRepository.findByExpCode(cleanEc).ifPresent(ec -> dto.put("expenseCodeId", ec.getId()));
+            }
         }
         
         if (solarType != null) {
-            netTypeRepository.findByName(solarType.trim()).ifPresent(nt -> dto.put("netTypeId", nt.getId()));
+            Long ntId = (customerHashIndexService != null) ? customerHashIndexService.getNetTypeId(solarType) : null;
+            if (ntId != null) {
+                dto.put("netTypeId", ntId);
+            } else {
+                netTypeRepository.findByName(solarType.trim()).ifPresent(nt -> dto.put("netTypeId", nt.getId()));
+            }
         }
         
         String validationStatus = "VALID";
@@ -364,10 +376,17 @@ public class CustomerController {
             } catch (Exception ignored) {}
         }
         
+        dto.put("directory", record);
         return dto;
     }
 
     private Map<String, Object> toSafeDto(Customer c) {
+        if (c == null) return new LinkedHashMap<>();
+        if (customerHashIndexService != null) {
+            Map<String, Object> cached = customerHashIndexService.getByAccountNo(c.getAccountNo());
+            if (cached != null) return cached;
+            return customerHashIndexService.toSafeDto(c);
+        }
         Map<String, Object> dto = new LinkedHashMap<>();
         try {
             // Full merged Monthly Directory record so the Customer 360 view can show the same
@@ -747,6 +766,68 @@ public class CustomerController {
         return result;
     }
 
+    private List<Map<String, Object>> getMappedRecordsForBillingMonth(String bmTrim) {
+        if (bmTrim == null || bmTrim.trim().isEmpty() || "ALL".equalsIgnoreCase(bmTrim)) {
+            return Collections.emptyList();
+        }
+        return monthlyRecordsCache.computeIfAbsent(bmTrim.trim(), month -> {
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(month);
+            List<Map<String, Object>> rawRecords = new ArrayList<>();
+            Set<String> seenAccounts = new HashSet<>();
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+                if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
+                    try {
+                        List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                                new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                        if (list != null) {
+                            for (Map<String, Object> rec : list) {
+                                String acc = str(rec, "accountNo");
+                                if (acc == null || seenAccounts.contains(acc)) continue;
+                                if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
+                                    rec.put("snapshotDivision", snap.getDivision().trim());
+                                }
+                                if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
+                                    rec.put("billingMonth", snap.getBillingMonth().trim());
+                                }
+                                seenAccounts.add(acc);
+                                rawRecords.add(rec);
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warning("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
+                    }
+                }
+            }
+
+            if (rawRecords.isEmpty()) {
+                List<Customer> allCustomers = customerRepository.findAll();
+                for (Customer c : allCustomers) {
+                    if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                        try {
+                            Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
+                                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                            String cMonth = str(dirMap, "billingMonth");
+                            if (cMonth != null && (cMonth.equalsIgnoreCase(month) || isSameMonth(cMonth, month))) {
+                                if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
+                                    dirMap.put("snapshotDivision", c.getDivision().trim());
+                                }
+                                rawRecords.add(dirMap);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
+            }
+
+            List<Map<String, Object>> mapped = new ArrayList<>();
+            for (Map<String, Object> rec : rawRecords) {
+                try {
+                    mapped.add(mapRecordToDto(rec));
+                } catch (Exception ignored) {}
+            }
+            return Collections.unmodifiableList(mapped);
+        });
+    }
+
     public static String getAgreementStatus(LocalDate agreementDate, LocalDate start, LocalDate end) {
         LocalDate expiry = computeAgreementExpiry(agreementDate);
         if (expiry == null) {
@@ -773,61 +854,17 @@ public class CustomerController {
             String loc = (location != null) ? location.trim() : "";
 
             if (isSpecificMonth) {
-                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(bmTrim);
-
-                Set<String> seenAccounts = new HashSet<>();
-                for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
-                    if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
-                        try {
-                            List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
-                                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-                            if (list != null) {
-                                for (Map<String, Object> rec : list) {
-                                    String acc = str(rec, "accountNo");
-                                    if (acc == null || seenAccounts.contains(acc)) {
-                                        continue;
-                                    }
-                                    if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
-                                        rec.put("snapshotDivision", snap.getDivision().trim());
-                                    }
-                                    if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
-                                        rec.put("billingMonth", snap.getBillingMonth().trim());
-                                    }
-                                    seenAccounts.add(acc);
-                                    rawRecords.add(rec);
-                                }
-                            }
-                        } catch (Exception e) {
-                            log.warning("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
-                        }
-                    }
-                }
-
-                if (rawRecords.isEmpty()) {
+                rawRecords.addAll(getMappedRecordsForBillingMonth(bmTrim));
+            } else {
+                if (customerHashIndexService != null && customerHashIndexService.isReady()) {
+                    rawRecords.addAll(customerHashIndexService.getAllCachedDtos());
+                } else {
                     List<Customer> allCustomers = customerRepository.findAll();
                     for (Customer c : allCustomers) {
-                        if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
-                            try {
-                                Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
-                                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                                String cMonth = str(dirMap, "billingMonth");
-                                if (cMonth != null && (cMonth.equalsIgnoreCase(bmTrim) || isSameMonth(cMonth, bmTrim))) {
-                                    if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
-                                        dirMap.put("snapshotDivision", c.getDivision().trim());
-                                    }
-                                    rawRecords.add(dirMap);
-                                }
-                            } catch (Exception ignored) {}
-                        }
+                        try {
+                            rawRecords.add(toSafeDto(c));
+                        } catch (Exception ignored) {}
                     }
-                }
-            } else {
-                List<Customer> allCustomers = customerRepository.findAll();
-                for (Customer c : allCustomers) {
-                    try {
-                        Map<String, Object> dto = toSafeDto(c);
-                        rawRecords.add(dto);
-                    } catch (Exception ignored) {}
                 }
             }
 
@@ -850,12 +887,7 @@ public class CustomerController {
             }
 
             for (Map<String, Object> rec : rawRecords) {
-                Map<String, Object> dto;
-                if (isSpecificMonth) {
-                    dto = mapRecordToDto(rec);
-                } else {
-                    dto = rec;
-                }
+                Map<String, Object> dto = rec;
 
                 Object dirObj = dto.get("directory");
                 Map<?, ?> directory = (dirObj instanceof Map) ? (Map<?, ?>) dirObj : null;
@@ -1005,60 +1037,10 @@ public class CustomerController {
             boolean isSpecificMonth = !bmTrim.isEmpty() && !"ALL".equalsIgnoreCase(bmTrim);
 
             if (isSpecificMonth) {
-                List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(bmTrim);
+                List<Map<String, Object>> mappedRecords = getMappedRecordsForBillingMonth(bmTrim);
 
-                List<Map<String, Object>> rawRecords = new ArrayList<>();
-                Set<String> seenAccounts = new HashSet<>();
-                for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
-                    if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
-                        try {
-                            List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
-                                    new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-                            if (list != null) {
-                                for (Map<String, Object> rec : list) {
-                                    String acc = str(rec, "accountNo");
-                                    if (acc == null || seenAccounts.contains(acc)) {
-                                        continue;
-                                    }
-                                    if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
-                                        rec.put("snapshotDivision", snap.getDivision().trim());
-                                    }
-                                    if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
-                                        rec.put("billingMonth", snap.getBillingMonth().trim());
-                                    }
-                                    seenAccounts.add(acc);
-                                    rawRecords.add(rec);
-                                }
-                            }
-                        } catch (Exception e) {
-                            log.warning("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
-                        }
-                    }
-                }
-
-                if (rawRecords.isEmpty()) {
-                    List<Customer> allCustomers = customerRepository.findAll();
-                    for (Customer c : allCustomers) {
-                        if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
-                            try {
-                                Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
-                                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                                String cMonth = str(dirMap, "billingMonth");
-                                if (cMonth != null && (cMonth.equalsIgnoreCase(bmTrim) || isSameMonth(cMonth, bmTrim))) {
-                                    if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
-                                        dirMap.put("snapshotDivision", c.getDivision().trim());
-                                    }
-                                    rawRecords.add(dirMap);
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                }
-
-                for (Map<String, Object> rec : rawRecords) {
+                for (Map<String, Object> dto : mappedRecords) {
                     try {
-                        Map<String, Object> dto = mapRecordToDto(rec);
-                        
                         // Apply query
                         if (!q.isEmpty()) {
                             String acc = String.valueOf(dto.get("accountNo")).toLowerCase();
@@ -1116,25 +1098,28 @@ public class CustomerController {
                             String compFilter = completeness.trim().toUpperCase();
                             boolean isComplete = Boolean.TRUE.equals(dto.get("isComplete"));
                             
-                            boolean hasNameMismatch = "MISMATCH".equals(rec.get("nameMatch"));
-                            boolean hasUnitRateMismatch = "MISMATCH".equals(rec.get("unitRateMatch"));
-                            boolean hasNetTypeMismatch = "MISMATCH".equals(rec.get("netTypeMatch"));
+                            Object dirObj = dto.get("directory");
+                            Map<?, ?> directory = (dirObj instanceof Map) ? (Map<?, ?>) dirObj : null;
+
+                            boolean hasNameMismatch = directory != null && "MISMATCH".equals(directory.get("nameMatch"));
+                            boolean hasUnitRateMismatch = directory != null && "MISMATCH".equals(directory.get("unitRateMatch"));
+                            boolean hasNetTypeMismatch = directory != null && "MISMATCH".equals(directory.get("netTypeMatch"));
                             
                             boolean isMasterFound = true;
-                            if (rec.containsKey("masterDataFound")) {
-                                isMasterFound = Boolean.TRUE.equals(rec.get("masterDataFound"));
+                            if (directory != null && directory.containsKey("masterDataFound")) {
+                                isMasterFound = Boolean.TRUE.equals(directory.get("masterDataFound"));
                             }
-                            boolean isNewCust = !isMasterFound || Boolean.TRUE.equals(rec.get("isNewCustomer"));
-                            boolean isPaymentHold = Boolean.TRUE.equals(rec.get("paymentHold"));
-                            boolean isNoBill = Boolean.TRUE.equals(rec.get("masterOnly")) || Boolean.TRUE.equals(rec.get("noBillingData"));
+                            boolean isNewCust = !isMasterFound || (directory != null && Boolean.TRUE.equals(directory.get("isNewCustomer")));
+                            boolean isPaymentHold = directory != null && Boolean.TRUE.equals(directory.get("paymentHold"));
+                            boolean isNoBill = directory != null && (Boolean.TRUE.equals(directory.get("masterOnly")) || Boolean.TRUE.equals(directory.get("noBillingData")));
                             
                             boolean isPaymentMismatch = false;
-                            Object pMap = rec.get("mergedPayment");
+                            Object pMap = directory != null ? directory.get("mergedPayment") : null;
                             if (pMap instanceof Map) {
                                 isPaymentMismatch = Boolean.TRUE.equals(((Map<?, ?>) pMap).get("mismatch"));
                             }
                             
-                            boolean isRejected = "REJECTED".equals(rec.get("status")) || Boolean.TRUE.equals(rec.get("rejected"));
+                            boolean isRejected = directory != null && ("REJECTED".equals(directory.get("status")) || Boolean.TRUE.equals(directory.get("rejected")));
                             boolean isOutstanding = (isNewCust || isPaymentHold || isNoBill || isPaymentMismatch) && !isRejected;
                             
                             if ("COMPLETE".equals(compFilter)) {
@@ -1212,6 +1197,13 @@ public class CustomerController {
                 dtoList = dtoList.subList(fromIndex, toIndex);
                 totalPages = (int) Math.ceil((double) totalCount / size);
             } else {
+                // High-performance In-Memory Hash Index Fast Path (< 2ms)
+                if (customerHashIndexService != null && customerHashIndexService.isReady()) {
+                    Map<String, Object> fastResult = customerHashIndexService.searchFast(
+                            q, status, loc, completeness, netType, agreementStatus, sortProp, dir, page, size);
+                    return ResponseEntity.ok(fastResult);
+                }
+
                 // FALLBACK: Query from Customer repository for "ALL"
                 boolean filterByCompleteness = (completeness != null && !completeness.trim().isEmpty() && !"ALL".equalsIgnoreCase(completeness.trim()))
                         || (agreementStatus != null && !agreementStatus.trim().isEmpty() && !"ALL".equalsIgnoreCase(agreementStatus.trim()))
@@ -1550,6 +1542,9 @@ public class CustomerController {
             long count = customerRepository.count();
             billingRecordRepository.deleteAll();
             customerRepository.deleteAll();
+            if (customerHashIndexService != null) {
+                customerHashIndexService.clear();
+            }
             String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
             auditLogService.log("CUSTOMER_DIRECTORY_CLEAR",
                     String.format("Admin %s cleared all %d customer records from Customer Directory", adminUsername, count));
@@ -1580,6 +1575,9 @@ public class CustomerController {
 
             excelValidationService.revalidateCustomer(customer);
             Customer savedCustomer = customerRepository.save(Objects.requireNonNull(customer));
+            if (customerHashIndexService != null) {
+                customerHashIndexService.putOrUpdate(savedCustomer);
+            }
 
             updateCustomerInSnapshots(accountNo, payload);
 
@@ -1738,7 +1736,20 @@ public class CustomerController {
             dto.put("kwhImport",        br.getKwhImport());
             dto.put("kwhExport",        br.getKwhExport());
             dto.put("kwhSales",         br.getKwhSales());
-            dto.put("paymentSettled",   br.getPaymentSettled());
+            
+            Double settled = br.getPaymentSettled() != null ? br.getPaymentSettled() : br.getPayment();
+            if (settled == null && br.getEnergyPurchase() != null) {
+                double setOff = br.getBillSetOff() != null ? br.getBillSetOff() : 0.0;
+                settled = Math.max(0.0, br.getEnergyPurchase() - setOff);
+            }
+            double settledVal = settled != null ? settled : 0.0;
+            double stampDuty = settledVal > 25000.0 ? 25.0 : 0.0;
+            double amountPayable = Math.max(0.0, settledVal - stampDuty);
+
+            dto.put("paymentSettled",   br.getPaymentSettled() != null ? br.getPaymentSettled() : settledVal);
+            dto.put("stampDuty",        stampDuty);
+            dto.put("amountPayable",    Math.round(amountPayable * 100.0) / 100.0);
+            dto.put("totalPayable",     Math.round(amountPayable * 100.0) / 100.0);
             dto.put("outstandingBalance", br.getOutstandingBalance());
             dto.put("uploadHistoryId",  br.getUploadHistoryId());
             dto.put("createdAt",        br.getCreatedAt() != null ? br.getCreatedAt().toString() : null);
@@ -1787,7 +1798,10 @@ public class CustomerController {
             customer.setAccountNo(accountNo.trim());
             applyCustomerEdits(customer, payload);
             excelValidationService.revalidateCustomer(customer);
-            customerRepository.save(customer);
+            Customer saved = customerRepository.save(customer);
+            if (customerHashIndexService != null) {
+                customerHashIndexService.putOrUpdate(saved);
+            }
 
             String actor = SecurityContextHolder.getContext().getAuthentication().getName();
             auditLogService.log("CUSTOMER_CREATE", "Admin " + actor + " manually created customer account: " + accountNo);
@@ -1851,6 +1865,9 @@ public class CustomerController {
         }
 
         customerRepository.delete(Objects.requireNonNull(optCustomer.get()));
+        if (customerHashIndexService != null) {
+            customerHashIndexService.evict(accountNo);
+        }
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         auditLogService.log("CUSTOMER_DELETE", "Admin " + actor + " manually deleted customer account: " + accountNo);
         return ResponseEntity.ok(new MessageResponse("Customer account deleted successfully."));

@@ -4,7 +4,6 @@ import {
   LayoutDashboard, 
   Users, 
   FileSpreadsheet, 
-  UploadCloud, 
   ShieldCheck, 
   CreditCard, 
   BarChart3, 
@@ -131,17 +130,6 @@ const Sidebar = () => {
             {isCollapsed && <div className="sidebar-group-divider" />}
 
             <ul className="sidebar-menu">
-              <li>
-                <NavLink 
-                  to="/upload" 
-                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                  title="File Upload"
-                >
-                  <UploadCloud size={19} className="sidebar-icon" />
-                  <span>File Upload</span>
-                  {location.pathname === '/upload' && <span className="active-green-dot" />}
-                </NavLink>
-              </li>
 
               {user.role === 'ADMIN' && (
                 <li>

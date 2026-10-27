@@ -6,6 +6,9 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "customers", indexes = {
+    @Index(name = "idx_customer_name", columnList = "customer_name"),
+    @Index(name = "idx_customer_mobile", columnList = "mobile_no"),
+    @Index(name = "idx_customer_status", columnList = "validation_status"),
     @Index(name = "idx_customer_branch_code", columnList = "branch_code"),
     @Index(name = "idx_customer_division", columnList = "division"),
     @Index(name = "idx_customer_solar_type", columnList = "solar_type")

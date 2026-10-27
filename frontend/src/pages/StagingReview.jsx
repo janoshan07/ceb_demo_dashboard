@@ -35,7 +35,7 @@ import {
   CustomerCard,
   FilterDropdown
 } from './MonthlyCustomerDirectory';
-import { computeAgreementExpiry, agreementExpiryStatus } from './UploadPage';
+import { computeAgreementExpiry, agreementExpiryStatus, TablePagination } from './UploadPage';
 
 // Helper to automatically derive L-Code based on solarType and tariffType
 const deriveLCode = (solarType, tariffType) => {
@@ -89,9 +89,23 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
   // Monthly Directory View layout states
   const [viewMode, setViewMode] = useState('CARDS'); // 'CARDS' | 'TABLE'
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [netTypeFilter, setNetTypeFilter] = useState('ALL');
   const [detailsRecord, setDetailsRecord] = useState(null);
+  const [stagingPage, setStagingPage] = useState(1);
+  const [stagingPageSize, setStagingPageSize] = useState(48);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchTerm(searchInput);
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    setStagingPage(1);
+  }, [searchTerm, statusFilter, netTypeFilter]);
 
   // Operation action states
   const [actionProcessing, setActionProcessing] = useState(false);
@@ -523,6 +537,18 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
     return true;
   });
 
+  const pagedDisplayRecords = useMemo(() => {
+    if (stagingPageSize === 'ALL') return displayRecords;
+    const start = (stagingPage - 1) * stagingPageSize;
+    return displayRecords.slice(start, start + stagingPageSize);
+  }, [displayRecords, stagingPage, stagingPageSize]);
+
+  const pagedFilteredRows = useMemo(() => {
+    if (stagingPageSize === 'ALL') return filteredRows;
+    const start = (stagingPage - 1) * stagingPageSize;
+    return filteredRows.slice(start, start + stagingPageSize);
+  }, [filteredRows, stagingPage, stagingPageSize]);
+
   const renderProposalsTab = () => {
     const pendingProposals = proposals.filter(p => p.status === 'PENDING');
     if (pendingProposals.length === 0) {
@@ -858,7 +884,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                     <div style={{ position: 'relative', flex: '1 1 220px', maxWidth: 340 }}>
                       <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
                       <input
-                        type="text" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}
+                        type="text" value={searchInput} onChange={e => setSearchInput(e.target.value)}
                         placeholder="Search Account No, Ref No or Name…"
                         style={{ width: '100%', padding: '0.5rem 0.7rem 0.5rem 2rem', borderRadius: 9, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.78rem' }}
                       />
@@ -921,17 +947,27 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                         No customer records match the selected search or filter criteria.
                       </div>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-                        {displayRecords.map(({ row, idx }) => (
-                          <CustomerCard
-                            key={idx}
-                            row={row}
-                            onView={() => setDetailsRecord(row)}
-                            onEdit={() => handleOpenEditModal(row.sources?.[0] || row)}
-                            onHistory={() => setActiveTab('corrections')}
-                          />
-                        ))}
-                      </div>
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
+                          {pagedDisplayRecords.map(({ row, idx }) => (
+                            <CustomerCard
+                              key={idx}
+                              row={row}
+                              onView={() => setDetailsRecord(row)}
+                              onEdit={() => handleOpenEditModal(row.sources?.[0] || row)}
+                              onHistory={() => setActiveTab('corrections')}
+                            />
+                          ))}
+                        </div>
+                        <TablePagination
+                          currentPage={stagingPage}
+                          pageSize={stagingPageSize}
+                          totalItems={displayRecords.length}
+                          onPageChange={setStagingPage}
+                          onPageSizeChange={setStagingPageSize}
+                          pageSizeOptions={[24, 48, 96, 'ALL']}
+                        />
+                      </>
                     )
                   ) : (
                     /* Tabular View (fallback) */
@@ -959,7 +995,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.map((row, i) => {
+                    {pagedFilteredRows.map((row, i) => {
                       const isWarning = row.validationStatus === 'WARNING';
                       const isDuplicate = row.validationStatus === 'DUPLICATE';
                       const isInvalid = row.validationStatus === 'INVALID';
@@ -1164,6 +1200,14 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                     })}
                   </tbody>
                 </table>
+                <TablePagination
+                  currentPage={stagingPage}
+                  pageSize={stagingPageSize}
+                  totalItems={filteredRows.length}
+                  onPageChange={setStagingPage}
+                  onPageSizeChange={setStagingPageSize}
+                  pageSizeOptions={[25, 50, 100, 'ALL']}
+                />
               </div>
             )}
           </>

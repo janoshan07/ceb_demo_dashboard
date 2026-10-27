@@ -86,6 +86,12 @@ public class BillingRecord {
     @Column(name = "outstanding_balance")
     private Double outstandingBalance;
 
+    @Column(name = "stamp_duty")
+    private Double stampDuty;
+
+    @Column(name = "amount_payable")
+    private Double amountPayable;
+
     @Column(name = "upload_history_id")
     private Long uploadHistoryId;
 
@@ -106,6 +112,18 @@ public class BillingRecord {
     public void calculateFields() {
         this.netUnit = (this.exportUnits != null ? this.exportUnits : 0.0) - (this.importUnits != null ? this.importUnits : 0.0);
         this.totalAmount = this.netUnit * (this.unitCost != null ? this.unitCost : 0.0);
+        Double settled = this.paymentSettled != null ? this.paymentSettled : this.payment;
+        if (settled == null && this.energyPurchase != null) {
+            double setOff = this.billSetOff != null ? this.billSetOff : 0.0;
+            settled = Math.max(0.0, this.energyPurchase - setOff);
+        }
+        if (settled != null) {
+            this.stampDuty = settled > 25000.0 ? 25.0 : 0.0;
+            this.amountPayable = Math.max(0.0, settled - this.stampDuty);
+        } else {
+            this.stampDuty = 0.0;
+            this.amountPayable = 0.0;
+        }
     }
 
     public BillingRecord() {
@@ -287,4 +305,33 @@ public class BillingRecord {
 
     public Double getOutstandingBalance() { return outstandingBalance; }
     public void setOutstandingBalance(Double outstandingBalance) { this.outstandingBalance = outstandingBalance; }
+
+    public Double getStampDuty() {
+        if (this.stampDuty != null) return this.stampDuty;
+        Double settled = this.paymentSettled != null ? this.paymentSettled : this.payment;
+        if (settled == null && this.energyPurchase != null) {
+            double setOff = this.billSetOff != null ? this.billSetOff : 0.0;
+            settled = Math.max(0.0, this.energyPurchase - setOff);
+        }
+        return (settled != null && settled > 25000.0) ? 25.0 : 0.0;
+    }
+
+    public void setStampDuty(Double stampDuty) {
+        this.stampDuty = stampDuty;
+    }
+
+    public Double getAmountPayable() {
+        if (this.amountPayable != null) return this.amountPayable;
+        Double settled = this.paymentSettled != null ? this.paymentSettled : this.payment;
+        if (settled == null && this.energyPurchase != null) {
+            double setOff = this.billSetOff != null ? this.billSetOff : 0.0;
+            settled = Math.max(0.0, this.energyPurchase - setOff);
+        }
+        if (settled == null) return 0.0;
+        return settled > 25000.0 ? Math.max(0.0, settled - 25.0) : settled;
+    }
+
+    public void setAmountPayable(Double amountPayable) {
+        this.amountPayable = amountPayable;
+    }
 }

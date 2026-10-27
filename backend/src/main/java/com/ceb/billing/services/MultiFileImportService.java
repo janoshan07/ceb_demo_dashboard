@@ -658,6 +658,23 @@ public class MultiFileImportService {
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
             int lastRow = sheet.getLastRowNum();
 
+            Map<String, Double> masterRateMap = new HashMap<>();
+            if (sessionId != null) {
+                List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
+                if (masterList != null) {
+                    for (Map<String, Object> mRow : masterList) {
+                        String mAcc = (String) mRow.get("accountNo");
+                        if (mAcc != null && !mAcc.trim().isEmpty()) {
+                            Double mRate = parseDouble(mRow.get("unitRate"));
+                            if (mRate != null && mRate > 0.0) {
+                                masterRateMap.put(mAcc.trim(), mRate);
+                            }
+                        }
+                    }
+                }
+            }
+            Map<String, Double> dbCustomerRateCache = new HashMap<>();
+
             for (int r = dataStart; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
@@ -682,31 +699,22 @@ public class MultiFileImportService {
                     ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
                 }
 
-                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid
-                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && sessionId != null && !cleanAcc.isEmpty()) {
-                    List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
-                    if (masterList != null) {
-                        for (Map<String, Object> mRow : masterList) {
-                            String mAcc = (String) mRow.get("accountNo");
-                            if (mAcc != null && mAcc.trim().equals(cleanAcc)) {
-                                Double mRate = parseDouble(mRow.get("unitRate"));
-                                if (mRate != null && mRate > 0.0) {
-                                    ngenUnitRate = mRate;
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid (O(1) lookup)
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !cleanAcc.isEmpty()) {
+                    ngenUnitRate = masterRateMap.get(cleanAcc);
                 }
 
-                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid
+                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid (cached lookup)
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !cleanAcc.isEmpty()) {
-                    try {
-                        Optional<Customer> custOpt = customerRepository.findById(cleanAcc);
-                        if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
-                            ngenUnitRate = custOpt.get().getUnitRate();
-                        }
-                    } catch (Exception ignored) {}
+                    ngenUnitRate = dbCustomerRateCache.computeIfAbsent(cleanAcc, acc -> {
+                        try {
+                            Optional<Customer> custOpt = customerRepository.findById(acc);
+                            if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                                return custOpt.get().getUnitRate();
+                            }
+                        } catch (Exception ignored) {}
+                        return null;
+                    });
                 }
 
                 // 4. Fallback: Unassigned numeric column scan (scan row for plausible unit rate value between 5.0 and 150.0)
@@ -824,6 +832,23 @@ public class MultiFileImportService {
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
             int lastRow = sheet.getLastRowNum();
 
+            Map<String, Double> masterRateMap = new HashMap<>();
+            if (sessionId != null) {
+                List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
+                if (masterList != null) {
+                    for (Map<String, Object> mRow : masterList) {
+                        String mAcc = (String) mRow.get("accountNo");
+                        if (mAcc != null && !mAcc.trim().isEmpty()) {
+                            Double mRate = parseDouble(mRow.get("unitRate"));
+                            if (mRate != null && mRate > 0.0) {
+                                masterRateMap.put(mAcc.trim(), mRate);
+                            }
+                        }
+                    }
+                }
+            }
+            Map<String, Double> dbCustomerRateCache = new HashMap<>();
+
             for (int r = dataStart; r <= lastRow; r++) {
                 Row row = sheet.getRow(r);
                 if (row == null || isRowEmpty(row)) continue;
@@ -881,31 +906,22 @@ public class MultiFileImportService {
                     ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
                 }
 
-                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid
-                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && sessionId != null && !accountNo.isEmpty()) {
-                    List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
-                    if (masterList != null) {
-                        for (Map<String, Object> mRow : masterList) {
-                            String mAcc = (String) mRow.get("accountNo");
-                            if (mAcc != null && mAcc.trim().equals(accountNo)) {
-                                Double mRate = parseDouble(mRow.get("unitRate"));
-                                if (mRate != null && mRate > 0.0) {
-                                    ngenUnitRate = mRate;
-                                    break;
-                                }
-                            }
-                        }
-                    }
+                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid (O(1) lookup)
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
+                    ngenUnitRate = masterRateMap.get(accountNo);
                 }
 
-                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid
+                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid (cached lookup)
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
-                    try {
-                        Optional<Customer> custOpt = customerRepository.findById(accountNo);
-                        if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
-                            ngenUnitRate = custOpt.get().getUnitRate();
-                        }
-                    } catch (Exception ignored) {}
+                    ngenUnitRate = dbCustomerRateCache.computeIfAbsent(accountNo, acc -> {
+                        try {
+                            Optional<Customer> custOpt = customerRepository.findById(acc);
+                            if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                                return custOpt.get().getUnitRate();
+                            }
+                        } catch (Exception ignored) {}
+                        return null;
+                    });
                 }
 
                 // 4. Fallback: Unassigned numeric column scan (scan row for plausible unit rate value between 5.0 and 150.0)
@@ -1430,7 +1446,40 @@ public class MultiFileImportService {
     private static final Map<Long, Map<String, String>> NET_TYPE_APPROVED_CACHE = new HashMap<>();
 
 
+    private final Set<String> cachedValidCostCodes = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<String> cachedValidNetTypes = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private final Set<String> cachedValidExpCodes = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private volatile long lastRefDataLoadTime = 0L;
+    private static final long REF_DATA_TTL_MS = 60_000L; // 1 minute
+
+    private void ensureReferenceDataLoaded() {
+        long now = System.currentTimeMillis();
+        if (now - lastRefDataLoadTime > REF_DATA_TTL_MS || cachedValidCostCodes.isEmpty()) {
+            synchronized (this) {
+                if (now - lastRefDataLoadTime > REF_DATA_TTL_MS || cachedValidCostCodes.isEmpty()) {
+                    cachedValidCostCodes.clear();
+                    costCodeRepository.findAll().forEach(c -> {
+                        if (c.getCostCode() != null) cachedValidCostCodes.add(c.getCostCode().trim().toUpperCase());
+                    });
+
+                    cachedValidNetTypes.clear();
+                    netTypeRepository.findAll().forEach(n -> {
+                        if (n.getName() != null) cachedValidNetTypes.add(n.getName().trim().toUpperCase());
+                    });
+
+                    cachedValidExpCodes.clear();
+                    expenseCodeRepository.findAll().forEach(e -> {
+                        if (e.getExpCode() != null) cachedValidExpCodes.add(e.getExpCode().trim().toUpperCase());
+                    });
+
+                    lastRefDataLoadTime = now;
+                }
+            }
+        }
+    }
+
     private List<String> validateMasterDataRow(Map<String, Object> row) {
+        ensureReferenceDataLoaded();
         List<String> errors = new ArrayList<>();
         
         String accountNo = row.get("accountNo") != null ? row.get("accountNo").toString() : null;
@@ -1458,7 +1507,7 @@ public class MultiFileImportService {
         if (costCode == null || costCode.trim().isEmpty()) {
             errors.add("Cost Code is missing");
         } else {
-            boolean ccExists = costCodeRepository.findByCostCode(costCode.trim()).isPresent();
+            boolean ccExists = cachedValidCostCodes.contains(costCode.trim().toUpperCase());
             if (!ccExists) {
                 errors.add("Unrecognized cost code: '" + costCode + "'");
             }
@@ -1510,7 +1559,7 @@ public class MultiFileImportService {
             errors.add("TYPE (Solar Type) is missing");
         } else {
             String normalized = ExcelValidationService.normalizeSolarType(solarType);
-            boolean ntExists = netTypeRepository.findByName(normalized).isPresent();
+            boolean ntExists = normalized != null && cachedValidNetTypes.contains(normalized.toUpperCase());
             if (!ntExists) {
                 errors.add("Unrecognized net type/solar type: '" + solarType + "'");
             }
@@ -1532,7 +1581,7 @@ public class MultiFileImportService {
         if (isBlank(expectedLCode)) {
             errors.add("L-Code cannot be generated for the given Type and Fix/Variable combination");
         } else {
-            boolean ecExists = expenseCodeRepository.findByExpCode(expectedLCode).isPresent();
+            boolean ecExists = cachedValidExpCodes.contains(expectedLCode.toUpperCase());
             if (!ecExists) {
                 errors.add("L-Code '" + expectedLCode + "' does not exist in the database");
             }
@@ -2223,6 +2272,14 @@ public class MultiFileImportService {
 
             boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
             int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+            Map<String, Map<String, Object>> masterStagedMap = new HashMap<>();
+            for (Map<String, Object> mc : masterStaged) {
+                String mAcc = (String) mc.get("accountNo");
+                if (mAcc != null && !mAcc.trim().isEmpty()) {
+                    masterStagedMap.put(mAcc.trim(), mc);
+                }
+            }
+            Map<String, Optional<Customer>> dbCustomerCache = new HashMap<>();
             int lastRow = sheet.getLastRowNum();
 
             for (int r = dataStart; r <= lastRow; r++) {
@@ -2274,23 +2331,18 @@ public class MultiFileImportService {
                 }
                 accountNo = accountNo.trim();
 
-                Map<String, Object> masterCust = null;
-                for (Map<String, Object> mc : masterStaged) {
-                    if (accountNo.equals(mc.get("accountNo"))) {
-                        masterCust = mc;
-                        break;
-                    }
-                }
+                Map<String, Object> masterCust = masterStagedMap.get(accountNo);
 
                 String customerName = "—";
                 String solarType = null;
                 Double unitRate = 0.0;
+                Optional<Customer> cOpt = Optional.empty();
                 if (masterCust != null) {
                     customerName = masterCust.get("customerName") != null ? masterCust.get("customerName").toString() : "—";
                     solarType = masterCust.get("solarType") != null ? masterCust.get("solarType").toString() : null;
                     unitRate = masterCust.get("unitRate") != null ? ((Number) masterCust.get("unitRate")).doubleValue() : 0.0;
                 } else {
-                    Optional<Customer> cOpt = customerRepository.findById(accountNo);
+                    cOpt = dbCustomerCache.computeIfAbsent(accountNo, customerRepository::findById);
                     if (cOpt.isPresent()) {
                         Customer c = cOpt.get();
                         customerName = c.getCustomerName() != null ? c.getCustomerName() : "—";
@@ -2324,7 +2376,8 @@ public class MultiFileImportService {
                 finalBillingData.put("payment", payment != null ? payment : 0.0);
 
                 List<ExcelValidationError> errorsList = new ArrayList<>();
-                if (masterCust == null && !customerRepository.existsById(accountNo)) {
+                boolean foundInDbOrMaster = masterCust != null || cOpt.isPresent();
+                if (!foundInDbOrMaster) {
                     errorsList.add(new ExcelValidationError("NPAY", r + 1, "Account No",
                             "Account No not found in customer database or Master Data", false));
                 }
@@ -2472,6 +2525,7 @@ public class MultiFileImportService {
         Map<String, List<Map<String, Object>>> nDuplicatesByAcc = new LinkedHashMap<>();
         Map<String, List<Map<String, Object>>> pDistinctByAcc = new LinkedHashMap<>();
         Map<String, List<Map<String, Object>>> pDuplicatesByAcc = new LinkedHashMap<>();
+        Map<String, Double> genCustRateCache = new HashMap<>();
         int rowIdx = 1;
 
         for (String acc : allAccounts) {
@@ -2575,12 +2629,15 @@ public class MultiFileImportService {
                     ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
                 }
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && acc != null && !acc.trim().isEmpty()) {
-                    try {
-                        Optional<Customer> custOpt = customerRepository.findById(acc.trim());
-                        if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
-                            ngenUnitRate = custOpt.get().getUnitRate();
-                        }
-                    } catch (Exception ignored) {}
+                    ngenUnitRate = genCustRateCache.computeIfAbsent(acc.trim(), k -> {
+                        try {
+                            Optional<Customer> custOpt = customerRepository.findById(k);
+                            if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                                return custOpt.get().getUnitRate();
+                            }
+                        } catch (Exception ignored) {}
+                        return null;
+                    });
                 }
                 Double ngenBillSetOff = numOrNull(ngen, "billSetOff");
                 Double ngenRetentionMoney = numOrNull(ngen, "retentionMoney");
@@ -2941,6 +2998,7 @@ public class MultiFileImportService {
         // Tracks approved Master Data accounts that were matched by a Main Data Set row, so the
         // remaining (unmatched) Master Data records can be preserved as base rows afterwards.
         Set<String> matchedMasterAccounts = new HashSet<>();
+        Map<String, Optional<Customer>> dbCustomerCache = new HashMap<>();
 
         for (Map<String, Object> row : mainDataset) {
             Map<String, Object> enriched = new LinkedHashMap<>(row);
@@ -3086,8 +3144,8 @@ public class MultiFileImportService {
                 matchedMasterAccounts.add(acc);
                 matchCount++;
             } else {
-                // Check DB for existing customer
-                Optional<Customer> cOpt = customerRepository.findById(acc);
+                // Check DB for existing customer (cached O(1))
+                Optional<Customer> cOpt = acc != null ? dbCustomerCache.computeIfAbsent(acc.trim(), customerRepository::findById) : Optional.empty();
                 if (cOpt.isPresent()) {
                     Customer c = cOpt.get();
                     enriched.put("customerName", c.getCustomerName() != null ? c.getCustomerName() : "—");
@@ -4694,6 +4752,7 @@ public class MultiFileImportService {
         final Long uploadId = uploadHistory.getId();
 
         int newCustCount = 0;
+        Map<String, Customer> processedCustomers = new HashMap<>();
 
         // 1. Save / Update Customers
         for (Map<String, Object> stagedCust : masterStaged) {
@@ -4785,6 +4844,7 @@ public class MultiFileImportService {
             }
             excelValidationService.revalidateCustomer(c);
             customerRepository.save(c);
+            processedCustomers.put(accountNo, c);
         }
 
         int createdBilling = 0;
@@ -4797,11 +4857,13 @@ public class MultiFileImportService {
             Double retentionMoney = row.get("retentionMoney") != null ? ((Number) row.get("retentionMoney")).doubleValue() : 0.0;
             Double payment = row.get("payment") != null ? ((Number) row.get("payment")).doubleValue() : 0.0;
 
-            Optional<Customer> custOpt = customerRepository.findById(accountNo);
-            if (custOpt.isEmpty()) {
+            Customer cust = accountNo != null ? processedCustomers.get(accountNo) : null;
+            if (cust == null && accountNo != null) {
+                cust = customerRepository.findById(accountNo).orElse(null);
+            }
+            if (cust == null) {
                 continue;
             }
-            Customer cust = custOpt.get();
 
             String prevReadingDateStr = (String) row.get("prevReadingDate");
             String currReadingDateStr = (String) row.get("currReadingDate");
@@ -4858,11 +4920,13 @@ public class MultiFileImportService {
             Double retentionMoney = row.get("retentionMoney") != null ? ((Number) row.get("retentionMoney")).doubleValue() : 0.0;
             Double payment = row.get("payment") != null ? ((Number) row.get("payment")).doubleValue() : 0.0;
 
-            Optional<Customer> custOpt = customerRepository.findById(accountNo);
-            if (custOpt.isEmpty()) {
+            Customer cust = accountNo != null ? processedCustomers.get(accountNo) : null;
+            if (cust == null && accountNo != null) {
+                cust = customerRepository.findById(accountNo).orElse(null);
+            }
+            if (cust == null) {
                 continue;
             }
-            Customer cust = custOpt.get();
 
             String prevReadingDateStr = (String) row.get("prevReadingDate");
             String currReadingDateStr = (String) row.get("currReadingDate");
@@ -4932,6 +4996,7 @@ public class MultiFileImportService {
         cleanupNpayStaging(sessionId);
         MAIN_DATA_CACHE.remove(sessionId);
         MAIN_DUP_CACHE.remove(sessionId);
+        com.ceb.billing.controllers.DashboardController.invalidateCache();
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);

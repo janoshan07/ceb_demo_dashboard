@@ -37,11 +37,37 @@ public class DashboardController {
     @Autowired
     private ApprovalRequestRepository approvalRequestRepository;
 
+    private static class CacheEntry<T> {
+        final T data;
+        final long expiresAt;
+        CacheEntry(T data, long ttlMillis) {
+            this.data = data;
+            this.expiresAt = System.currentTimeMillis() + ttlMillis;
+        }
+        boolean isValid() {
+            return System.currentTimeMillis() < expiresAt;
+        }
+    }
+
+    private static volatile CacheEntry<Map<String, Object>> adminSummaryCache;
+    private static volatile CacheEntry<Map<String, Object>> officerSummaryCache;
+    private static volatile CacheEntry<Map<String, Object>> analyticsCache;
+    private static final long CACHE_TTL_MS = 20_000L; // 20 seconds
+
+    public static void invalidateCache() {
+        adminSummaryCache = null;
+        officerSummaryCache = null;
+        analyticsCache = null;
+    }
+
     // --- Admin Dashboard Endpoint ---
 
     @GetMapping("/api/admin/dashboard/summary")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> getAdminDashboardSummary() {
+        if (adminSummaryCache != null && adminSummaryCache.isValid()) {
+            return ResponseEntity.ok(adminSummaryCache.data);
+        }
         Map<String, Object> summary = new HashMap<>();
         
         long totalCustomers = customerRepository.count();
@@ -63,6 +89,7 @@ public class DashboardController {
         summary.put("totalImportUnits", totalImports != null ? totalImports : 0.0);
         summary.put("totalExportUnits", totalExports != null ? totalExports : 0.0);
 
+        adminSummaryCache = new CacheEntry<>(summary, CACHE_TTL_MS);
         return ResponseEntity.ok(summary);
     }
 
@@ -71,6 +98,9 @@ public class DashboardController {
     @GetMapping("/api/officer/dashboard/summary")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> getOfficerDashboardSummary() {
+        if (officerSummaryCache != null && officerSummaryCache.isValid()) {
+            return ResponseEntity.ok(officerSummaryCache.data);
+        }
         Map<String, Object> summary = new HashMap<>();
         
         long totalCustomers = customerRepository.count();
@@ -90,6 +120,7 @@ public class DashboardController {
         summary.put("totalImportUnits", totalImports != null ? totalImports : 0.0);
         summary.put("totalExportUnits", totalExports != null ? totalExports : 0.0);
 
+        officerSummaryCache = new CacheEntry<>(summary, CACHE_TTL_MS);
         return ResponseEntity.ok(summary);
     }
 
@@ -132,6 +163,9 @@ public class DashboardController {
     @GetMapping("/api/admin/dashboard/analytics")
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
     public ResponseEntity<?> getAdminDashboardAnalytics() {
+        if (analyticsCache != null && analyticsCache.isValid()) {
+            return ResponseEntity.ok(analyticsCache.data);
+        }
         Map<String, Object> response = new HashMap<>();
 
         // 1. Totals
@@ -205,6 +239,7 @@ public class DashboardController {
         }
         response.put("solarDistribution", solarDistribution);
 
+        analyticsCache = new CacheEntry<>(response, CACHE_TTL_MS);
         return ResponseEntity.ok(response);
     }
 }

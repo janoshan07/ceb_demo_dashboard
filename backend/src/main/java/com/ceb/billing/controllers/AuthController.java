@@ -48,10 +48,13 @@ public class AuthController {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userDetails.getUsername()));
 
-        // 2. DO NOT issue JWT immediately. Generate and dispatch secure 6-digit OTP to user's registered phone
-        OtpLoginResponse otpResponse = otpService.createAndSendOtp(user);
+        // 2. Issue JWT token directly upon successful credentials verification (OTP bypassed)
+        String role = user.getRole();
+        String jwt = jwtUtils.generateJwtTokenFromUsername(user.getUsername(), role);
 
-        return ResponseEntity.ok(otpResponse);
+        auditLogService.log("USER_LOGIN_SUCCESS", "User " + user.getUsername() + " successfully authenticated with credentials.");
+
+        return ResponseEntity.ok(new JwtResponse(jwt, user.getUsername(), role));
     }
 
     @PostMapping("/verify-otp")

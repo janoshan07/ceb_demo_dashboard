@@ -50,6 +50,9 @@ public class CustomerDirectorySyncService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    private CustomerHashIndexService customerHashIndexService;
+
     /** Syncs every record of an approved snapshot into the Customer Directory. */
     @Transactional
     public int syncSnapshot(MonthlyDirectorySnapshot snap) {
@@ -81,6 +84,9 @@ public class CustomerDirectorySyncService {
         }
         log.info("CustomerDirectorySync: synced " + synced + " customer(s) from snapshot " + snap.getId()
                 + " (division=" + division + ").");
+        if (customerHashIndexService != null && synced > 0) {
+            customerHashIndexService.rebuildIndex();
+        }
         return synced;
     }
 

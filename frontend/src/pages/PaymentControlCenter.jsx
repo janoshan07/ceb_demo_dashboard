@@ -1875,7 +1875,9 @@ const PaymentControlCenter = () => {
                                       <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Bill Set-Off</th>
                                       <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Retention</th>
                                       <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Outstanding</th>
-                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Total Payable</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Payment Settled</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Stamp Duty</th>
+                                      <th style={{ padding: '0.65rem 0.75rem', textAlign: 'right' }}>Amount Payable</th>
                                       <th style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>Record Status</th>
                                       <th style={{ padding: '0.65rem 0.75rem' }}>Hold Status & Reason</th>
                                       <th style={{ padding: '0.65rem 0.75rem', textAlign: 'center' }}>Action</th>
@@ -1943,9 +1945,19 @@ const PaymentControlCenter = () => {
                                             {formatLKR(p.outstandingBalance)}
                                           </td>
 
-                                          {/* Total Payable */}
-                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#10b981' }}>
+                                          {/* Payment Settled */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: 'var(--text-primary)' }}>
                                             {formatLKR(p.totalPayable)}
+                                          </td>
+
+                                          {/* Stamp Duty */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#f87171' }}>
+                                            {formatLKR(p.stampDuty != null ? p.stampDuty : (Number(p.totalPayable) > 25000 ? 25 : 0))}
+                                          </td>
+
+                                          {/* Amount Payable */}
+                                          <td style={{ padding: '0.65rem 0.75rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#10b981' }}>
+                                            {formatLKR(p.amountPayable != null ? p.amountPayable : (Number(p.totalPayable) > 25000 ? Math.max(0, Number(p.totalPayable) - 25) : Number(p.totalPayable)))}
                                           </td>
 
                                           {/* Record Status Badge */}
@@ -2366,7 +2378,9 @@ const PaymentControlCenter = () => {
                   <th style={{ padding: '0.85rem 1rem' }}>Customer Name</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Net Type</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Bank / Branch</th>
-                  <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Total Settled</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Payment Settled</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Stamp Duty</th>
+                  <th style={{ padding: '0.85rem 1rem', textAlign: 'right' }}>Amount Payable</th>
                   <th style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>Status</th>
                   <th style={{ padding: '0.85rem 1rem' }}>Settled Date</th>
                 </tr>
@@ -2390,8 +2404,14 @@ const PaymentControlCenter = () => {
                       <td style={{ padding: '0.85rem 1rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
                         {item.bankCode || '—'} / {item.branchCode || '—'} ({item.bankAccountNo || '—'})
                       </td>
-                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#10b981' }}>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: 'var(--text-primary)' }}>
                         {formatLKR(item.totalPayable)}
+                      </td>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#f87171' }}>
+                        {formatLKR(item.stampDuty != null ? item.stampDuty : (Number(item.totalPayable) > 25000 ? 25 : 0))}
+                      </td>
+                      <td style={{ padding: '0.85rem 1rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#10b981' }}>
+                        {formatLKR(item.amountPayable != null ? item.amountPayable : (Number(item.totalPayable) > 25000 ? Math.max(0, Number(item.totalPayable) - 25) : Number(item.totalPayable)))}
                       </td>
                       <td style={{ padding: '0.85rem 1rem', textAlign: 'center' }}>
                         <span style={{ padding: '0.2rem 0.55rem', borderRadius: '4px', background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', fontWeight: 800, fontSize: '0.74rem' }}>
@@ -3368,7 +3388,9 @@ const PaymentControlCenter = () => {
                     <th style={{ padding: '0.65rem 0.85rem' }}>Account No</th>
                     <th style={{ padding: '0.65rem 0.85rem' }}>Customer Name</th>
                     <th style={{ padding: '0.65rem 0.85rem' }}>Bank / Branch</th>
-                    <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Total Payable</th>
+                    <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Payment Settled</th>
+                    <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Stamp Duty</th>
+                    <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Amount Payable</th>
                     <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Item Status</th>
                   </tr>
                 </thead>
@@ -3378,8 +3400,14 @@ const PaymentControlCenter = () => {
                       <td style={{ padding: '0.65rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>{item.accountNo}</td>
                       <td style={{ padding: '0.65rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{item.customerName}</td>
                       <td style={{ padding: '0.65rem 0.85rem', color: 'var(--text-secondary)' }}>{item.bankCode || '—'} / {item.branchCode || '—'}</td>
-                      <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', color: '#10b981', fontWeight: 700 }}>
+                      <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', color: 'var(--text-primary)', fontWeight: 700 }}>
                         {formatLKR(item.totalPayable)}
+                      </td>
+                      <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', color: '#f87171', fontWeight: 700 }}>
+                        {formatLKR(item.stampDuty != null ? item.stampDuty : (Number(item.totalPayable) > 25000 ? 25 : 0))}
+                      </td>
+                      <td style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', color: '#10b981', fontWeight: 700 }}>
+                        {formatLKR(item.amountPayable != null ? item.amountPayable : (Number(item.totalPayable) > 25000 ? Math.max(0, Number(item.totalPayable) - 25) : Number(item.totalPayable)))}
                       </td>
                       <td style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>
                         <span style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', background: 'rgba(255,255,255,0.06)', fontSize: '0.74rem', fontWeight: 600 }}>

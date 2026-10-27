@@ -427,6 +427,25 @@ const SearchBar = ({
   showFilters
 }) => {
   const [isFocused, setIsFocused] = useState(false);
+  const [localVal, setLocalVal] = useState(value || '');
+
+  useEffect(() => {
+    setLocalVal(value || '');
+  }, [value]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localVal !== (value || '')) {
+        onChange(localVal);
+      }
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [localVal, onChange, value]);
+
+  const handleClear = () => {
+    setLocalVal('');
+    onChange('');
+  };
 
   return (
     <div style={{
@@ -463,8 +482,8 @@ const SearchBar = ({
         <input
           type="text"
           className="search-bar-input-override"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          value={localVal}
+          onChange={(e) => setLocalVal(e.target.value)}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
@@ -477,7 +496,7 @@ const SearchBar = ({
             width: '100%',
             height: '100%',
             padding: 0,
-            paddingRight: (value || count > 0) ? '6.5rem' : '0',
+            paddingRight: (localVal || count > 0) ? '6.5rem' : '0',
             fontFamily: 'inherit',
             transition: 'all 0.3s'
           }}
@@ -493,7 +512,7 @@ const SearchBar = ({
           pointerEvents: 'auto',
           zIndex: 2
         }}>
-          {value && (
+          {localVal && (
             <span style={{
               fontSize: '0.72rem',
               color: '#818cf8',
@@ -509,10 +528,10 @@ const SearchBar = ({
             </span>
           )}
           
-          {value && (
+          {localVal && (
             <button
               type="button"
-              onClick={() => onChange('')}
+              onClick={handleClear}
               style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: 'none',
@@ -588,6 +607,123 @@ const SearchBar = ({
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+//  REUSABLE TABLE PAGINATION COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════
+export const TablePagination = ({
+  currentPage = 1,
+  pageSize = 50,
+  totalItems = 0,
+  onPageChange,
+  onPageSizeChange,
+  pageSizeOptions = [25, 50, 100, 'ALL']
+}) => {
+  const isAll = pageSize === 'ALL' || (typeof pageSize === 'number' && pageSize >= totalItems);
+  const effectiveSize = isAll ? Math.max(1, totalItems) : Number(pageSize);
+  const totalPages = isAll ? 1 : Math.max(1, Math.ceil(totalItems / effectiveSize));
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const startItem = totalItems === 0 ? 0 : (safePage - 1) * effectiveSize + 1;
+  const endItem = isAll ? totalItems : Math.min(safePage * effectiveSize, totalItems);
+
+  if (totalItems <= 25 && pageSize === 50) return null;
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      flexWrap: 'wrap',
+      gap: '1rem',
+      padding: '0.75rem 1.25rem',
+      background: 'rgba(15, 23, 42, 0.75)',
+      backdropFilter: 'blur(10px)',
+      borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+      borderRadius: '0 0 16px 16px',
+      fontSize: '0.8rem',
+      color: 'var(--text-secondary)',
+      marginTop: '-1px'
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <span>
+          Showing <strong style={{ color: 'white' }}>{totalItems > 0 ? `${startItem}–${endItem}` : 0}</strong> of <strong style={{ color: 'white' }}>{totalItems}</strong> entries
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.5rem' }}>
+          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Per page:</span>
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const val = e.target.value === 'ALL' ? 'ALL' : Number(e.target.value);
+              onPageSizeChange(val);
+              onPageChange(1);
+            }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.07)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: '8px',
+              color: 'white',
+              padding: '0.2rem 0.5rem',
+              fontSize: '0.74rem',
+              cursor: 'pointer',
+              outline: 'none'
+            }}
+          >
+            {pageSizeOptions.map(opt => (
+              <option key={opt} value={opt} style={{ background: '#0f172a', color: 'white' }}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <button
+          type="button"
+          disabled={safePage <= 1}
+          onClick={() => onPageChange(safePage - 1)}
+          style={{
+            padding: '0.3rem 0.7rem',
+            borderRadius: '8px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: safePage <= 1 ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.08)',
+            color: safePage <= 1 ? '#475569' : '#cbd5e1',
+            fontSize: '0.75rem',
+            cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
+            fontWeight: 500,
+            transition: 'all 0.2s'
+          }}
+        >
+          Previous
+        </button>
+
+        <span style={{ padding: '0 0.5rem', fontSize: '0.75rem', color: '#cbd5e1' }}>
+          Page <strong style={{ color: 'white' }}>{safePage}</strong> of <strong style={{ color: 'white' }}>{totalPages}</strong>
+        </span>
+
+        <button
+          type="button"
+          disabled={safePage >= totalPages}
+          onClick={() => onPageChange(safePage + 1)}
+          style={{
+            padding: '0.3rem 0.7rem',
+            borderRadius: '8px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            background: safePage >= totalPages ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.08)',
+            color: safePage >= totalPages ? '#475569' : '#cbd5e1',
+            fontSize: '0.75rem',
+            cursor: safePage >= totalPages ? 'not-allowed' : 'pointer',
+            fontWeight: 500,
+            transition: 'all 0.2s'
+          }}
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — Master Data
 // ═══════════════════════════════════════════════════════════════════════════
 const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
@@ -596,6 +732,8 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const allCount = rows.length;
   const validCount = rows.filter(r => r.status === 'VALID').length;
@@ -633,6 +771,16 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
     }
     return prefix ? `${prefix}${val}` : String(val);
   };
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchText, activeFilter, filterErrors]);
+
+  const pagedRows = React.useMemo(() => {
+    if (pageSize === 'ALL') return displayed;
+    const start = (currentPage - 1) * pageSize;
+    return displayed.slice(start, start + pageSize);
+  }, [displayed, currentPage, pageSize]);
 
   React.useEffect(() => {
     setSelectedKeys(prev => {
@@ -783,11 +931,13 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
             </tr>
           </thead>
           <tbody>
-            {displayed.map((row, i) => (
-              <React.Fragment key={i}>
+            {pagedRows.map((row, i) => {
+              const rowIndex = (currentPage - 1) * (pageSize === 'ALL' ? 0 : pageSize) + i;
+              return (
+              <React.Fragment key={rowIndex}>
                 <tr
-                  onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                  onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                     {row.status === 'ERROR' ? (
@@ -850,7 +1000,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                     </div>
                   </td>
                 </tr>
-                {expandedRow === i && row.errors?.length > 0 && (
+                {expandedRow === rowIndex && row.errors?.length > 0 && (
                   <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
                     <td colSpan={19} style={{ padding: '0.75rem 1.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
@@ -863,10 +1013,18 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                   </tr>
                 )}
               </React.Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalItems={displayed.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
       </>
       )}
     </div>
@@ -882,6 +1040,8 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const allCount = rows.length;
   const validCount = rows.filter(r => r.status === 'VALID').length;
@@ -908,6 +1068,16 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
     return true;
   });
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchText, activeFilter, filterErrors]);
+
+  const pagedRows = React.useMemo(() => {
+    if (pageSize === 'ALL') return displayed;
+    const start = (currentPage - 1) * pageSize;
+    return displayed.slice(start, start + pageSize);
+  }, [displayed, currentPage, pageSize]);
 
   const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
   const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
@@ -1055,11 +1225,13 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
             </tr>
           </thead>
           <tbody>
-            {displayed.map((row, i) => (
-              <React.Fragment key={i}>
+            {pagedRows.map((row, i) => {
+              const rowIndex = (currentPage - 1) * (pageSize === 'ALL' ? 0 : pageSize) + i;
+              return (
+              <React.Fragment key={rowIndex}>
                 <tr
-                  onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                  onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
+                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                     {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
@@ -1115,7 +1287,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
                     </div>
                   </td>
                 </tr>
-                {expandedRow === i && (row.status === 'DUPLICATE' || row.errors?.length > 0) && (
+                {expandedRow === rowIndex && (row.status === 'DUPLICATE' || row.errors?.length > 0) && (
                   <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
                     <td colSpan={9} style={{ padding: '0.75rem 1.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
@@ -1129,10 +1301,18 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
                   </tr>
                 )}
               </React.Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalItems={displayed.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
       </>
       )}
     </div>
@@ -1148,6 +1328,8 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const isValidRecord = r => (r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT') && (!r.warnings || r.warnings.length === 0);
 
@@ -1178,6 +1360,16 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
     return true;
   });
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchText, activeFilter, filterErrors]);
+
+  const pagedRows = React.useMemo(() => {
+    if (pageSize === 'ALL') return displayed;
+    const start = (currentPage - 1) * pageSize;
+    return displayed.slice(start, start + pageSize);
+  }, [displayed, currentPage, pageSize]);
 
   const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
   const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
@@ -1339,12 +1531,13 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
             </tr>
           </thead>
           <tbody>
-            {displayed.map((row, i) => {
+            {pagedRows.map((row, i) => {
+              const rowIndex = (currentPage - 1) * (pageSize === 'ALL' ? 0 : pageSize) + i;
               return (
-                <React.Fragment key={i}>
+                <React.Fragment key={rowIndex}>
                   <tr
-                    onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                    onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
@@ -1427,7 +1620,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       </div>
                     </td>
                   </tr>
-                  {expandedRow === i && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
+                  {expandedRow === rowIndex && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
                       <td colSpan={17} style={{ padding: '1rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
@@ -1465,6 +1658,13 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           </tbody>
         </table>
       </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalItems={displayed.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
       </>
       )}
     </div>
@@ -1481,6 +1681,8 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
   const [activeFilter, setActiveFilter] = useState('ALL');
   const [searchText, setSearchText] = useState('');
   const [showFilters, setShowFilters] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const isValidRecord = r => (r.status === 'VALID' || r.status === 'MULTIPLE_PAYMENT') && (!r.warnings || r.warnings.length === 0);
 
@@ -1511,6 +1713,16 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     if (activeFilter === 'DUPLICATE') return r.status === 'DUPLICATE';
     return true;
   });
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchText, activeFilter, filterErrors]);
+
+  const pagedRows = React.useMemo(() => {
+    if (pageSize === 'ALL') return displayed;
+    const start = (currentPage - 1) * pageSize;
+    return displayed.slice(start, start + pageSize);
+  }, [displayed, currentPage, pageSize]);
 
   const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
   const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
@@ -1668,15 +1880,16 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
             </tr>
           </thead>
           <tbody>
-            {displayed.map((row, i) => {
+            {pagedRows.map((row, i) => {
+              const rowIndex = (currentPage - 1) * (pageSize === 'ALL' ? 0 : pageSize) + i;
               const accInvalid = isAccountInvalid(row.accountNo);
               const accEmpty = isAccountEmpty(row.accountNo);
 
               return (
-                <React.Fragment key={i}>
+                <React.Fragment key={rowIndex}>
                   <tr
-                    onClick={() => setExpandedRow(expandedRow === i ? null : i)}
-                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === i ? 'rgba(99,102,241,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                    onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
+                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
@@ -1748,7 +1961,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                       </div>
                     </td>
                   </tr>
-                  {expandedRow === i && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
+                  {expandedRow === rowIndex && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
                       <td colSpan={11} style={{ padding: '1rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
@@ -1786,6 +1999,13 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           </tbody>
         </table>
       </div>
+      <TablePagination
+        currentPage={currentPage}
+        pageSize={pageSize}
+        totalItems={displayed.length}
+        onPageChange={setCurrentPage}
+        onPageSizeChange={setPageSize}
+      />
       </>
       )}
     </div>
@@ -1994,9 +2214,22 @@ const UploadPage = () => {
   const [mainDatasetFilter, setMainDatasetFilter] = useState('ALL');
   const [mainSearchText, setMainSearchText] = useState('');
   const [showMainFilters, setShowMainFilters] = useState(true);
+  const [mainPage, setMainPage] = useState(1);
+  const [mainPageSize, setMainPageSize] = useState(50);
+
   const [masterComparisonFilter, setMasterComparisonFilter] = useState('ALL');
   const [comparisonSearchText, setComparisonSearchText] = useState('');
   const [showComparisonFilters, setShowComparisonFilters] = useState(true);
+  const [comparisonPage, setComparisonPage] = useState(1);
+  const [comparisonPageSize, setComparisonPageSize] = useState(50);
+
+  useEffect(() => {
+    setMainPage(1);
+  }, [mainSearchText, mainDatasetFilter]);
+
+  useEffect(() => {
+    setComparisonPage(1);
+  }, [comparisonSearchText, masterComparisonFilter]);
   // ── Step 6: Name Mismatch review workflow ──
   const [nameMismatchSelected, setNameMismatchSelected] = useState([]); // Account Nos selected for bulk approval
   const [nameApproving, setNameApproving] = useState(false);
@@ -4807,32 +5040,42 @@ const UploadPage = () => {
           </div>
         )}
 
-        {filteredRows.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-            <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-            <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-              <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                  {['#', 'Account No', 'Name', 'Prev Reading', 'Curr Reading', 'Net Type', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Status', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row, i) => {
-                  const rowKey = row.rowNum ?? row.accountNo ?? i;
-                  const expanded = mainExpandedRow === rowKey;
-                  const dupMembers = rowHasDuplicates(row) ? dupEntriesByAcc[String(row.accountNo ?? '—')] : null;
-                  const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.multiplePaymentReason || row.rejectionReason || !!dupMembers;
-                  return (
-                    <React.Fragment key={rowKey}>
-                      <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isMultiplePayment ? '3px solid #818cf8' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                        <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{i + 1}</td>
+        {(() => {
+          const pagedMainRows = mainPageSize === 'ALL'
+            ? filteredRows
+            : filteredRows.slice((mainPage - 1) * mainPageSize, mainPage * mainPageSize);
+
+          if (filteredRows.length === 0) {
+            return (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+                <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+              </div>
+            );
+          }
+
+          return (
+            <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                    {['#', 'Account No', 'Name', 'Prev Reading', 'Curr Reading', 'Net Type', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Status', 'Actions'].map(h => (
+                      <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedMainRows.map((row, i) => {
+                    const rowIndex = (mainPage - 1) * (mainPageSize === 'ALL' ? 0 : mainPageSize) + i;
+                    const rowKey = row.rowNum ?? row.accountNo ?? rowIndex;
+                    const expanded = mainExpandedRow === rowKey;
+                    const dupMembers = rowHasDuplicates(row) ? dupEntriesByAcc[String(row.accountNo ?? '—')] : null;
+                    const hasDetail = (row.errors?.length || 0) + (row.warnings?.length || 0) + (row.missingFields?.length || 0) + (row.mismatchFields?.length || 0) > 0 || row.duplicateReason || row.multiplePaymentReason || row.rejectionReason || !!dupMembers;
+                    return (
+                      <React.Fragment key={rowKey}>
+                        <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isMultiplePayment ? '3px solid #818cf8' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                          <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{rowIndex + 1}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {row.accountNo || '—'}
                           {row.sourceFile && (
@@ -4933,8 +5176,16 @@ const UploadPage = () => {
                 })}
               </tbody>
             </table>
+            <TablePagination
+              currentPage={mainPage}
+              pageSize={mainPageSize}
+              totalItems={filteredRows.length}
+              onPageChange={setMainPage}
+              onPageSizeChange={setMainPageSize}
+            />
           </div>
-        )}
+          );
+        })()}
 
         {/* ── Edit merged record modal ── */}
         {editingMainRow && (() => {
@@ -5978,35 +6229,45 @@ const UploadPage = () => {
               </div>
             );
           })()
-        ) : filteredRows.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
-            <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-            <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-              <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
-                  {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Unit Rate Check', 'Status', 'Issues'].map(h => (
-                    <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row, i) => {
-                  const rowKey = row.rowNum ?? row.accountNo ?? i;
-                  const expanded = comparisonExpandedRow === rowKey;
-                  const errorCount = row.errors?.length || 0;
-                  const warningCount = row.warnings?.length || 0;
-                  const isMulti = isMultiplePayment(row);
-                  const isDuplicate = isDup(row);
-                  const hasDetail = errorCount + warningCount > 0 || row.status === 'REJECTED' || !!row.multiplePaymentReason;
-                  return (
-                    <React.Fragment key={rowKey}>
-                      <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : isMulti ? '3px solid #818cf8' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : isMulti ? 'rgba(129,140,248,0.03)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                        <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
+        ) : (() => {
+          const pagedComparisonRows = comparisonPageSize === 'ALL'
+            ? filteredRows
+            : filteredRows.slice((comparisonPage - 1) * comparisonPageSize, comparisonPage * comparisonPageSize);
+
+          if (filteredRows.length === 0) {
+            return (
+              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
+                <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
+              </div>
+            );
+          }
+
+          return (
+            <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                    {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Unit Rate Check', 'Status', 'Issues'].map(h => (
+                      <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pagedComparisonRows.map((row, i) => {
+                    const rowIndex = (comparisonPage - 1) * (comparisonPageSize === 'ALL' ? 0 : comparisonPageSize) + i;
+                    const rowKey = row.rowNum ?? row.accountNo ?? rowIndex;
+                    const expanded = comparisonExpandedRow === rowKey;
+                    const errorCount = row.errors?.length || 0;
+                    const warningCount = row.warnings?.length || 0;
+                    const isMulti = isMultiplePayment(row);
+                    const isDuplicate = isDup(row);
+                    const hasDetail = errorCount + warningCount > 0 || row.status === 'REJECTED' || !!row.multiplePaymentReason;
+                    return (
+                      <React.Fragment key={rowKey}>
+                        <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : isMulti ? '3px solid #818cf8' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : isMulti ? 'rgba(129,140,248,0.03)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                          <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerAddress || '—'}</td>
@@ -6128,8 +6389,16 @@ const UploadPage = () => {
                 })}
               </tbody>
             </table>
+            <TablePagination
+              currentPage={comparisonPage}
+              pageSize={comparisonPageSize}
+              totalItems={filteredRows.length}
+              onPageChange={setComparisonPage}
+              onPageSizeChange={setComparisonPageSize}
+            />
           </div>
-        )}
+          );
+        })()}
       </div>
     );
   };

@@ -3641,6 +3641,9 @@ const CustomerDetails = () => {
                               );
                               const status = getBillPaymentStatus(bill);
                               const settledAmt = bill.paymentSettled != null ? bill.paymentSettled : bill.payment;
+                              const numSettled = Number(settledAmt || 0);
+                              const stampDutyAmt = bill.stampDuty != null ? Number(bill.stampDuty) : (numSettled > 25000 ? 25 : 0);
+                              const amountPayable = bill.amountPayable != null ? Number(bill.amountPayable) : (bill.totalPayable != null ? Number(bill.totalPayable) : (numSettled > 25000 ? Math.max(0, numSettled - 25) : numSettled));
                               const outstandingAmt = Number(bill.outstandingBalance || 0);
                               const grossSalesAmt = bill.energyPurchase != null ? bill.energyPurchase : bill.totalAmount;
                               const isMultiObligation = grp.bills.length > 1;
@@ -3735,20 +3738,46 @@ const CustomerDetails = () => {
                                     padding: '0.85rem 1rem',
                                     border: '1px solid rgba(255,255,255,0.04)'
                                   }}>
-                                    {/* 1. Payment Settled (Hero) */}
+                                    {/* 1. Payment Settled */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
-                                        <CheckCircle size={13} color="#10b981" /> Payment Settled
+                                        <CheckCircle size={13} color="var(--text-secondary)" /> Payment Settled
                                       </div>
-                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>
                                         {settledAmt != null ? formatLKR(settledAmt) : '—'}
                                       </div>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                                        Disbursed to customer bank
+                                        Original settled amount
                                       </div>
                                     </div>
 
-                                    {/* 2. Outstanding Balance (Hero) */}
+                                    {/* NEW: Stamp Duty */}
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                                        <FileText size={13} color="#f87171" /> Stamp Duty
+                                      </div>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f87171', letterSpacing: '-0.02em' }}>
+                                        {formatLKR(stampDutyAmt)}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                        Govt. deduction
+                                      </div>
+                                    </div>
+
+                                    {/* NEW: Amount Payable */}
+                                    <div>
+                                      <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
+                                        <DollarSign size={13} color="#10b981" /> Amount Payable
+                                      </div>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                                        {formatLKR(amountPayable)}
+                                      </div>
+                                      <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                                        Final amount disbursed
+                                      </div>
+                                    </div>
+
+                                    {/* 4. Outstanding Balance */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
                                         <AlertCircle size={13} color={outstandingAmt > 0 ? '#f59e0b' : '#10b981'} /> Outstanding Balance
@@ -3897,6 +3926,8 @@ const CustomerDetails = () => {
                             <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Ref & Mode</th>
                             <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Solar Units (kWh)</th>
                             <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Payment Settled</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Stamp Duty</th>
+                            <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Amount Payable</th>
                             <th style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Outstanding</th>
                             <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase' }}>Actions</th>
                           </tr>
@@ -3911,6 +3942,9 @@ const CustomerDetails = () => {
                             const m = getBillMonth(bill);
                             const isMulti = (monthCounts[m] || 0) > 1;
                             const settledAmt = bill.paymentSettled != null ? bill.paymentSettled : bill.payment;
+                            const numSettled = Number(settledAmt || 0);
+                            const stampDutyAmt = bill.stampDuty != null ? Number(bill.stampDuty) : (numSettled > 25000 ? 25 : 0);
+                            const amountPayable = bill.amountPayable != null ? Number(bill.amountPayable) : (bill.totalPayable != null ? Number(bill.totalPayable) : (numSettled > 25000 ? Math.max(0, numSettled - 25) : numSettled));
                             const outstandingAmt = Number(bill.outstandingBalance || 0);
 
                             return (
@@ -3967,8 +4001,22 @@ const CustomerDetails = () => {
 
                                 {/* Payment Settled */}
                                 <td style={{ padding: '0.6rem 0.85rem' }}>
-                                  <div style={{ fontWeight: 800, color: '#10b981', fontSize: '0.85rem' }}>
+                                  <div style={{ fontWeight: 800, color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
                                     {settledAmt != null ? formatLKR(settledAmt) : '—'}
+                                  </div>
+                                </td>
+
+                                {/* Stamp Duty */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 800, color: '#f87171', fontSize: '0.85rem' }}>
+                                    {formatLKR(stampDutyAmt)}
+                                  </div>
+                                </td>
+
+                                {/* Amount Payable */}
+                                <td style={{ padding: '0.6rem 0.85rem' }}>
+                                  <div style={{ fontWeight: 800, color: '#10b981', fontSize: '0.85rem' }}>
+                                    {formatLKR(amountPayable)}
                                   </div>
                                   <span style={{
                                     fontSize: '0.64rem', fontWeight: 700, padding: '0.05rem 0.35rem', borderRadius: 8,

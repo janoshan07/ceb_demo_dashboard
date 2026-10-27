@@ -38,6 +38,9 @@ public class PaymentBatchItem {
     @Column(name = "outstanding_balance")
     private Double outstandingBalance = 0.0;
 
+    @Column(name = "stamp_duty")
+    private Double stampDuty = 0.0;
+
     @Column(name = "total_payable", nullable = false)
     private Double totalPayable = 0.0;
 
@@ -140,6 +143,14 @@ public class PaymentBatchItem {
 
     public void setOutstandingBalance(Double outstandingBalance) {
         this.outstandingBalance = outstandingBalance;
+    }
+
+    public Double getStampDuty() {
+        return stampDuty;
+    }
+
+    public void setStampDuty(Double stampDuty) {
+        this.stampDuty = stampDuty;
     }
 
     public Double getTotalPayable() {

@@ -40,8 +40,13 @@ public interface CustomerRepository extends JpaRepository<Customer, String> {
      * Pageable.
      */
     @Query("SELECT c FROM Customer c WHERE " +
-           "(:query IS NULL OR LOWER(c.accountNo) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
-           "LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%'))) AND " +
+           "(:query IS NULL OR " +
+           " c.accountNo = :query OR " +
+           " c.accountNo LIKE CONCAT(:query, '%') OR " +
+           " LOWER(c.accountNo) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           " c.customerName = :query OR " +
+           " c.customerName LIKE CONCAT(:query, '%') OR " +
+           " LOWER(c.customerName) LIKE LOWER(CONCAT('%', :query, '%'))) AND " +
            "(:status IS NULL OR c.validationStatus = :status) AND " +
            "(:location IS NULL OR " +
            "(c.division IS NOT NULL AND TRIM(c.division) <> '' AND LOWER(TRIM(c.division)) = LOWER(TRIM(:location))) OR " +

@@ -85,4 +85,7 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
     List<Object[]> getBranchWiseAnalytics();
 
     long countByCustomerAccountNo(String accountNo);
+
+    @Query("SELECT MAX(b.toDate) FROM BillingRecord b")
+    LocalDate findMaxToDate();
 }

@@ -219,6 +219,45 @@ public class PaymentControlServiceTest {
         assertTrue(augRes.getHoldReasons().isEmpty(), "August must not have September's hold reasons");
         assertTrue(augRes.getBlockingIssues().isEmpty(), "August must have no blocking issues");
     }
+
+    @Test
+    public void testM_StampDuty_GreaterThan25000_AppliesRs25Deduction() {
+        Map<String, Object> rec = createValidCustomerRecord();
+        rec.put("paymentSettled", 30000.0);
+
+        Map<String, Double> fin = service.extractFinancials(rec);
+
+        assertEquals(30000.0, fin.get("paymentSettled"));
+        assertEquals(25.0, fin.get("stampDuty"));
+        assertEquals(29975.0, fin.get("amountPayable"));
+        assertEquals(29975.0, fin.get("totalPayable"));
+    }
+
+    @Test
+    public void testN_StampDuty_Exactly25000_ZeroStampDuty() {
+        Map<String, Object> rec = createValidCustomerRecord();
+        rec.put("paymentSettled", 25000.0);
+
+        Map<String, Double> fin = service.extractFinancials(rec);
+
+        assertEquals(25000.0, fin.get("paymentSettled"));
+        assertEquals(0.0, fin.get("stampDuty"));
+        assertEquals(25000.0, fin.get("amountPayable"));
+        assertEquals(25000.0, fin.get("totalPayable"));
+    }
+
+    @Test
+    public void testO_StampDuty_LessThan25000_ZeroStampDuty() {
+        Map<String, Object> rec = createValidCustomerRecord();
+        rec.put("paymentSettled", 15000.0);
+
+        Map<String, Double> fin = service.extractFinancials(rec);
+
+        assertEquals(15000.0, fin.get("paymentSettled"));
+        assertEquals(0.0, fin.get("stampDuty"));
+        assertEquals(15000.0, fin.get("amountPayable"));
+        assertEquals(15000.0, fin.get("totalPayable"));
+    }
 }
 
 

@@ -63,49 +63,100 @@ const Dashboard = () => {
   const { showToast } = useToast();
 
   useEffect(() => {
-    if (user && (user.role === 'ADMIN' || user.role === 'OFFICER')) {
-      const fetchPredictionsData = async () => {
-        try {
-          setPredictionsLoading(true);
-          const res = await authFetch('/api/admin/dashboard/predictions');
-          if (res.ok) {
-            const data = await res.json();
-            setPredictions(data);
-          }
-        } catch (err) {
-          console.error('Failed to load predictions:', err);
-        } finally {
-          setPredictionsLoading(false);
-        }
-      };
-      fetchPredictionsData();
-    }
-  }, [user]);
+    if (!user) return;
 
-  useEffect(() => {
-    if (user && (user.role === 'ADMIN' || user.role === 'OFFICER')) {
-      const fetchFilteredAlerts = async () => {
-        try {
+    const fetchAllDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const isAdminOrOfficer = user.role === 'ADMIN' || user.role === 'OFFICER';
+        const summaryUrl = user.role === 'ADMIN' 
+          ? '/api/admin/dashboard/summary' 
+          : user.role === 'OFFICER' 
+            ? '/api/officer/dashboard/summary' 
+            : '/api/user/dashboard/summary';
+        const trendUrl = user.role === 'USER' ? '/api/user/reports/monthly' : null;
+        const profileUrl = user.role === 'USER' ? `/api/user/customers/${user.username}` : null;
+
+        if (isAdminOrOfficer) {
+          setPredictionsLoading(true);
           setAlertsLoading(true);
-          const cntRes = await authFetch('/api/admin/alerts/counters');
-          if (cntRes.ok) {
-            const cntData = await cntRes.json();
-            setAlertCounters(cntData);
-          }
-          const alertsRes = await authFetch(`/api/admin/alerts?severity=${severityFilter}`);
-          if (alertsRes.ok) {
-            const alertsData = await alertsRes.json();
-            setAlerts(alertsData);
-          }
-        } catch (err) {
-          console.error('Error fetching alerts:', err);
-        } finally {
-          setAlertsLoading(false);
         }
-      };
-      fetchFilteredAlerts();
-    }
-  }, [severityFilter, user]);
+
+        // Fire all API requests in parallel
+        const [summaryRes, analyticsRes, trendRes, profileRes, predRes, cntRes, alertsRes] = await Promise.all([
+          authFetch(summaryUrl).catch(() => null),
+          isAdminOrOfficer ? authFetch('/api/admin/dashboard/analytics').catch(() => null) : Promise.resolve(null),
+          trendUrl ? authFetch(trendUrl).catch(() => null) : Promise.resolve(null),
+          profileUrl ? authFetch(profileUrl).catch(() => null) : Promise.resolve(null),
+          isAdminOrOfficer ? authFetch('/api/admin/dashboard/predictions').catch(() => null) : Promise.resolve(null),
+          isAdminOrOfficer ? authFetch('/api/admin/alerts/counters').catch(() => null) : Promise.resolve(null),
+          isAdminOrOfficer ? authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null) : Promise.resolve(null),
+        ]);
+
+        // 1. Process summary
+        if (summaryRes && summaryRes.ok) {
+          const statsData = await summaryRes.json().catch(() => ({}));
+          setStats(statsData);
+        } else {
+          throw new Error('Failed to load dashboard summary');
+        }
+
+        // 2. Process analytics
+        let trendData = [];
+        if (analyticsRes && analyticsRes.ok) {
+          const analyticsData = await analyticsRes.json().catch(() => ({}));
+          setAnalytics(analyticsData);
+          if (Array.isArray(analyticsData.monthlyTrend)) {
+            trendData = analyticsData.monthlyTrend;
+          }
+        }
+
+        // 3. Process trend (fallback for user role)
+        if (trendUrl && trendRes && trendRes.ok) {
+          const rawTrend = await trendRes.json().catch(() => ([]));
+          trendData = Array.isArray(rawTrend) ? rawTrend : [];
+        }
+
+        const sortedTrend = [...trendData].sort((a, b) => {
+          if (a.year !== b.year) return a.year - b.year;
+          return a.month - b.month;
+        });
+        setMonthlyTrend(sortedTrend);
+
+        // 4. Process customer info (USER role)
+        if (profileRes && profileRes.ok) {
+          const custData = await profileRes.json().catch(() => null);
+          setCustomerInfo(custData);
+        }
+
+        // 5. Process predictions
+        if (predRes && predRes.ok) {
+          const predData = await predRes.json().catch(() => null);
+          setPredictions(predData);
+        }
+
+        // 6. Process alerts
+        if (cntRes && cntRes.ok) {
+          const cntData = await cntRes.json().catch(() => null);
+          if (cntData) setAlertCounters(cntData);
+        }
+        if (alertsRes && alertsRes.ok) {
+          const alertsData = await alertsRes.json().catch(() => null);
+          if (alertsData) setAlerts(alertsData);
+        }
+      } catch (err) {
+        setError(err.message || 'Failed to fetch dashboard data.');
+      } finally {
+        setLoading(false);
+        setPredictionsLoading(false);
+        setAlertsLoading(false);
+      }
+    };
+
+    fetchAllDashboardData();
+  }, [user, severityFilter]);
 
   const handleResolveAlert = async (alertId) => {
     try {
@@ -114,15 +165,17 @@ const Dashboard = () => {
       });
       if (res.ok) {
         showToast('Alert anomaly marked as resolved.', 'success');
-        const cntRes = await authFetch('/api/admin/alerts/counters');
-        if (cntRes.ok) {
-          const cntData = await cntRes.json();
-          setAlertCounters(cntData);
+        const [cntRes, alertsRes] = await Promise.all([
+          authFetch('/api/admin/alerts/counters').catch(() => null),
+          authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null)
+        ]);
+        if (cntRes && cntRes.ok) {
+          const cntData = await cntRes.json().catch(() => null);
+          if (cntData) setAlertCounters(cntData);
         }
-        const alertsRes = await authFetch(`/api/admin/alerts?severity=${severityFilter}`);
-        if (alertsRes.ok) {
-          const alertsData = await alertsRes.json();
-          setAlerts(alertsData);
+        if (alertsRes && alertsRes.ok) {
+          const alertsData = await alertsRes.json().catch(() => null);
+          if (alertsData) setAlerts(alertsData);
         }
       }
     } catch (err) {
@@ -130,82 +183,6 @@ const Dashboard = () => {
       console.error('Failed to resolve alert:', err);
     }
   };
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        let summaryUrl = '';
-        let trendUrl = '';
-        let profileUrl = '';
-
-        if (user?.role === 'ADMIN') {
-          summaryUrl = '/api/admin/dashboard/summary';
-          trendUrl = '/api/officer/reports/monthly';
-        } else if (user?.role === 'OFFICER') {
-          summaryUrl = '/api/officer/dashboard/summary';
-          trendUrl = '/api/officer/reports/monthly';
-        } else if (user?.role === 'USER') {
-          summaryUrl = '/api/user/dashboard/summary';
-          trendUrl = '/api/user/reports/monthly';
-          profileUrl = `/api/user/customers/${user.username}`;
-        } else {
-          throw new Error('Unauthorized role session.');
-        }
-
-        // Fetch stats
-        const statsRes = await authFetch(summaryUrl);
-        const statsData = statsRes.ok ? await statsRes.json().catch(() => ({})) : null;
-        if (!statsRes.ok || !statsData) {
-          throw new Error(statsData?.message || `Failed to load dashboard summary (Status ${statsRes.status})`);
-        }
-        setStats(statsData);
-
-        // Fetch advanced analytics if admin or officer
-        if (user?.role === 'ADMIN' || user?.role === 'OFFICER') {
-          const analyticsRes = await authFetch('/api/admin/dashboard/analytics');
-          if (analyticsRes.ok) {
-            const analyticsData = await analyticsRes.json().catch(() => ({}));
-            setAnalytics(analyticsData);
-          }
-        }
-
-        // Fetch monthly trend for chart (backward compatible / user chart)
-        const trendRes = await authFetch(trendUrl);
-        const trendData = trendRes.ok ? await trendRes.json().catch(() => ([])) : [];
-        if (!trendRes.ok) {
-          throw new Error(trendData?.message || `Failed to load monthly reports (Status ${trendRes.status})`);
-        }
-        
-        const trendArray = Array.isArray(trendData) ? trendData : [];
-        
-        // Sort chronologically (oldest to newest)
-        const sortedTrend = [...trendArray].sort((a, b) => {
-          if (a.year !== b.year) return a.year - b.year;
-          return a.month - b.month;
-        });
-        
-        setMonthlyTrend(sortedTrend);
-
-        // If Customer (USER) role, fetch their customer details
-        if (user?.role === 'USER' && profileUrl) {
-          const custRes = await authFetch(profileUrl);
-          if (custRes.ok) {
-            const custData = await custRes.json();
-            setCustomerInfo(custData);
-          }
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to fetch dashboard data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboardData();
-  }, [user]);
 
   const formatLKR = (val) => {
     return new Intl.NumberFormat('en-LK', {

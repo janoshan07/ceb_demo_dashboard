@@ -268,35 +268,34 @@ export const ToastProvider = ({ children }) => {
               className="toast-item"
               style={{
                 pointerEvents: 'auto',
-                background: 'rgba(15, 23, 42, 0.96)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
-                border: `1px solid ${meta.borderTint}`,
-                borderLeft: `4px solid ${meta.primary}`,
-                borderRadius: '12px',
-                padding: '0.95rem 1.1rem 1rem 1rem',
-                boxShadow: `0 20px 40px -8px rgba(0, 0, 0, 0.65), 0 0 25px -6px ${meta.glow}`,
+                background: '#FFFFFF',
+                backdropFilter: 'none',
+                WebkitBackdropFilter: 'none',
+                border: `1px solid #E5E8EF`,
+                borderLeft: `3px solid ${meta.primary}`,
+                borderRadius: '10px',
+                padding: '0.85rem 1rem',
+                boxShadow: '0 8px 24px -6px rgba(16, 24, 40, 0.12), 0 2px 8px -2px rgba(16, 24, 40, 0.08)',
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: '0.85rem',
+                gap: '0.75rem',
                 position: 'relative',
                 overflow: 'hidden',
-                animation: 'toastSlideIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+                animation: 'toastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards'
               }}
             >
               {/* Status Icon */}
               <div 
                 style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '9px',
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '8px',
                   backgroundColor: meta.bgTint,
-                  border: `1px solid ${meta.borderTint}`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   flexShrink: 0,
-                  marginTop: '0.1rem'
+                  marginTop: '0.05rem'
                 }}
               >
                 {meta.toastIcon}
@@ -304,27 +303,25 @@ export const ToastProvider = ({ children }) => {
 
               {/* Toast Text Content */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Category Pill Tag */}
+                {/* Category label */}
                 <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  fontSize: '0.66rem',
-                  fontWeight: 800,
+                  fontSize: '0.65rem',
+                  fontWeight: 700,
                   letterSpacing: '0.07em',
                   textTransform: 'uppercase',
                   color: meta.primary,
-                  marginBottom: '0.2rem'
+                  marginBottom: '0.15rem'
                 }}>
                   {meta.category}
                 </div>
 
                 {/* Primary Title */}
                 <div style={{ 
-                  fontSize: '0.88rem', 
-                  fontWeight: 700, 
-                  color: '#FFFFFF', 
+                  fontSize: '0.85rem', 
+                  fontWeight: 600, 
+                  color: '#1A2033', 
                   lineHeight: 1.3,
-                  marginBottom: '0.25rem',
+                  marginBottom: '0.2rem',
                   letterSpacing: '-0.01em'
                 }}>
                   {title}
@@ -333,8 +330,8 @@ export const ToastProvider = ({ children }) => {
                 {/* Body Message */}
                 {toast.message && (
                   <div style={{ 
-                    fontSize: '0.82rem', 
-                    color: '#cbd5e1', 
+                    fontSize: '0.8rem', 
+                    color: '#6B7A99', 
                     lineHeight: 1.45, 
                     wordBreak: 'break-word',
                     fontWeight: 400
@@ -350,10 +347,10 @@ export const ToastProvider = ({ children }) => {
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  color: '#94a3b8',
+                  color: '#9BA6BF',
                   cursor: 'pointer',
-                  padding: '0.3rem',
-                  borderRadius: '6px',
+                  padding: '0.2rem',
+                  borderRadius: '4px',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -361,16 +358,16 @@ export const ToastProvider = ({ children }) => {
                   transition: 'all 0.15s ease'
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#FFFFFF';
-                  e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+                  e.currentTarget.style.color = '#1A2033';
+                  e.currentTarget.style.backgroundColor = '#F1F3F8';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#94a3b8';
+                  e.currentTarget.style.color = '#9BA6BF';
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
                 aria-label="Close notification"
               >
-                <X size={15} />
+                <X size={14} />
               </button>
 
               {/* Progress Duration Line */}
@@ -380,8 +377,8 @@ export const ToastProvider = ({ children }) => {
                   bottom: 0,
                   left: 0,
                   right: 0,
-                  height: '3px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.08)'
+                  height: '2px',
+                  backgroundColor: '#F1F3F8'
                 }}
               >
                 <div 
@@ -403,15 +400,15 @@ export const ToastProvider = ({ children }) => {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(5, 11, 24, 0.78)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
+            background: 'rgba(26, 32, 51, 0.45)',
+            backdropFilter: 'none',
+            WebkitBackdropFilter: 'none',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 1000000,
             padding: '1.25rem',
-            animation: 'modalFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+            animation: 'modalFadeIn 0.18s ease'
           }}
           onClick={(e) => {
             if (e.target === e.currentTarget) handleModalCancel();
@@ -422,14 +419,14 @@ export const ToastProvider = ({ children }) => {
             return (
               <div 
                 style={{
-                  background: '#0f172a',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
-                  borderTop: `3.5px solid ${meta.primary}`,
+                  background: '#FFFFFF',
+                  border: '1px solid #E5E8EF',
+                  borderTop: `3px solid ${meta.primary}`,
                   borderRadius: '14px',
                   width: '100%',
                   maxWidth: '460px',
-                  padding: '1.6rem 1.75rem',
-                  boxShadow: '0 24px 64px -12px rgba(0, 0, 0, 0.8), 0 0 35px -10px ' + meta.glow,
+                  padding: '1.5rem 1.75rem',
+                  boxShadow: '0 20px 40px -8px rgba(16, 24, 40, 0.15), 0 8px 16px -4px rgba(16, 24, 40, 0.08)',
                   display: 'flex',
                   flexDirection: 'column',
                   position: 'relative',
@@ -438,30 +435,28 @@ export const ToastProvider = ({ children }) => {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Header Row */}
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.15rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '1rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                     <div 
                       style={{
-                        width: '42px',
-                        height: '42px',
+                        width: '40px',
+                        height: '40px',
                         borderRadius: '10px',
                         backgroundColor: meta.bgTint,
-                        border: `1px solid ${meta.borderTint}`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         flexShrink: 0,
-                        boxShadow: '0 0 15px ' + meta.glow
                       }}
                     >
                       {meta.icon}
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF', margin: 0, letterSpacing: '-0.01em' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#1A2033', margin: 0, letterSpacing: '-0.01em' }}>
                         {modalDialog.title || meta.defaultTitle}
                       </h3>
-                      <span style={{ fontSize: '0.72rem', fontWeight: 600, color: meta.primary, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                        CEB Grid Security & Workflow
+                      <span style={{ fontSize: '0.7rem', fontWeight: 600, color: meta.primary, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        EDL Solar Billing System
                       </span>
                     </div>
                   </div>
@@ -469,9 +464,9 @@ export const ToastProvider = ({ children }) => {
                   <button 
                     onClick={handleModalCancel}
                     style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      color: '#94a3b8',
+                      background: '#F1F3F8',
+                      border: '1px solid #E5E8EF',
+                      color: '#6B7A99',
                       cursor: 'pointer',
                       width: '28px',
                       height: '28px',
@@ -483,12 +478,12 @@ export const ToastProvider = ({ children }) => {
                       transition: 'all 0.15s ease'
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color = '#FFFFFF';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
+                      e.currentTarget.style.color = '#1A2033';
+                      e.currentTarget.style.backgroundColor = '#E5E8EF';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color = '#94a3b8';
-                      e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.color = '#6B7A99';
+                      e.currentTarget.style.backgroundColor = '#F1F3F8';
                     }}
                     aria-label="Close dialog"
                   >
@@ -497,7 +492,7 @@ export const ToastProvider = ({ children }) => {
                 </div>
 
                 {/* Message Body */}
-                <div style={{ fontSize: '0.88rem', color: '#cbd5e1', lineHeight: 1.55, marginBottom: '1.25rem', whiteSpace: 'pre-line' }}>
+                <div style={{ fontSize: '0.875rem', color: '#6B7A99', lineHeight: 1.6, marginBottom: '1.25rem', whiteSpace: 'pre-line' }}>
                   {modalDialog.message}
                 </div>
 
@@ -505,12 +500,12 @@ export const ToastProvider = ({ children }) => {
                 {modalDialog.details && (
                   <div 
                     style={{
-                      background: 'rgba(0, 0, 0, 0.3)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
+                      background: '#F8F9FC',
+                      border: '1px solid #E5E8EF',
                       borderRadius: '8px',
-                      padding: '0.65rem 0.85rem',
+                      padding: '0.625rem 0.875rem',
                       fontSize: '0.8rem',
-                      color: '#94a3b8',
+                      color: '#6B7A99',
                       marginBottom: '1.25rem',
                       fontFamily: 'monospace'
                     }}
@@ -533,24 +528,32 @@ export const ToastProvider = ({ children }) => {
                       placeholder={modalDialog.placeholder}
                       style={{
                         width: '100%',
-                        padding: '0.65rem 0.85rem',
-                        backgroundColor: 'rgba(0, 0, 0, 0.35)',
-                        border: promptError ? '1px solid #ef4444' : '1px solid rgba(255, 255, 255, 0.15)',
+                        padding: '0.625rem 0.875rem',
+                        backgroundColor: '#F8F9FC',
+                        border: promptError ? '1.5px solid #EF4444' : '1.5px solid #E5E8EF',
                         borderRadius: '8px',
-                        color: '#FFFFFF',
-                        fontSize: '0.88rem',
+                        color: '#1A2033',
+                        fontSize: '0.875rem',
                         outline: 'none',
-                        transition: 'border-color 0.15s ease'
+                        transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
                       }}
                       onFocus={(e) => {
-                        if (!promptError) e.target.style.borderColor = meta.primary;
+                        if (!promptError) {
+                          e.target.style.borderColor = meta.primary;
+                          e.target.style.boxShadow = '0 0 0 3px rgba(59, 126, 246, 0.1)';
+                          e.target.style.backgroundColor = '#FFFFFF';
+                        }
                       }}
                       onBlur={(e) => {
-                        if (!promptError) e.target.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                        if (!promptError) {
+                          e.target.style.borderColor = '#E5E8EF';
+                          e.target.style.boxShadow = 'none';
+                          e.target.style.backgroundColor = '#F8F9FC';
+                        }
                       }}
                     />
                     {promptError && (
-                      <div style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '0.35rem', fontWeight: 500 }}>
+                      <div style={{ fontSize: '0.75rem', color: '#EF4444', marginTop: '0.35rem', fontWeight: 500 }}>
                         {promptError}
                       </div>
                     )}
@@ -558,29 +561,30 @@ export const ToastProvider = ({ children }) => {
                 )}
 
                 {/* Action Buttons */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.65rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1.15rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.5rem', borderTop: '1px solid #E5E8EF', paddingTop: '1rem' }}>
                   {!modalDialog.isAlert && modalDialog.cancelText && (
                     <button
                       type="button"
                       onClick={handleModalCancel}
                       style={{
-                        padding: '0.55rem 1.15rem',
-                        borderRadius: '8px',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        background: 'rgba(255, 255, 255, 0.04)',
-                        color: '#cbd5e1',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '7px',
+                        border: '1px solid #E5E8EF',
+                        background: '#F8F9FC',
+                        color: '#6B7A99',
                         fontSize: '0.84rem',
-                        fontWeight: 600,
+                        fontWeight: 500,
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease'
+                        transition: 'all 0.15s ease',
+                        fontFamily: "'Inter', sans-serif"
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.08)';
-                        e.currentTarget.style.color = '#FFFFFF';
+                        e.currentTarget.style.backgroundColor = '#E5E8EF';
+                        e.currentTarget.style.color = '#1A2033';
                       }}
                       onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.04)';
-                        e.currentTarget.style.color = '#cbd5e1';
+                        e.currentTarget.style.backgroundColor = '#F8F9FC';
+                        e.currentTarget.style.color = '#6B7A99';
                       }}
                     >
                       {modalDialog.cancelText}
@@ -591,26 +595,25 @@ export const ToastProvider = ({ children }) => {
                     type="button"
                     onClick={handleModalConfirm}
                     style={{
-                      padding: '0.55rem 1.25rem',
-                      borderRadius: '8px',
+                      padding: '0.5rem 1.125rem',
+                      borderRadius: '7px',
                       border: 'none',
                       backgroundColor: meta.primary,
                       color: '#FFFFFF',
                       fontSize: '0.84rem',
-                      fontWeight: 700,
+                      fontWeight: 600,
                       cursor: 'pointer',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '0.4rem',
-                      boxShadow: '0 4px 14px ' + meta.glow,
-                      transition: 'all 0.15s ease'
+                      gap: '0.375rem',
+                      boxShadow: '0 2px 8px rgba(16, 24, 40, 0.15)',
+                      transition: 'all 0.15s ease',
+                      fontFamily: "'Inter', sans-serif"
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-1px)';
                       e.currentTarget.style.filter = 'brightness(1.08)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'none';
                       e.currentTarget.style.filter = 'none';
                     }}
                   >

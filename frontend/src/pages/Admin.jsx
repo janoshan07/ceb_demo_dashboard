@@ -368,7 +368,7 @@ const Admin = () => {
           <ArrowLeft size={16} />
           Back to Dashboard
         </button>
-        <div style={{ padding: '3rem', backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: '12px', textAlign: 'center' }}>
+        <div style={{ padding: '3rem', backgroundColor: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: '12px', textAlign: 'center' }}>
           <ShieldAlert size={64} className="text-danger" style={{ margin: '0 auto 1.5rem', color: 'var(--danger)' }} />
           <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Access Restricted</h2>
           <p style={{ color: 'var(--text-secondary)' }}>You do not have administrative permissions to view this control board.</p>
@@ -703,10 +703,10 @@ const Admin = () => {
           </div>
 
           {/* Create User Form */}
-          <div className="neon-card" style={{ padding: '1.75rem' }}>
-            <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
-              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'white', fontWeight: 800 }}>
-                <UserPlus size={20} color="#22d3ee" />
+          <div className="card" style={{ padding: '1.75rem' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
+              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)', fontWeight: 700 }}>
+                <UserPlus size={20} color="var(--primary)" />
                 Add System User
               </h2>
             </div>

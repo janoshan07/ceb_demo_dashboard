@@ -149,7 +149,7 @@ const SVGLineChart = ({
             y1={getY(tick)}
             x2={svgWidth - paddingRight}
             y2={getY(tick)}
-            stroke="var(--border-color)"
+            stroke="var(--border)"
             strokeWidth="1"
             strokeDasharray="4 4"
           />

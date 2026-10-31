@@ -274,43 +274,43 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
 
       {/* Feature info cards below dropzone */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(99, 102, 241, 0.12)', border: '1px solid rgba(99, 102, 241, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <FileSpreadsheet size={20} color="#818cf8" />
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: 12, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(37, 99, 235, 0.08)', border: '1px solid rgba(37, 99, 235, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <FileSpreadsheet size={20} color="var(--primary)" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>{requiredColumns} Required Columns</div>
-            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Must be included</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{requiredColumns} Required Columns</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Must be included</div>
           </div>
         </div>
 
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: 12, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <ShieldCheck size={20} color="#10b981" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>Unique 10-digit Account No</div>
-            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>No duplicates allowed</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Unique 10-digit Account No</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>No duplicates allowed</div>
           </div>
         </div>
 
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(168, 85, 247, 0.12)', border: '1px solid rgba(168, 85, 247, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <FileText size={20} color="#a855f7" />
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: 12, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <FileText size={20} color="#8b5cf6" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>Excel Format Only</div>
-            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>.xlsx or .xls files</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Excel Format Only</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>.xlsx or .xls files</div>
           </div>
         </div>
 
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: 12, padding: '0.9rem 1.1rem', display: 'flex', alignItems: 'center', gap: '0.85rem', boxShadow: 'var(--shadow-sm)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <Database size={20} color="#f59e0b" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white' }}>Maximum File Size</div>
-            <div style={{ fontSize: '0.74rem', color: '#94a3b8' }}>50 MB per file</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Maximum File Size</div>
+            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>50 MB per file</div>
           </div>
         </div>
       </div>
@@ -330,18 +330,16 @@ const StatCard = ({ label, value, color, icon, subtitle }) => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
-        background: hovered
-          ? 'linear-gradient(145deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)'
-          : 'linear-gradient(145deg, rgba(22, 30, 49, 0.75) 0%, rgba(15, 23, 42, 0.85) 100%)',
-        border: `1px solid ${hovered ? 'rgba(255, 255, 255, 0.18)' : 'rgba(255, 255, 255, 0.08)'}`,
-        borderRadius: 14,
+        background: '#FFFFFF',
+        border: `1px solid ${hovered ? 'var(--primary)' : 'var(--border)'}`,
+        borderRadius: 12,
         padding: '0.9rem 1.1rem',
         display: 'flex',
         alignItems: 'center',
         gap: '0.85rem',
-        boxShadow: hovered ? '0 10px 25px rgba(0, 0, 0, 0.4)' : '0 4px 14px rgba(0, 0, 0, 0.2)',
+        boxShadow: hovered ? 'var(--shadow-md)' : 'var(--shadow-sm)',
         transform: hovered ? 'translateY(-2px)' : 'none',
-        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+        transition: 'all 0.2s ease',
         height: '100%',
         minHeight: '78px',
         boxSizing: 'border-box',
@@ -459,25 +457,24 @@ const SearchBar = ({
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        background: 'linear-gradient(135deg, rgba(16, 24, 48, 0.5), rgba(9, 15, 36, 0.7))',
-        backdropFilter: 'blur(12px)',
-        border: isFocused ? '1.5px solid #22d3ee' : '1px solid rgba(255, 255, 255, 0.08)',
-        borderRadius: '16px',
+        background: '#FFFFFF',
+        border: isFocused ? '1px solid var(--primary)' : '1px solid var(--border)',
+        borderRadius: '10px',
         padding: '0.6rem 1rem',
-        height: '44px',
+        height: '42px',
         boxSizing: 'border-box',
         flex: 1,
         maxWidth: '520px',
         position: 'relative',
         boxShadow: isFocused 
-          ? '0 0 16px rgba(34, 211, 238, 0.35), inset 0 0 10px rgba(34, 211, 238, 0.1)' 
-          : '0 4px 12px rgba(0, 0, 0, 0.15)',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          ? '0 0 0 3px rgba(37, 99, 235, 0.12)' 
+          : 'var(--shadow-sm)',
+        transition: 'all 0.2s ease'
       }}>
         <Search 
           size={16} 
-          color={isFocused ? '#22d3ee' : '#64748b'} 
-          style={{ marginRight: '0.75rem', transition: 'color 0.3s' }} 
+          color={isFocused ? 'var(--primary)' : 'var(--text-muted)'} 
+          style={{ marginRight: '0.75rem', transition: 'color 0.2s' }} 
         />
         <input
           type="text"
@@ -572,29 +569,29 @@ const SearchBar = ({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '0.5rem',
-            background: showFilters ? 'rgba(99, 102, 241, 0.12)' : 'rgba(15, 23, 42, 0.4)',
-            border: `1px solid ${showFilters ? 'rgba(99, 102, 241, 0.35)' : 'rgba(255, 255, 255, 0.06)'}`,
-            borderRadius: '16px',
+            background: showFilters ? 'rgba(37, 99, 235, 0.08)' : '#FFFFFF',
+            border: `1px solid ${showFilters ? 'var(--primary)' : 'var(--border)'}`,
+            borderRadius: '10px',
             padding: '0 1.1rem',
-            height: '44px',
+            height: '42px',
             boxSizing: 'border-box',
-            color: showFilters ? '#a5b4fc' : '#94a3b8',
+            color: showFilters ? 'var(--primary)' : 'var(--text-secondary)',
             cursor: 'pointer',
             fontSize: '0.8rem',
             fontWeight: 600,
             transition: 'all 0.2s ease',
-            boxShadow: showFilters ? '0 0 12px rgba(99, 102, 241, 0.15)' : 'none'
+            boxShadow: showFilters ? '0 0 0 3px rgba(37, 99, 235, 0.12)' : 'var(--shadow-sm)'
           }}
           onMouseEnter={(e) => {
             if (!showFilters) {
-              e.currentTarget.style.border = '1px solid rgba(99, 102, 241, 0.25)';
-              e.currentTarget.style.color = '#a5b4fc';
+              e.currentTarget.style.borderColor = 'var(--primary)';
+              e.currentTarget.style.color = 'var(--primary)';
             }
           }}
           onMouseLeave={(e) => {
             if (!showFilters) {
-              e.currentTarget.style.border = '1px solid rgba(255, 255, 255, 0.06)';
-              e.currentTarget.style.color = '#94a3b8';
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.color = 'var(--text-secondary)';
             }
           }}
         >
@@ -635,20 +632,19 @@ export const TablePagination = ({
       flexWrap: 'wrap',
       gap: '1rem',
       padding: '0.75rem 1.25rem',
-      background: 'rgba(15, 23, 42, 0.75)',
-      backdropFilter: 'blur(10px)',
-      borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-      borderRadius: '0 0 16px 16px',
+      background: '#FFFFFF',
+      borderTop: '1px solid var(--border)',
+      borderRadius: '0 0 12px 12px',
       fontSize: '0.8rem',
       color: 'var(--text-secondary)',
       marginTop: '-1px'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <span>
-          Showing <strong style={{ color: 'white' }}>{totalItems > 0 ? `${startItem}–${endItem}` : 0}</strong> of <strong style={{ color: 'white' }}>{totalItems}</strong> entries
+          Showing <strong style={{ color: 'var(--text-primary)' }}>{totalItems > 0 ? `${startItem}–${endItem}` : 0}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{totalItems}</strong> entries
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.5rem' }}>
-          <span style={{ fontSize: '0.74rem', color: '#94a3b8' }}>Per page:</span>
+          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Per page:</span>
           <select
             value={pageSize}
             onChange={(e) => {
@@ -657,18 +653,18 @@ export const TablePagination = ({
               onPageChange(1);
             }}
             style={{
-              background: 'rgba(255, 255, 255, 0.07)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              borderRadius: '8px',
-              color: 'white',
-              padding: '0.2rem 0.5rem',
+              background: '#F8FAFC',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              color: 'var(--text-primary)',
+              padding: '0.25rem 0.5rem',
               fontSize: '0.74rem',
               cursor: 'pointer',
               outline: 'none'
             }}
           >
             {pageSizeOptions.map(opt => (
-              <option key={opt} value={opt} style={{ background: '#0f172a', color: 'white' }}>
+              <option key={opt} value={opt} style={{ background: '#FFFFFF', color: '#1E293B' }}>
                 {opt}
               </option>
             ))}
@@ -682,22 +678,22 @@ export const TablePagination = ({
           disabled={safePage <= 1}
           onClick={() => onPageChange(safePage - 1)}
           style={{
-            padding: '0.3rem 0.7rem',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            background: safePage <= 1 ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.08)',
-            color: safePage <= 1 ? '#475569' : '#cbd5e1',
+            padding: '0.35rem 0.75rem',
+            borderRadius: '6px',
+            border: '1px solid var(--border)',
+            background: safePage <= 1 ? '#F8FAFC' : '#FFFFFF',
+            color: safePage <= 1 ? 'var(--text-muted)' : 'var(--text-primary)',
             fontSize: '0.75rem',
             cursor: safePage <= 1 ? 'not-allowed' : 'pointer',
             fontWeight: 500,
-            transition: 'all 0.2s'
+            transition: 'all 0.15s ease'
           }}
         >
           Previous
         </button>
 
-        <span style={{ padding: '0 0.5rem', fontSize: '0.75rem', color: '#cbd5e1' }}>
-          Page <strong style={{ color: 'white' }}>{safePage}</strong> of <strong style={{ color: 'white' }}>{totalPages}</strong>
+        <span style={{ padding: '0 0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+          Page <strong style={{ color: 'var(--text-primary)' }}>{safePage}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{totalPages}</strong>
         </span>
 
         <button
@@ -705,15 +701,15 @@ export const TablePagination = ({
           disabled={safePage >= totalPages}
           onClick={() => onPageChange(safePage + 1)}
           style={{
-            padding: '0.3rem 0.7rem',
-            borderRadius: '8px',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            background: safePage >= totalPages ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.08)',
-            color: safePage >= totalPages ? '#475569' : '#cbd5e1',
+            padding: '0.35rem 0.75rem',
+            borderRadius: '6px',
+            border: '1px solid var(--border)',
+            background: safePage >= totalPages ? '#F8FAFC' : '#FFFFFF',
+            color: safePage >= totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
             fontSize: '0.75rem',
             cursor: safePage >= totalPages ? 'not-allowed' : 'pointer',
             fontWeight: 500,
-            transition: 'all 0.2s'
+            transition: 'all 0.15s ease'
           }}
         >
           Next
@@ -812,23 +808,23 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
               style={{
                 padding: '0.5rem 1rem',
                 borderRadius: 20,
-                background: isSelected ? 'rgba(99, 102, 241, 0.15)' : 'rgba(15, 23, 42, 0.6)',
-                border: `1px solid ${isSelected ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255, 255, 255, 0.08)'}`,
-                color: isSelected ? 'white' : '#94a3b8',
+                background: isSelected ? 'var(--primary)' : '#FFFFFF',
+                border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
+                color: isSelected ? '#FFFFFF' : 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontSize: '0.8rem',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
-                boxShadow: isSelected ? '0 0 15px rgba(99,102,241,0.2)' : 'none',
-                transition: 'all 0.2s ease'
+                boxShadow: isSelected ? 'var(--shadow-sm)' : 'none',
+                transition: 'all 0.15s ease'
               }}
             >
               <span>{tab.label}</span>
               <span style={{
-                background: isSelected ? tab.color : 'rgba(255,255,255,0.08)',
-                color: isSelected ? 'white' : tab.color,
+                background: isSelected ? 'rgba(255,255,255,0.25)' : 'var(--bg-subtle)',
+                color: isSelected ? '#FFFFFF' : tab.color,
                 padding: '0.1rem 0.45rem',
                 borderRadius: 12,
                 fontSize: '0.7rem',
@@ -853,9 +849,9 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
       />
       {showFilters && renderFilterTabs()}
       {!displayed.length ? (
-        <div style={{ textAlign: 'center', padding: '3.5rem', background: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', color: 'var(--text-secondary)' }}>
+        <div style={{ textAlign: 'center', padding: '3.5rem', background: '#FFFFFF', borderRadius: 12, border: '1px solid var(--border)', color: 'var(--text-secondary)', boxShadow: 'var(--shadow-sm)' }}>
           <CheckCircle size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-          <div style={{ fontWeight: 600, color: 'white', fontSize: '0.95rem' }}>No visible records found.</div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>No visible records found.</div>
         </div>
       ) : (
         <>
@@ -900,10 +896,10 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
         </div>
       )}
 
-      <div style={{ overflowX: 'auto', borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(15, 23, 42, 0.7)', maxWidth: '100%' }}>
+      <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border)', background: '#FFFFFF', maxWidth: '100%', boxShadow: 'var(--shadow-sm)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
                 <input
                   type="checkbox"
@@ -4333,7 +4329,7 @@ const UploadPage = () => {
                         <button
                           onClick={() => handleRestoreRow(d)}
                           title="Restore this record to the main list"
-                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#34d399', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#059669', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
                         >
                           Restore
                         </button>
@@ -4365,16 +4361,16 @@ const UploadPage = () => {
 
   const renderStep1 = () => (
     <div>
-      {/* Step 1 Info Box with Column Pills & Download Template matching Image 2 */}
-      <div style={{ background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: 16, padding: '1.25rem 1.5rem', marginBottom: '1.5rem' }}>
+      {/* Step 1 Info Box with Column Pills & Download Template */}
+      <div style={{ background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: 12, padding: '1.25rem 1.5rem', marginBottom: '1.5rem', boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', flex: 1 }}>
-            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', border: '1px solid rgba(99, 102, 241, 0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Info size={18} color="#818cf8" />
+            <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(37, 99, 235, 0.08)', border: '1px solid rgba(37, 99, 235, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Info size={18} color="var(--primary)" />
             </div>
             <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white' }}>Step 1 — Master Data Upload</div>
-              <div style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>Step 1 — Master Data Upload</div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
                 Upload the customer master data Excel sheet. Required columns:
               </div>
 
@@ -5410,7 +5406,7 @@ const UploadPage = () => {
               { key: 'REJECTED', label: 'Rejected', count: (rows || []).filter(r => r.status === 'REJECTED').length, color: '#f43f5e' },
               { key: 'DUPLICATE', label: 'Duplicate Records', count: actualDupCount || 0, color: '#ec4899' },
               { key: 'NAME_MISMATCH', label: 'Name Mismatch Review', count: nameMismatchCount || 0, color: '#fb7185' },
-              { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#fbbf24' },
+              { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch Review', count: unitRateMismatchCount || 0, color: '#D97706' },
               { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch Review', count: netTypeMismatchCount || 0, color: '#a78bfa' },
               { key: 'EXPIRED_AGREEMENT', label: 'Expired / 7 Years Completed', count: agreementExpiredCount, color: '#38bdf8' },
             ].map(tab => (
@@ -5519,7 +5515,7 @@ const UploadPage = () => {
                                                  flex: 1,
                                                  padding: '0.4rem 0.65rem',
                                                  borderRadius: 8,
-                                                 border: `1px solid ${editMasterActive ? '#22d3ee' : 'rgba(255,255,255,0.08)'}`,
+                                                 border: `1px solid ${editMasterActive ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}`,
                                                  background: editMasterActive ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.03)',
                                                  color: editMasterActive ? 'white' : 'var(--text-secondary)',
                                                  fontSize: '0.8rem',
@@ -5536,7 +5532,7 @@ const UploadPage = () => {
                                                  borderRadius: 8,
                                                  background: editMasterActive ? 'rgba(34, 211, 238, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                                                  border: `1px solid ${editMasterActive ? 'rgba(34, 211, 238, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
-                                                 color: editMasterActive ? '#22d3ee' : 'var(--text-secondary)',
+                                                 color: editMasterActive ? 'var(--primary)' : 'var(--text-secondary)',
                                                  fontSize: '0.75rem',
                                                  fontWeight: 600,
                                                  cursor: 'pointer',
@@ -5565,7 +5561,7 @@ const UploadPage = () => {
                                                  flex: 1,
                                                  padding: '0.4rem 0.65rem',
                                                  borderRadius: 8,
-                                                 border: `1px solid ${editUploadedActive ? '#22d3ee' : 'rgba(255,255,255,0.08)'}`,
+                                                 border: `1px solid ${editUploadedActive ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}`,
                                                  background: editUploadedActive ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.03)',
                                                  color: editUploadedActive ? 'white' : 'var(--text-secondary)',
                                                  fontSize: '0.8rem',
@@ -5582,7 +5578,7 @@ const UploadPage = () => {
                                                  borderRadius: 8,
                                                  background: editUploadedActive ? 'rgba(34, 211, 238, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                                                  border: `1px solid ${editUploadedActive ? 'rgba(34, 211, 238, 0.3)' : 'rgba(255, 255, 255, 0.08)'}`,
-                                                 color: editUploadedActive ? '#22d3ee' : 'var(--text-secondary)',
+                                                 color: editUploadedActive ? 'var(--primary)' : 'var(--text-secondary)',
                                                  fontSize: '0.75rem',
                                                  fontWeight: 600,
                                                  cursor: 'pointer',
@@ -6215,7 +6211,7 @@ const UploadPage = () => {
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{entry.accountNo}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>{entry.customerName}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#f87171' }}>{entry.oldValue ?? '—'}</td>
-                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#34d399', fontWeight: 700 }}>{entry.newValue}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#059669', fontWeight: 700 }}>{entry.newValue}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>{entry.editedBy}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{new Date(entry.editedAt).toLocaleString()}</td>
                               </tr>
@@ -6687,7 +6683,7 @@ const UploadPage = () => {
       {/* Batch Details Modal */}
       {batchDetails && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Batch Details</h3>
               <button onClick={() => setBatchDetails(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
@@ -6748,7 +6744,7 @@ const UploadPage = () => {
       {/* Edit (Rename) Batch Modal */}
       {editingBatch && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <form onSubmit={handleSaveBatchRename} style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '450px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+          <form onSubmit={handleSaveBatchRename} style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '450px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Rename Import Batch</h3>
               <button type="button" onClick={() => setEditingBatch(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
@@ -6821,27 +6817,27 @@ const UploadPage = () => {
       </div>
 
       {activeView === 'history' ? renderHistory() : activeView === 'staged-review' ? renderStagedReview() : (
-        <div className="card" style={{ padding: '2rem', borderRadius: 20, background: 'rgba(15, 23, 42, 0.75)', border: '1px solid rgba(255,255,255,0.08)', boxShadow: '0 20px 50px rgba(0,0,0,0.4)' }}>
-          {/* Rejection Alert Banner matching Image 2 */}
+        <div className="card" style={{ padding: '2rem', borderRadius: 16, background: '#FFFFFF', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+          {/* Rejection Alert Banner */}
           {latestRejected && wizardStep === 1 && !session && (
             <div style={{
-              background: 'radial-gradient(circle at 10% 20%, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%)',
-              border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: 16,
+              background: '#FEF2F2',
+              border: '1px solid #FCA5A5', borderRadius: 12,
               padding: '1.25rem 1.5rem', marginBottom: '1.75rem',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem'
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(239, 68, 68, 0.18)', border: '1px solid rgba(239, 68, 68, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <AlertTriangle size={22} color="#ef4444" />
+                <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#FEE2E2', border: '1px solid #FCA5A5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <AlertTriangle size={22} color="#DC2626" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, color: 'white', fontSize: '1rem', letterSpacing: '-0.2px' }}>
+                  <div style={{ fontWeight: 700, color: '#991B1B', fontSize: '1rem', letterSpacing: '-0.2px' }}>
                     Import Batch Rejected by Admin
                   </div>
-                  <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: '0.2rem' }}>
+                  <div style={{ fontSize: '0.82rem', color: '#B91C1C', marginTop: '0.2rem' }}>
                     Batch: <strong>{latestRejected.filename || 'Multi-File Import (Session 150)'}</strong> was rejected.
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                  <div style={{ fontSize: '0.78rem', color: '#7F1D1D', marginTop: '0.25rem' }}>
                     Please correct the issues in your Excel sheets and start a new import session below.
                   </div>
                 </div>
@@ -6918,7 +6914,7 @@ const UploadPage = () => {
       {/* Monthly Customer Directory — name & save dialog (post Step 6 approval) */}
       {showDirectoryNaming && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '520px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '520px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Archive size={20} color="#10b981" /> Save Monthly Customer Directory</h3>
               <button type="button" onClick={() => { if (!savingDirectory) setShowDirectoryNaming(false); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
@@ -6944,7 +6940,7 @@ const UploadPage = () => {
       {/* Row Correction Modal */}
       {correctingRow && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(5, 8, 16, 0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 99999, padding: '1.5rem', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '650px', padding: '2rem', boxShadow: 'var(--shadow)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '650px', padding: '2rem', boxShadow: 'var(--shadow)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Correct Row #{correctingRow.rowNum || correctingRow.accountNo}</h3>
               <button onClick={() => setCorrectingRow(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>

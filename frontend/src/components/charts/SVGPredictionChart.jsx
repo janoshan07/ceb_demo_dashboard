@@ -286,7 +286,7 @@ const SVGPredictionChart = ({
               cx={p.x}
               cy={p.y}
               r={hoveredIndex === i ? 5 : 3}
-              fill={hoveredIndex === i ? strokeColor : 'var(--bg-secondary)'}
+              fill={hoveredIndex === i ? strokeColor : '#FFFFFF'}
               stroke={strokeColor}
               strokeWidth="2"
               style={{ pointerEvents: 'none', transition: 'r 0.15s' }}

@@ -762,7 +762,7 @@ const PaymentControlCenter = () => {
         >
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#60a5fa', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.8rem', color: '#3B7EF6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Total Customers
               </span>
               <User size={18} style={{ color: '#3b82f6' }} />
@@ -773,7 +773,7 @@ const PaymentControlCenter = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total canonical producers</span>
-            <span style={{ fontSize: '0.72rem', color: '#60a5fa', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_CUSTOMERS' ? 1 : 0.65 }}>
+            <span style={{ fontSize: '0.72rem', color: '#3B7EF6', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_CUSTOMERS' ? 1 : 0.65 }}>
               Details <ChevronRight size={12} />
             </span>
           </div>
@@ -804,7 +804,7 @@ const PaymentControlCenter = () => {
         >
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#34d399', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Payment Ready
               </span>
               <CheckCircle2 size={18} style={{ color: '#10b981' }} />
@@ -815,7 +815,7 @@ const PaymentControlCenter = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Verified eligible for disbursement</span>
-            <span style={{ fontSize: '0.72rem', color: '#34d399', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_READY' ? 1 : 0.65 }}>
+            <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_READY' ? 1 : 0.65 }}>
               Details <ChevronRight size={12} />
             </span>
           </div>
@@ -846,7 +846,7 @@ const PaymentControlCenter = () => {
         >
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.8rem', color: '#D97706', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Payment On Hold
               </span>
               <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
@@ -857,7 +857,7 @@ const PaymentControlCenter = () => {
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
             <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Withheld by blocking validations</span>
-            <span style={{ fontSize: '0.72rem', color: '#fbbf24', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_ON_HOLD' ? 1 : 0.65 }}>
+            <span style={{ fontSize: '0.72rem', color: '#D97706', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_ON_HOLD' ? 1 : 0.65 }}>
               Details <ChevronRight size={12} />
             </span>
           </div>
@@ -1038,7 +1038,7 @@ const PaymentControlCenter = () => {
 
       {/* ── 2. FILTER BAR & DIVISION CONTROLS ─────────────────────────── */}
       <div style={{
-        background: 'var(--bg-secondary)',
+        background: '#FFFFFF',
         borderRadius: '12px',
         padding: '1rem 1.25rem',
         marginBottom: '1.5rem',
@@ -1057,7 +1057,7 @@ const PaymentControlCenter = () => {
               value={billingPeriod}
               onChange={(e) => { setBillingPeriod(e.target.value); setCurrentPage(0); }}
               style={{
-                background: 'var(--bg-card)',
+                background: '#FFFFFF',
                 border: '1px solid var(--border-color)',
                 color: 'var(--text-primary)',
                 borderRadius: '6px',
@@ -1105,25 +1105,24 @@ const PaymentControlCenter = () => {
             style={{
               display: 'flex',
               alignItems: 'center',
-              background: searchFocused ? 'rgba(15, 23, 42, 0.95)' : 'var(--bg-card)',
+              background: '#FFFFFF',
               borderRadius: '8px',
               padding: '0.45rem 0.85rem',
-              border: searchFocused ? '1.5px solid #22d3ee' : '1px solid var(--border-color)',
+              border: searchFocused ? '1px solid var(--primary)' : '1px solid var(--border)',
               boxShadow: searchFocused
-                ? '0 0 16px rgba(34, 211, 238, 0.4), inset 0 0 8px rgba(34, 211, 238, 0.1)'
+                ? '0 0 0 3px rgba(37, 99, 235, 0.12)'
                 : 'none',
               minWidth: '280px',
-              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)'
+              transition: 'all 0.2s ease'
             }}
           >
             <Search
               size={16}
               className="pcc-search-icon"
               style={{
-                color: searchFocused ? '#22d3ee' : 'var(--text-muted)',
+                color: searchFocused ? 'var(--primary)' : 'var(--text-muted)',
                 marginRight: '0.5rem',
-                filter: searchFocused ? 'drop-shadow(0 0 6px rgba(34, 211, 238, 0.6))' : 'none',
-                transition: 'all 0.25s ease'
+                transition: 'all 0.2s ease'
               }}
             />
             <input
@@ -1149,7 +1148,7 @@ const PaymentControlCenter = () => {
               <X
                 size={14}
                 style={{
-                  color: searchFocused ? '#22d3ee' : 'var(--text-muted)',
+                  color: 'var(--text-muted)',
                   cursor: 'pointer',
                   transition: 'color 0.2s ease'
                 }}
@@ -1179,7 +1178,7 @@ const PaymentControlCenter = () => {
             <select
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setCurrentPage(0); }}
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
+              style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
             >
               <option value="ALL">All Payment Statuses</option>
               <option value="READY">READY</option>
@@ -1198,7 +1197,7 @@ const PaymentControlCenter = () => {
             <select
               value={validationFilter}
               onChange={(e) => { setValidationFilter(e.target.value); setCurrentPage(0); }}
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
+              style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
             >
               <option value="ALL">All Validation Statuses</option>
               <option value="VALID">VALID</option>
@@ -1213,7 +1212,7 @@ const PaymentControlCenter = () => {
             <select
               value={holdReasonFilter}
               onChange={(e) => { setHoldReasonFilter(e.target.value); setCurrentPage(0); }}
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
+              style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
             >
               <option value="ALL">All Hold Reasons</option>
               <option value="Name Mismatch">Name Mismatch</option>
@@ -1233,7 +1232,7 @@ const PaymentControlCenter = () => {
             <select
               value={netTypeFilter}
               onChange={(e) => { setNetTypeFilter(e.target.value); setCurrentPage(0); }}
-              style={{ background: 'var(--bg-card)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
+              style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', borderRadius: '6px', padding: '0.35rem 0.65rem', fontSize: '0.8rem', outline: 'none', cursor: 'pointer' }}
             >
               <option value="ALL">All Net Types</option>
               <option value="Net Plus">Net Plus</option>
@@ -1431,7 +1430,7 @@ const PaymentControlCenter = () => {
 
       {/* ── 4. MAIN DATA TABLE (ALL, READY, ON_HOLD, REVIEW) ──────────── */}
       {activeTab !== 'BATCHES' && activeTab !== 'HISTORY' && (
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
           {/* Table Header Controls */}
           <div style={{
             padding: '0.85rem 1.25rem',
@@ -1703,8 +1702,8 @@ const PaymentControlCenter = () => {
                               <span>{row.paymentRecordsCount || pList.length} Records</span>
                             </span>
                             <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
-                              <span style={{ color: '#34d399' }}>{row.readyRecordsCount ?? readyPayments.length} Ready</span> •{' '}
-                              <span style={{ color: '#fbbf24' }}>{row.onHoldRecordsCount ?? (pList.length - readyPayments.length)} Hold</span>
+                              <span style={{ color: '#059669' }}>{row.readyRecordsCount ?? readyPayments.length} Ready</span> •{' '}
+                              <span style={{ color: '#D97706' }}>{row.onHoldRecordsCount ?? (pList.length - readyPayments.length)} Hold</span>
                             </div>
                           </td>
 
@@ -1844,23 +1843,23 @@ const PaymentControlCenter = () => {
 
                         {/* ── Expanded Nested Payment Obligations Sub-Table ─ */}
                         {isExpanded && (
-                          <tr style={{ background: 'rgba(15, 23, 42, 0.65)', borderBottom: '2px solid rgba(59, 130, 246, 0.25)' }}>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '2px solid var(--border)' }}>
                             <td colSpan={12} style={{ padding: '0.85rem 1.25rem 1.25rem 2.5rem' }}>
-                              <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.2)' }}>
-                                <div style={{ padding: '0.65rem 1rem', background: 'rgba(255,255,255,0.03)', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                              <div style={{ background: '#FFFFFF', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden', boxShadow: 'var(--shadow-sm)' }}>
+                                <div style={{ padding: '0.65rem 1rem', background: '#F1F5F9', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                                    <Layers size={14} style={{ color: '#818cf8' }} />
+                                    <Layers size={14} style={{ color: 'var(--primary)' }} />
                                     <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                                      Payment Obligations for Customer: <strong style={{ color: '#38bdf8' }}>{row.accountNo}</strong> — {row.customerName || row.masterName}
+                                      Payment Obligations for Customer: <strong style={{ color: 'var(--primary)' }}>{row.accountNo}</strong> — {row.customerName || row.masterName}
                                     </span>
                                     <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
                                       ({pList.length} historical & current payment obligations)
                                     </span>
                                   </div>
                                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.76rem' }}>
-                                    <span style={{ color: 'var(--text-muted)' }}>Total Pending: <strong style={{ color: '#f3f4f6' }}>{formatLKR(row.totalPendingAmount || row.totalPayableAmount)}</strong></span>
+                                    <span style={{ color: 'var(--text-muted)' }}>Total Pending: <strong style={{ color: 'var(--text-primary)' }}>{formatLKR(row.totalPendingAmount || row.totalPayableAmount)}</strong></span>
                                     <span style={{ color: '#10b981' }}>Ready: <strong>{formatLKR(row.totalReadyAmount)}</strong></span>
-                                    <span style={{ color: '#fbbf24' }}>On Hold: <strong>{formatLKR(row.totalOnHoldAmount)}</strong></span>
+                                    <span style={{ color: '#D97706' }}>On Hold: <strong>{formatLKR(row.totalOnHoldAmount)}</strong></span>
                                   </div>
                                 </div>
 
@@ -1988,7 +1987,7 @@ const PaymentControlCenter = () => {
                                           {/* Hold Status & Diagnostics */}
                                           <td style={{ padding: '0.65rem 0.75rem', maxWidth: '240px' }}>
                                             {isPReady ? (
-                                              <span style={{ color: '#34d399', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
+                                              <span style={{ color: '#059669', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.75rem' }}>
                                                 <CheckCircle2 size={12} /> Eligible for Payment
                                               </span>
                                             ) : p.paymentStatus === 'PAID' ? (
@@ -2000,11 +1999,11 @@ const PaymentControlCenter = () => {
                                                     Mismatch: {p.mismatches.map(m => m.field).join(', ')}
                                                   </span>
                                                 ) : p.missingFields && p.missingFields.length > 0 ? (
-                                                  <span style={{ color: '#fbbf24', fontWeight: 700 }}>
+                                                  <span style={{ color: '#D97706', fontWeight: 700 }}>
                                                     Missing: {p.missingFields.slice(0, 2).join(', ')}
                                                   </span>
                                                 ) : (
-                                                  <span style={{ color: '#fbbf24', fontWeight: 600 }}>
+                                                  <span style={{ color: '#D97706', fontWeight: 600 }}>
                                                     {p.holdStatus || (p.holdReasons && p.holdReasons.length > 0 ? p.holdReasons[0] : 'ON HOLD')}
                                                   </span>
                                                 )}
@@ -2070,7 +2069,7 @@ const PaymentControlCenter = () => {
                 disabled={currentPage === 0}
                 onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
                 style={{
-                  background: 'var(--bg-card)',
+                  background: '#FFFFFF',
                   border: '1px solid var(--border-color)',
                   color: currentPage === 0 ? 'var(--text-muted)' : 'var(--text-primary)',
                   padding: '0.35rem 0.65rem',
@@ -2084,7 +2083,7 @@ const PaymentControlCenter = () => {
                 disabled={currentPage >= (customersData.totalPages - 1)}
                 onClick={() => setCurrentPage(p => p + 1)}
                 style={{
-                  background: 'var(--bg-card)',
+                  background: '#FFFFFF',
                   border: '1px solid var(--border-color)',
                   color: currentPage >= (customersData.totalPages - 1) ? 'var(--text-muted)' : 'var(--text-primary)',
                   padding: '0.35rem 0.65rem',
@@ -2101,7 +2100,7 @@ const PaymentControlCenter = () => {
 
       {/* ── 5. PAYMENT BATCHES TAB ────────────────────────────────────── */}
       {activeTab === 'BATCHES' && (
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '1.5rem' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--border-color)', padding: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <div>
               <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
@@ -2145,7 +2144,7 @@ const PaymentControlCenter = () => {
                   <div
                     key={batch.id}
                     style={{
-                      background: 'var(--bg-card)',
+                      background: '#FFFFFF',
                       borderRadius: '10px',
                       border: '1px solid var(--border-color)',
                       padding: '1.25rem',
@@ -2231,7 +2230,7 @@ const PaymentControlCenter = () => {
                           style={{
                             background: 'rgba(59,130,246,0.15)',
                             border: '1px solid rgba(59,130,246,0.3)',
-                            color: '#60a5fa',
+                            color: '#3B7EF6',
                             padding: '0.4rem 0.75rem',
                             borderRadius: '6px',
                             fontSize: '0.78rem',
@@ -2302,7 +2301,7 @@ const PaymentControlCenter = () => {
                           style={{
                             background: 'rgba(245,158,11,0.15)',
                             border: '1px solid rgba(245,158,11,0.3)',
-                            color: '#fbbf24',
+                            color: '#D97706',
                             padding: '0.4rem 0.75rem',
                             borderRadius: '6px',
                             fontSize: '0.78rem',
@@ -2360,7 +2359,7 @@ const PaymentControlCenter = () => {
 
       {/* ── 6. PAYMENT HISTORY TAB ────────────────────────────────────── */}
       {activeTab === 'HISTORY' && (
-        <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+        <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
           <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
             <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
               Completed & Settled Payment Disbursements
@@ -2444,7 +2443,7 @@ const PaymentControlCenter = () => {
           padding: '1.5rem'
         }}>
           <div style={{
-            background: 'var(--bg-secondary)',
+            background: '#FFFFFF',
             border: '1px solid var(--border-color)',
             borderRadius: '16px',
             width: '100%',
@@ -2488,7 +2487,7 @@ const PaymentControlCenter = () => {
                   </span>
                 </div>
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
-                  Account: <strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{selectedCustomerDetails.customerInfo?.accountNumber || selectedCustomerDetails.record?.accountNo}</strong> • {selectedCustomerDetails.customerInfo?.customerName} • Billing Month: <strong style={{ color: '#fbbf24' }}>{selectedCustomerDetails.billingInfo?.billingMonth}</strong>
+                  Account: <strong style={{ color: '#38bdf8', fontFamily: 'monospace' }}>{selectedCustomerDetails.customerInfo?.accountNumber || selectedCustomerDetails.record?.accountNo}</strong> • {selectedCustomerDetails.customerInfo?.customerName} • Billing Month: <strong style={{ color: '#D97706' }}>{selectedCustomerDetails.billingInfo?.billingMonth}</strong>
                 </div>
 
                 {/* Multi-Payment Switcher Tabs */}
@@ -2631,7 +2630,7 @@ const PaymentControlCenter = () => {
                   {/* Payment Hold Banner if held */}
                   {selectedCustomerDetails.paymentInfo?.paymentStatus !== 'READY' && selectedCustomerDetails.paymentInfo?.paymentStatus !== 'PAID' && (
                     <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '1rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#fbbf24', fontWeight: 700, fontSize: '0.92rem', marginBottom: '0.35rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#D97706', fontWeight: 700, fontSize: '0.92rem', marginBottom: '0.35rem' }}>
                         <AlertTriangle size={18} />
                         <span>Payment Hold — {selectedCustomerDetails.billingInfo?.billingMonth}</span>
                       </div>
@@ -2725,7 +2724,7 @@ const PaymentControlCenter = () => {
                   {/* 3 Panels: Customer Info, Billing Info, Payment Info */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
                     {/* Panel 1: Customer Information */}
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.15rem' }}>
+                    <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.15rem' }}>
                       <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                         <User size={15} />
                         <span>Customer Information</span>
@@ -2741,7 +2740,7 @@ const PaymentControlCenter = () => {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Net Type:</span>
-                          <span style={{ fontWeight: 600, color: '#60a5fa' }}>{selectedCustomerDetails.customerInfo?.netType}</span>
+                          <span style={{ fontWeight: 600, color: '#3B7EF6' }}>{selectedCustomerDetails.customerInfo?.netType}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Bank Code:</span>
@@ -2759,8 +2758,8 @@ const PaymentControlCenter = () => {
                     </div>
 
                     {/* Panel 2: Billing Information */}
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.15rem' }}>
-                      <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.15rem' }}>
+                      <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#D97706', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                         <Zap size={15} />
                         <span>Billing Information</span>
                       </h4>
@@ -2793,7 +2792,7 @@ const PaymentControlCenter = () => {
                     </div>
 
                     {/* Panel 3: Payment Information */}
-                    <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.15rem' }}>
+                    <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.15rem' }}>
                       <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
                         <DollarSign size={15} />
                         <span>Payment & Eligibility</span>
@@ -2813,7 +2812,7 @@ const PaymentControlCenter = () => {
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Bill Set-Off:</span>
-                          <span style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{formatLKR(selectedCustomerDetails.paymentInfo?.billSetOff)}</span>
+                          <span style={{ fontFamily: 'monospace', color: '#D97706' }}>{formatLKR(selectedCustomerDetails.paymentInfo?.billSetOff)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ color: 'var(--text-secondary)' }}>Outstanding Balance:</span>
@@ -2830,7 +2829,7 @@ const PaymentControlCenter = () => {
                   </div>
 
                   {/* Section 4: VALIDATION DETAILS */}
-                  <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
+                  <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.65rem' }}>
                       <div>
                         <h4 style={{ fontSize: '0.92rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -2867,7 +2866,7 @@ const PaymentControlCenter = () => {
                       {/* Sub-Panel A: Mismatches */}
                       <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#60a5fa' }}>Mismatches</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#3B7EF6' }}>Mismatches</span>
                           <button
                             onClick={() => setDrawerTab('mismatches')}
                             style={{ background: 'transparent', border: 'none', color: '#38bdf8', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
@@ -2893,10 +2892,10 @@ const PaymentControlCenter = () => {
                       {/* Sub-Panel B: Missing Details */}
                       <div style={{ background: 'rgba(0,0,0,0.2)', padding: '0.85rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#fbbf24' }}>Missing Details</span>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#D97706' }}>Missing Details</span>
                           <button
                             onClick={() => setDrawerTab('checklist')}
-                            style={{ background: 'transparent', border: 'none', color: '#fbbf24', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            style={{ background: 'transparent', border: 'none', color: '#D97706', fontSize: '0.75rem', cursor: 'pointer', textDecoration: 'underline' }}
                           >
                             View Checklist
                           </button>
@@ -2956,7 +2955,7 @@ const PaymentControlCenter = () => {
 
               {/* TAB 2: MISMATCH COMPARISONS */}
               {drawerTab === 'mismatches' && (
-                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+                <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
                   <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)' }}>
                     <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
                       Field Comparison: Master Value vs Source Value
@@ -2969,8 +2968,8 @@ const PaymentControlCenter = () => {
                     <thead>
                       <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'left' }}>Field</th>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#60a5fa' }}>Master Value</th>
-                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#fbbf24' }}>Source Value</th>
+                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#3B7EF6' }}>Master Value</th>
+                        <th style={{ padding: '0.75rem 1rem', textAlign: 'left', color: '#D97706' }}>Source Value</th>
                         <th style={{ padding: '0.75rem 1rem', textAlign: 'center' }}>Result</th>
                       </tr>
                     </thead>
@@ -2992,7 +2991,7 @@ const PaymentControlCenter = () => {
                                 MISMATCH
                               </span>
                             ) : (
-                              <span style={{ padding: '0.2rem 0.55rem', borderRadius: '4px', background: 'rgba(16,185,129,0.15)', color: '#34d399', fontWeight: 700, fontSize: '0.75rem' }}>
+                              <span style={{ padding: '0.2rem 0.55rem', borderRadius: '4px', background: 'rgba(16,185,129,0.15)', color: '#059669', fontWeight: 700, fontSize: '0.75rem' }}>
                                 MATCHED
                               </span>
                             )}
@@ -3006,7 +3005,7 @@ const PaymentControlCenter = () => {
 
               {/* TAB 3: REQUIRED DETAILS CHECKLIST */}
               {drawerTab === 'checklist' && (
-                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
+                <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
                   <div style={{ marginBottom: '1.25rem' }}>
                     <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
                       Required Details Verification Checklist
@@ -3063,7 +3062,7 @@ const PaymentControlCenter = () => {
 
               {/* TAB 4: RESOLVE ISSUE & RE-EVALUATE */}
               {drawerTab === 'resolve' && (
-                <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
+                <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
                   <div style={{ marginBottom: '1.25rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#10b981', fontWeight: 700, fontSize: '1rem', marginBottom: '0.25rem' }}>
                       <Wrench size={18} />
@@ -3081,7 +3080,7 @@ const PaymentControlCenter = () => {
                         type="text"
                         value={correctionForm.customerName || ''}
                         onChange={(e) => setCorrectionForm({ ...correctionForm, customerName: e.target.value })}
-                        style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                     <div>
@@ -3090,7 +3089,7 @@ const PaymentControlCenter = () => {
                         type="text"
                         value={correctionForm.bankAccountNo || ''}
                         onChange={(e) => setCorrectionForm({ ...correctionForm, bankAccountNo: e.target.value })}
-                        style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                     <div>
@@ -3099,7 +3098,7 @@ const PaymentControlCenter = () => {
                         type="text"
                         value={correctionForm.bankCode || ''}
                         onChange={(e) => setCorrectionForm({ ...correctionForm, bankCode: e.target.value })}
-                        style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                     <div>
@@ -3108,7 +3107,7 @@ const PaymentControlCenter = () => {
                         type="text"
                         value={correctionForm.branchCode || ''}
                         onChange={(e) => setCorrectionForm({ ...correctionForm, branchCode: e.target.value })}
-                        style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                     <div>
@@ -3116,7 +3115,7 @@ const PaymentControlCenter = () => {
                       <select
                         value={correctionForm.solarType || ''}
                         onChange={(e) => setCorrectionForm({ ...correctionForm, solarType: e.target.value })}
-                        style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       >
                         <option value="Net Plus">Net Plus</option>
                         <option value="Net Plus Plus">Net Plus Plus</option>
@@ -3131,7 +3130,7 @@ const PaymentControlCenter = () => {
                         step="0.01"
                         value={correctionForm.unitRate || ''}
                         onChange={(e) => setCorrectionForm({ ...correctionForm, unitRate: e.target.value })}
-                        style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
+                        style={{ width: '100%', background: '#FFFFFF', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.5rem 0.75rem', borderRadius: '6px', fontSize: '0.85rem' }}
                       />
                     </div>
                   </div>
@@ -3228,7 +3227,7 @@ const PaymentControlCenter = () => {
           padding: '1.5rem'
         }}>
           <div style={{
-            background: 'var(--bg-secondary)',
+            background: '#FFFFFF',
             border: '1px solid var(--border-color)',
             borderRadius: '16px',
             width: '100%',
@@ -3257,14 +3256,14 @@ const PaymentControlCenter = () => {
             <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '10px', padding: '1rem' }}>
                 <div style={{ fontSize: '0.88rem', color: 'var(--text-primary)', lineHeight: '1.5' }}>
-                  You are bundling <strong style={{ color: '#34d399' }}>{selectedFinancials.eligibleCount}</strong> PAYMENT READY customer(s) into an official payment batch for supervisor approval and bank disbursement.
+                  You are bundling <strong style={{ color: '#059669' }}>{selectedFinancials.eligibleCount}</strong> PAYMENT READY customer(s) into an official payment batch for supervisor approval and bank disbursement.
                 </div>
               </div>
 
               {/* Warning if any ON HOLD customers were attempted */}
               {selectedFinancials.onHoldCount > 0 && (
                 <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '10px', padding: '0.85rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: '#fbbf24', fontWeight: 700, fontSize: '0.85rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', color: '#D97706', fontWeight: 700, fontSize: '0.85rem' }}>
                     <AlertTriangle size={16} />
                     <span>{selectedFinancials.onHoldCount} Selected Account(s) Are ON HOLD & Excluded:</span>
                   </div>
@@ -3275,7 +3274,7 @@ const PaymentControlCenter = () => {
               )}
 
               {/* Financial Totals Breakdown */}
-              <div style={{ background: 'var(--bg-card)', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
+              <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Selected Eligible Customers:</span>
                   <strong style={{ color: 'var(--text-primary)' }}>{selectedFinancials.eligibleCount}</strong>
@@ -3286,7 +3285,7 @@ const PaymentControlCenter = () => {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Total Bill Outstanding Set Off:</span>
-                  <span style={{ fontFamily: 'monospace', color: '#fbbf24' }}>{formatLKR(selectedFinancials.billSetOff)}</span>
+                  <span style={{ fontFamily: 'monospace', color: '#D97706' }}>{formatLKR(selectedFinancials.billSetOff)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.88rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Total Outstanding Carried Balance:</span>
@@ -3352,7 +3351,7 @@ const PaymentControlCenter = () => {
           padding: '1.5rem'
         }}>
           <div style={{
-            background: 'var(--bg-secondary)',
+            background: '#FFFFFF',
             border: '1px solid var(--border-color)',
             borderRadius: '16px',
             width: '100%',
@@ -3476,8 +3475,8 @@ const PaymentControlCenter = () => {
                 filterTabLabel: 'View Payment Ready Tab',
                 metrics: [
                   { label: 'Ready Producers', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
-                  { label: 'Ready Total Payable', value: formatLKR(summary.totalPayable), color: '#34d399' },
-                  { label: 'Verification Gates', value: '11 of 11 Passed', color: '#60a5fa' },
+                  { label: 'Ready Total Payable', value: formatLKR(summary.totalPayable), color: '#059669' },
+                  { label: 'Verification Gates', value: '11 of 11 Passed', color: '#3B7EF6' },
                   { label: 'Batch Eligibility', value: 'Eligible for Batch Creation', color: '#10b981' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'READY' || c.isEligible
@@ -3500,7 +3499,7 @@ const PaymentControlCenter = () => {
                 metrics: [
                   { label: 'On Hold Producers', value: (summary.onHoldCount || 0).toLocaleString(), color: '#f59e0b' },
                   { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#f87171' },
-                  { label: 'Primary Blockers', value: 'Holds & Missing Details', color: '#fbbf24' },
+                  { label: 'Primary Blockers', value: 'Holds & Missing Details', color: '#D97706' },
                   { label: 'Resolution Path', value: 'Customer 360 / Edit Details', color: '#38bdf8' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'ON_HOLD' || (c.holdReasons && c.holdReasons.length > 0)
@@ -3523,8 +3522,8 @@ const PaymentControlCenter = () => {
                 metrics: [
                   { label: 'Flagged Records', value: (summary.reviewCount || 0).toLocaleString(), color: '#a855f7' },
                   { label: 'Review Categories', value: 'Duplicate Sources / Batches', color: '#c084fc' },
-                  { label: 'Under Review Batches', value: batches.filter(b => b.status === 'UNDER_REVIEW' || b.status === 'SUBMITTED').length, color: '#fbbf24' },
-                  { label: 'Audit Gateway', value: 'Supervisor Action Required', color: '#60a5fa' }
+                  { label: 'Under Review Batches', value: batches.filter(b => b.status === 'UNDER_REVIEW' || b.status === 'SUBMITTED').length, color: '#D97706' },
+                  { label: 'Audit Gateway', value: 'Supervisor Action Required', color: '#3B7EF6' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'REVIEW'
               };
@@ -3546,8 +3545,8 @@ const PaymentControlCenter = () => {
                 metrics: [
                   { label: 'Ready Payable', value: formatLKR(summary.totalPayable), color: '#38bdf8' },
                   { label: 'Eligible Payees', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
-                  { label: 'Formula Enforced', value: 'kWh Sales − SetOff − Retention', color: '#fbbf24' },
-                  { label: 'Disbursement Status', value: 'Available for Batching', color: '#34d399' }
+                  { label: 'Formula Enforced', value: 'kWh Sales − SetOff − Retention', color: '#D97706' },
+                  { label: 'Disbursement Status', value: 'Available for Batching', color: '#059669' }
                 ],
                 filterPredicate: (c) => (c.totalPayable != null && c.totalPayable > 0) || c.paymentStatus === 'READY'
               };
@@ -3568,7 +3567,7 @@ const PaymentControlCenter = () => {
                 filterTabLabel: 'View On Hold Accounts in Table',
                 metrics: [
                   { label: 'Withheld Total', value: formatLKR(summary.totalOnHold), color: '#f87171' },
-                  { label: 'Withheld Producers', value: ((summary.onHoldCount || 0) + (summary.reviewCount || 0)).toLocaleString(), color: '#fbbf24' },
+                  { label: 'Withheld Producers', value: ((summary.onHoldCount || 0) + (summary.reviewCount || 0)).toLocaleString(), color: '#D97706' },
                   { label: 'Disbursement Guard', value: 'Strictly Locked', color: '#ef4444' },
                   { label: 'Release Trigger', value: 'Pass Validation Criteria', color: '#38bdf8' }
                 ],
@@ -3634,7 +3633,7 @@ const PaymentControlCenter = () => {
             }}
           >
             <div style={{
-              background: 'var(--bg-secondary)',
+              background: '#FFFFFF',
               border: '1px solid var(--border-color)',
               borderRadius: '16px',
               width: '100%',
@@ -3736,7 +3735,7 @@ const PaymentControlCenter = () => {
                     <div
                       key={idx}
                       style={{
-                        background: 'var(--bg-card)',
+                        background: '#FFFFFF',
                         border: '1px solid var(--border-color)',
                         borderRadius: '10px',
                         padding: '0.9rem 1.1rem'

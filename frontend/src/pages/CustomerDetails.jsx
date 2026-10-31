@@ -1257,21 +1257,21 @@ const CustomerDetails = () => {
   };
 
   return (
-    <div className="page-wrapper animate-fade-in">
-      <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '0.85rem', marginBottom: '0.75rem', fontWeight: 500, padding: 0 }}>
+    <div className="page-wrapper animate-fade-in" style={{ backgroundColor: '#F8FAFC', minHeight: '100%' }}>
+      <button onClick={() => navigate('/')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: '0.85rem', marginBottom: '0.75rem', fontWeight: 500, padding: 0 }}>
         <ArrowLeft size={14} /> Back to Dashboard
       </button>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.75rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'white', margin: 0 }}>Customer Directory</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.25rem', margin: 0 }}>Search customer electricity accounts, edit profiles, and view ledger details.</p>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>Customer Directory</h1>
+          <p style={{ color: '#64748B', fontSize: '0.88rem', marginTop: '0.25rem', margin: 0 }}>Search customer electricity accounts, edit profiles, and view ledger details.</p>
         </div>
         {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
           <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#1e293b', border: '1px solid var(--border-color)', fontWeight: 500, color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+            <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', fontWeight: 600, color: '#0F172A', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
               <Download size={15} /> Export <ChevronDown size={14} />
             </button>
-            <button className="btn btn-primary" onClick={openAddCustomerModal} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600, color: 'white', cursor: 'pointer', fontSize: '0.85rem' }}>
+            <button className="btn btn-primary" onClick={openAddCustomerModal} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#2563EB', borderColor: '#2563EB', fontWeight: 600, color: '#FFFFFF', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}>
               <Plus size={16} /> Add Customer
             </button>
           </div>
@@ -1281,17 +1281,17 @@ const CustomerDetails = () => {
       {/* Completeness Summary Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
         {/* Total Customers */}
-        <div className="card" style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)' }}>
+        <div className="card" style={{ padding: '1.25rem', borderRadius: '12px', border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <User size={24} color="#818cf8" />
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <User size={22} color="#2563EB" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL' ? `Total (${locationFilter})` : 'Total Customers'}
               </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.totalCustomers.toLocaleString()}</div>
-              <div style={{ fontSize: '0.72rem', color: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#38bdf8' : '#10b981', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '0.15rem' }}>{summaryStats.totalCustomers.toLocaleString()}</div>
+              <div style={{ fontSize: '0.72rem', color: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#2563EB' : '#10B981', marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.25rem', fontWeight: 500 }}>
                 {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? (
                   <span>📍 {locationFilter} Division active</span>
                 ) : (
@@ -1300,45 +1300,45 @@ const CustomerDetails = () => {
               </div>
             </div>
           </div>
-          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+          <button style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
             <MoreVertical size={16} />
           </button>
         </div>
 
         {/* Complete Details */}
-        <div className="card" onClick={() => { setCompletenessFilter('COMPLETE'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', borderLeft: completenessFilter === 'COMPLETE' ? '3px solid #10b981' : '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer' }}>
+        <div className="card" onClick={() => { setCompletenessFilter('COMPLETE'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0', borderLeft: completenessFilter === 'COMPLETE' ? '3px solid #10B981' : '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFFFFF', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <CheckCircle size={24} color="#10b981" />
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CheckCircle size={22} color="#10B981" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Complete Details</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.completeCustomers.toLocaleString()}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Complete Details</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '0.15rem' }}>{summaryStats.completeCustomers.toLocaleString()}</div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '0.15rem', fontWeight: 500 }}>
                 {summaryStats.totalCustomers > 0 ? (summaryStats.completeCustomers / summaryStats.totalCustomers * 100).toFixed(2) : 0}% complete
               </div>
             </div>
           </div>
-          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+          <button style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
             <MoreVertical size={16} />
           </button>
         </div>
 
         {/* Missing Details */}
-        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid var(--border-color)', borderRight: '1px solid var(--border-color)', borderBottom: '1px solid var(--border-color)', borderLeft: (completenessFilter === 'MISSING' || completenessFilter === 'NAME_MISMATCH' || completenessFilter === 'UNIT_RATE_MISMATCH' || completenessFilter === 'NET_TYPE_MISMATCH') ? '3px solid #f59e0b' : '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(30,41,59,0.2)', cursor: 'pointer' }}>
+        <div className="card" onClick={() => { setCompletenessFilter('MISSING'); setCurrentPage(0); }} style={{ padding: '1.25rem', borderRadius: '12px', borderTop: '1px solid #E2E8F0', borderRight: '1px solid #E2E8F0', borderBottom: '1px solid #E2E8F0', borderLeft: (completenessFilter === 'MISSING' || completenessFilter === 'NAME_MISMATCH' || completenessFilter === 'UNIT_RATE_MISMATCH' || completenessFilter === 'NET_TYPE_MISMATCH') ? '3px solid #F59E0B' : '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#FFFFFF', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <AlertTriangle size={24} color="#f59e0b" />
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#FFFBEB', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <AlertTriangle size={22} color="#D97706" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details / Validation</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>{summaryStats.missingCustomers.toLocaleString()}</div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#D97706', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Missing Details / Validation</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '0.15rem' }}>{summaryStats.missingCustomers.toLocaleString()}</div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '0.15rem', fontWeight: 500 }}>
                 {summaryStats.totalCustomers > 0 ? (summaryStats.missingCustomers / summaryStats.totalCustomers * 100).toFixed(2) : 0}% issues / missing info
               </div>
             </div>
           </div>
-          <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+          <button style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
             <MoreVertical size={16} />
           </button>
         </div>
@@ -1356,29 +1356,29 @@ const CustomerDetails = () => {
           style={{ 
             padding: '1.25rem', 
             borderRadius: '12px', 
-            border: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '1px solid rgba(56,189,248,0.6)' : '1px solid var(--border-color)', 
+            border: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '1px solid #0284C7' : '1px solid #E2E8F0', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between', 
-            background: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? 'rgba(56,189,248,0.08)' : 'rgba(30,41,59,0.2)',
+            background: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#F0F9FF' : '#FFFFFF',
             cursor: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? 'pointer' : 'default',
-            boxShadow: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '0 0 12px rgba(56,189,248,0.15)' : 'none',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.03)',
             transition: 'all 0.2s ease'
           }}
           title={(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? 'Click to reset to All Locations' : 'Locations'}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(56,189,248,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <MapPin size={24} color="#38bdf8" />
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: '#F0F9FF', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <MapPin size={22} color="#0284C7" />
             </div>
             <div>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#38bdf8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0284C7', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? `Location: ${locationFilter}` : 'Locations'}
               </div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'white', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '0.15rem' }}>
                 {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? summaryStats.totalCustomers.toLocaleString() : summaryStats.locationsCount}
               </div>
-              <div style={{ fontSize: '0.72rem', color: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#38bdf8' : 'var(--text-muted)', marginTop: '0.15rem' }}>
+              <div style={{ fontSize: '0.72rem', color: (locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? '#0284C7' : '#64748B', marginTop: '0.15rem', fontWeight: 500 }}>
                 {(locationFilter && locationFilter.trim().toUpperCase() !== 'ALL') ? `${locationFilter} Customers (Click to reset)` : 'Eastern Province'}
               </div>
             </div>
@@ -1387,12 +1387,12 @@ const CustomerDetails = () => {
             <button 
               onClick={(e) => { e.stopPropagation(); setLocationFilter('ALL'); setCurrentPage(0); fetchSummaryStats('ALL', selectedBillingMonth); }}
               title="Reset location filter"
-              style={{ background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 600 }}
+              style={{ background: '#FEE2E2', border: '1px solid #FCA5A5', color: '#DC2626', borderRadius: '6px', padding: '0.25rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.2rem', fontWeight: 600 }}
             >
               <X size={12} /> All
             </button>
           ) : (
-            <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+            <button style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
               <MoreVertical size={16} />
             </button>
           )}
@@ -1406,9 +1406,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('ALL'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? 'rgba(59,130,246,0.12)' : '#111827',
-              border: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '1px solid #3b82f6' : '1px solid var(--border-color)',
-              color: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#60a5fa' : 'var(--text-secondary)',
+              background: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#2563EB' : '#FFFFFF',
+              border: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '1px solid #2563EB' : '1px solid #E2E8F0',
+              color: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1416,11 +1416,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '0 2px 4px rgba(37,99,235,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <User size={14} /> All Customers
-            <span style={{ marginLeft: '0.35rem', background: '#3b82f6', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? 'rgba(255,255,255,0.25)' : '#EFF6FF',
+              color: (completenessFilter === 'ALL' && statusFilter === 'ALL') ? '#FFFFFF' : '#2563EB',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.totalCustomers ?? 0}
             </span>
           </button>
@@ -1429,9 +1438,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('COMPLETE'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'COMPLETE' ? 'rgba(16,185,129,0.12)' : '#111827',
-              border: completenessFilter === 'COMPLETE' ? '1px solid #10b981' : '1px solid var(--border-color)',
-              color: completenessFilter === 'COMPLETE' ? '#34d399' : 'var(--text-secondary)',
+              background: completenessFilter === 'COMPLETE' ? '#16A34A' : '#FFFFFF',
+              border: completenessFilter === 'COMPLETE' ? '1px solid #16A34A' : '1px solid #E2E8F0',
+              color: completenessFilter === 'COMPLETE' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1439,11 +1448,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'COMPLETE' ? '0 2px 4px rgba(22,163,74,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <CheckCircle size={14} /> Complete Details
-            <span style={{ marginLeft: '0.35rem', background: '#10b981', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'COMPLETE' ? 'rgba(255,255,255,0.25)' : '#DCFCE7',
+              color: completenessFilter === 'COMPLETE' ? '#FFFFFF' : '#166534',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.completeCustomers ?? 0}
             </span>
           </button>
@@ -1452,9 +1470,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('MISSING'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'MISSING' ? 'rgba(245,158,11,0.12)' : '#111827',
-              border: completenessFilter === 'MISSING' ? '1px solid #f59e0b' : '1px solid var(--border-color)',
-              color: completenessFilter === 'MISSING' ? '#fbbf24' : 'var(--text-secondary)',
+              background: completenessFilter === 'MISSING' ? '#D97706' : '#FFFFFF',
+              border: completenessFilter === 'MISSING' ? '1px solid #D97706' : '1px solid #E2E8F0',
+              color: completenessFilter === 'MISSING' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1462,11 +1480,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'MISSING' ? '0 2px 4px rgba(217,119,6,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <AlertTriangle size={14} /> Missing Details
-            <span style={{ marginLeft: '0.35rem', background: '#f59e0b', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'MISSING' ? 'rgba(255,255,255,0.25)' : '#FEF3C7',
+              color: completenessFilter === 'MISSING' ? '#FFFFFF' : '#B45309',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.missingCustomers ?? 0}
             </span>
           </button>
@@ -1475,9 +1502,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('NAME_MISMATCH'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'NAME_MISMATCH' ? 'rgba(251,113,133,0.12)' : '#111827',
-              border: completenessFilter === 'NAME_MISMATCH' ? '1px solid #fb7185' : '1px solid var(--border-color)',
-              color: completenessFilter === 'NAME_MISMATCH' ? '#fb7185' : 'var(--text-secondary)',
+              background: completenessFilter === 'NAME_MISMATCH' ? '#E11D48' : '#FFFFFF',
+              border: completenessFilter === 'NAME_MISMATCH' ? '1px solid #E11D48' : '1px solid #E2E8F0',
+              color: completenessFilter === 'NAME_MISMATCH' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1485,11 +1512,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'NAME_MISMATCH' ? '0 2px 4px rgba(225,29,72,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <User size={14} /> Name Mismatch
-            <span style={{ marginLeft: '0.35rem', background: '#fb7185', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'NAME_MISMATCH' ? 'rgba(255,255,255,0.25)' : '#FFE4E6',
+              color: completenessFilter === 'NAME_MISMATCH' ? '#FFFFFF' : '#BE123C',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.nameMismatchesCount ?? 0}
             </span>
           </button>
@@ -1498,9 +1534,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('UNIT_RATE_MISMATCH'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'UNIT_RATE_MISMATCH' ? 'rgba(251,191,36,0.12)' : '#111827',
-              border: completenessFilter === 'UNIT_RATE_MISMATCH' ? '1px solid #fbbf24' : '1px solid var(--border-color)',
-              color: completenessFilter === 'UNIT_RATE_MISMATCH' ? '#fbbf24' : 'var(--text-secondary)',
+              background: completenessFilter === 'UNIT_RATE_MISMATCH' ? '#D97706' : '#FFFFFF',
+              border: completenessFilter === 'UNIT_RATE_MISMATCH' ? '1px solid #D97706' : '1px solid #E2E8F0',
+              color: completenessFilter === 'UNIT_RATE_MISMATCH' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1508,11 +1544,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'UNIT_RATE_MISMATCH' ? '0 2px 4px rgba(217,119,6,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <AlertTriangle size={14} /> Unit Rate Mismatch
-            <span style={{ marginLeft: '0.35rem', background: '#fbbf24', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'UNIT_RATE_MISMATCH' ? 'rgba(255,255,255,0.25)' : '#FEF3C7',
+              color: completenessFilter === 'UNIT_RATE_MISMATCH' ? '#FFFFFF' : '#B45309',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.unitRateMismatchesCount ?? 0}
             </span>
           </button>
@@ -1521,9 +1566,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('NET_TYPE_MISMATCH'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'NET_TYPE_MISMATCH' ? 'rgba(167,139,250,0.12)' : '#111827',
-              border: completenessFilter === 'NET_TYPE_MISMATCH' ? '1px solid #a78bfa' : '1px solid var(--border-color)',
-              color: completenessFilter === 'NET_TYPE_MISMATCH' ? '#a78bfa' : 'var(--text-secondary)',
+              background: completenessFilter === 'NET_TYPE_MISMATCH' ? '#7C3AED' : '#FFFFFF',
+              border: completenessFilter === 'NET_TYPE_MISMATCH' ? '1px solid #7C3AED' : '1px solid #E2E8F0',
+              color: completenessFilter === 'NET_TYPE_MISMATCH' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1531,11 +1576,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'NET_TYPE_MISMATCH' ? '0 2px 4px rgba(124,58,237,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <Zap size={14} /> Net Type Mismatch
-            <span style={{ marginLeft: '0.35rem', background: '#a78bfa', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'NET_TYPE_MISMATCH' ? 'rgba(255,255,255,0.25)' : '#F3E8FF',
+              color: completenessFilter === 'NET_TYPE_MISMATCH' ? '#FFFFFF' : '#7E22CE',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.netTypeMismatchesCount ?? 0}
             </span>
           </button>
@@ -1544,9 +1598,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('OUTSTANDING'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'OUTSTANDING' ? 'rgba(56,189,248,0.12)' : '#111827',
-              border: completenessFilter === 'OUTSTANDING' ? '1px solid #38bdf8' : '1px solid var(--border-color)',
-              color: completenessFilter === 'OUTSTANDING' ? '#38bdf8' : 'var(--text-secondary)',
+              background: completenessFilter === 'OUTSTANDING' ? '#0284C7' : '#FFFFFF',
+              border: completenessFilter === 'OUTSTANDING' ? '1px solid #0284C7' : '1px solid #E2E8F0',
+              color: completenessFilter === 'OUTSTANDING' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1554,11 +1608,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'OUTSTANDING' ? '0 2px 4px rgba(2,132,199,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <Clock size={14} /> Outstanding Customers
-            <span style={{ marginLeft: '0.35rem', background: '#38bdf8', color: 'black', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'OUTSTANDING' ? 'rgba(255,255,255,0.25)' : '#E0F2FE',
+              color: completenessFilter === 'OUTSTANDING' ? '#FFFFFF' : '#0369A1',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.outstandingCustomersCount ?? 0}
             </span>
           </button>
@@ -1567,9 +1630,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('EXPIRED'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'EXPIRED' ? 'rgba(239,68,68,0.12)' : '#111827',
-              border: completenessFilter === 'EXPIRED' ? '1px solid #ef4444' : '1px solid var(--border-color)',
-              color: completenessFilter === 'EXPIRED' ? '#f87171' : 'var(--text-secondary)',
+              background: completenessFilter === 'EXPIRED' ? '#DC2626' : '#FFFFFF',
+              border: completenessFilter === 'EXPIRED' ? '1px solid #DC2626' : '1px solid #E2E8F0',
+              color: completenessFilter === 'EXPIRED' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1577,11 +1640,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'EXPIRED' ? '0 2px 4px rgba(220,38,38,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <Clock size={14} /> Expired Agreements
-            <span style={{ marginLeft: '0.35rem', background: '#ef4444', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'EXPIRED' ? 'rgba(255,255,255,0.25)' : '#FEE2E2',
+              color: completenessFilter === 'EXPIRED' ? '#FFFFFF' : '#B91C1C',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.expiredAgreementsCount ?? 0}
             </span>
           </button>
@@ -1590,9 +1662,9 @@ const CustomerDetails = () => {
             onClick={() => { setCompletenessFilter('EXPIRING_SOON'); setStatusFilter('ALL'); setCurrentPage(0); }}
             style={{
               padding: '0.5rem 1.1rem',
-              background: completenessFilter === 'EXPIRING_SOON' ? 'rgba(249,115,22,0.12)' : '#111827',
-              border: completenessFilter === 'EXPIRING_SOON' ? '1px solid #f97316' : '1px solid var(--border-color)',
-              color: completenessFilter === 'EXPIRING_SOON' ? '#f97316' : 'var(--text-secondary)',
+              background: completenessFilter === 'EXPIRING_SOON' ? '#EA580C' : '#FFFFFF',
+              border: completenessFilter === 'EXPIRING_SOON' ? '1px solid #EA580C' : '1px solid #E2E8F0',
+              color: completenessFilter === 'EXPIRING_SOON' ? '#FFFFFF' : '#475569',
               fontWeight: 600,
               fontSize: '0.8rem',
               borderRadius: '8px',
@@ -1600,11 +1672,20 @@ const CustomerDetails = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              transition: 'all 0.2s ease'
+              boxShadow: completenessFilter === 'EXPIRING_SOON' ? '0 2px 4px rgba(234,88,12,0.2)' : '0 1px 2px rgba(0,0,0,0.03)',
+              transition: 'all 0.15s ease'
             }}
           >
             <Clock size={14} /> Expiring Soon
-            <span style={{ marginLeft: '0.35rem', background: '#f97316', color: 'white', borderRadius: '999px', padding: '0.05rem 0.35rem', fontSize: '0.68rem', fontWeight: 800 }}>
+            <span style={{
+              marginLeft: '0.35rem',
+              background: completenessFilter === 'EXPIRING_SOON' ? 'rgba(255,255,255,0.25)' : '#FFEDD5',
+              color: completenessFilter === 'EXPIRING_SOON' ? '#FFFFFF' : '#C2410C',
+              borderRadius: '999px',
+              padding: '0.05rem 0.45rem',
+              fontSize: '0.68rem',
+              fontWeight: 800
+            }}>
               {summaryStats.expiringSoonAgreementsCount ?? 0}
             </span>
           </button>
@@ -1612,22 +1693,23 @@ const CustomerDetails = () => {
         </div>
 
         {/* View Mode Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', background: '#111827', padding: '0.25rem', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', background: '#F1F5F9', padding: '0.25rem', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
           <button
             onClick={() => setViewMode('SINGLE')}
             style={{
               padding: '0.4rem 0.85rem',
               borderRadius: '6px',
-              border: 'none',
-              background: viewMode === 'SINGLE' ? '#3b82f6' : 'transparent',
-              color: viewMode === 'SINGLE' ? 'white' : 'var(--text-secondary)',
+              border: viewMode === 'SINGLE' ? '1px solid #E2E8F0' : '1px solid transparent',
+              background: viewMode === 'SINGLE' ? '#FFFFFF' : 'transparent',
+              color: viewMode === 'SINGLE' ? '#0F172A' : '#64748B',
+              boxShadow: viewMode === 'SINGLE' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               fontSize: '0.78rem',
-              fontWeight: 600,
+              fontWeight: viewMode === 'SINGLE' ? 700 : 500,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.3rem',
-              transition: 'all 0.2s ease'
+              gap: '0.35rem',
+              transition: 'all 0.15s ease'
             }}
           >
             <Layers size={13} /> Unified Table
@@ -1637,16 +1719,17 @@ const CustomerDetails = () => {
             style={{
               padding: '0.4rem 0.85rem',
               borderRadius: '6px',
-              border: 'none',
-              background: viewMode === 'GROUPED' ? '#3b82f6' : 'transparent',
-              color: viewMode === 'GROUPED' ? 'white' : 'var(--text-secondary)',
+              border: viewMode === 'GROUPED' ? '1px solid #E2E8F0' : '1px solid transparent',
+              background: viewMode === 'GROUPED' ? '#FFFFFF' : 'transparent',
+              color: viewMode === 'GROUPED' ? '#0F172A' : '#64748B',
+              boxShadow: viewMode === 'GROUPED' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
               fontSize: '0.78rem',
-              fontWeight: 600,
+              fontWeight: viewMode === 'GROUPED' ? 700 : 500,
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '0.3rem',
-              transition: 'all 0.2s ease'
+              gap: '0.35rem',
+              transition: 'all 0.15s ease'
             }}
           >
             <Layers size={13} /> Grouped View
@@ -1662,21 +1745,21 @@ const CustomerDetails = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="card" style={{ marginBottom: '1.5rem', padding: '1.25rem', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(30,41,59,0.15)' }}>
+      <div className="card" style={{ marginBottom: '1.5rem', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: '#F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%', marginBottom: '1rem', flexWrap: 'wrap' }}>
           <form onSubmit={handleSearchSubmit} style={{ flex: 1, display: 'flex', gap: '0.5rem', margin: 0 }}>
             <div className="input-group" style={{ flex: 1, position: 'relative' }}>
-              <Search size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+              <Search size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
               <input
                 type="text"
                 className="form-input"
-                style={{ paddingLeft: '2.5rem', height: '42px', borderRadius: '8px', background: '#0b0f19', border: '1px solid var(--border-color)', color: 'white', width: '100%', fontSize: '0.85rem' }}
+                style={{ paddingLeft: '2.5rem', height: '42px', borderRadius: '8px', background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#0F172A', width: '100%', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                 placeholder="Search by Account No, Customer Name, or Mobile..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 1.5rem', borderRadius: '8px', background: '#3b82f6', borderColor: '#3b82f6', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem' }}>
+            <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 1.5rem', borderRadius: '8px', background: '#2563EB', borderColor: '#2563EB', color: '#FFFFFF', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}>
               <Search size={14} /> Search
             </button>
           </form>
@@ -1694,7 +1777,7 @@ const CustomerDetails = () => {
               setAppliedQuery('');
               setCurrentPage(0);
             }}
-            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(239,68,68,0.15)', background: 'rgba(239,68,68,0.04)', color: '#f87171', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem' }}
+            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #FECACA', background: '#FFFFFF', color: '#DC2626', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
           >
             <Trash2 size={14} /> Clear Filters
           </button>
@@ -1702,16 +1785,16 @@ const CustomerDetails = () => {
           <button
             type="button"
             className="btn btn-secondary"
-            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid var(--border-color)', background: '#111827', color: 'var(--text-secondary)', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem' }}
+            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
           >
             <Filter size={14} /> Filter <ChevronDown size={14} />
           </button>
         </div>
 
         {/* Billing Month, Agreement Status and Net Type Filter Panel */}
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #E2E8F0' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
-            <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Billing Month:</label>
+            <label style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Billing Month:</label>
             <select
               value={selectedBillingMonth}
               onChange={(e) => { 
@@ -1721,7 +1804,7 @@ const CustomerDetails = () => {
                 fetchSummaryStats(locationFilter, newMonth);
               }}
               className="form-input"
-              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
+              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#FFFFFF', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
             >
               <option value="ALL">All Billing Months</option>
               {billingMonths.map((m) => (
@@ -1731,12 +1814,12 @@ const CustomerDetails = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
-            <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Agreement Status:</label>
+            <label style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Agreement Status:</label>
             <select
               value={agreementStatusFilter}
               onChange={(e) => { setAgreementStatusFilter(e.target.value); setCurrentPage(0); }}
               className="form-input"
-              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
+              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#FFFFFF', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
             >
               <option value="ALL">All Statuses</option>
               <option value="EXPIRED">Expired (7 Years Completed)</option>
@@ -1745,12 +1828,12 @@ const CustomerDetails = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
-            <label style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Type:</label>
+            <label style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Type:</label>
             <select
               value={netTypeFilter}
               onChange={(e) => { setNetTypeFilter(e.target.value); setCurrentPage(0); }}
               className="form-input"
-              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#0b0f19', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer' }}
+              style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#FFFFFF', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
             >
               <option value="ALL">All Net Types</option>
               {netTypesList.map((nt) => (
@@ -1761,9 +1844,9 @@ const CustomerDetails = () => {
         </div>
 
         {/* Location tags + Sorting controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', paddingTop: '0.85rem', borderTop: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', paddingTop: '0.85rem', borderTop: '1px solid #E2E8F0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginRight: '0.35rem' }}>
+            <span style={{ color: '#475569', fontSize: '0.78rem', fontWeight: 700, marginRight: '0.35rem' }}>
               Locations:
             </span>
             {['ALL', ...DIRECTORY_DIVISIONS].map((loc) => {
@@ -1783,17 +1866,17 @@ const CustomerDetails = () => {
                     fontWeight: active ? 700 : 600,
                     borderRadius: '6px',
                     cursor: 'pointer',
-                    border: active ? '1px solid #3b82f6' : '1px solid var(--border-color)',
-                    background: active ? 'rgba(59,130,246,0.18)' : '#111827',
-                    color: active ? '#60a5fa' : 'var(--text-secondary)',
-                    boxShadow: active ? '0 0 10px rgba(59,130,246,0.25)' : 'none',
+                    border: active ? '1px solid #2563EB' : '1px solid #E2E8F0',
+                    background: active ? '#2563EB' : '#FFFFFF',
+                    color: active ? '#FFFFFF' : '#475569',
+                    boxShadow: active ? '0 1px 3px rgba(37,99,235,0.25)' : '0 1px 2px rgba(0,0,0,0.03)',
                     transition: 'all 0.15s ease',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '0.35rem'
                   }}
                 >
-                  {active && loc !== 'ALL' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#60a5fa', display: 'inline-block' }} />}
+                  {active && loc !== 'ALL' && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFFFFF', display: 'inline-block' }} />}
                   <span>{loc === 'ALL' ? 'All Locations' : loc}</span>
                 </button>
               );
@@ -1801,12 +1884,12 @@ const CustomerDetails = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>Sort by:</span>
+            <span style={{ color: '#475569', fontSize: '0.78rem', fontWeight: 700 }}>Sort by:</span>
             <select
               value={sortBy}
               onChange={(e) => { setSortBy(e.target.value); setCurrentPage(0); }}
               className="form-input"
-              style={{ appearance: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.78rem', background: '#111827', color: 'white', border: '1px solid var(--border-color)', borderRadius: '8px', width: 'auto', minWidth: '130px', height: '36px' }}
+              style={{ appearance: 'auto', padding: '0.4rem 0.75rem', fontSize: '0.78rem', background: '#FFFFFF', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', width: 'auto', minWidth: '130px', height: '36px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
             >
               {SORT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
@@ -1817,7 +1900,7 @@ const CustomerDetails = () => {
               className="btn btn-secondary"
               title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
               onClick={() => { setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(0); }}
-              style={{ padding: '0 0.75rem', height: '36px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', border: '1px solid var(--border-color)', background: '#111827', color: 'white', borderRadius: '8px' }}
+              style={{ padding: '0 0.75rem', height: '36px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
             >
               <ArrowUpDown size={13} /> {sortDir === 'asc' ? 'A-Z' : 'Z-A'}
             </button>
@@ -1827,7 +1910,7 @@ const CustomerDetails = () => {
 
       {/* Customer List Display: Unified vs Grouped View */}
       {viewMode === 'SINGLE' ? (
-        <div className="card" style={{ borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(30,41,59,0.2)', overflow: 'hidden' }}>
+        <div className="card" style={{ borderRadius: '12px', border: '1px solid #E2E8F0', background: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
           <div className="table-container">
             {loading ? (
               <table className="custom-table" style={{ opacity: 0.8 }}>
@@ -1863,14 +1946,14 @@ const CustomerDetails = () => {
                 </tbody>
               </table>
             ) : customers.length === 0 ? (
-              <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                <MapPin size={42} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#38bdf8' }} />
-                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white' }}>
+              <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748B' }}>
+                <MapPin size={42} style={{ opacity: 0.5, marginBottom: '0.75rem', color: '#2563EB' }} />
+                <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>
                   {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
                     ? `No Customers Found for Location: ${locationFilter}`
                     : (appliedQuery ? `No Customers Matching "${appliedQuery}"` : 'No Customer Records Found')}
                 </div>
-                <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
+                <div style={{ fontSize: '0.84rem', color: '#64748B', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
                   {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
                     ? `There are no customer records belonging to "${locationFilter}" under the selected filters.`
                     : (appliedQuery
@@ -1891,7 +1974,7 @@ const CustomerDetails = () => {
                       setAppliedQuery('');
                       setCurrentPage(0);
                     }}
-                    style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', background: 'rgba(56,189,248,0.08)', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}
+                    style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #2563EB', color: '#FFFFFF', background: '#2563EB', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
                   >
                     Reset Location & Filters
                   </button>
@@ -1922,7 +2005,7 @@ const CustomerDetails = () => {
                           {currentPage * pageSize + idx + 1}
                         </td>
                         <td style={{ fontWeight: 600 }}>
-                          <span style={{ color: '#60a5fa', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                          <span style={{ color: '#3B7EF6', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
                             {cust.accountNo}
                           </span>
                         </td>
@@ -1976,7 +2059,7 @@ const CustomerDetails = () => {
                         </td>
                         <td>
                           {comp.isComplete ? (
-                            <span className="badge success" style={{ background: 'rgba(16,185,129,0.12)', color: '#34d399', border: '1px solid rgba(16,185,129,0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span className="badge success" style={{ background: 'rgba(16,185,129,0.12)', color: '#059669', border: '1px solid rgba(16,185,129,0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                               <CheckCircle size={12} /> COMPLETE
                             </span>
                           ) : (
@@ -2059,7 +2142,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="Payment Control & Dossier"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#D97706', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                               onClick={() => handleViewDetails(cust, 'payment')}
                             >
                               <CreditCard size={14} />
@@ -2067,7 +2150,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="View Profile"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                               onClick={() => handleViewDetails(cust)}
                             >
                               <Eye size={14} />
@@ -2075,7 +2158,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="Billing Ledger"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#34d399' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                               onClick={() => handleViewDetails(cust)}
                             >
                               <FileText size={14} />
@@ -2083,7 +2166,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="More Options"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                             >
                               <MoreVertical size={14} />
                             </button>
@@ -2098,14 +2181,14 @@ const CustomerDetails = () => {
           </div>
         </div>
       ) : customers.length === 0 ? (
-        <div className="card" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', borderRadius: '12px', border: '1px solid var(--border-color)', background: 'rgba(30,41,59,0.2)' }}>
-          <MapPin size={42} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#38bdf8' }} />
-          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: 'white' }}>
+        <div className="card" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#64748B', borderRadius: '12px', border: '1px solid #E2E8F0', background: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+          <MapPin size={42} style={{ opacity: 0.5, marginBottom: '0.75rem', color: '#2563EB' }} />
+          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#0F172A' }}>
             {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
               ? `No Customers Found for Location: ${locationFilter}`
               : (appliedQuery ? `No Customers Matching "${appliedQuery}"` : 'No Customer Records Found')}
           </div>
-          <div style={{ fontSize: '0.84rem', color: 'var(--text-muted)', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
+          <div style={{ fontSize: '0.84rem', color: '#64748B', marginTop: '0.4rem', maxWidth: '520px', margin: '0.4rem auto 0' }}>
             {locationFilter && locationFilter.trim().toUpperCase() !== 'ALL'
               ? `There are no customer records belonging to "${locationFilter}" under the selected filters.`
               : (appliedQuery
@@ -2126,7 +2209,7 @@ const CustomerDetails = () => {
                 setAppliedQuery('');
                 setCurrentPage(0);
               }}
-              style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid rgba(56,189,248,0.3)', color: '#38bdf8', background: 'rgba(56,189,248,0.08)', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}
+              style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #2563EB', color: '#FFFFFF', background: '#2563EB', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
             >
               Reset Location & Filters
             </button>
@@ -2136,25 +2219,25 @@ const CustomerDetails = () => {
         /* Grouped View: 2 Distinct Groups */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Group 1: Complete Details */}
-          <div className="card" style={{ borderLeft: '4px solid #10b981', padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <div className="card" style={{ borderLeft: '4px solid #16A34A', border: '1px solid #E2E8F0', borderLeftColor: '#16A34A', background: '#FFFFFF', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(16,185,129,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CheckCircle size={18} color="#10b981" />
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <CheckCircle size={18} color="#16A34A" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#10b981' }}>Complete Customer Details</h3>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>All required customer profile fields are fully filled.</p>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#16A34A' }}>Complete Customer Details</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748B' }}>All required customer profile fields are fully filled.</p>
                 </div>
               </div>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '999px', background: 'rgba(16,185,129,0.15)', color: '#10b981' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '999px', background: '#DCFCE7', color: '#166534' }}>
                 {customers.filter(c => getCustomerCompleteness(c).isComplete).length} Customers
               </span>
             </div>
 
             <div className="table-container">
               {customers.filter(c => getCustomerCompleteness(c).isComplete).length === 0 ? (
-                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.88rem' }}>
                   No customers with complete details in this page view.
                 </div>
               ) : (
@@ -2175,7 +2258,7 @@ const CustomerDetails = () => {
                       <tr key={cust.accountNo}>
                         <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{idx + 1}</td>
                         <td style={{ fontWeight: 600 }}>
-                          <span style={{ color: '#60a5fa', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                          <span style={{ color: '#2563EB', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
                             {cust.accountNo}
                           </span>
                         </td>
@@ -2219,7 +2302,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="View Profile"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                               onClick={() => handleViewDetails(cust)}
                             >
                               <Eye size={14} />
@@ -2227,7 +2310,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="Billing Ledger"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#34d399' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                               onClick={() => handleViewDetails(cust)}
                             >
                               <FileText size={14} />
@@ -2235,7 +2318,7 @@ const CustomerDetails = () => {
                             <button 
                               className="btn btn-secondary" 
                               title="More Options"
-                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}
+                              style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#64748B', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                             >
                               <MoreVertical size={14} />
                             </button>
@@ -2250,25 +2333,25 @@ const CustomerDetails = () => {
           </div>
 
           {/* Group 2: Missing Details */}
-          <div className="card" style={{ borderLeft: '4px solid #f59e0b', padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
+          <div className="card" style={{ borderLeft: '4px solid #D97706', border: '1px solid #E2E8F0', borderLeftColor: '#D97706', background: '#FFFFFF', borderRadius: '12px', padding: '1.25rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.75rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(245,158,11,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <AlertTriangle size={18} color="#f59e0b" />
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FEF3C7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <AlertTriangle size={18} color="#D97706" />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#f59e0b' }}>Missing Customer Details</h3>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Customers with one or more missing information fields.</p>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#D97706' }}>Missing Customer Details</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: '#64748B' }}>Customers with one or more missing information fields.</p>
                 </div>
               </div>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '999px', background: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, padding: '0.25rem 0.75rem', borderRadius: '999px', background: '#FEF3C7', color: '#B45309' }}>
                 {customers.filter(c => !getCustomerCompleteness(c).isComplete).length} Customers
               </span>
             </div>
 
             <div className="table-container">
               {customers.filter(c => !getCustomerCompleteness(c).isComplete).length === 0 ? (
-                <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem' }}>
+                <div style={{ padding: '1.5rem', textAlign: 'center', color: '#64748B', fontSize: '0.88rem' }}>
                   All loaded customers in this view have complete details! 🎉
                 </div>
               ) : (
@@ -2290,7 +2373,7 @@ const CustomerDetails = () => {
                         <tr key={cust.accountNo}>
                           <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{idx + 1}</td>
                           <td style={{ fontWeight: 600 }}>
-                            <span style={{ color: '#60a5fa', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                            <span style={{ color: '#2563EB', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
                               {cust.accountNo}
                             </span>
                           </td>
@@ -2316,7 +2399,7 @@ const CustomerDetails = () => {
                               <button 
                                 className="btn btn-secondary" 
                                 title="View Profile"
-                                style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}
+                                style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                                 onClick={() => handleViewDetails(cust)}
                               >
                                 <Eye size={14} />
@@ -2324,7 +2407,7 @@ const CustomerDetails = () => {
                               <button 
                                 className="btn btn-secondary" 
                                 title="Fill Details"
-                                style={{ padding: '0.35rem', borderRadius: '6px', background: '#1e293b', border: '1px solid var(--border-color)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fbbf24' }}
+                                style={{ padding: '0.35rem', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#D97706', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
                                 onClick={() => { handleViewDetails(cust); setIsEditing(true); }}
                               >
                                 <Edit size={14} />
@@ -2414,11 +2497,12 @@ const CustomerDetails = () => {
                   appearance: 'auto',
                   padding: '0.25rem 0.5rem',
                   fontSize: '0.8rem',
-                  background: '#111827',
-                  color: 'white',
-                  border: '1px solid var(--border-color)',
+                  background: '#FFFFFF',
+                  color: '#0F172A',
+                  border: '1px solid #E2E8F0',
                   borderRadius: '6px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.04)'
                 }}
               >
                 {[5, 10, 20, 50].map((sz) => (
@@ -2556,7 +2640,7 @@ const CustomerDetails = () => {
                       <div key={i} style={{ fontSize: '0.82rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.15)' }}>
                         <span style={{ fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', fontSize: '0.74rem', letterSpacing: '0.05em' }}>{err.type}</span>
                         {err.master !== undefined && err.main !== undefined ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.2rem', padding: '0.45rem 0.65rem', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 6, border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.2rem', padding: '0.45rem 0.65rem', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 6, border: '1px solid #E5E8EF' }}>
                             <div>
                               <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '0.1rem' }}>Master:</span>
                               <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.master)}</span>
@@ -2869,7 +2953,7 @@ const CustomerDetails = () => {
                             value={editBranchCode}
                             readOnly
                             disabled
-                            style={{ backgroundColor: 'var(--bg-secondary)', cursor: 'not-allowed', opacity: 0.8 }}
+                            style={{ backgroundColor: '#FFFFFF', cursor: 'not-allowed', opacity: 0.8 }}
                           />
                         </div>
                         <div className="form-group">
@@ -3085,7 +3169,7 @@ const CustomerDetails = () => {
                 {/* Score & Yearly Summaries */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {/* Performance Score Card */}
-                  <div className="card" style={{ border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: 'var(--bg-secondary)' }}>
+                  <div className="card" style={{ border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.5rem', backgroundColor: '#FFFFFF' }}>
                     {historyLoading ? (
                       <div className="skeleton" style={{ height: '90px', width: '100%' }}></div>
                     ) : (
@@ -3124,7 +3208,7 @@ const CustomerDetails = () => {
                   </div>
 
                   {/* Yearly Summary Card */}
-                  <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                  <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: '#FFFFFF' }}>
                     <h4 style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <Calendar size={14} />
                       Yearly Summary Ledger
@@ -3918,7 +4002,7 @@ const CustomerDetails = () => {
                     </div>
                   ) : (
                     /* ── COMPACT RESPONSIVE TABLE VIEW (Zero Horizontal Scroll) ── */
-                    <div style={{ borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', overflow: 'hidden' }}>
+                    <div style={{ borderRadius: 12, border: '1px solid var(--border-color)', background: '#FFFFFF', overflow: 'hidden' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem', tableLayout: 'auto' }}>
                         <thead>
                           <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
@@ -4088,7 +4172,7 @@ const CustomerDetails = () => {
                 <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   
                   {/* Revenue Trend Chart (100% width) */}
-                  <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                  <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: '#FFFFFF' }}>
                     <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                       <DollarSign size={16} className="text-primary" />
                       Revenue Trend (LKR)
@@ -4110,7 +4194,7 @@ const CustomerDetails = () => {
                   {/* Import / Export Grid (50% / 50% split) */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
                     {/* Export units */}
-                    <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                    <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: '#FFFFFF' }}>
                       <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <Sun size={16} style={{ color: 'var(--success)' }} />
                         Monthly Solar Export (kWh)
@@ -4129,7 +4213,7 @@ const CustomerDetails = () => {
                     </div>
 
                     {/* Import units */}
-                    <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
+                    <div className="card" style={{ border: '1px solid var(--border-color)', backgroundColor: '#FFFFFF' }}>
                       <h4 style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                         <TrendingDown size={16} style={{ color: 'var(--warning)' }} />
                         Monthly Grid Import (kWh)
@@ -4172,9 +4256,9 @@ const CustomerDetails = () => {
 
               if (!dossier) {
                 return (
-                  <div className="animate-fade-in" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', background: 'rgba(15, 23, 42, 0.4)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
-                    <CreditCard size={38} style={{ color: '#f59e0b', opacity: 0.8, marginBottom: '0.75rem' }} />
-                    <h4 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'white' }}>Payment Control Dossier</h4>
+                  <div className="animate-fade-in" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', background: '#F8FAFC', borderRadius: '12px', border: '1px solid var(--border)' }}>
+                    <CreditCard size={38} style={{ color: 'var(--primary)', opacity: 0.8, marginBottom: '0.75rem' }} />
+                    <h4 style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>Payment Control Dossier</h4>
                     <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '0.5rem auto 1.5rem', maxWidth: '440px' }}>
                       Fetch the complete month-wise financial ledger, eligibility checks, and diagnostics for account {selectedCustomer?.accountNo}.
                     </p>
@@ -4196,33 +4280,33 @@ const CustomerDetails = () => {
                 <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
                   {/* Canonical Summary Card */}
                   <div style={{
-                    background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.8) 100%)',
+                    background: '#FFFFFF',
                     borderRadius: '14px',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    border: '1px solid var(--border)',
                     padding: '1.25rem',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.4)'
+                    boxShadow: 'var(--shadow-sm)'
                   }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: '1rem', marginBottom: '1rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem', marginBottom: '1rem' }}>
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem', color: '#38bdf8' }}>
+                          <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem', color: 'var(--primary)' }}>
                             {dossier.accountNo}
                           </span>
-                          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'white' }}>
+                          <span style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                             {dossier.customerName || selectedCustomer?.customerName}
                           </span>
-                          <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.15)', color: '#c084fc', border: '1px solid rgba(139, 92, 246, 0.3)', padding: '0.15rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                          <span className="badge" style={{ background: 'rgba(37, 99, 235, 0.08)', color: 'var(--primary)', border: '1px solid rgba(37, 99, 235, 0.2)', padding: '0.15rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
                             {dossier.solarType || selectedCustomer?.solarType || 'Net Plus'}
                           </span>
                           {dossier.division && (
-                            <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.12)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.25)', padding: '0.15rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                            <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.08)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0.15rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
                               <MapPin size={11} style={{ marginRight: '3px' }} />
                               {dossier.division.toUpperCase()}
                             </span>
                           )}
                         </div>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginTop: '0.35rem' }}>
-                          Active Billing Cycle: <strong style={{ color: 'white' }}>{dossier.latestBillingMonth || '—'}</strong>
+                          Active Billing Cycle: <strong style={{ color: 'var(--text-primary)' }}>{dossier.latestBillingMonth || '—'}</strong>
                         </div>
                       </div>
 
@@ -4255,32 +4339,32 @@ const CustomerDetails = () => {
 
                     {/* Financial KPI 5-Grid */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
-                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Current Payment</div>
                         <div style={{ color: '#38bdf8', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.currentPayment || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
-                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Bill Set-Off</div>
                         <div style={{ color: '#fbbf24', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.billSetOff || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
-                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Retention Money</div>
                         <div style={{ color: '#c084fc', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.retentionMoney || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
-                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '0.75rem' }}>
+                      <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Outstanding Balance</div>
                         <div style={{ color: '#f87171', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                       <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: '10px', padding: '0.75rem' }}>
-                        <div style={{ color: '#34d399', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>Total Payable</div>
+                        <div style={{ color: '#059669', fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase' }}>Total Payable</div>
                         <div style={{ color: '#10b981', fontSize: '1.15rem', fontWeight: 800, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.totalPayable || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
@@ -4355,7 +4439,7 @@ const CustomerDetails = () => {
                           <div style={{
                             background: 'rgba(255, 255, 255, 0.02)',
                             borderRadius: '10px',
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            border: '1px solid #E5E8EF',
                             padding: '0.85rem 1rem',
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -4560,8 +4644,8 @@ const CustomerDetails = () => {
                           )}
 
                           {/* Side-by-Side Comparison Table */}
-                          <div style={{ border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '10px', overflow: 'hidden' }}>
-                            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.75rem 1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ border: '1px solid #E5E8EF', borderRadius: '10px', overflow: 'hidden' }}>
+                            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.75rem 1rem', borderBottom: '1px solid #E5E8EF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white', textTransform: 'uppercase' }}>
                                 Side-by-Side Comparison: Master Data vs Uploaded Source ({m.billingMonth})
                               </span>
@@ -4594,7 +4678,7 @@ const CustomerDetails = () => {
                                             MISMATCH
                                           </span>
                                         ) : (
-                                          <span className="badge success" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
+                                          <span className="badge success" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
                                             MATCH
                                           </span>
                                         )}
@@ -4608,7 +4692,7 @@ const CustomerDetails = () => {
 
                           {/* Missing Fields Checklist */}
                           {(m.missingFields || []).length > 0 && (
-                            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '10px', padding: '0.85rem 1rem' }}>
+                            <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.85rem 1rem' }}>
                               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', marginBottom: '0.4rem' }}>
                                 Missing Required Information for this Month:
                               </div>
@@ -4682,7 +4766,7 @@ const CustomerDetails = () => {
       {/* Resolve Issue & Re-evaluate Modal */}
       {resolveModalOpen && resolveTargetMonth && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1250, padding: '1.5rem' }}>
-          <div className="neon-card animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.75rem', background: 'var(--bg-secondary)', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
+          <div className="neon-card animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.75rem', background: '#FFFFFF', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.85rem', marginBottom: '1.25rem' }}>
               <div>
                 <h3 style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', margin: 0 }}>
@@ -4828,7 +4912,7 @@ const CustomerDetails = () => {
       {editingBill && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
           <div className="neon-card animate-fade-in" style={{ width: '540px', padding: '1.75rem' }}>
-            <div className="panel-header" style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
+            <div className="panel-header" style={{ borderBottom: '1px solid #E5E8EF', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
               <h3 className="panel-title" style={{ color: 'white', fontWeight: 800, fontSize: '1.15rem' }}>Edit Billing Record ({editingBill.refNo})</h3>
               <button 
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
@@ -5002,50 +5086,50 @@ const CustomerDetails = () => {
       )}
 
       {addCustomerModalOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ zIndex: 10000, background: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)' }}>
+        <div className="modal-overlay animate-fade-in" style={{ zIndex: 10000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)' }}>
           <style>{`
             .add-cust-input {
               width: 100%;
-              height: 44px;
-              padding: 0 14px 0 44px;
-              background: rgba(15, 23, 42, 0.75);
-              border: 1px solid rgba(255, 255, 255, 0.12);
-              border-radius: 12px;
-              color: #ffffff;
+              height: 42px;
+              padding: 0 14px 0 42px;
+              background: #F8FAFC;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-md);
+              color: var(--text-primary);
               font-size: 0.88rem;
               outline: none;
               transition: all 0.2s ease;
             }
             .add-cust-input:focus {
-              border: 1.5px solid #22d3ee !important;
-              box-shadow: 0 0 16px rgba(34, 211, 238, 0.35) !important;
-              background: rgba(15, 23, 42, 0.95) !important;
+              border-color: var(--primary) !important;
+              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+              background: #FFFFFF !important;
             }
             .add-cust-input::placeholder {
-              color: #475569;
+              color: var(--text-muted);
             }
             .add-cust-select {
               appearance: none;
               width: 100%;
-              height: 44px;
-              padding: 0 38px 0 44px;
-              background: rgba(15, 23, 42, 0.75);
-              border: 1px solid rgba(255, 255, 255, 0.12);
-              border-radius: 12px;
-              color: #ffffff;
+              height: 42px;
+              padding: 0 38px 0 42px;
+              background: #F8FAFC;
+              border: 1px solid var(--border);
+              border-radius: var(--radius-md);
+              color: var(--text-primary);
               font-size: 0.88rem;
               outline: none;
               cursor: pointer;
               transition: all 0.2s ease;
             }
             .add-cust-select:focus {
-              border: 1.5px solid #22d3ee !important;
-              box-shadow: 0 0 16px rgba(34, 211, 238, 0.35) !important;
-              background: rgba(15, 23, 42, 0.95) !important;
+              border-color: var(--primary) !important;
+              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+              background: #FFFFFF !important;
             }
             .add-cust-select option {
-              background: #0f172a;
-              color: #ffffff;
+              background: #FFFFFF;
+              color: #1E293B;
             }
           `}</style>
           <div className="modal-content animate-fade-in" style={{
@@ -5053,60 +5137,66 @@ const CustomerDetails = () => {
             width: '100%',
             maxHeight: '92vh',
             overflowY: 'auto',
-            padding: '2.2rem 2.4rem',
-            background: 'linear-gradient(160deg, rgba(16, 26, 46, 0.96), rgba(9, 14, 26, 0.98))',
-            border: '1px solid rgba(34, 211, 238, 0.4)',
-            boxShadow: '0 25px 70px rgba(0, 0, 0, 0.8), 0 0 35px rgba(34, 211, 238, 0.2)',
-            borderRadius: '22px',
-            color: '#ffffff'
+            padding: '2rem 2.25rem',
+            background: '#FFFFFF',
+            border: '1px solid var(--border)',
+            boxShadow: 'var(--shadow-xl)',
+            borderRadius: '16px',
+            color: 'var(--text-primary)'
           }}>
             {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.75rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <UserPlus size={24} color="#22d3ee" style={{ filter: 'drop-shadow(0 0 8px rgba(34, 211, 238, 0.6))' }} />
-                <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 600, color: '#ffffff', letterSpacing: '-0.01em' }}>Add Customer Profile</h3>
+                <div style={{ width: 36, height: 36, borderRadius: '10px', background: 'rgba(37, 99, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <UserPlus size={20} color="var(--primary)" />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>Add Customer Profile</h3>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>Enter consumer solar account and banking information</p>
+                </div>
               </div>
               <button 
                 onClick={() => setAddCustomerModalOpen(false)} 
                 style={{ 
-                  background: 'rgba(255, 255, 255, 0.05)', 
-                  border: '1px solid rgba(255, 255, 255, 0.1)', 
-                  width: 34, 
-                  height: 34, 
-                  borderRadius: 10, 
+                  background: 'none', 
+                  border: 'none', 
+                  width: 32, 
+                  height: 32, 
+                  borderRadius: 8, 
                   display: 'flex', 
                   alignItems: 'center', 
                   justifyContent: 'center', 
-                  color: '#94a3b8', 
+                  color: 'var(--text-muted)', 
                   cursor: 'pointer',
                   transition: 'all 0.2s'
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}
               >
                 <X size={18} />
               </button>
             </div>
 
             {addCustError && (
-              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.4)', borderRadius: 10, color: '#f87171', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
+              <div style={{ padding: '0.75rem 1rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, color: '#B91C1C', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
                 {addCustError}
               </div>
             )}
 
             <form onSubmit={handleAddCustomerSubmit}>
               {/* Row 1: Account Number & Customer Name */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>
-                    Account Number (10 digits)<span style={{ color: '#ef4444' }}>*</span>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
+                    Account Number (10 digits)<span style={{ color: 'var(--danger)' }}>*</span>
                   </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Shield size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Shield size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="text"
                       maxLength={10}
                       className="add-cust-input"
+                      placeholder="e.g. 5431209876"
                       value={newCustAccNo}
                       onChange={(e) => setNewCustAccNo(e.target.value)}
                       required
@@ -5114,14 +5204,15 @@ const CustomerDetails = () => {
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>
-                    Customer Name<span style={{ color: '#ef4444' }}>*</span>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
+                    Customer Name<span style={{ color: 'var(--danger)' }}>*</span>
                   </label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <User size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <User size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="text"
                       className="add-cust-input"
+                      placeholder="Full Name"
                       value={newCustName}
                       onChange={(e) => setNewCustName(e.target.value)}
                       required
@@ -5131,13 +5222,14 @@ const CustomerDetails = () => {
               </div>
 
               {/* Row 2: Customer Address */}
-              <div style={{ marginBottom: '1.1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Customer Address</label>
+              <div style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Customer Address</label>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <MapPin size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                  <MapPin size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                   <input
                     type="text"
                     className="add-cust-input"
+                    placeholder="Residential / Business Address"
                     value={newCustAddress}
                     onChange={(e) => setNewCustAddress(e.target.value)}
                   />
@@ -5145,51 +5237,53 @@ const CustomerDetails = () => {
               </div>
 
               {/* Row 3: Mobile Number & Agreement Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Mobile Number</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Mobile Number</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Phone size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Phone size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="text"
                       className="add-cust-input"
+                      placeholder="07XXXXXXXX"
                       value={newCustMobile}
                       onChange={(e) => setNewCustMobile(e.target.value)}
                     />
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Agreement Date</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Agreement Date</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       type="date"
                       className="add-cust-input"
-                      style={{ paddingLeft: 14, paddingRight: 40, colorScheme: 'dark' }}
+                      style={{ paddingLeft: 14, paddingRight: 40 }}
                       value={newCustAgreementDate}
                       onChange={(e) => setNewCustAgreementDate(e.target.value)}
                     />
-                    <Calendar size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Calendar size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                   </div>
                 </div>
               </div>
 
               {/* Row 4: Panel Capacity (kW) & Net Type */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Panel Capacity (kW)</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Panel Capacity (kW)</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Sun size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Sun size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="number"
                       step="0.01"
                       className="add-cust-input"
+                      placeholder="0.00"
                       value={newCustCapacity}
                       onChange={(e) => setNewCustCapacity(e.target.value)}
                     />
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Net Type (Solar Type)</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Net Type (Solar Type)</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <select
                       className="add-cust-select"
@@ -5206,33 +5300,35 @@ const CustomerDetails = () => {
                         <option key={n.id} value={n.id}>{n.name}</option>
                       ))}
                     </select>
-                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                   </div>
                 </div>
               </div>
 
               {/* Row 5: Reference No & Unit Rate */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Reference No (Ref No)</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Reference No (Ref No)</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Tag size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Tag size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="text"
                       className="add-cust-input"
+                      placeholder="Optional reference"
                       value={newCustRefNo}
                       onChange={(e) => setNewCustRefNo(e.target.value)}
                     />
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Unit Rate</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Unit Rate (LKR)</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <DollarSign size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <DollarSign size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="number"
                       step="0.001"
                       className="add-cust-input"
+                      placeholder="0.00"
                       value={newCustUnitRate}
                       onChange={(e) => setNewCustUnitRate(e.target.value)}
                     />
@@ -5241,21 +5337,22 @@ const CustomerDetails = () => {
               </div>
 
               {/* Row 6: Tariff Type & Cost Code */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.1rem', marginBottom: '1.1rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Tariff Type</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Tariff Type</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Code size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Code size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="text"
                       className="add-cust-input"
+                      placeholder="DOMESTIC / COMMERCIAL"
                       value={newCustTariffType}
                       onChange={(e) => setNewCustTariffType(e.target.value)}
                     />
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Cost Code</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Cost Code</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <select
                       className="add-cust-select"
@@ -5268,18 +5365,18 @@ const CustomerDetails = () => {
                         <option key={c.id} value={c.id}>{c.costCode} - {c.areaName}</option>
                       ))}
                     </select>
-                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                   </div>
                 </div>
               </div>
 
               {/* Row 7: L-Code */}
               <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>L-Code</label>
+                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>L-Code</label>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                   <select
                     className="add-cust-select"
-                    style={{ paddingLeft: 14, background: 'rgba(255,255,255,0.03)', cursor: 'not-allowed', opacity: 0.7 }}
+                    style={{ paddingLeft: 14, background: '#F1F5F9', cursor: 'not-allowed', opacity: 0.8 }}
                     value={newCustExpenseCodeId}
                     disabled
                   >
@@ -5288,46 +5385,49 @@ const CustomerDetails = () => {
                       <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
                     ))}
                   </select>
-                  <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: '#64748b', pointerEvents: 'none' }} />
+                  <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                 </div>
               </div>
 
               {/* Section Divider: Banking Details */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.35rem 0 1rem 0' }}>
-                <span style={{ fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.08em', color: '#64748b', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Banking Details</span>
-                <div style={{ flex: 1, height: 1, background: 'rgba(255, 255, 255, 0.08)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0 1rem 0' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Banking Details</span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
 
               {/* Row 8: Banking Details (Bank Code, Branch Code, Bank Account No) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1.1rem', marginBottom: '1.75rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Bank Code</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Bank Code</label>
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Landmark size={17} style={{ position: 'absolute', left: 14, color: '#64748b', pointerEvents: 'none' }} />
+                    <Landmark size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
                     <input
                       type="text"
                       className="add-cust-input"
+                      placeholder="e.g. 7010"
                       value={newCustBankCode}
                       onChange={(e) => setNewCustBankCode(e.target.value)}
                     />
                   </div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Branch Code</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Branch Code</label>
                   <input
                     type="text"
                     className="add-cust-input"
                     style={{ paddingLeft: 14 }}
+                    placeholder="Branch"
                     value={newCustBranchCode}
                     onChange={(e) => setNewCustBranchCode(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 500, color: '#cbd5e1', marginBottom: '0.45rem' }}>Bank Account No</label>
+                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Bank Account No</label>
                   <input
                     type="text"
                     className="add-cust-input"
                     style={{ paddingLeft: 14 }}
+                    placeholder="Account No"
                     value={newCustBankAccountNo}
                     onChange={(e) => setNewCustBankAccountNo(e.target.value)}
                   />
@@ -5335,50 +5435,21 @@ const CustomerDetails = () => {
               </div>
 
               {/* Footer Actions */}
-              <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
                 <button
                   type="button"
                   onClick={() => setAddCustomerModalOpen(false)}
                   disabled={addCustLoading}
-                  style={{
-                    height: 44,
-                    padding: '0 1.6rem',
-                    borderRadius: 12,
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    color: '#e2e8f0',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    cursor: addCustLoading ? 'not-allowed' : 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => { if (!addCustLoading) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; }}
-                  onMouseLeave={e => { if (!addCustLoading) e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; }}
+                  className="btn btn-secondary"
+                  style={{ height: 40, padding: '0 1.25rem', borderRadius: '8px' }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={addCustLoading}
-                  style={{
-                    height: 44,
-                    padding: '0 1.8rem',
-                    borderRadius: 12,
-                    background: 'linear-gradient(135deg, #06b6d4, #0891b2, #22d3ee)',
-                    border: 'none',
-                    color: '#ffffff',
-                    fontSize: '0.88rem',
-                    fontWeight: 600,
-                    cursor: addCustLoading ? 'not-allowed' : 'pointer',
-                    boxShadow: '0 4px 20px rgba(34, 211, 238, 0.4)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    transition: 'all 0.2s',
-                    opacity: addCustLoading ? 0.7 : 1
-                  }}
-                  onMouseEnter={e => { if (!addCustLoading) { e.currentTarget.style.boxShadow = '0 6px 25px rgba(34, 211, 238, 0.55)'; e.currentTarget.style.filter = 'brightness(1.1)'; } }}
-                  onMouseLeave={e => { if (!addCustLoading) { e.currentTarget.style.boxShadow = '0 4px 20px rgba(34, 211, 238, 0.4)'; e.currentTarget.style.filter = 'none'; } }}
+                  className="btn btn-primary"
+                  style={{ height: 40, padding: '0 1.5rem', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
                 >
                   {addCustLoading ? 'Adding...' : 'Add Profile +'}
                 </button>
@@ -5389,17 +5460,34 @@ const CustomerDetails = () => {
       )}
 
       {addBillModalOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000, background: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)' }}>
-          <div className="neon-card animate-fade-in" style={{ maxWidth: 650, width: '100%', padding: '2rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.75rem' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'white', fontWeight: 800 }}>Add Billing Ledger Entry</h3>
-              <button onClick={() => setAddBillModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <X size={20} />
+        <div className="modal-overlay animate-fade-in" style={{ zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)' }}>
+          <div className="modal-content animate-fade-in" style={{
+            maxWidth: 650,
+            width: '100%',
+            padding: '2rem',
+            background: '#FFFFFF',
+            border: '1px solid var(--border)',
+            borderRadius: '16px',
+            boxShadow: 'var(--shadow-xl)',
+            color: 'var(--text-primary)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.85rem' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: 'var(--text-primary)', fontWeight: 700 }}>Add Billing Ledger Entry</h3>
+                <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>Record new cycle readings and payments for this consumer</p>
+              </div>
+              <button 
+                onClick={() => setAddBillModalOpen(false)} 
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 6, borderRadius: 6 }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-subtle)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >
+                <X size={18} />
               </button>
             </div>
 
             {addBillError && (
-              <div style={{ padding: '0.75rem 1rem', background: 'rgba(239,68,68,0.1)', border: '1px solid var(--danger)', borderRadius: 8, color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              <div style={{ padding: '0.75rem 1rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, color: '#B91C1C', fontSize: '0.85rem', marginBottom: '1rem' }}>
                 {addBillError}
               </div>
             )}
@@ -5410,7 +5498,7 @@ const CustomerDetails = () => {
                   <label className="form-label">From Date*</label>
                   <input
                     type="date"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillFromDate}
                     onChange={(e) => setNewBillFromDate(e.target.value)}
                     required
@@ -5420,7 +5508,7 @@ const CustomerDetails = () => {
                   <label className="form-label">To Date*</label>
                   <input
                     type="date"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillToDate}
                     onChange={(e) => setNewBillToDate(e.target.value)}
                     required
@@ -5434,7 +5522,7 @@ const CustomerDetails = () => {
                   <input
                     type="number"
                     step="0.01"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillImportUnits}
                     onChange={(e) => setNewBillImportUnits(e.target.value)}
                     required
@@ -5445,7 +5533,7 @@ const CustomerDetails = () => {
                   <input
                     type="number"
                     step="0.01"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillExportUnits}
                     onChange={(e) => setNewBillExportUnits(e.target.value)}
                     required
@@ -5456,7 +5544,7 @@ const CustomerDetails = () => {
                   <input
                     type="number"
                     step="0.01"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillUnitCost}
                     onChange={(e) => setNewBillUnitCost(e.target.value)}
                     required
@@ -5469,7 +5557,7 @@ const CustomerDetails = () => {
                   <label className="form-label">Reference Number (optional)</label>
                   <input
                     type="text"
-                    className="login-form-input"
+                    className="form-control"
                     placeholder="Generates if empty"
                     value={newBillRefNo}
                     onChange={(e) => setNewBillRefNo(e.target.value)}
@@ -5478,7 +5566,7 @@ const CustomerDetails = () => {
                 <div className="form-group">
                   <label className="form-label">Billing Mode</label>
                   <select
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillMode}
                     onChange={(e) => setNewBillMode(e.target.value)}
                     style={{ appearance: 'auto' }}
@@ -5494,7 +5582,7 @@ const CustomerDetails = () => {
                   <label className="form-label">Bill Cycle</label>
                   <input
                     type="number"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillCycle}
                     onChange={(e) => setNewBillCycle(e.target.value)}
                   />
@@ -5504,7 +5592,7 @@ const CustomerDetails = () => {
                   <input
                     type="number"
                     step="0.01"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillSetOff}
                     onChange={(e) => setNewBillSetOff(e.target.value)}
                   />
@@ -5514,7 +5602,7 @@ const CustomerDetails = () => {
                   <input
                     type="number"
                     step="0.01"
-                    className="login-form-input"
+                    className="form-control"
                     value={newBillRetentionMoney}
                     onChange={(e) => setNewBillRetentionMoney(e.target.value)}
                   />
@@ -5526,13 +5614,13 @@ const CustomerDetails = () => {
                 <input
                   type="number"
                   step="0.01"
-                  className="login-form-input"
+                  className="form-control"
                   value={newBillPayment}
                   onChange={(e) => setNewBillPayment(e.target.value)}
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: '1rem' }}>
                 <button type="button" className="btn btn-secondary" onClick={() => setAddBillModalOpen(false)} disabled={addBillLoading}>
                   Cancel
                 </button>

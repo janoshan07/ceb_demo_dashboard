@@ -10,7 +10,8 @@ import {
   Settings, 
   LogOut, 
   ChevronLeft, 
-  ChevronRight
+  ChevronRight,
+  Upload
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import edlLogo from '../assets/edl_logo.jpg';
@@ -24,21 +25,39 @@ const Sidebar = () => {
 
   const getRoleLabel = (role) => {
     switch(role) {
-      case 'ADMIN': return 'Administrator';
+      case 'ADMIN':   return 'Administrator';
       case 'OFFICER': return 'Billing Officer';
-      case 'USER': return 'Solar Customer';
-      case 'VIEWER': return 'Viewer';
-      default: return role;
+      case 'USER':    return 'Solar Customer';
+      case 'VIEWER':  return 'Viewer';
+      default:        return role;
     }
   };
 
-  const toggleCollapse = () => {
-    setIsCollapsed(prev => !prev);
+  const toggleCollapse = () => setIsCollapsed(prev => !prev);
+
+  /* ─── Nav Item Component ─── */
+  const NavItem = ({ to, icon: Icon, label, exact }) => {
+    const isActive = exact ? location.pathname === to : location.pathname.startsWith(to);
+    return (
+      <li>
+        <NavLink
+          to={to}
+          className={() => `sidebar-item-link ${isActive ? 'active' : ''}`}
+          title={label}
+          end={exact}
+        >
+          <Icon size={17} className="sidebar-icon" />
+          {!isCollapsed && <span>{label}</span>}
+          {!isCollapsed && isActive && <span className="active-green-dot" />}
+        </NavLink>
+      </li>
+    );
   };
 
   return (
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-      {/* 4. BRANDING */}
+
+      {/* ── Branding Header ── */}
       <div className="sidebar-header">
         <div className="sidebar-brand-wrapper">
           <div className="sidebar-logo-box">
@@ -46,166 +65,81 @@ const Sidebar = () => {
           </div>
           {!isCollapsed && (
             <div className="sidebar-brand-text">
-              <span className="sidebar-brand-title">
-                EDL
-                <span 
-                  style={{ 
-                    display: 'inline-block', 
-                    width: '6px', 
-                    height: '6px', 
-                    borderRadius: '50%', 
-                    backgroundColor: '#16A34A' 
-                  }} 
-                  title="Live Grid Connected" 
-                />
-              </span>
+              <span className="sidebar-brand-title">EDL</span>
               <span className="sidebar-brand-subtitle">Smart Solar Dashboard</span>
             </div>
           )}
         </div>
 
-        <button 
-          className="sidebar-collapse-btn" 
+        <button
+          className="sidebar-collapse-btn"
           onClick={toggleCollapse}
-          title={isCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
         >
-          {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
         </button>
       </div>
 
-      {/* 3. SIDEBAR STRUCTURE & NAVIGATION ITEMS */}
+      {/* ── Navigation ── */}
       <div className="sidebar-content">
-        {/* MAIN GROUP */}
-        <div className="sidebar-group">
-          <div className="sidebar-group-header">MAIN</div>
-          {isCollapsed && <div className="sidebar-group-divider" />}
 
+        {/* GENERAL */}
+        <div className="sidebar-group">
+          {!isCollapsed && <div className="sidebar-group-header">General</div>}
+          {isCollapsed && <div className="sidebar-group-divider" />}
           <ul className="sidebar-menu">
-            <li>
-              <NavLink 
-                to="/" 
-                className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                title="Dashboard"
-              >
-                <LayoutDashboard size={19} className="sidebar-icon" />
-                <span>Dashboard</span>
-                {location.pathname === '/' && <span className="active-green-dot" />}
-              </NavLink>
-            </li>
+            <NavItem to="/" icon={LayoutDashboard} label="Dashboard" exact />
 
             {user.role !== 'USER' && (
               <>
-                <li>
-                  <NavLink 
-                    to="/customers" 
-                    className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                    title="Customer Directory"
-                  >
-                    <Users size={19} className="sidebar-icon" />
-                    <span>Customer Directory</span>
-                    {location.pathname === '/customers' && <span className="active-green-dot" />}
-                  </NavLink>
-                </li>
-
-                <li>
-                  <NavLink 
-                    to="/monthly-directory" 
-                    className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                    title="Monthly Billing"
-                  >
-                    <FileSpreadsheet size={19} className="sidebar-icon" />
-                    <span>Monthly Billing</span>
-                    {location.pathname === '/monthly-directory' && <span className="active-green-dot" />}
-                  </NavLink>
-                </li>
+                <NavItem to="/customers" icon={Users} label="Customer Directory" />
+                <NavItem to="/monthly-directory" icon={FileSpreadsheet} label="Monthly Billing" />
               </>
             )}
           </ul>
         </div>
 
-        {/* OPERATIONS GROUP */}
+        {/* OPERATIONS */}
         {user.role !== 'USER' && (
           <div className="sidebar-group">
-            <div className="sidebar-group-header">OPERATIONS</div>
+            {!isCollapsed && <div className="sidebar-group-header">Operations</div>}
             {isCollapsed && <div className="sidebar-group-divider" />}
-
             <ul className="sidebar-menu">
-
               {user.role === 'ADMIN' && (
-                <li>
-                  <NavLink 
-                    to="/admin" 
-                    className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                    title="Import Approvals"
-                  >
-                    <ShieldCheck size={19} className="sidebar-icon" />
-                    <span>Import Approvals</span>
-                    {location.pathname === '/admin' && <span className="active-green-dot" />}
-                  </NavLink>
-                </li>
+                <NavItem to="/admin" icon={ShieldCheck} label="Import Approvals" />
               )}
-
-              <li>
-                <NavLink 
-                  to="/payments" 
-                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                  title="Payment Control Center"
-                >
-                  <CreditCard size={19} className="sidebar-icon" />
-                  <span>Payment Control Center</span>
-                  {location.pathname === '/payments' && <span className="active-green-dot" />}
-                </NavLink>
-              </li>
+              <NavItem to="/payments" icon={CreditCard} label="Payment Control" />
+              {user.role !== 'USER' && (
+                <NavItem to="/upload" icon={Upload} label="Upload Data" />
+              )}
             </ul>
           </div>
         )}
 
-        {/* ANALYTICS GROUP */}
+        {/* ANALYTICS */}
         {user.role !== 'USER' && (
           <div className="sidebar-group">
-            <div className="sidebar-group-header">ANALYTICS</div>
+            {!isCollapsed && <div className="sidebar-group-header">Analytics</div>}
             {isCollapsed && <div className="sidebar-group-divider" />}
-
             <ul className="sidebar-menu">
-              <li>
-                <NavLink 
-                  to="/reports" 
-                  className={({ isActive }) => `sidebar-item-link ${isActive ? 'active' : ''}`}
-                  title="Reports"
-                >
-                  <BarChart3 size={19} className="sidebar-icon" />
-                  <span>Reports</span>
-                  {location.pathname === '/reports' && <span className="active-green-dot" />}
-                </NavLink>
-              </li>
+              <NavItem to="/reports" icon={BarChart3} label="Reports" />
             </ul>
           </div>
         )}
 
-        {/* SYSTEM GROUP */}
+        {/* SYSTEM (admin only) */}
         {user.role === 'ADMIN' && (
           <div className="sidebar-group">
-            <div className="sidebar-group-header">SYSTEM</div>
+            {!isCollapsed && <div className="sidebar-group-header">System</div>}
             {isCollapsed && <div className="sidebar-group-divider" />}
-
             <ul className="sidebar-menu">
-              <li>
-                <NavLink 
-                  to="/admin" 
-                  className={({ isActive }) => `sidebar-item-link ${location.pathname === '/admin' ? 'active' : ''}`}
-                  title="Settings"
-                >
-                  <Settings size={19} className="sidebar-icon" />
-                  <span>Settings</span>
-                  {location.pathname === '/admin' && <span className="active-green-dot" />}
-                </NavLink>
-              </li>
+              <NavItem to="/admin" icon={Settings} label="Settings" />
             </ul>
           </div>
         )}
       </div>
 
-      {/* 10. USER PROFILE AREA */}
+      {/* ── User Profile & Logout ── */}
       <div className="sidebar-footer">
         <div className="user-profile-widget" title={`${user.username} (${getRoleLabel(user.role)})`}>
           <div className="user-avatar">
@@ -220,7 +154,7 @@ const Sidebar = () => {
         </div>
 
         <button className="btn-logout" onClick={logout} title="Logout">
-          <LogOut size={16} />
+          <LogOut size={15} />
           {!isCollapsed && <span>Logout</span>}
         </button>
       </div>

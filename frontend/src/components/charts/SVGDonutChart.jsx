@@ -132,7 +132,7 @@ const SVGDonutChart = ({
               fontSize: '0.82rem',
               padding: '0.35rem 0.5rem',
               borderRadius: '6px',
-              backgroundColor: activeIndex === i ? 'rgba(255,255,255,0.03)' : 'transparent',
+              backgroundColor: activeIndex === i ? 'rgba(0, 0, 0, 0.04)' : 'transparent',
               transition: 'background-color 0.2s',
               cursor: 'pointer'
             }}

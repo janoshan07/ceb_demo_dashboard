@@ -164,7 +164,7 @@ export const STATUS_FILTERS = [
   { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981', icon: CheckCircle },
   { key: 'MISSING', label: 'Missing Details / Validation', cardLabel: 'Missing Details / Validation', color: '#f43f5e', icon: AlertTriangle },
   { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185', icon: UserX },
-  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24', icon: DollarSign },
+  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#D97706', icon: DollarSign },
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
   { key: 'OTHER_MISMATCHES', label: 'Other Mismatches', cardLabel: 'Other Mismatches', color: '#f97316', icon: AlertCircle },
   { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', cardLabel: 'Outstanding Customers', color: '#38bdf8', icon: Clock },
@@ -178,7 +178,7 @@ export const STAGING_STATUS_FILTERS = [
   { key: 'VALID', label: 'Valid', cardLabel: 'Valid', color: '#10b981', icon: CheckCircle },
   { key: 'MISSING', label: 'Missing Details / Validation', cardLabel: 'Missing Details / Validation', color: '#f43f5e', icon: AlertTriangle },
   { key: 'NAME_MISMATCH', label: 'Name Mismatch', cardLabel: 'Name Mismatch', color: '#fb7185', icon: UserX },
-  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#fbbf24', icon: DollarSign },
+  { key: 'UNIT_RATE_MISMATCH', label: 'Unit Rate Mismatch', cardLabel: 'Unit Rate Mismatch', color: '#D97706', icon: DollarSign },
   { key: 'NET_TYPE_MISMATCH', label: 'Net Type Mismatch', cardLabel: 'Net Type Mismatch', color: '#a78bfa', icon: ArrowUpDown },
   { key: 'OTHER_MISMATCHES', label: 'Other Mismatches', cardLabel: 'Other Mismatches', color: '#f97316', icon: AlertCircle },
   { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', cardLabel: 'Outstanding Customers', color: '#38bdf8', icon: Clock },
@@ -390,7 +390,7 @@ export const FilterDropdown = ({ value, options, onChange, minWidth = 190, place
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 60,
-          background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 10,
+          background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 10,
           boxShadow: '0 12px 34px rgba(0,0,0,0.55)', padding: '0.35rem', maxHeight: 320, overflowY: 'auto'
         }}>
           {options.map(o => {
@@ -1222,7 +1222,7 @@ const MonthlyCustomerDirectory = () => {
       {/* "Start New Billing Month" picker — pick a month + year, then upload per division */}
       {newMonthOpen && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: 430, padding: '1.75rem', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: 430, padding: '1.75rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Plus size={17} color="#818cf8" /> Start New Billing Month
@@ -1263,7 +1263,7 @@ const MonthlyCustomerDirectory = () => {
       {/* Open / View modal */}
       {viewing && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '1250px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '1250px', maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.4rem 1.75rem', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'white', display: 'flex', alignItems: 'center', gap: '0.65rem', letterSpacing: '0.02em', textTransform: 'uppercase' }}>
@@ -1419,7 +1419,7 @@ const MonthlyCustomerDirectory = () => {
       {/* Record detail modal — full merged record + preserved validation, from the snapshot only */}
       {detailRecord && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000000, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '860px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '860px', maxHeight: '92vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
               <div>
                 <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ref No: {cellText(detailRecord.refNo)}</div>
@@ -1511,7 +1511,7 @@ const MonthlyCustomerDirectory = () => {
       {editing && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000000, padding: '1.5rem', backdropFilter: 'blur(14px)' }}>
           <div className="neon-card" style={{ width: '100%', maxWidth: '780px', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.25rem 1.5rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '1.25rem 1.5rem', borderBottom: '1px solid #E5E8EF' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Edit3 size={18} color="#818cf8" /> Edit Record
@@ -1585,7 +1585,7 @@ const MonthlyCustomerDirectory = () => {
       {/* Audit history modal (full snapshot or scoped to one record) */}
       {auditScope !== null && viewing && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.88)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000000, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '720px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '720px', maxHeight: '88vh', display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
               <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <History size={18} color="#818cf8" /> Edit &amp; Approval History
@@ -1640,7 +1640,7 @@ const MonthlyCustomerDirectory = () => {
       {/* Rename modal */}
       {renaming && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(5, 8, 16, 0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999, padding: '1.5rem', backdropFilter: 'blur(8px)' }}>
-          <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '460px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
+          <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '460px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Pencil size={18} color="#f59e0b" /> Rename Dataset</h3>
               <button onClick={() => !renameSaving && setRenaming(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>

@@ -290,7 +290,7 @@ const Dashboard = () => {
                 padding: '0.2rem 0.55rem', 
                 borderRadius: '6px', 
                 backgroundColor: 'rgba(59, 130, 246, 0.12)', 
-                color: '#60a5fa', 
+                color: '#3B7EF6', 
                 border: '1px solid rgba(59, 130, 246, 0.2)' 
               }}>
                 <Zap size={12} />
@@ -305,7 +305,7 @@ const Dashboard = () => {
                 padding: '0.2rem 0.55rem', 
                 borderRadius: '6px', 
                 backgroundColor: 'rgba(16, 185, 129, 0.12)', 
-                color: '#34d399', 
+                color: '#059669', 
                 border: '1px solid rgba(16, 185, 129, 0.2)' 
               }}>
                 <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
@@ -324,8 +324,8 @@ const Dashboard = () => {
             <span style={{ 
               fontSize: '0.82rem', 
               color: 'var(--text-secondary)', 
-              backgroundColor: 'var(--bg-secondary)', 
-              border: '1px solid rgba(255, 255, 255, 0.08)', 
+              backgroundColor: '#FFFFFF', 
+              border: '1px solid #E5E8EF', 
               padding: '0.45rem 0.85rem', 
               borderRadius: '8px', 
               display: 'flex', 
@@ -357,15 +357,15 @@ const Dashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.15rem', marginBottom: '1.75rem' }}>
           {/* Card 1: Registered Accounts */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderTop: '3px solid #3b82f6', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'space-between',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
@@ -381,7 +381,7 @@ const Dashboard = () => {
                 height: '38px', 
                 borderRadius: '10px', 
                 backgroundColor: 'rgba(59, 130, 246, 0.12)', 
-                color: '#60a5fa', 
+                color: '#3B7EF6', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center' 
@@ -389,9 +389,9 @@ const Dashboard = () => {
                 <Users size={20} />
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #E5E8EF' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solar Grid Accounts</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#3B7EF6', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
                 Active Registry
               </span>
             </div>
@@ -399,22 +399,22 @@ const Dashboard = () => {
 
           {/* Card 2: Net Settlement Revenue */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderTop: '3px solid #10b981', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'space-between',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Net Statement Revenue
                 </span>
-                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem', lineHeight: 1.1 }}>
                   {formatLKR(stats?.totalRevenue || 0)}
                 </div>
               </div>
@@ -423,7 +423,7 @@ const Dashboard = () => {
                 height: '38px', 
                 borderRadius: '10px', 
                 backgroundColor: 'rgba(16, 185, 129, 0.12)', 
-                color: '#34d399', 
+                color: '#059669', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center' 
@@ -431,9 +431,9 @@ const Dashboard = () => {
                 <DollarSign size={20} />
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #E5E8EF' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ledger Balance Flow</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
                 Settlement Net
               </span>
             </div>
@@ -441,22 +441,22 @@ const Dashboard = () => {
 
           {/* Card 3: Total Solar Exports */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderTop: '3px solid #06b6d4', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'space-between',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Total Solar Exports
                 </span>
-                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#22d3ee', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0EA5E9', marginTop: '0.25rem', lineHeight: 1.1 }}>
                   {analytics?.totalExportUnits?.toLocaleString() || 0}
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: '0.35rem' }}>kWh</span>
                 </div>
@@ -466,7 +466,7 @@ const Dashboard = () => {
                 height: '38px', 
                 borderRadius: '10px', 
                 backgroundColor: 'rgba(6, 182, 212, 0.12)', 
-                color: '#22d3ee', 
+                color: '#0EA5E9', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center' 
@@ -474,9 +474,9 @@ const Dashboard = () => {
                 <ArrowUpCircle size={20} />
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #E5E8EF' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Solar Generation Fed to Grid</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#22d3ee', backgroundColor: 'rgba(6, 182, 212, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#0EA5E9', backgroundColor: 'rgba(6, 182, 212, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
                 Renewable Feed
               </span>
             </div>
@@ -484,22 +484,22 @@ const Dashboard = () => {
 
           {/* Card 4: Total Grid Imports */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderTop: '3px solid #f59e0b', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem', 
             display: 'flex', 
             flexDirection: 'column', 
             justifyContent: 'space-between',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   Total Grid Imports
                 </span>
-                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.25rem', lineHeight: 1.1 }}>
+                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#D97706', marginTop: '0.25rem', lineHeight: 1.1 }}>
                   {analytics?.totalImportUnits?.toLocaleString() || 0}
                   <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)', marginLeft: '0.35rem' }}>kWh</span>
                 </div>
@@ -509,7 +509,7 @@ const Dashboard = () => {
                 height: '38px', 
                 borderRadius: '10px', 
                 backgroundColor: 'rgba(245, 158, 11, 0.12)', 
-                color: '#fbbf24', 
+                color: '#D97706', 
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'center' 
@@ -517,9 +517,9 @@ const Dashboard = () => {
                 <ArrowDownCircle size={20} />
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #E5E8EF' }}>
               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Consumer Load Drawn</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#fbbf24', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#D97706', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
                 Grid Consumption
               </span>
             </div>
@@ -528,14 +528,14 @@ const Dashboard = () => {
 
         {/* Operational Smart Alert Engine */}
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem', 
           marginBottom: '1.75rem',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid #E5E8EF' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                 <Bell size={18} style={{ color: 'var(--primary)' }} />
@@ -557,7 +557,7 @@ const Dashboard = () => {
             </div>
 
             {/* Severity Filter Tabs */}
-            <div style={{ display: 'flex', backgroundColor: 'rgba(0, 0, 0, 0.2)', padding: '0.2rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+            <div style={{ display: 'flex', backgroundColor: '#F1F3F8', padding: '0.2rem', borderRadius: '8px', border: '1px solid #E5E8EF' }}>
               {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map((sev) => {
                 const isActive = severityFilter === sev;
                 return (
@@ -587,7 +587,7 @@ const Dashboard = () => {
           <div style={{ marginTop: '1rem' }}>
             {alertsLoading ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '90px' }}>
-                <div style={{ border: '2px solid rgba(255, 255, 255, 0.1)', borderTop: '2px solid var(--primary)', borderRadius: '50%', width: '22px', height: '22px', animation: 'spin 1s linear infinite' }}></div>
+                <div style={{ border: '2px solid #E5E8EF', borderTop: '2px solid var(--primary)', borderRadius: '50%', width: '22px', height: '22px', animation: 'spin 1s linear infinite' }}></div>
               </div>
             ) : alerts.length === 0 ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '1.25rem', backgroundColor: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '10px' }}>
@@ -615,7 +615,7 @@ const Dashboard = () => {
                         gap: '0.85rem', 
                         padding: '0.75rem 1rem', 
                         backgroundColor: bgTint, 
-                        border: '1px solid rgba(255, 255, 255, 0.05)', 
+                        border: '1px solid #E5E8EF', 
                         borderLeft: `4px solid ${borderCol}`, 
                         borderRadius: '8px' 
                       }}
@@ -641,7 +641,7 @@ const Dashboard = () => {
                         onClick={() => handleResolveAlert(alert.alertId)}
                         style={{
                           background: 'rgba(255, 255, 255, 0.06)',
-                          border: '1px solid rgba(255, 255, 255, 0.12)',
+                          border: '1px solid #E5E8EF',
                           color: 'var(--text-primary)',
                           padding: '0.35rem 0.75rem',
                           borderRadius: '6px',
@@ -670,11 +670,11 @@ const Dashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
           {/* Monthly Net Revenue Trend */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
               <div>
@@ -686,7 +686,7 @@ const Dashboard = () => {
                   Settlement statements and ledger revenue totals across cycles
                 </p>
               </div>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#3B7EF6', backgroundColor: 'rgba(59, 130, 246, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
                 LKR Trend
               </span>
             </div>
@@ -703,11 +703,11 @@ const Dashboard = () => {
 
           {/* Net Energy Flow Trend */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
               <div>
@@ -719,7 +719,7 @@ const Dashboard = () => {
                   Monthly net generation balance (Solar Exports - Grid Imports)
                 </p>
               </div>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>
                 kWh Balance
               </span>
             </div>
@@ -738,11 +738,11 @@ const Dashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
           {/* Top Exporters */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -756,7 +756,7 @@ const Dashboard = () => {
                   onClick={() => setShowAllExporters(!showAllExporters)}
                   style={{
                     background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    border: '1px solid #E5E8EF',
                     color: 'var(--text-secondary)',
                     fontSize: '0.74rem',
                     fontWeight: 600,
@@ -811,7 +811,7 @@ const Dashboard = () => {
                             ({item.accountNo})
                           </span>
                         </div>
-                        <span style={{ fontWeight: 700, color: '#34d399', flexShrink: 0, marginLeft: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, color: '#059669', flexShrink: 0, marginLeft: '0.5rem' }}>
                           {item.totalExport.toLocaleString()} kWh
                         </span>
                       </div>
@@ -827,11 +827,11 @@ const Dashboard = () => {
 
           {/* Top Consumers */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -845,7 +845,7 @@ const Dashboard = () => {
                   onClick={() => setShowAllConsumers(!showAllConsumers)}
                   style={{
                     background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    border: '1px solid #E5E8EF',
                     color: 'var(--text-secondary)',
                     fontSize: '0.74rem',
                     fontWeight: 600,
@@ -900,7 +900,7 @@ const Dashboard = () => {
                             ({item.accountNo})
                           </span>
                         </div>
-                        <span style={{ fontWeight: 700, color: '#fbbf24', flexShrink: 0, marginLeft: '0.5rem' }}>
+                        <span style={{ fontWeight: 700, color: '#D97706', flexShrink: 0, marginLeft: '0.5rem' }}>
                           {item.totalImport.toLocaleString()} kWh
                         </span>
                       </div>
@@ -919,11 +919,11 @@ const Dashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
           {/* Solar Type Distribution */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF',
             display: 'flex',
             flexDirection: 'column'
           }}>
@@ -950,11 +950,11 @@ const Dashboard = () => {
 
           {/* Branch-wise Analytics Breakdown */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF',
             display: 'flex',
             flexDirection: 'column'
           }}>
@@ -990,8 +990,8 @@ const Dashboard = () => {
                         </span>
                       </td>
                       <td style={{ textAlign: 'right', fontWeight: 500 }}>{branch.customerCount}</td>
-                      <td style={{ textAlign: 'right', color: '#fbbf24' }}>{branch.totalImports.toLocaleString()} kWh</td>
-                      <td style={{ textAlign: 'right', color: '#34d399' }}>{branch.totalExports.toLocaleString()} kWh</td>
+                      <td style={{ textAlign: 'right', color: '#D97706' }}>{branch.totalImports.toLocaleString()} kWh</td>
+                      <td style={{ textAlign: 'right', color: '#059669' }}>{branch.totalExports.toLocaleString()} kWh</td>
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>{formatLKR(branch.totalRevenue)}</td>
                     </tr>
                   ))}
@@ -1009,7 +1009,7 @@ const Dashboard = () => {
         {/* EDL Predictor Engine Section */}
         {!isCustomer && predictions && (
           <div style={{ 
-            background: 'var(--bg-secondary)', 
+            background: '#FFFFFF', 
             border: '1px solid rgba(167, 139, 250, 0.25)', 
             borderRadius: '12px', 
             padding: '1.4rem', 
@@ -1019,9 +1019,9 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
               <div>
                 <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
-                  <Sparkles size={18} style={{ color: '#a78bfa' }} />
+                  <Sparkles size={18} style={{ color: '#7C3AED' }} />
                   EDL Predictor Engine
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#a78bfa', backgroundColor: 'rgba(167, 139, 250, 0.15)', border: '1px solid rgba(167, 139, 250, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#7C3AED', backgroundColor: 'rgba(167, 139, 250, 0.15)', border: '1px solid rgba(167, 139, 250, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
                     Linear Regression
                   </span>
                 </h3>
@@ -1029,7 +1029,7 @@ const Dashboard = () => {
                   Next month forecast calculated from trailing billing cycles & energy load models
                 </p>
               </div>
-              <span style={{ fontSize: '0.76rem', color: '#a78bfa', fontWeight: 600, backgroundColor: 'rgba(167, 139, 250, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '6px' }}>
+              <span style={{ fontSize: '0.76rem', color: '#7C3AED', fontWeight: 600, backgroundColor: 'rgba(167, 139, 250, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '6px' }}>
                 Forecast Target: {predictions.nextMonthName}
               </span>
             </div>
@@ -1038,7 +1038,7 @@ const Dashboard = () => {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
               <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Revenue</span>
-                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#a78bfa', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#7C3AED', marginTop: '0.25rem' }}>
                   {formatLKR(predictions.nextMonthRevenue)}
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Next Month Statements</div>
@@ -1046,7 +1046,7 @@ const Dashboard = () => {
 
               <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Exports</span>
-                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem' }}>
                   {Math.round(predictions.nextMonthExports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Solar Generation Export</div>
@@ -1054,7 +1054,7 @@ const Dashboard = () => {
 
               <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Imports</span>
-                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.25rem' }}>
+                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#D97706', marginTop: '0.25rem' }}>
                   {Math.round(predictions.nextMonthImports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
                 </div>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Consumer Load Draw</div>
@@ -1063,9 +1063,9 @@ const Dashboard = () => {
 
             {/* Prediction Charts */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: '1.15rem' }}>
-              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.15rem' }}>
+              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '1.15rem' }}>
                 <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 1rem 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <DollarSign size={16} style={{ color: '#a78bfa' }} />
+                  <DollarSign size={16} style={{ color: '#7C3AED' }} />
                   Revenue: Actual vs Forecast Trend
                 </h4>
                 <SVGPredictionChart
@@ -1079,9 +1079,9 @@ const Dashboard = () => {
                 />
               </div>
 
-              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid rgba(255, 255, 255, 0.05)', borderRadius: '10px', padding: '1.15rem' }}>
+              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '1.15rem' }}>
                 <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 1rem 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <Sun size={16} style={{ color: '#34d399' }} />
+                  <Sun size={16} style={{ color: '#059669' }} />
                   Solar Exports: Actual vs Forecast Trend
                 </h4>
                 <SVGPredictionChart
@@ -1101,11 +1101,11 @@ const Dashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem' }}>
           {/* Recent Ingestions Table */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1163,11 +1163,11 @@ const Dashboard = () => {
 
           {/* Operations Hub */}
           <div style={{ 
-            background: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            background: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             borderRadius: '12px', 
             padding: '1.25rem 1.4rem',
-            boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+            boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between'
@@ -1198,7 +1198,7 @@ const Dashboard = () => {
                   borderRadius: '8px', 
                   border: '1px solid rgba(245, 158, 11, 0.3)', 
                   backgroundColor: 'rgba(245, 158, 11, 0.08)', 
-                  color: '#fbbf24',
+                  color: '#D97706',
                   marginBottom: '1rem' 
                 }}>
                   <Clock size={20} style={{ flexShrink: 0 }} />
@@ -1212,7 +1212,7 @@ const Dashboard = () => {
               )}
             </div>
 
-            <div style={{ borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem', display: 'flex', gap: '0.75rem' }}>
+            <div style={{ borderTop: '1px solid #E5E8EF', paddingTop: '1rem', display: 'flex', gap: '0.75rem' }}>
               <Link to="/customers" className="btn btn-secondary" style={{ flex: 1, textDecoration: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.45rem', fontSize: '0.84rem', padding: '0.65rem 1rem' }}>
                 <Users size={15} />
                 Customer Registry
@@ -1248,7 +1248,7 @@ const Dashboard = () => {
               padding: '0.2rem 0.55rem', 
               borderRadius: '6px', 
               backgroundColor: 'rgba(59, 130, 246, 0.12)', 
-              color: '#60a5fa', 
+              color: '#3B7EF6', 
               border: '1px solid rgba(59, 130, 246, 0.2)' 
             }}>
               <Zap size={12} />
@@ -1270,8 +1270,8 @@ const Dashboard = () => {
           <span style={{ 
             fontSize: '0.82rem', 
             color: 'var(--text-secondary)', 
-            backgroundColor: 'var(--bg-secondary)', 
-            border: '1px solid rgba(255, 255, 255, 0.08)', 
+            backgroundColor: '#FFFFFF', 
+            border: '1px solid #E5E8EF', 
             padding: '0.45rem 0.85rem', 
             borderRadius: '8px', 
             display: 'flex', 
@@ -1287,15 +1287,15 @@ const Dashboard = () => {
       {/* Customer 4 Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.15rem', marginBottom: '1.75rem' }}>
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderTop: '3px solid #3b82f6', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem', 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
         }}>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Account Number</span>
@@ -1304,76 +1304,76 @@ const Dashboard = () => {
             </div>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Registered Meter ID</span>
           </div>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#60a5fa', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(59, 130, 246, 0.12)', color: '#3B7EF6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <User size={20} />
           </div>
         </div>
 
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderTop: '3px solid #10b981', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem', 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
         }}>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Net Balance</span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#34d399', marginTop: '0.25rem' }}>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem' }}>
               {formatLKR(stats?.totalRevenue)}
             </div>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Statement Balance Flow</span>
           </div>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#34d399', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <DollarSign size={20} />
           </div>
         </div>
 
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderTop: '3px solid #06b6d4', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem', 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
         }}>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Generation</span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#22d3ee', marginTop: '0.25rem' }}>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0EA5E9', marginTop: '0.25rem' }}>
               {stats?.totalExportUnits?.toLocaleString() || 0} <span style={{ fontSize: '0.85rem' }}>kWh</span>
             </div>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Cumulative Solar Exports</span>
           </div>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(6, 182, 212, 0.12)', color: '#22d3ee', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(6, 182, 212, 0.12)', color: '#0EA5E9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ArrowUpCircle size={20} />
           </div>
         </div>
 
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderTop: '3px solid #f59e0b', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem', 
           display: 'flex', 
           justifyContent: 'space-between', 
           alignItems: 'center',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
         }}>
           <div>
             <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total Consumption</span>
-            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#fbbf24', marginTop: '0.25rem' }}>
+            <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#D97706', marginTop: '0.25rem' }}>
               {stats?.totalImportUnits?.toLocaleString() || 0} <span style={{ fontSize: '0.85rem' }}>kWh</span>
             </div>
             <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Cumulative Grid Imports</span>
           </div>
-          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.12)', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ArrowDownCircle size={20} />
           </div>
         </div>
@@ -1383,11 +1383,11 @@ const Dashboard = () => {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
         {/* Customer Chart */}
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
@@ -1452,16 +1452,16 @@ const Dashboard = () => {
 
         {/* Connection Profile */}
         <div style={{ 
-          background: 'var(--bg-secondary)', 
-          border: '1px solid rgba(255, 255, 255, 0.08)', 
+          background: '#FFFFFF', 
+          border: '1px solid #E5E8EF', 
           borderRadius: '12px', 
           padding: '1.25rem 1.4rem',
-          boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)',
+          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem', paddingBottom: '0.75rem', borderBottom: '1px solid #E5E8EF' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Activity size={18} style={{ color: 'var(--primary)' }} />
               <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
@@ -1498,7 +1498,7 @@ const Dashboard = () => {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid #E5E8EF', paddingTop: '0.85rem' }}>
               <div>
                 <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)' }}>Panel Capacity</span>
                 <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)', marginTop: '0.15rem' }}>
@@ -1514,7 +1514,7 @@ const Dashboard = () => {
             </div>
 
             {customerInfo?.isComplete ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem', fontSize: '0.78rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', borderTop: '1px solid #E5E8EF', paddingTop: '0.85rem', fontSize: '0.78rem' }}>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Bank</span>
                   <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.15rem' }}>{customerInfo?.bankCode || '—'}</div>
@@ -1529,7 +1529,7 @@ const Dashboard = () => {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '0.85rem', fontSize: '0.78rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid #E5E8EF', paddingTop: '0.85rem', fontSize: '0.78rem' }}>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Outstanding Balance</span>
                   <div style={{ fontWeight: 800, color: '#ef4444', marginTop: '0.15rem' }}>
@@ -1538,7 +1538,7 @@ const Dashboard = () => {
                 </div>
                 <div>
                   <span style={{ color: 'var(--text-secondary)' }}>Settled Payment</span>
-                  <div style={{ fontWeight: 800, color: '#34d399', marginTop: '0.15rem' }}>
+                  <div style={{ fontWeight: 800, color: '#059669', marginTop: '0.15rem' }}>
                     {customerInfo?.directory?.payment != null ? formatLKR(customerInfo.directory.payment) : (customerInfo?.directory?.paymentSettled != null ? formatLKR(customerInfo.directory.paymentSettled) : '—')}
                   </div>
                 </div>
@@ -1550,11 +1550,11 @@ const Dashboard = () => {
 
       {/* Customer Statements Ledger Table */}
       <div style={{ 
-        background: 'var(--bg-secondary)', 
-        border: '1px solid rgba(255, 255, 255, 0.08)', 
+        background: '#FFFFFF', 
+        border: '1px solid #E5E8EF', 
         borderRadius: '12px', 
         padding: '1.25rem 1.4rem',
-        boxShadow: '0 4px 16px -2px rgba(0, 0, 0, 0.25)'
+        boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.15rem' }}>
           <FileSpreadsheet size={18} style={{ color: 'var(--primary)' }} />
@@ -1590,13 +1590,13 @@ const Dashboard = () => {
                       </td>
                       <td style={{ fontWeight: 600, color: 'var(--primary)', fontFamily: 'monospace' }}>{bill.refNo}</td>
                       <td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#fbbf24' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#D97706' }}>
                           <ArrowDownCircle size={13} />
                           {bill.imports.toLocaleString()}
                         </span>
                       </td>
                       <td>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#34d399' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', color: '#059669' }}>
                           <ArrowUpCircle size={13} />
                           {bill.exports.toLocaleString()}
                         </span>

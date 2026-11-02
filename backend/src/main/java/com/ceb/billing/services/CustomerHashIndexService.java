@@ -13,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -216,7 +215,8 @@ public class CustomerHashIndexService {
             int page,
             int size) {
 
-        final String qLower = (query != null) ? query.trim().toLowerCase() : "";
+        final String queryTrim = (query != null) ? query.trim() : "";
+        final String qLower = queryTrim.toLowerCase();
         final String statusTrim = (validationStatus != null) ? validationStatus.trim() : "";
         final String locTrim = (location != null) ? location.trim() : "";
         final String netTrim = (netType != null) ? netType.trim() : "";
@@ -226,8 +226,8 @@ public class CustomerHashIndexService {
         List<Map<String, Object>> matched = new ArrayList<>();
 
         // Fast path: if exact account number match exists in Hash Map
-        if (!qLower.isEmpty() && accountNoHashIndex.containsKey(query.trim())) {
-            Map<String, Object> exact = accountNoHashIndex.get(query.trim());
+        if (!qLower.isEmpty() && accountNoHashIndex.containsKey(queryTrim)) {
+            Map<String, Object> exact = accountNoHashIndex.get(queryTrim);
             if (matchesCustomer(exact, statusTrim, locTrim, netTrim, agreeTrim, compTrim)) {
                 matched.add(exact);
             }
@@ -237,7 +237,7 @@ public class CustomerHashIndexService {
         for (Map<String, Object> dto : accountNoHashIndex.values()) {
             String acc = String.valueOf(dto.get("accountNo"));
             // Avoid duplicate if exact match already added
-            if (!matched.isEmpty() && acc.equalsIgnoreCase(query != null ? query.trim() : "")) {
+            if (!matched.isEmpty() && acc.equalsIgnoreCase(queryTrim)) {
                 continue;
             }
 

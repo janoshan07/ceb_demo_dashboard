@@ -10,8 +10,7 @@ import {
   Settings, 
   LogOut, 
   ChevronLeft, 
-  ChevronRight,
-  Upload
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import edlLogo from '../assets/edl_logo.jpg';
@@ -109,9 +108,6 @@ const Sidebar = () => {
                 <NavItem to="/admin" icon={ShieldCheck} label="Import Approvals" />
               )}
               <NavItem to="/payments" icon={CreditCard} label="Payment Control" />
-              {user.role !== 'USER' && (
-                <NavItem to="/upload" icon={Upload} label="Upload Data" />
-              )}
             </ul>
           </div>
         )}

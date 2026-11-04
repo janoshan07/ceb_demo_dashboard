@@ -13,7 +13,6 @@ import {
   Filter,
   RefreshCw,
   Eye,
-  Send,
   Layers,
   FileCheck2,
   XCircle,
@@ -33,7 +32,6 @@ import {
   X,
   Check,
   Wrench,
-  Sparkles,
   ArrowRight
 } from 'lucide-react';
 
@@ -357,28 +355,6 @@ const PaymentControlCenter = () => {
     }
   };
 
-  // ── Test Case 12345 One-Click Seeder ────────────────────────────────
-  const handleSeedTestCase = async () => {
-    setActionLoading(true);
-    try {
-      const res = await authFetch('/api/payments/test-case/seed-12345', {
-        method: 'POST'
-      });
-      const data = await res.json();
-      if (res.ok) {
-        showToast(data.message || 'Test Case 12345 seeded successfully with 3 monthly payments!');
-        fetchSummary();
-        fetchCustomers();
-      } else {
-        showToast(data.message || 'Failed seeding test case', 'error');
-      }
-    } catch (e) {
-      showToast('Seed error: ' + e.message, 'error');
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
   // ── Open Detail Drawer / Modal ─────────────────────────────────────
   const openCustomerDetails = async (accountNo, rowBillingMonth, initialTab = 'overview', recordKey = null) => {
     setActionLoading(true);
@@ -681,52 +657,6 @@ const PaymentControlCenter = () => {
             <span>Refresh</span>
           </button>
 
-          <button
-            onClick={handleSeedTestCase}
-            disabled={loading || actionLoading}
-            title="Seed Test Case: Customer 12345 with 3 monthly payment obligations (Jan Hold 10k, Feb Hold 12k, Mar Ready 15k)"
-            className="btn"
-            style={{
-              background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(99, 102, 241, 0.25))',
-              border: '1px solid rgba(168, 85, 247, 0.45)',
-              color: '#d8b4fe',
-              padding: '0.6rem 1rem',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              cursor: 'pointer',
-              fontWeight: 700,
-              fontSize: '0.85rem'
-            }}
-          >
-            <Sparkles size={15} />
-            <span>Seed Test Case (12345)</span>
-          </button>
-
-          <button
-            onClick={() => setBatchReviewModalOpen(true)}
-            disabled={selectedRecords.size === 0}
-            className="btn"
-            style={{
-              background: selectedRecords.size > 0 ? 'linear-gradient(135deg, #10b981, #059669)' : 'rgba(255,255,255,0.08)',
-              border: 'none',
-              color: selectedRecords.size > 0 ? '#fff' : 'var(--text-muted)',
-              padding: '0.6rem 1.25rem',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.55rem',
-              cursor: selectedRecords.size > 0 ? 'pointer' : 'not-allowed',
-              fontWeight: 700,
-              fontSize: '0.88rem',
-              boxShadow: selectedRecords.size > 0 ? '0 4px 14px rgba(16, 185, 129, 0.4)' : 'none',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <Send size={16} />
-            <span>Create Payment Batch ({selectedRecords.size})</span>
-          </button>
         </div>
       </div>
 
@@ -745,15 +675,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('TOTAL_CUSTOMERS')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'TOTAL_CUSTOMERS'
-              ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(17, 24, 39, 0.95))'
-              : 'linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(17, 24, 39, 0.8))',
-            border: hoveredCard === 'TOTAL_CUSTOMERS' ? '1px solid rgba(59, 130, 246, 0.65)' : '1px solid rgba(59, 130, 246, 0.25)',
+            background: hoveredCard === 'TOTAL_CUSTOMERS' ? '#EFF6FF' : '#FFFFFF',
+            border: hoveredCard === 'TOTAL_CUSTOMERS' ? '1px solid #3B82F6' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'TOTAL_CUSTOMERS' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'TOTAL_CUSTOMERS' ? '0 10px 24px -4px rgba(59, 130, 246, 0.28)' : 'none',
+            transform: hoveredCard === 'TOTAL_CUSTOMERS' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'TOTAL_CUSTOMERS' ? '0 8px 20px -4px rgba(59, 130, 246, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -767,7 +695,7 @@ const PaymentControlCenter = () => {
               </span>
               <User size={18} style={{ color: '#3b82f6' }} />
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
               {(summary.totalCustomers || summary.customerCount || 0).toLocaleString()}
             </div>
           </div>
@@ -787,15 +715,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('PAYMENT_READY')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'PAYMENT_READY'
-              ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.22), rgba(17, 24, 39, 0.95))'
-              : 'linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(17, 24, 39, 0.8))',
-            border: hoveredCard === 'PAYMENT_READY' ? '1px solid rgba(16, 185, 129, 0.65)' : '1px solid rgba(16, 185, 129, 0.25)',
+            background: hoveredCard === 'PAYMENT_READY' ? '#ECFDF5' : '#FFFFFF',
+            border: hoveredCard === 'PAYMENT_READY' ? '1px solid #10B981' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'PAYMENT_READY' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'PAYMENT_READY' ? '0 10px 24px -4px rgba(16, 185, 129, 0.28)' : 'none',
+            transform: hoveredCard === 'PAYMENT_READY' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'PAYMENT_READY' ? '0 8px 20px -4px rgba(16, 185, 129, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -809,7 +735,7 @@ const PaymentControlCenter = () => {
               </span>
               <CheckCircle2 size={18} style={{ color: '#10b981' }} />
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
               {(summary.paymentReadyCount || 0).toLocaleString()}
             </div>
           </div>
@@ -829,15 +755,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('PAYMENT_ON_HOLD')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'PAYMENT_ON_HOLD'
-              ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.22), rgba(17, 24, 39, 0.95))'
-              : 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(17, 24, 39, 0.8))',
-            border: hoveredCard === 'PAYMENT_ON_HOLD' ? '1px solid rgba(245, 158, 11, 0.65)' : '1px solid rgba(245, 158, 11, 0.25)',
+            background: hoveredCard === 'PAYMENT_ON_HOLD' ? '#FFFBEB' : '#FFFFFF',
+            border: hoveredCard === 'PAYMENT_ON_HOLD' ? '1px solid #F59E0B' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'PAYMENT_ON_HOLD' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'PAYMENT_ON_HOLD' ? '0 10px 24px -4px rgba(245, 158, 11, 0.28)' : 'none',
+            transform: hoveredCard === 'PAYMENT_ON_HOLD' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'PAYMENT_ON_HOLD' ? '0 8px 20px -4px rgba(245, 158, 11, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -851,7 +775,7 @@ const PaymentControlCenter = () => {
               </span>
               <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
               {(summary.onHoldCount || 0).toLocaleString()}
             </div>
           </div>
@@ -871,15 +795,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('REQUIRES_REVIEW')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'REQUIRES_REVIEW'
-              ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.22), rgba(17, 24, 39, 0.95))'
-              : 'linear-gradient(135deg, rgba(168, 85, 247, 0.12), rgba(17, 24, 39, 0.8))',
-            border: hoveredCard === 'REQUIRES_REVIEW' ? '1px solid rgba(168, 85, 247, 0.65)' : '1px solid rgba(168, 85, 247, 0.25)',
+            background: hoveredCard === 'REQUIRES_REVIEW' ? '#FAF5FF' : '#FFFFFF',
+            border: hoveredCard === 'REQUIRES_REVIEW' ? '1px solid #A855F7' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'REQUIRES_REVIEW' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'REQUIRES_REVIEW' ? '0 10px 24px -4px rgba(168, 85, 247, 0.28)' : 'none',
+            transform: hoveredCard === 'REQUIRES_REVIEW' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'REQUIRES_REVIEW' ? '0 8px 20px -4px rgba(168, 85, 247, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -893,7 +815,7 @@ const PaymentControlCenter = () => {
               </span>
               <Clock size={18} style={{ color: '#a855f7' }} />
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
               {(summary.reviewCount || 0).toLocaleString()}
             </div>
           </div>
@@ -913,15 +835,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('TOTAL_PAYABLE')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'TOTAL_PAYABLE'
-              ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.22), rgba(17, 24, 39, 0.95))'
-              : 'linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(17, 24, 39, 0.8))',
-            border: hoveredCard === 'TOTAL_PAYABLE' ? '1px solid rgba(6, 182, 212, 0.65)' : '1px solid rgba(6, 182, 212, 0.25)',
+            background: hoveredCard === 'TOTAL_PAYABLE' ? '#F0FDFA' : '#FFFFFF',
+            border: hoveredCard === 'TOTAL_PAYABLE' ? '1px solid #06B6D4' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'TOTAL_PAYABLE' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'TOTAL_PAYABLE' ? '0 10px 24px -4px rgba(6, 182, 212, 0.28)' : 'none',
+            transform: hoveredCard === 'TOTAL_PAYABLE' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'TOTAL_PAYABLE' ? '0 8px 20px -4px rgba(6, 182, 212, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -935,7 +855,7 @@ const PaymentControlCenter = () => {
               </span>
               <DollarSign size={18} style={{ color: '#06b6d4' }} />
             </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#38bdf8', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 'clamp(0.78rem, 0.92vw, 1.05rem)', fontWeight: 800, color: '#0891B2', letterSpacing: '-0.04em', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
               {formatLKR(summary.totalPayable)}
             </div>
           </div>
@@ -955,15 +875,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('TOTAL_ON_HOLD')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'TOTAL_ON_HOLD'
-              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.22), rgba(17, 24, 39, 0.95))'
-              : 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(17, 24, 39, 0.8))',
-            border: hoveredCard === 'TOTAL_ON_HOLD' ? '1px solid rgba(239, 68, 68, 0.65)' : '1px solid rgba(239, 68, 68, 0.25)',
+            background: hoveredCard === 'TOTAL_ON_HOLD' ? '#FFF1F2' : '#FFFFFF',
+            border: hoveredCard === 'TOTAL_ON_HOLD' ? '1px solid #EF4444' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'TOTAL_ON_HOLD' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'TOTAL_ON_HOLD' ? '0 10px 24px -4px rgba(239, 68, 68, 0.28)' : 'none',
+            transform: hoveredCard === 'TOTAL_ON_HOLD' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'TOTAL_ON_HOLD' ? '0 8px 20px -4px rgba(239, 68, 68, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -977,7 +895,7 @@ const PaymentControlCenter = () => {
               </span>
               <Lock size={18} style={{ color: '#ef4444' }} />
             </div>
-            <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f87171', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 'clamp(0.78rem, 0.92vw, 1.05rem)', fontWeight: 800, color: '#DC2626', letterSpacing: '-0.04em', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
               {formatLKR(summary.totalOnHold)}
             </div>
           </div>
@@ -997,17 +915,13 @@ const PaymentControlCenter = () => {
           onMouseEnter={() => setHoveredCard('MULTI_PAYMENTS')}
           onMouseLeave={() => setHoveredCard(null)}
           style={{
-            background: hoveredCard === 'MULTI_PAYMENTS'
-              ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.25), rgba(17, 24, 39, 0.95))'
-              : (multiPaymentFilter
-                  ? 'linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(17, 24, 39, 0.9))'
-                  : 'linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(17, 24, 39, 0.8))'),
-            border: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '1px solid rgba(99, 102, 241, 0.75)' : '1px solid rgba(99, 102, 241, 0.25)',
+            background: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '#EEF2FF' : '#FFFFFF',
+            border: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '1px solid #818CF8' : '1px solid #E2E8F0',
             borderRadius: '12px',
             padding: '1.15rem 1.35rem',
             cursor: 'pointer',
-            transform: hoveredCard === 'MULTI_PAYMENTS' ? 'translateY(-3px)' : 'none',
-            boxShadow: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '0 10px 24px -4px rgba(99, 102, 241, 0.35)' : 'none',
+            transform: hoveredCard === 'MULTI_PAYMENTS' ? 'translateY(-2px)' : 'none',
+            boxShadow: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '0 8px 20px -4px rgba(99, 102, 241, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
             display: 'flex',
             flexDirection: 'column',
@@ -1016,20 +930,20 @@ const PaymentControlCenter = () => {
         >
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#a5b4fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Multi-Payments
               </span>
-              <Layers size={18} style={{ color: '#818cf8' }} />
+              <Layers size={18} style={{ color: '#6366F1' }} />
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f3f4f6' }}>
+            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
               {(summary.multiPaymentCustomersCount || 0).toLocaleString()}
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>
               {(summary.multiPaymentCount || 0).toLocaleString()} records
             </span>
-            <span style={{ fontSize: '0.72rem', color: '#818cf8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'MULTI_PAYMENTS' ? 1 : 0.65 }}>
+            <span style={{ fontSize: '0.72rem', color: '#4F46E5', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'MULTI_PAYMENTS' ? 1 : 0.8 }}>
               Details <ChevronRight size={12} />
             </span>
           </div>
@@ -1488,27 +1402,6 @@ const PaymentControlCenter = () => {
               >
                 Collapse All
               </button>
-              {activeTab === 'READY' && selectedRecords.size > 0 && (
-                <button
-                  onClick={() => setBatchReviewModalOpen(true)}
-                  style={{
-                    background: 'linear-gradient(135deg, #10b981, #059669)',
-                    border: 'none',
-                    color: '#fff',
-                    padding: '0.4rem 0.85rem',
-                    borderRadius: '6px',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.35rem'
-                  }}
-                >
-                  <Send size={13} />
-                  <span>Create Batch ({selectedRecords.size})</span>
-                </button>
-              )}
             </div>
           </div>
 
@@ -3438,23 +3331,23 @@ const PaymentControlCenter = () => {
             case 'TOTAL_CUSTOMERS':
               return {
                 title: 'Total Customers Overview',
-                icon: <User size={22} style={{ color: '#3b82f6' }} />,
-                color: '#3b82f6',
-                gradient: 'linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(59, 130, 246, 0.15)',
-                badgeText: '#60a5fa',
-                badgeBorder: 'rgba(59, 130, 246, 0.3)',
+                icon: <User size={22} style={{ color: '#2563EB' }} />,
+                color: '#2563EB',
+                gradient: 'linear-gradient(135deg, #EFF6FF, #FFFFFF)',
+                badgeColor: '#EFF6FF',
+                badgeText: '#1D4ED8',
+                badgeBorder: '#BFDBFE',
                 stat: (summary.totalCustomers || summary.customerCount || 0).toLocaleString(),
                 statLabel: 'Total Canonical Solar Producers',
                 description: 'Complete directory of registered solar producers across the selected billing period and division scope. This count represents the complete backend dataset invariant of local filters.',
                 filterTab: 'ALL',
                 filterTabLabel: 'View All in Table',
                 metrics: [
-                  { label: 'Payment Ready', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
-                  { label: 'Payment On Hold', value: (summary.onHoldCount || 0).toLocaleString(), color: '#f59e0b' },
-                  { label: 'Requires Review', value: (summary.reviewCount || 0).toLocaleString(), color: '#c084fc' },
-                  { label: 'Total Ready Payable', value: formatLKR(summary.totalPayable), color: '#38bdf8' },
-                  { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#f87171' }
+                  { label: 'Payment Ready', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#047857' },
+                  { label: 'Payment On Hold', value: (summary.onHoldCount || 0).toLocaleString(), color: '#B45309' },
+                  { label: 'Requires Review', value: (summary.reviewCount || 0).toLocaleString(), color: '#7E22CE' },
+                  { label: 'Total Ready Payable', value: formatLKR(summary.totalPayable), color: '#0369A1' },
+                  { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#B91C1C' }
                 ],
                 filterPredicate: () => true
               };
@@ -3462,22 +3355,22 @@ const PaymentControlCenter = () => {
             case 'PAYMENT_READY':
               return {
                 title: 'Payment Ready Verification',
-                icon: <CheckCircle2 size={22} style={{ color: '#10b981' }} />,
-                color: '#10b981',
-                gradient: 'linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(16, 185, 129, 0.15)',
-                badgeText: '#34d399',
-                badgeBorder: 'rgba(16, 185, 129, 0.3)',
+                icon: <CheckCircle2 size={22} style={{ color: '#047857' }} />,
+                color: '#047857',
+                gradient: 'linear-gradient(135deg, #ECFDF5, #FFFFFF)',
+                badgeColor: '#ECFDF5',
+                badgeText: '#047857',
+                badgeBorder: '#A7F3D0',
                 stat: (summary.paymentReadyCount || 0).toLocaleString(),
                 statLabel: 'Verified Eligible for Disbursement',
                 description: 'Producers who have passed all 11 backend verification and banking integrity checks. These records are verified, free of payment holds, and ready for payment batch bundling.',
                 filterTab: 'READY',
                 filterTabLabel: 'View Payment Ready Tab',
                 metrics: [
-                  { label: 'Ready Producers', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
-                  { label: 'Ready Total Payable', value: formatLKR(summary.totalPayable), color: '#059669' },
-                  { label: 'Verification Gates', value: '11 of 11 Passed', color: '#3B7EF6' },
-                  { label: 'Batch Eligibility', value: 'Eligible for Batch Creation', color: '#10b981' }
+                  { label: 'Ready Producers', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#047857' },
+                  { label: 'Ready Total Payable', value: formatLKR(summary.totalPayable), color: '#047857' },
+                  { label: 'Verification Gates', value: '11 of 11 Passed', color: '#1D4ED8' },
+                  { label: 'Batch Eligibility', value: 'Eligible for Batch Creation', color: '#047857' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'READY' || c.isEligible
               };
@@ -3485,22 +3378,22 @@ const PaymentControlCenter = () => {
             case 'PAYMENT_ON_HOLD':
               return {
                 title: 'Payment On Hold Diagnostics',
-                icon: <AlertTriangle size={22} style={{ color: '#f59e0b' }} />,
-                color: '#f59e0b',
-                gradient: 'linear-gradient(135deg, rgba(245, 158, 11, 0.18), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(245, 158, 11, 0.15)',
-                badgeText: '#fbbf24',
-                badgeBorder: 'rgba(245, 158, 11, 0.3)',
+                icon: <AlertTriangle size={22} style={{ color: '#B45309' }} />,
+                color: '#B45309',
+                gradient: 'linear-gradient(135deg, #FFFBEB, #FFFFFF)',
+                badgeColor: '#FFFBEB',
+                badgeText: '#92400E',
+                badgeBorder: '#FDE68A',
                 stat: (summary.onHoldCount || 0).toLocaleString(),
                 statLabel: 'Withheld by Blocking Validations',
                 description: 'Producers temporarily prevented from receiving disbursement due to active payment holds, missing bank or identity information, negative net calculations, or validation errors.',
                 filterTab: 'ON_HOLD',
                 filterTabLabel: 'View On Hold Tab',
                 metrics: [
-                  { label: 'On Hold Producers', value: (summary.onHoldCount || 0).toLocaleString(), color: '#f59e0b' },
-                  { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#f87171' },
+                  { label: 'On Hold Producers', value: (summary.onHoldCount || 0).toLocaleString(), color: '#B45309' },
+                  { label: 'Total Withheld Balance', value: formatLKR(summary.totalOnHold), color: '#B91C1C' },
                   { label: 'Primary Blockers', value: 'Holds & Missing Details', color: '#D97706' },
-                  { label: 'Resolution Path', value: 'Customer 360 / Edit Details', color: '#38bdf8' }
+                  { label: 'Resolution Path', value: 'Customer 360 / Edit Details', color: '#0369A1' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'ON_HOLD' || (c.holdReasons && c.holdReasons.length > 0)
               };
@@ -3508,22 +3401,22 @@ const PaymentControlCenter = () => {
             case 'REQUIRES_REVIEW':
               return {
                 title: 'Requires Review Audit Queue',
-                icon: <Clock size={22} style={{ color: '#a855f7' }} />,
-                color: '#a855f7',
-                gradient: 'linear-gradient(135deg, rgba(168, 85, 247, 0.18), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(168, 85, 247, 0.15)',
-                badgeText: '#c084fc',
-                badgeBorder: 'rgba(168, 85, 247, 0.3)',
+                icon: <Clock size={22} style={{ color: '#7E22CE' }} />,
+                color: '#7E22CE',
+                gradient: 'linear-gradient(135deg, #FAF5FF, #FFFFFF)',
+                badgeColor: '#FAF5FF',
+                badgeText: '#7E22CE',
+                badgeBorder: '#E9D5FF',
                 stat: (summary.reviewCount || 0).toLocaleString(),
                 statLabel: 'Pending Officer Investigation',
                 description: 'Producers flagged with multi-source billing discrepancies, duplicate records, or pending supervisory batch review requiring official confirmation.',
                 filterTab: 'REVIEW',
                 filterTabLabel: 'View Requires Review Tab',
                 metrics: [
-                  { label: 'Flagged Records', value: (summary.reviewCount || 0).toLocaleString(), color: '#a855f7' },
-                  { label: 'Review Categories', value: 'Duplicate Sources / Batches', color: '#c084fc' },
-                  { label: 'Under Review Batches', value: batches.filter(b => b.status === 'UNDER_REVIEW' || b.status === 'SUBMITTED').length, color: '#D97706' },
-                  { label: 'Audit Gateway', value: 'Supervisor Action Required', color: '#3B7EF6' }
+                  { label: 'Flagged Records', value: (summary.reviewCount || 0).toLocaleString(), color: '#7E22CE' },
+                  { label: 'Review Categories', value: 'Duplicate Sources / Batches', color: '#7E22CE' },
+                  { label: 'Under Review Batches', value: batches.filter(b => b.status === 'UNDER_REVIEW' || b.status === 'SUBMITTED').length, color: '#B45309' },
+                  { label: 'Audit Gateway', value: 'Supervisor Action Required', color: '#1D4ED8' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'REVIEW'
               };
@@ -3531,22 +3424,22 @@ const PaymentControlCenter = () => {
             case 'TOTAL_PAYABLE':
               return {
                 title: 'Total Ready Payable Balance',
-                icon: <DollarSign size={22} style={{ color: '#06b6d4' }} />,
-                color: '#06b6d4',
-                gradient: 'linear-gradient(135deg, rgba(6, 182, 212, 0.18), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(6, 182, 212, 0.15)',
-                badgeText: '#38bdf8',
-                badgeBorder: 'rgba(6, 182, 212, 0.3)',
+                icon: <DollarSign size={22} style={{ color: '#0369A1' }} />,
+                color: '#0369A1',
+                gradient: 'linear-gradient(135deg, #ECFEFF, #FFFFFF)',
+                badgeColor: '#ECFEFF',
+                badgeText: '#0E7490',
+                badgeBorder: '#A5F3FC',
                 stat: formatLKR(summary.totalPayable),
                 statLabel: 'Net Approved Settlement Capital',
                 description: 'Aggregated net settlement amount payable to verified ready producers. Calculated as: kWh Energy Purchase / Sales Amount minus Bill Set-Off and Retention Money.',
                 filterTab: 'READY',
                 filterTabLabel: 'View Ready Accounts in Table',
                 metrics: [
-                  { label: 'Ready Payable', value: formatLKR(summary.totalPayable), color: '#38bdf8' },
-                  { label: 'Eligible Payees', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#10b981' },
-                  { label: 'Formula Enforced', value: 'kWh Sales − SetOff − Retention', color: '#D97706' },
-                  { label: 'Disbursement Status', value: 'Available for Batching', color: '#059669' }
+                  { label: 'Ready Payable', value: formatLKR(summary.totalPayable), color: '#0369A1' },
+                  { label: 'Eligible Payees', value: (summary.paymentReadyCount || 0).toLocaleString(), color: '#047857' },
+                  { label: 'Formula Enforced', value: 'kWh Sales − SetOff − Retention', color: '#B45309' },
+                  { label: 'Disbursement Status', value: 'Available for Batching', color: '#047857' }
                 ],
                 filterPredicate: (c) => (c.totalPayable != null && c.totalPayable > 0) || c.paymentStatus === 'READY'
               };
@@ -3554,22 +3447,22 @@ const PaymentControlCenter = () => {
             case 'TOTAL_ON_HOLD':
               return {
                 title: 'Total Withheld / On Hold Balance',
-                icon: <Lock size={22} style={{ color: '#ef4444' }} />,
-                color: '#ef4444',
-                gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(239, 68, 68, 0.15)',
-                badgeText: '#f87171',
-                badgeBorder: 'rgba(239, 68, 68, 0.3)',
+                icon: <Lock size={22} style={{ color: '#B91C1C' }} />,
+                color: '#B91C1C',
+                gradient: 'linear-gradient(135deg, #FEF2F2, #FFFFFF)',
+                badgeColor: '#FEF2F2',
+                badgeText: '#B91C1C',
+                badgeBorder: '#FECACA',
                 stat: formatLKR(summary.totalOnHold),
                 statLabel: 'Withheld Financial Liability',
                 description: 'Aggregate value of payments currently held or pending review due to active hold triggers, identity mismatches, or missing details awaiting verification.',
                 filterTab: 'ON_HOLD',
                 filterTabLabel: 'View On Hold Accounts in Table',
                 metrics: [
-                  { label: 'Withheld Total', value: formatLKR(summary.totalOnHold), color: '#f87171' },
-                  { label: 'Withheld Producers', value: ((summary.onHoldCount || 0) + (summary.reviewCount || 0)).toLocaleString(), color: '#D97706' },
+                  { label: 'Withheld Total', value: formatLKR(summary.totalOnHold), color: '#B91C1C' },
+                  { label: 'Withheld Producers', value: ((summary.onHoldCount || 0) + (summary.reviewCount || 0)).toLocaleString(), color: '#B45309' },
                   { label: 'Disbursement Guard', value: 'Strictly Locked', color: '#ef4444' },
-                  { label: 'Release Trigger', value: 'Pass Validation Criteria', color: '#38bdf8' }
+                  { label: 'Release Trigger', value: 'Pass Validation Criteria', color: '#0369A1' }
                 ],
                 filterPredicate: (c) => c.paymentStatus === 'ON_HOLD' || c.paymentStatus === 'REVIEW' || (c.holdReasons && c.holdReasons.length > 0)
               };
@@ -3577,12 +3470,12 @@ const PaymentControlCenter = () => {
             case 'MULTI_PAYMENTS':
               return {
                 title: 'Multi-Payment Customer Records',
-                icon: <Layers size={22} style={{ color: '#818cf8' }} />,
-                color: '#818cf8',
-                gradient: 'linear-gradient(135deg, rgba(99, 102, 241, 0.22), rgba(17, 24, 39, 0.95))',
-                badgeColor: 'rgba(99, 102, 241, 0.18)',
-                badgeText: '#a5b4fc',
-                badgeBorder: 'rgba(99, 102, 241, 0.35)',
+                icon: <Layers size={22} style={{ color: '#4338CA' }} />,
+                color: '#4338CA',
+                gradient: 'linear-gradient(135deg, #EEF2FF, #FFFFFF)',
+                badgeColor: '#EEF2FF',
+                badgeText: '#4338CA',
+                badgeBorder: '#C7D2FE',
                 stat: (summary.multiPaymentCustomersCount || 0).toLocaleString(),
                 statLabel: 'Customers with Multiple Payments',
                 description: 'Producers with multiple active payment records in this period (e.g. previously held payments released alongside the current billing cycle). Color-coded grouping and sequence tags ensure full payment traceability.',
@@ -3595,10 +3488,10 @@ const PaymentControlCenter = () => {
                   setSummaryModalCard(null);
                 },
                 metrics: [
-                  { label: 'Multi-Pay Customers', value: (summary.multiPaymentCustomersCount || 0).toLocaleString(), color: '#818cf8' },
-                  { label: 'Total Payment Records', value: (summary.multiPaymentCount || 0).toLocaleString(), color: '#a5b4fc' },
-                  { label: 'Hold / Arrears Releases', value: 'Supported & Visualized', color: '#38bdf8' },
-                  { label: 'Grouping Method', value: 'Deterministic Color-Coded', color: '#10b981' }
+                  { label: 'Multi-Pay Customers', value: (summary.multiPaymentCustomersCount || 0).toLocaleString(), color: '#4338CA' },
+                  { label: 'Total Payment Records', value: (summary.multiPaymentCount || 0).toLocaleString(), color: '#4338CA' },
+                  { label: 'Hold / Arrears Releases', value: 'Supported & Visualized', color: '#0369A1' },
+                  { label: 'Grouping Method', value: 'Deterministic Color-Coded', color: '#047857' }
                 ],
                 filterPredicate: (c) => Boolean(c.hasMultiplePayments)
               };
@@ -3642,7 +3535,7 @@ const PaymentControlCenter = () => {
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.8)'
+              boxShadow: '0 24px 60px -18px rgba(15, 23, 42, 0.35)'
             }}>
               {/* Modal Header */}
               <div style={{
@@ -3651,7 +3544,7 @@ const PaymentControlCenter = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: 'rgba(0,0,0,0.2)'
+                background: '#F8FAFC'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
                   <div style={{
@@ -3684,7 +3577,7 @@ const PaymentControlCenter = () => {
                       </span>
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                      Scope: <strong style={{ color: '#38bdf8' }}>{billingPeriod === 'ALL' ? 'All Months' : billingPeriod}</strong> • Division: <strong style={{ color: '#38bdf8' }}>{division}</strong>
+                      Scope: <strong style={{ color: '#0369A1' }}>{billingPeriod === 'ALL' ? 'All Months' : billingPeriod}</strong> • Division: <strong style={{ color: '#0369A1' }}>{division}</strong>
                     </div>
                   </div>
                 </div>
@@ -3716,10 +3609,10 @@ const PaymentControlCenter = () => {
                     <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: modalConfig.badgeText, fontWeight: 700 }}>
                       {modalConfig.statLabel}
                     </span>
-                    <div style={{ fontSize: '2.1rem', fontWeight: 900, color: '#f3f4f6', marginTop: '0.2rem', letterSpacing: '-0.02em' }}>
+                    <div style={{ fontSize: '2.1rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '0.2rem', letterSpacing: '-0.02em' }}>
                       {modalConfig.stat}
                     </div>
-                    <div style={{ fontSize: '0.85rem', color: 'rgba(243, 244, 246, 0.85)', marginTop: '0.4rem', maxWidth: '620px', lineHeight: '1.45' }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.4rem', maxWidth: '620px', lineHeight: '1.45' }}>
                       {modalConfig.description}
                     </div>
                   </div>
@@ -3738,7 +3631,8 @@ const PaymentControlCenter = () => {
                         background: '#FFFFFF',
                         border: '1px solid var(--border-color)',
                         borderRadius: '10px',
-                        padding: '0.9rem 1.1rem'
+                        padding: '0.9rem 1.1rem',
+                        boxShadow: 'var(--shadow-xs)'
                       }}
                     >
                       <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
@@ -3755,7 +3649,7 @@ const PaymentControlCenter = () => {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <FileText size={16} style={{ color: '#38bdf8' }} />
+                      <FileText size={16} style={{ color: '#0369A1' }} />
                       <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                         Relevant Customer Records ({relevantRecords.length} on current page)
                       </h4>
@@ -3769,7 +3663,7 @@ const PaymentControlCenter = () => {
 
                   {relevantRecords.length === 0 ? (
                     <div style={{
-                      background: 'rgba(0,0,0,0.2)',
+                      background: '#F8FAFC',
                       border: '1px solid var(--border-color)',
                       borderRadius: '10px',
                       padding: '2.2rem 1.5rem',
@@ -3786,14 +3680,14 @@ const PaymentControlCenter = () => {
                     </div>
                   ) : (
                     <div style={{
-                      background: 'rgba(0,0,0,0.2)',
+                      background: '#FFFFFF',
                       border: '1px solid var(--border-color)',
                       borderRadius: '10px',
                       overflow: 'hidden'
                     }}>
                       <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                          <thead style={{ position: 'sticky', top: 0, background: '#111827', zIndex: 1 }}>
+                          <thead style={{ position: 'sticky', top: 0, background: '#F1F5F9', zIndex: 1 }}>
                             <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', textTransform: 'uppercase', fontSize: '0.72rem' }}>
                               <th style={{ padding: '0.65rem 0.85rem' }}>Account No</th>
                               <th style={{ padding: '0.65rem 0.85rem' }}>Customer Name</th>
@@ -3810,34 +3704,34 @@ const PaymentControlCenter = () => {
                               const isHold = c.paymentStatus === 'ON_HOLD';
                               const isRev = c.paymentStatus === 'REVIEW';
 
-                              let badgeBg = 'rgba(255,255,255,0.06)';
+                              let badgeBg = '#F1F5F9';
                               let badgeColor = 'var(--text-secondary)';
                               let badgeBorder = 'var(--border-color)';
                               if (isReady) {
-                                badgeBg = 'rgba(16, 185, 129, 0.15)';
-                                badgeColor = '#34d399';
-                                badgeBorder = 'rgba(16, 185, 129, 0.3)';
+                                badgeBg = '#ECFDF5';
+                                badgeColor = '#047857';
+                                badgeBorder = '#A7F3D0';
                               } else if (isHold) {
-                                badgeBg = 'rgba(245, 158, 11, 0.15)';
-                                badgeColor = '#fbbf24';
-                                badgeBorder = 'rgba(245, 158, 11, 0.3)';
+                                badgeBg = '#FFFBEB';
+                                badgeColor = '#92400E';
+                                badgeBorder = '#FDE68A';
                               } else if (isRev) {
-                                badgeBg = 'rgba(168, 85, 247, 0.15)';
-                                badgeColor = '#c084fc';
-                                badgeBorder = 'rgba(168, 85, 247, 0.3)';
+                                badgeBg = '#FAF5FF';
+                                badgeColor = '#7E22CE';
+                                badgeBorder = '#E9D5FF';
                               }
 
                               return (
                                 <tr
                                   key={c.accountNo || i}
                                   style={{
-                                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                                    borderBottom: '1px solid #E2E8F0',
                                     transition: 'background 0.15s ease'
                                   }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; }}
+                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F8FAFC'; }}
                                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
                                 >
-                                  <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#38bdf8' }}>
+                                  <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#0369A1' }}>
                                     {c.accountNo}
                                   </td>
                                   <td style={{ padding: '0.55rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -3849,7 +3743,7 @@ const PaymentControlCenter = () => {
                                   <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
                                     {c.division || c.branchCode || '—'}
                                   </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: isReady ? '#10b981' : (isHold ? '#f59e0b' : 'var(--text-primary)') }}>
+                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: isReady ? '#047857' : (isHold ? '#B45309' : 'var(--text-primary)') }}>
                                     {formatLKR(c.totalPayable)}
                                   </td>
                                   <td style={{ padding: '0.55rem 0.85rem', textAlign: 'center' }}>
@@ -3873,9 +3767,9 @@ const PaymentControlCenter = () => {
                                       }}
                                       title="Inspect payment dossier"
                                       style={{
-                                        background: 'rgba(56, 189, 248, 0.12)',
-                                        border: '1px solid rgba(56, 189, 248, 0.25)',
-                                        color: '#38bdf8',
+                                        background: '#EFF6FF',
+                                        border: '1px solid #BFDBFE',
+                                        color: '#1D4ED8',
                                         padding: '0.25rem 0.55rem',
                                         borderRadius: '6px',
                                         fontSize: '0.72rem',
@@ -3908,7 +3802,7 @@ const PaymentControlCenter = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                background: 'rgba(0,0,0,0.2)'
+                background: '#F8FAFC'
               }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
                   Canonical Metric: <strong style={{ color: modalConfig.badgeText }}>{modalConfig.stat}</strong>
@@ -3927,7 +3821,7 @@ const PaymentControlCenter = () => {
                         }
                       }}
                       style={{
-                        background: 'rgba(255,255,255,0.08)',
+                        background: '#FFFFFF',
                         border: '1px solid var(--border-color)',
                         color: 'var(--text-primary)',
                         padding: '0.5rem 1rem',
@@ -3948,7 +3842,7 @@ const PaymentControlCenter = () => {
                   <button
                     onClick={() => setSummaryModalCard(null)}
                     style={{
-                      background: 'rgba(255,255,255,0.08)',
+                      background: '#FFFFFF',
                       border: '1px solid var(--border-color)',
                       color: 'var(--text-primary)',
                       padding: '0.5rem 1.25rem',

@@ -1718,8 +1718,8 @@ select.form-input option {
 .neon-card {
   background: var(--bg-card) !important;
   border: 1px solid var(--border) !important;
-  box-shadow: var(--shadow-lg) !important;
-  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-sm) !important;
+  border-radius: var(--radius-lg) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
@@ -1851,6 +1851,75 @@ input.pcc-search-input:focus {
   height: 16px !important;
   stroke: currentColor !important;
   stroke-width: 2 !important;
+}
+
+/* Bring legacy inline upload-wizard surfaces into the shared light theme. */
+.upload-workflow-page {
+  color: var(--text-primary);
+}
+
+.upload-workflow-page [style*="rgba(10, 16, 30, 0.7)"],
+.upload-workflow-page [style*="rgba(15, 23, 42, 0.8)"],
+.upload-workflow-page [style*="rgba(15, 23, 42, 0.2)"],
+.upload-workflow-page [style*="rgba(255,255,255,0.05)"],
+.upload-workflow-page [style*="rgba(255,255,255,0.015)"],
+.upload-workflow-page [style*="rgba(255,255,255,0.04)"],
+.upload-workflow-page [style*="rgba(255,255,255,0.06)"],
+.upload-workflow-page [style*="rgba(255,255,255,0.08)"],
+.upload-workflow-page [style*="rgba(255, 255, 255, 0.05)"],
+.upload-workflow-page [style*="rgba(255, 255, 255, 0.015)"],
+.upload-workflow-page [style*="rgba(255, 255, 255, 0.04)"],
+.upload-workflow-page [style*="rgba(255, 255, 255, 0.06)"],
+.upload-workflow-page [style*="rgba(255, 255, 255, 0.08)"],
+.upload-workflow-page [style*="--card-bg"],
+.upload-workflow-page [style*="#1a1c23"],
+.upload-workflow-page [style*="rgb(26, 28, 35)"] {
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+}
+
+.upload-workflow-page [style*="radial-gradient(circle at 50% 50%"] {
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+.upload-workflow-page [style*="--card-bg"] {
+  background: var(--bg-card) !important;
+}
+
+.upload-workflow-page input[style*="#1a1c23"],
+.upload-workflow-page select[style*="#1a1c23"],
+.upload-workflow-page input[style*="rgb(26, 28, 35)"],
+.upload-workflow-page select[style*="rgb(26, 28, 35)"] {
+  background: var(--bg-input) !important;
+  color: var(--text-primary) !important;
+}
+
+.upload-workflow-page [style*="color: white"]:not(button):not(button *) {
+  color: var(--text-primary) !important;
+}
+
+.upload-workflow-page [style*="color: #94a3b8"],
+.upload-workflow-page [style*="color: rgb(148, 163, 184)"] {
+  color: var(--text-secondary) !important;
+}
+
+.upload-workflow-page [style*="color: #cbd5e1"],
+.upload-workflow-page [style*="color: rgb(203, 213, 225)"] {
+  color: var(--text-secondary) !important;
+}
+
+.upload-workflow-page [style*="color: #818cf8"],
+.upload-workflow-page [style*="color: rgb(129, 140, 248)"],
+.upload-workflow-page [style*="color: #a5b4fc"],
+.upload-workflow-page [style*="color: rgb(165, 180, 252)"] {
+  color: var(--primary) !important;
+}
+
+.upload-workflow-page [style*="color: #34d399"],
+.upload-workflow-page [style*="color: rgb(52, 211, 153)"] {
+  color: #047857 !important;
 }
 
 /* ============================================================

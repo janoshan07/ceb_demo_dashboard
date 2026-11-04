@@ -68,7 +68,7 @@ const SORT_OPTIONS = [
 // NPAY). Rendered from the synced `directory` record so the Customer 360 view shows the same detail.
 const DETAIL_SECTIONS = [
   {
-    title: 'Master Data', color: '#38bdf8',
+    title: 'Master Data', color: '#0369A1',
     fields: [
       { label: 'Address', keys: ['customerAddress', 'masterAddress', 'address'] },
       { label: 'Mobile Number', keys: ['mobileNo', 'masterMobile', 'telephone', 'phone'] },
@@ -83,14 +83,14 @@ const DETAIL_SECTIONS = [
     ],
   },
   {
-    title: 'CEB Assist', color: '#f59e0b',
+    title: 'CEB Assist', color: '#B45309',
     fields: [
       { label: 'Previous Reading Date', keys: ['prevReadingDate'] },
       { label: 'Current Reading Date', keys: ['currReadingDate'] },
     ],
   },
   {
-    title: 'NGEN', color: '#818cf8',
+    title: 'NGEN', color: '#4F46E5',
     fields: [
       { label: 'kWh Import', keys: ['kwhImport'] },
       { label: 'kWh Export', keys: ['kwhExport'] },
@@ -103,7 +103,7 @@ const DETAIL_SECTIONS = [
     ],
   },
   {
-    title: 'NPAY', color: '#c084fc',
+    title: 'NPAY', color: '#7E22CE',
     fields: [
       { label: 'Energy Purchase', keys: ['npayEnergyPurchase'] },
       { label: 'Bill Set Off', keys: ['npayBillSetOff'] },
@@ -2538,7 +2538,7 @@ const CustomerDetails = () => {
                   <XCircle size={16} style={{ color: '#ef4444' }} />
                   Record Rejected
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#f87171' }}>
+                <div style={{ fontSize: '0.82rem', color: '#B91C1C' }}>
                   <strong>Rejection Reason / Comments:</strong>
                   <div style={{ marginTop: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.04)', borderRadius: 6, border: '1px solid rgba(239, 68, 68, 0.1)' }}>
                     {selectedCustomer.directory?.rejectionReason || selectedCustomer.rejectionReason || 'Rejected during Step 6 review'}
@@ -2550,11 +2550,11 @@ const CustomerDetails = () => {
             {/* Pending Admin Approval Banner */}
             {(selectedCustomer.pendingAdminApproval === true || selectedCustomer.approvalStatus === 'PENDING_APPROVAL' || selectedCustomer.directory?.pendingAdminApproval === true || selectedCustomer.directory?.approvalStatus === 'PENDING_APPROVAL') && (
               <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem' }}>
-                <div style={{ color: '#fbbf24', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
-                  <Clock size={16} style={{ color: '#fbbf24' }} />
+                <div style={{ color: '#B45309', fontWeight: 700, marginBottom: '0.35rem', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.9rem' }}>
+                  <Clock size={16} style={{ color: '#B45309' }} />
                   Pending Admin Approval
                 </div>
-                <div style={{ fontSize: '0.82rem', color: '#fde68a' }}>
+                <div style={{ fontSize: '0.82rem', color: '#92400E' }}>
                   An officer has submitted corrections for this customer. Edits are currently awaiting Administrator review and approval before live completion.
                 </div>
               </div>
@@ -2637,17 +2637,17 @@ const CustomerDetails = () => {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                     {issues.map((err, i) => (
-                      <div key={i} style={{ fontSize: '0.82rem', color: '#f87171', display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.15)' }}>
-                        <span style={{ fontWeight: 700, color: '#fca5a5', textTransform: 'uppercase', fontSize: '0.74rem', letterSpacing: '0.05em' }}>{err.type}</span>
+                      <div key={i} style={{ fontSize: '0.82rem', color: '#B91C1C', display: 'flex', flexDirection: 'column', gap: '0.25rem', padding: '0.5rem 0.75rem', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 8, border: '1px solid rgba(239, 68, 68, 0.15)' }}>
+                        <span style={{ fontWeight: 700, color: '#991B1B', textTransform: 'uppercase', fontSize: '0.74rem', letterSpacing: '0.05em' }}>{err.type}</span>
                         {err.master !== undefined && err.main !== undefined ? (
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.2rem', padding: '0.45rem 0.65rem', background: 'rgba(0, 0, 0, 0.25)', borderRadius: 6, border: '1px solid #E5E8EF' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.2rem', padding: '0.45rem 0.65rem', background: '#F8FAFC', borderRadius: 6, border: '1px solid #E5E8EF' }}>
                             <div>
                               <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '0.1rem' }}>Master:</span>
-                              <span style={{ fontWeight: 700, color: '#38bdf8', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.master)}</span>
+                              <span style={{ fontWeight: 700, color: '#0369A1', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.master)}</span>
                             </div>
                             <div>
                               <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, display: 'block', marginBottom: '0.1rem' }}>Main:</span>
-                              <span style={{ fontWeight: 700, color: '#f87171', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.main)}</span>
+                              <span style={{ fontWeight: 700, color: '#B91C1C', fontSize: '0.85rem', wordBreak: 'break-word' }}>{String(err.main)}</span>
                             </div>
                           </div>
                         ) : (
@@ -2770,7 +2770,7 @@ const CustomerDetails = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <label className="form-label">Customer Name</label>
                           {hasNameMismatch && (
-                            <span style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                            <span style={{ fontSize: '0.68rem', color: '#B91C1C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                               <AlertTriangle size={11} /> Name Mismatch
                             </span>
                           )}
@@ -2812,7 +2812,7 @@ const CustomerDetails = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <label className="form-label">Net Type (Solar Type)</label>
                             {hasNetTypeMismatch && (
-                              <span style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.68rem', color: '#B91C1C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                 <AlertTriangle size={11} /> Net Type Mismatch
                               </span>
                             )}
@@ -2875,7 +2875,7 @@ const CustomerDetails = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <label className="form-label">Unit Rate</label>
                             {hasUnitRateMismatch && (
-                              <span style={{ fontSize: '0.68rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.68rem', color: '#B91C1C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                 <AlertTriangle size={11} /> Rate Mismatch
                               </span>
                             )}
@@ -2997,16 +2997,16 @@ const CustomerDetails = () => {
                           transition: 'all 0.2s ease'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.72rem', color: hasNameMismatch ? '#f87171' : 'var(--text-secondary)', fontWeight: hasNameMismatch ? 700 : 500 }}>
+                            <span style={{ fontSize: '0.72rem', color: hasNameMismatch ? '#B91C1C' : 'var(--text-secondary)', fontWeight: hasNameMismatch ? 700 : 500 }}>
                               Customer Name
                             </span>
                             {hasNameMismatch && (
-                              <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.62rem', color: '#B91C1C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                 <AlertTriangle size={10} /> MISMATCH
                               </span>
                             )}
                           </div>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: hasNameMismatch ? '#fca5a5' : 'inherit' }}>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: hasNameMismatch ? '#991B1B' : 'inherit' }}>
                             {renderValOrMissing(selectedCustomer.customerName || selectedCustomer.directory?.customerName || selectedCustomer.directory?.masterName || selectedCustomer.directory?.npayName || selectedCustomer.directory?.ngenName)}
                           </div>
                         </div>
@@ -3019,16 +3019,16 @@ const CustomerDetails = () => {
                           transition: 'all 0.2s ease'
                         }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: '0.72rem', color: hasNetTypeMismatch ? '#f87171' : 'var(--text-secondary)', fontWeight: hasNetTypeMismatch ? 700 : 500 }}>
+                            <span style={{ fontSize: '0.72rem', color: hasNetTypeMismatch ? '#B91C1C' : 'var(--text-secondary)', fontWeight: hasNetTypeMismatch ? 700 : 500 }}>
                               Solar System Type
                             </span>
                             {hasNetTypeMismatch && (
-                              <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.62rem', color: '#B91C1C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                 <AlertTriangle size={10} /> MISMATCH
                               </span>
                             )}
                           </div>
-                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: hasNetTypeMismatch ? '#fca5a5' : ((selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType) ? 'var(--success)' : 'inherit') }}>
+                          <div style={{ fontWeight: 600, marginTop: '0.1rem', color: hasNetTypeMismatch ? '#991B1B' : ((selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType) ? '#047857' : 'inherit') }}>
                             {renderValOrMissing(selectedCustomer.solarType || selectedCustomer.netTypeName || selectedCustomer.directory?.solarType || selectedCustomer.directory?.masterNetType || selectedCustomer.directory?.ngenNetType || selectedCustomer.directory?.npayNetType)}
                           </div>
                         </div>
@@ -3105,12 +3105,12 @@ const CustomerDetails = () => {
                               Unit Rate
                             </span>
                             {hasUnitRateMismatch && (
-                              <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                              <span style={{ fontSize: '0.62rem', color: '#B91C1C', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                                 <AlertTriangle size={10} /> MISMATCH
                               </span>
                             )}
                           </div>
-                          <div style={{ fontWeight: 500, color: hasUnitRateMismatch ? '#fca5a5' : 'inherit' }}>
+                          <div style={{ fontWeight: 500, color: hasUnitRateMismatch ? '#991B1B' : 'inherit' }}>
                             {renderValOrMissing(selectedCustomer.unitRate ?? selectedCustomer.directory?.unitRate ?? selectedCustomer.directory?.masterUnitRate ?? selectedCustomer.directory?.ngenUnitRate, (v) => `${v} LKR`)}
                           </div>
                         </div>
@@ -3255,25 +3255,25 @@ const CustomerDetails = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
                       <div>
                         <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ref No: {dirCell(rec.refNo ?? selectedCustomer.refNo)}</div>
-                        <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem', margin: '0.15rem 0', color: 'white' }}>{selectedCustomer.accountNo}</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '1.1rem', margin: '0.15rem 0', color: 'var(--primary)' }}>{selectedCustomer.accountNo}</div>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                           {dirCell(rec.npayName) !== '—' ? dirCell(rec.npayName) : (selectedCustomer.customerName || '—')}
                         </div>
                       </div>
-                      <span className={`badge ${selectedCustomer.validationStatus === 'ERROR' ? 'danger' : 'success'}`} style={{ padding: '0.25rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, background: selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.15)' : 'rgba(16,185,129,0.15)', color: selectedCustomer.validationStatus === 'ERROR' ? '#f87171' : '#10b981', border: `1px solid ${selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
+                      <span className={`badge ${selectedCustomer.validationStatus === 'ERROR' ? 'danger' : 'success'}`} style={{ padding: '0.25rem 0.7rem', borderRadius: '999px', fontSize: '0.72rem', fontWeight: 700, background: selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)', color: selectedCustomer.validationStatus === 'ERROR' ? '#B91C1C' : '#047857', border: `1px solid ${selectedCustomer.validationStatus === 'ERROR' ? 'rgba(239,68,68,0.3)' : 'rgba(16,185,129,0.3)'}` }}>
                         {selectedCustomer.validationStatus === 'ERROR' ? 'New Customer' : 'Valid'}
                       </span>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
                       {DETAIL_SECTIONS.map(sec => (
-                        <div key={sec.title} style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
+                        <div key={sec.title} style={{ border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: '#FFFFFF' }}>
                           <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: sec.color, marginBottom: '0.5rem' }}>{sec.title}</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                             {sec.fields.map(f => (
                               <div key={f.label} style={{ fontSize: '0.76rem', display: 'flex', justifyContent: 'space-between', gap: '0.75rem' }}>
                                 <span style={{ color: 'var(--text-muted)' }}>{f.label}</span>
-                                <span style={{ color: 'white', fontWeight: 600, textAlign: 'right' }}>{dirFieldValue(rec, f)}</span>
+                                <span style={{ color: 'var(--text-primary)', fontWeight: 600, textAlign: 'right' }}>{dirFieldValue(rec, f)}</span>
                               </div>
                             ))}
                           </div>
@@ -3282,23 +3282,23 @@ const CustomerDetails = () => {
                     </div>
 
                     {/* Validation — preserved exactly as approved in the Monthly Directory */}
-                    <div style={{ marginTop: '1rem', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: 'rgba(255,255,255,0.02)' }}>
-                      <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#f87171', marginBottom: '0.5rem' }}>Validation</div>
+                    <div style={{ marginTop: '1rem', border: '1px solid var(--border-color)', borderRadius: 12, padding: '0.85rem 1rem', background: '#FFFFFF' }}>
+                      <div style={{ fontSize: '0.64rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', color: '#B91C1C', marginBottom: '0.5rem' }}>Validation</div>
                       {errors.map((e, i) => (
-                        <div key={`e${i}`} style={{ fontSize: '0.75rem', color: '#f87171', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{e}</div>
+                        <div key={`e${i}`} style={{ fontSize: '0.75rem', color: '#B91C1C', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{e}</div>
                       ))}
                       {warnings.map((w, i) => (
-                        <div key={`w${i}`} style={{ fontSize: '0.75rem', color: '#f59e0b', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{w}</div>
+                        <div key={`w${i}`} style={{ fontSize: '0.75rem', color: '#B45309', display: 'flex', gap: '0.4rem', alignItems: 'flex-start', marginBottom: '0.25rem' }}><AlertTriangle size={12} style={{ marginTop: 2, flexShrink: 0 }} />{w}</div>
                       ))}
                       {errors.length === 0 && warnings.length === 0 && (
-                        <div style={{ fontSize: '0.75rem', color: '#10b981', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}><CheckCircle size={12} /> No errors or warnings</div>
+                        <div style={{ fontSize: '0.75rem', color: '#047857', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}><CheckCircle size={12} /> No errors or warnings</div>
                       )}
                       {fromDirectory && (
                         <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                           {[['Name Match', 'nameMatch'], ['Unit Rate Match', 'unitRateMatch'], ['Net Type Match', 'netTypeMatch']].map(([lbl, mk]) => (
                             rec[mk] ? (
                               <div key={mk} style={{ fontSize: '0.73rem', color: 'var(--text-secondary)' }}>
-                                {lbl}: <strong style={{ color: rec[mk] === 'MISMATCH' ? '#f87171' : '#10b981' }}>{dirCell(rec[mk])}</strong>
+                                {lbl}: <strong style={{ color: rec[mk] === 'MISMATCH' ? '#B91C1C' : '#047857' }}>{dirCell(rec[mk])}</strong>
                               </div>
                             ) : null
                           ))}
@@ -3427,12 +3427,12 @@ const CustomerDetails = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                       <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <History size={18} color="#818cf8" />
+                        <History size={18} color="#4F46E5" />
                       </div>
                       <div>
-                        <h3 className="panel-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <h3 className="panel-title" style={{ margin: 0, fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                           Billing & Payment Ledger
-                          <span style={{ fontSize: '0.72rem', background: 'rgba(99,102,241,0.15)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.3)', padding: '0.15rem 0.55rem', borderRadius: 20, fontWeight: 700 }}>
+                          <span style={{ fontSize: '0.72rem', background: '#EEF2FF', color: '#4338CA', border: '1px solid #C7D2FE', padding: '0.15rem 0.55rem', borderRadius: 20, fontWeight: 700 }}>
                             {totalBillsCount} Records
                           </span>
                         </h3>
@@ -3444,14 +3444,14 @@ const CustomerDetails = () => {
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       {/* View Mode Switcher (Cards vs Table) */}
-                      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', padding: '0.2rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)' }}>
+                      <div style={{ display: 'flex', background: '#F1F5F9', padding: '0.2rem', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                         <button
                           type="button"
                           onClick={() => setBillingViewMode('cards')}
                           style={{
-                            background: billingViewMode === 'cards' ? 'rgba(99,102,241,0.25)' : 'transparent',
-                            color: billingViewMode === 'cards' ? '#818cf8' : 'var(--text-secondary)',
-                            border: billingViewMode === 'cards' ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                            background: billingViewMode === 'cards' ? '#EEF2FF' : 'transparent',
+                            color: billingViewMode === 'cards' ? '#4338CA' : 'var(--text-secondary)',
+                            border: billingViewMode === 'cards' ? '1px solid #C7D2FE' : '1px solid transparent',
                             borderRadius: 6, padding: '0.28rem 0.6rem', fontSize: '0.74rem', fontWeight: 600,
                             display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', transition: 'all 0.15s ease'
                           }}
@@ -3463,9 +3463,9 @@ const CustomerDetails = () => {
                           type="button"
                           onClick={() => setBillingViewMode('table')}
                           style={{
-                            background: billingViewMode === 'table' ? 'rgba(99,102,241,0.25)' : 'transparent',
-                            color: billingViewMode === 'table' ? '#818cf8' : 'var(--text-secondary)',
-                            border: billingViewMode === 'table' ? '1px solid rgba(99,102,241,0.4)' : '1px solid transparent',
+                            background: billingViewMode === 'table' ? '#EEF2FF' : 'transparent',
+                            color: billingViewMode === 'table' ? '#4338CA' : 'var(--text-secondary)',
+                            border: billingViewMode === 'table' ? '1px solid #C7D2FE' : '1px solid transparent',
                             borderRadius: 6, padding: '0.28rem 0.6rem', fontSize: '0.74rem', fontWeight: 600,
                             display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', transition: 'all 0.15s ease'
                           }}
@@ -3484,7 +3484,7 @@ const CustomerDetails = () => {
                             padding: '0.42rem 0.85rem',
                             fontSize: '0.78rem',
                             fontWeight: 600,
-                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            background: '#047857',
                             border: 'none',
                             borderRadius: 8,
                             display: 'flex',
@@ -3506,9 +3506,9 @@ const CustomerDetails = () => {
                     <div style={{ background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: 10, padding: '0.75rem 1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                         <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Total Settled</span>
-                        <CheckCircle size={15} color="#10b981" />
+                        <CheckCircle size={15} color="#047857" />
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#047857', letterSpacing: '-0.02em' }}>
                         {formatLKR(totalSettledAmt)}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -3520,9 +3520,9 @@ const CustomerDetails = () => {
                     <div style={{ background: latestOutstandingAmt > 0 ? 'rgba(245, 158, 11, 0.06)' : 'rgba(16, 185, 129, 0.04)', border: latestOutstandingAmt > 0 ? '1px solid rgba(245, 158, 11, 0.25)' : '1px solid rgba(16, 185, 129, 0.15)', borderRadius: 10, padding: '0.75rem 1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                         <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Current Outstanding</span>
-                        <AlertCircle size={15} color={latestOutstandingAmt > 0 ? '#f59e0b' : '#10b981'} />
+                        <AlertCircle size={15} color={latestOutstandingAmt > 0 ? '#B45309' : '#047857'} />
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: latestOutstandingAmt > 0 ? '#f59e0b' : '#10b981', letterSpacing: '-0.02em' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: latestOutstandingAmt > 0 ? '#B45309' : '#047857', letterSpacing: '-0.02em' }}>
                         {latestOutstandingAmt > 0 ? formatLKR(latestOutstandingAmt) : 'LKR 0.00'}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -3534,9 +3534,9 @@ const CustomerDetails = () => {
                     <div style={{ background: 'rgba(56, 189, 248, 0.05)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: 10, padding: '0.75rem 1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                         <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Solar Generation Sold</span>
-                        <Zap size={15} color="#38bdf8" />
+                        <Zap size={15} color="#0369A1" />
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', letterSpacing: '-0.02em' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0369A1', letterSpacing: '-0.02em' }}>
                         {formatLKR(totalGrossSales)}
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -3548,9 +3548,9 @@ const CustomerDetails = () => {
                     <div style={{ background: 'rgba(129, 140, 248, 0.05)', border: '1px solid rgba(129, 140, 248, 0.2)', borderRadius: 10, padding: '0.75rem 1rem' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
                         <span style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 700, color: 'var(--text-secondary)' }}>Multiple Payments</span>
-                        <Layers size={15} color="#818cf8" />
+                        <Layers size={15} color="#4F46E5" />
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#818cf8', letterSpacing: '-0.02em' }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4F46E5', letterSpacing: '-0.02em' }}>
                         {multiPaymentRecordsCount} <span style={{ fontSize: '0.8rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Obligations</span>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
@@ -3560,7 +3560,7 @@ const CustomerDetails = () => {
                   </div>
 
                   {/* Search, Filter Tabs & Sort Controls */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', background: 'rgba(255,255,255,0.02)', padding: '0.6rem 0.85rem', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.65rem', background: '#F8FAFC', padding: '0.6rem 0.85rem', borderRadius: 10, border: '1px solid #E2E8F0' }}>
                     {/* Search input */}
                     <div style={{ position: 'relative', flex: '1 1 200px', maxWidth: '320px' }}>
                       <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -3571,10 +3571,10 @@ const CustomerDetails = () => {
                         onChange={(e) => setBillingSearchTerm(e.target.value)}
                         style={{
                           width: '100%', boxSizing: 'border-box',
-                          background: 'rgba(0,0,0,0.3)',
-                          border: '1px solid rgba(255,255,255,0.1)',
+                          background: '#FFFFFF',
+                          border: '1px solid #E2E8F0',
                           borderRadius: 7, padding: '0.38rem 0.7rem 0.38rem 2rem',
-                          color: 'white', fontSize: '0.78rem'
+                          color: 'var(--text-primary)', fontSize: '0.78rem'
                         }}
                       />
                       {billingSearchTerm && (
@@ -3601,17 +3601,17 @@ const CustomerDetails = () => {
                           type="button"
                           onClick={() => setBillingFilterStatus(tab.key)}
                           style={{
-                            background: billingFilterStatus === tab.key ? (tab.highlight ? 'rgba(129,140,248,0.2)' : 'rgba(255,255,255,0.1)') : 'transparent',
-                            color: billingFilterStatus === tab.key ? (tab.highlight ? '#818cf8' : 'white') : 'var(--text-secondary)',
-                            border: billingFilterStatus === tab.key ? (tab.highlight ? '1px solid rgba(129,140,248,0.4)' : '1px solid rgba(255,255,255,0.18)') : '1px solid transparent',
+                            background: billingFilterStatus === tab.key ? '#EFF6FF' : 'transparent',
+                            color: billingFilterStatus === tab.key ? 'var(--primary)' : 'var(--text-secondary)',
+                            border: billingFilterStatus === tab.key ? '1px solid #BFDBFE' : '1px solid transparent',
                             borderRadius: 6, padding: '0.3rem 0.65rem', fontSize: '0.74rem', fontWeight: 600,
                             display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', transition: 'all 0.15s ease'
                           }}
                         >
                           <span>{tab.label}</span>
                           <span style={{
-                            background: billingFilterStatus === tab.key ? (tab.highlight ? '#818cf8' : 'rgba(255,255,255,0.2)') : 'rgba(255,255,255,0.06)',
-                            color: billingFilterStatus === tab.key ? '#000' : 'var(--text-muted)',
+                            background: billingFilterStatus === tab.key ? '#FFFFFF' : '#E2E8F0',
+                            color: 'var(--text-secondary)',
                             fontSize: '0.66rem', fontWeight: 700, padding: '0.05rem 0.35rem', borderRadius: 10
                           }}>
                             {tab.count}
@@ -3624,9 +3624,9 @@ const CustomerDetails = () => {
                         type="button"
                         onClick={() => setBillingSortOrder(prev => prev === 'DESC' ? 'ASC' : 'DESC')}
                         style={{
-                          background: 'rgba(255,255,255,0.04)',
+                          background: '#FFFFFF',
                           color: 'var(--text-secondary)',
-                          border: '1px solid rgba(255,255,255,0.08)',
+                          border: '1px solid #E2E8F0',
                           borderRadius: 6, padding: '0.3rem 0.6rem', fontSize: '0.74rem', fontWeight: 600,
                           display: 'flex', alignItems: 'center', gap: '0.3rem', cursor: 'pointer'
                         }}
@@ -3647,9 +3647,9 @@ const CustomerDetails = () => {
                     </div>
                   ) : filtered.length === 0 ? (
                     /* Empty State */
-                    <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: 'rgba(255,255,255,0.015)', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: 12 }}>
+                    <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', background: '#F8FAFC', border: '1px dashed #CBD5E1', borderRadius: 12 }}>
                       <History size={36} color="var(--text-muted)" style={{ opacity: 0.4, marginBottom: '0.75rem' }} />
-                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'white' }}>No Billing Records Found</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>No Billing Records Found</div>
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.3rem', maxWidth: 360, margin: '0.3rem auto 1rem' }}>
                         {billingSearchTerm || billingFilterStatus !== 'ALL'
                           ? 'No bills match your current search or filter criteria. Try clearing filters.'
@@ -3685,19 +3685,19 @@ const CustomerDetails = () => {
                           <div style={{
                             display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem',
                             padding: '0.5rem 0.85rem',
-                            background: grp.isMultiMonth ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.03)',
-                            border: grp.isMultiMonth ? '1px solid rgba(99,102,241,0.25)' : '1px solid rgba(255,255,255,0.06)',
+                            background: grp.isMultiMonth ? '#EEF2FF' : '#F8FAFC',
+                            border: grp.isMultiMonth ? '1px solid #C7D2FE' : '1px solid #E2E8F0',
                             borderRadius: 10
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                              <Calendar size={15} color={grp.isMultiMonth ? '#818cf8' : '#38bdf8'} />
-                              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'white' }}>{grp.monthKey}</span>
+                              <Calendar size={15} color={grp.isMultiMonth ? '#4F46E5' : '#0369A1'} />
+                              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>{grp.monthKey}</span>
                               {grp.isMultiMonth && (
                                 <span style={{
                                   display: 'inline-flex', alignItems: 'center', gap: '0.3rem',
                                   fontSize: '0.7rem', fontWeight: 700,
-                                  background: 'rgba(99,102,241,0.18)', color: '#818cf8',
-                                  border: '1px solid rgba(99,102,241,0.35)',
+                                  background: '#EEF2FF', color: '#4338CA',
+                                  border: '1px solid #C7D2FE',
                                   padding: '0.15rem 0.5rem', borderRadius: 12
                                 }}>
                                   <Layers size={11} /> Multiple Payments ({grp.bills.length} Records)
@@ -3707,11 +3707,11 @@ const CustomerDetails = () => {
 
                             <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.76rem' }}>
                               <span style={{ color: 'var(--text-secondary)' }}>
-                                Period Settled: <strong style={{ color: '#10b981' }}>{formatLKR(grp.totalSettled)}</strong>
+                                Period Settled: <strong style={{ color: '#047857' }}>{formatLKR(grp.totalSettled)}</strong>
                               </span>
                               <span style={{ color: 'var(--text-muted)' }}>•</span>
                               <span style={{ color: 'var(--text-secondary)' }}>
-                                Gross Sales: <strong style={{ color: '#38bdf8' }}>{formatLKR(grp.totalSales)}</strong>
+                                Gross Sales: <strong style={{ color: '#0369A1' }}>{formatLKR(grp.totalSales)}</strong>
                               </span>
                             </div>
                           </div>
@@ -3755,9 +3755,9 @@ const CustomerDetails = () => {
                                       {/* Obligation index pill if multi-payment */}
                                       {isMultiObligation && (
                                         <span style={{
-                                          background: idx === 0 ? 'rgba(99,102,241,0.2)' : 'rgba(168,85,247,0.2)',
-                                          color: idx === 0 ? '#818cf8' : '#c084fc',
-                                          border: idx === 0 ? '1px solid rgba(99,102,241,0.35)' : '1px solid rgba(168,85,247,0.35)',
+                                          background: idx === 0 ? '#EEF2FF' : '#FAF5FF',
+                                          color: idx === 0 ? '#4338CA' : '#7E22CE',
+                                          border: idx === 0 ? '1px solid #C7D2FE' : '1px solid #E9D5FF',
                                           padding: '0.15rem 0.55rem', borderRadius: 4, fontSize: '0.72rem', fontWeight: 700
                                         }}>
                                           Obligation #{idx + 1} of {grp.bills.length} {idx > 0 ? '• Additional Payment' : ''}
@@ -3765,12 +3765,12 @@ const CustomerDetails = () => {
                                       )}
 
                                       {/* Ref No */}
-                                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: 'white', background: 'rgba(255,255,255,0.06)', padding: '0.15rem 0.5rem', borderRadius: 6, border: '1px solid rgba(255,255,255,0.08)' }}>
+                                      <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-primary)', background: '#F1F5F9', padding: '0.15rem 0.5rem', borderRadius: 6, border: '1px solid #E2E8F0' }}>
                                         Ref: {bill.refNo || '—'}
                                       </span>
 
                                       {/* Payment / Billing Mode badge */}
-                                      <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: 4, background: 'rgba(56,189,248,0.1)', color: '#38bdf8', fontWeight: 600 }}>
+                                      <span style={{ fontSize: '0.7rem', padding: '0.15rem 0.45rem', borderRadius: 4, background: '#EFF6FF', color: '#0369A1', fontWeight: 600 }}>
                                         {bill.billingMode || 'Fixed'}
                                       </span>
 
@@ -3803,7 +3803,7 @@ const CustomerDetails = () => {
                                         <button
                                           type="button"
                                           className="btn btn-primary"
-                                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem', background: 'rgba(239,68,68,0.15)', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)', display: 'flex', alignItems: 'center', gap: '0.3rem', borderRadius: 6 }}
+                                          style={{ padding: '0.25rem 0.6rem', fontSize: '0.74rem', background: '#FEF2F2', color: '#B91C1C', borderColor: '#FECACA', display: 'flex', alignItems: 'center', gap: '0.3rem', borderRadius: 6 }}
                                           onClick={() => handleDeleteBill(bill.billingId)}
                                         >
                                           <Trash2 size={12} /> Delete
@@ -3817,17 +3817,17 @@ const CustomerDetails = () => {
                                     display: 'grid',
                                     gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                                     gap: '0.75rem',
-                                    background: 'rgba(0,0,0,0.22)',
+                                    background: '#F8FAFC',
                                     borderRadius: 10,
                                     padding: '0.85rem 1rem',
-                                    border: '1px solid rgba(255,255,255,0.04)'
+                                    border: '1px solid #E2E8F0'
                                   }}>
                                     {/* 1. Payment Settled */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
                                         <CheckCircle size={13} color="var(--text-secondary)" /> Payment Settled
                                       </div>
-                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'white', letterSpacing: '-0.02em' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
                                         {settledAmt != null ? formatLKR(settledAmt) : '—'}
                                       </div>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
@@ -3838,9 +3838,9 @@ const CustomerDetails = () => {
                                     {/* NEW: Stamp Duty */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
-                                        <FileText size={13} color="#f87171" /> Stamp Duty
+                                        <FileText size={13} color="#B91C1C" /> Stamp Duty
                                       </div>
-                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#f87171', letterSpacing: '-0.02em' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#B91C1C', letterSpacing: '-0.02em' }}>
                                         {formatLKR(stampDutyAmt)}
                                       </div>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
@@ -3851,9 +3851,9 @@ const CustomerDetails = () => {
                                     {/* NEW: Amount Payable */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
-                                        <DollarSign size={13} color="#10b981" /> Amount Payable
+                                        <DollarSign size={13} color="#047857" /> Amount Payable
                                       </div>
-                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#047857', letterSpacing: '-0.02em' }}>
                                         {formatLKR(amountPayable)}
                                       </div>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
@@ -3864,9 +3864,9 @@ const CustomerDetails = () => {
                                     {/* 4. Outstanding Balance */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
-                                        <AlertCircle size={13} color={outstandingAmt > 0 ? '#f59e0b' : '#10b981'} /> Outstanding Balance
+                                        <AlertCircle size={13} color={outstandingAmt > 0 ? '#B45309' : '#047857'} /> Outstanding Balance
                                       </div>
-                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: outstandingAmt > 0 ? '#f59e0b' : '#10b981', letterSpacing: '-0.02em' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: outstandingAmt > 0 ? '#B45309' : '#047857', letterSpacing: '-0.02em' }}>
                                         {formatLKR(outstandingAmt)}
                                       </div>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
@@ -3877,9 +3877,9 @@ const CustomerDetails = () => {
                                     {/* 3. Energy Purchase / Gross Sales */}
                                     <div>
                                       <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '0.25rem' }}>
-                                        <DollarSign size={13} color="#38bdf8" /> kWh Sales Revenue
+                                        <DollarSign size={13} color="#0369A1" /> kWh Sales Revenue
                                       </div>
-                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#38bdf8', letterSpacing: '-0.02em' }}>
+                                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0369A1', letterSpacing: '-0.02em' }}>
                                         {grossSalesAmt != null ? formatLKR(grossSalesAmt) : '—'}
                                       </div>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
@@ -3897,41 +3897,41 @@ const CustomerDetails = () => {
                                     color: 'var(--text-secondary)'
                                   }}>
                                     {/* Reading Period */}
-                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <div style={{ background: '#F8FAFC', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                         <Clock size={11} /> Reading Dates
                                       </div>
-                                      <div style={{ fontWeight: 600, color: 'white', marginTop: '0.2rem', fontSize: '0.74rem' }}>
+                                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginTop: '0.2rem', fontSize: '0.74rem' }}>
                                         {bill.prevReadingDate || '—'} <span style={{ color: 'var(--text-muted)' }}>→</span> {bill.currReadingDate || '—'}
                                       </div>
                                     </div>
 
                                     {/* kWh Export */}
-                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <div style={{ background: '#F8FAFC', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                         <TrendingUp size={11} color="#10b981" /> kWh Export
                                       </div>
-                                      <div style={{ fontWeight: 700, color: '#10b981', marginTop: '0.2rem' }}>
+                                      <div style={{ fontWeight: 700, color: '#047857', marginTop: '0.2rem' }}>
                                         {(bill.kwhExport != null ? bill.kwhExport : bill.exportUnits || 0).toLocaleString()} kWh
                                       </div>
                                     </div>
 
                                     {/* kWh Import */}
-                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <div style={{ background: '#F8FAFC', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
                                         <TrendingDown size={11} color="#f59e0b" /> kWh Import
                                       </div>
-                                      <div style={{ fontWeight: 700, color: '#f59e0b', marginTop: '0.2rem' }}>
+                                      <div style={{ fontWeight: 700, color: '#B45309', marginTop: '0.2rem' }}>
                                         {(bill.kwhImport != null ? bill.kwhImport : bill.importUnits || 0).toLocaleString()} kWh
                                       </div>
                                     </div>
 
                                     {/* kWh Sales / Net */}
-                                    <div style={{ background: 'rgba(255,255,255,0.02)', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid rgba(255,255,255,0.04)' }}>
+                                    <div style={{ background: '#F8FAFC', padding: '0.5rem 0.65rem', borderRadius: 8, border: '1px solid #E2E8F0' }}>
                                       <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                                        <Zap size={11} color="#38bdf8" /> Net Unit Sales
+                                        <Zap size={11} color="#0369A1" /> Net Unit Sales
                                       </div>
-                                      <div style={{ fontWeight: 700, color: (bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0) >= 0 ? '#10b981' : '#ef4444', marginTop: '0.2rem' }}>
+                                      <div style={{ fontWeight: 700, color: (bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0) >= 0 ? '#047857' : '#B91C1C', marginTop: '0.2rem' }}>
                                         {(bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0) > 0 ? '+' : ''}{(bill.kwhSales != null ? bill.kwhSales : bill.netUnit || 0).toLocaleString()} kWh
                                       </div>
                                     </div>
@@ -3972,23 +3972,23 @@ const CustomerDetails = () => {
                                     {isExpanded && (
                                       <div style={{
                                         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem',
-                                        padding: '0.65rem 0.85rem', background: 'rgba(0,0,0,0.3)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.72rem'
+                                        padding: '0.65rem 0.85rem', background: '#F8FAFC', borderRadius: 8, border: '1px solid #E2E8F0', fontSize: '0.72rem'
                                       }}>
                                         <div>
                                           <span style={{ color: 'var(--text-muted)', display: 'block' }}>Unit Rate / Tariff:</span>
-                                          <span style={{ color: 'white', fontWeight: 600, fontFamily: 'monospace' }}>{bill.unitCost != null ? formatLKR(bill.unitCost) : '—'}</span>
+                                          <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'monospace' }}>{bill.unitCost != null ? formatLKR(bill.unitCost) : '—'}</span>
                                         </div>
                                         <div>
                                           <span style={{ color: 'var(--text-muted)', display: 'block' }}>Billing Cycle:</span>
-                                          <span style={{ color: 'white', fontWeight: 600 }}>{bill.billCycle || '—'}</span>
+                                          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{bill.billCycle || '—'}</span>
                                         </div>
                                         <div>
                                           <span style={{ color: 'var(--text-muted)', display: 'block' }}>Upload History ID:</span>
-                                          <span style={{ color: 'white', fontWeight: 600, fontFamily: 'monospace' }}>{bill.uploadHistoryId || 'Manual / Initial'}</span>
+                                          <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'monospace' }}>{bill.uploadHistoryId || 'Manual / Initial'}</span>
                                         </div>
                                         <div>
                                           <span style={{ color: 'var(--text-muted)', display: 'block' }}>Logged Timestamp:</span>
-                                          <span style={{ color: 'white', fontWeight: 600 }}>{bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : '—'}</span>
+                                          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : '—'}</span>
                                         </div>
                                       </div>
                                     )}
@@ -4042,7 +4042,7 @@ const CustomerDetails = () => {
                               >
                                 {/* Period & Obligation */}
                                 <td style={{ padding: '0.6rem 0.85rem' }}>
-                                  <div style={{ fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                                     {m}
                                     {isMulti && (
                                       <span style={{ fontSize: '0.65rem', background: 'rgba(99,102,241,0.18)', color: '#818cf8', padding: '0.05rem 0.35rem', borderRadius: 4, fontWeight: 700 }}>
@@ -4057,9 +4057,9 @@ const CustomerDetails = () => {
 
                                 {/* Ref & Mode */}
                                 <td style={{ padding: '0.6rem 0.85rem' }}>
-                                  <div style={{ fontFamily: 'monospace', fontWeight: 600, color: 'white' }}>{bill.refNo || '—'}</div>
+                                  <div style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>{bill.refNo || '—'}</div>
                                   <div style={{ display: 'flex', gap: '0.3rem', alignItems: 'center', marginTop: '0.15rem' }}>
-                                    <span style={{ fontSize: '0.65rem', color: '#38bdf8' }}>{bill.billingMode || 'Fixed'}</span>
+                                    <span style={{ fontSize: '0.65rem', color: '#0369A1' }}>{bill.billingMode || 'Fixed'}</span>
                                     <span style={{ color: 'var(--text-muted)', fontSize: '0.65rem' }}>•</span>
                                     <span className={`badge ${perf.class}`} style={{ fontSize: '0.62rem', padding: '0.05rem 0.3rem' }}>
                                       {perf.text}
@@ -4092,7 +4092,7 @@ const CustomerDetails = () => {
 
                                 {/* Stamp Duty */}
                                 <td style={{ padding: '0.6rem 0.85rem' }}>
-                                  <div style={{ fontWeight: 800, color: '#f87171', fontSize: '0.85rem' }}>
+                                  <div style={{ fontWeight: 800, color: '#B91C1C', fontSize: '0.85rem' }}>
                                     {formatLKR(stampDutyAmt)}
                                   </div>
                                 </td>
@@ -4341,25 +4341,25 @@ const CustomerDetails = () => {
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
                       <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Current Payment</div>
-                        <div style={{ color: '#38bdf8', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                        <div style={{ color: '#0369A1', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.currentPayment || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                       <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Bill Set-Off</div>
-                        <div style={{ color: '#fbbf24', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                        <div style={{ color: '#92400E', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.billSetOff || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                       <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Retention Money</div>
-                        <div style={{ color: '#c084fc', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                        <div style={{ color: '#7E22CE', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.retentionMoney || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                       <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '0.75rem' }}>
                         <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase' }}>Outstanding Balance</div>
-                        <div style={{ color: '#f87171', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
+                        <div style={{ color: '#B91C1C', fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', marginTop: '0.2rem' }}>
                           LKR {Number(dossier.outstandingBalance || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
@@ -4376,8 +4376,8 @@ const CustomerDetails = () => {
                   <div className="card" style={{ backgroundColor: 'var(--bg-primary)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div>
-                        <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
-                          <Calendar size={16} style={{ color: '#38bdf8' }} />
+                        <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.4rem', margin: 0 }}>
+                          <Calendar size={16} style={{ color: '#0369A1' }} />
                           <span>Month-Wise Payment History & Isolation</span>
                         </h4>
                         <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginTop: '0.2rem' }}>
@@ -4437,7 +4437,7 @@ const CustomerDetails = () => {
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem' }}>
                           {/* Selected Month Header Strip */}
                           <div style={{
-                            background: 'rgba(255, 255, 255, 0.02)',
+                            background: '#F8FAFC',
                             borderRadius: '10px',
                             border: '1px solid #E5E8EF',
                             padding: '0.85rem 1rem',
@@ -4448,8 +4448,8 @@ const CustomerDetails = () => {
                             gap: '0.75rem'
                           }}>
                             <div>
-                              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'white' }}>
-                                {m.billingMonth} • <span style={{ color: '#38bdf8', fontWeight: 500 }}>{m.division} Division</span>
+                              <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {m.billingMonth} • <span style={{ color: '#0369A1', fontWeight: 500 }}>{m.division} Division</span>
                               </div>
                               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
                                 Snapshot: {m.datasetName || m.billingMonth} {m.approvalDate ? `• Approved ${String(m.approvalDate).substring(0, 10)}` : ''}
@@ -4469,7 +4469,7 @@ const CustomerDetails = () => {
                                 fontSize: '0.8rem',
                                 fontWeight: 800,
                                 background: mStatus === 'READY' ? 'rgba(16, 185, 129, 0.2)' : mStatus === 'PAID' ? 'rgba(5, 150, 105, 0.2)' : mStatus === 'REVIEW' ? 'rgba(168, 85, 247, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                                color: mStatus === 'READY' ? '#10b981' : mStatus === 'PAID' ? '#059669' : mStatus === 'REVIEW' ? '#c084fc' : '#f59e0b',
+                                color: mStatus === 'READY' ? '#047857' : mStatus === 'PAID' ? '#047857' : mStatus === 'REVIEW' ? '#7E22CE' : '#B45309',
                                 border: `1px solid ${mStatus === 'READY' ? 'rgba(16, 185, 129, 0.4)' : mStatus === 'PAID' ? 'rgba(5, 150, 105, 0.4)' : mStatus === 'REVIEW' ? 'rgba(168, 85, 247, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
                               }}>
                                 {mStatus.replace('_', ' ')}
@@ -4488,7 +4488,7 @@ const CustomerDetails = () => {
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                   <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
-                                  <h5 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#fbbf24', margin: 0 }}>
+                                  <h5 style={{ fontSize: '0.92rem', fontWeight: 700, color: '#92400E', margin: 0 }}>
                                     Why is this payment on hold for {m.billingMonth}?
                                   </h5>
                                 </div>
@@ -4517,10 +4517,10 @@ const CustomerDetails = () => {
                                 {/* Category 1: MISMATCH */}
                                 {hasMismatches && (
                                   <div style={{ background: 'rgba(239, 68, 68, 0.1)', borderLeft: '3px solid #ef4444', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
-                                    <div style={{ color: '#f87171', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                    <div style={{ color: '#B91C1C', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
                                       🔴 Data Mismatch Detected (Master Data vs Billing Source)
                                     </div>
-                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#fca5a5' }}>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#991B1B' }}>
                                       {cat.mismatches.map((item, idx) => (
                                         <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
                                       ))}
@@ -4531,10 +4531,10 @@ const CustomerDetails = () => {
                                 {/* Category 2: MISSING_DETAILS */}
                                 {hasMissing && (
                                   <div style={{ background: 'rgba(245, 158, 11, 0.1)', borderLeft: '3px solid #f59e0b', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
-                                    <div style={{ color: '#fbbf24', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                    <div style={{ color: '#92400E', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
                                       🟡 Missing Required Customer Information
                                     </div>
-                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#fde68a' }}>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#92400E' }}>
                                       {cat.missingDetails.map((item, idx) => (
                                         <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
                                       ))}
@@ -4545,10 +4545,10 @@ const CustomerDetails = () => {
                                 {/* Category 3: VALIDATION_ERROR */}
                                 {hasValErrors && (
                                   <div style={{ background: 'rgba(249, 115, 22, 0.1)', borderLeft: '3px solid #f97316', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
-                                    <div style={{ color: '#fb923c', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                    <div style={{ color: '#C2410C', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
                                       🟠 Staging / File Validation Error
                                     </div>
-                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#fed7aa' }}>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#9A3412' }}>
                                       {cat.validationErrors.map((item, idx) => (
                                         <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
                                       ))}
@@ -4559,10 +4559,10 @@ const CustomerDetails = () => {
                                 {/* Category 4: HOLD_ACTIVE */}
                                 {hasHolds && (
                                   <div style={{ background: 'rgba(56, 189, 248, 0.1)', borderLeft: '3px solid #38bdf8', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
-                                    <div style={{ color: '#38bdf8', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                    <div style={{ color: '#0369A1', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
                                       🔵 Manual Payment Hold Flag Active
                                     </div>
-                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#bae6fd' }}>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#075985' }}>
                                       {cat.holds.map((item, idx) => (
                                         <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
                                       ))}
@@ -4573,10 +4573,10 @@ const CustomerDetails = () => {
                                 {/* Category 5: OUTSTANDING */}
                                 {hasOutstanding && (
                                   <div style={{ background: 'rgba(168, 85, 247, 0.1)', borderLeft: '3px solid #a855f7', borderRadius: '6px', padding: '0.6rem 0.85rem' }}>
-                                    <div style={{ color: '#c084fc', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                                    <div style={{ color: '#7E22CE', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase' }}>
                                       🟣 Financial / Payable Condition
                                     </div>
-                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#e9d5ff' }}>
+                                    <ul style={{ margin: '0.3rem 0 0 1.1rem', padding: 0, fontSize: '0.8rem', color: '#6B21A8' }}>
                                       {cat.outstanding.map((item, idx) => (
                                         <li key={idx} style={{ marginTop: '0.15rem' }}>{item}</li>
                                       ))}
@@ -4645,8 +4645,8 @@ const CustomerDetails = () => {
 
                           {/* Side-by-Side Comparison Table */}
                           <div style={{ border: '1px solid #E5E8EF', borderRadius: '10px', overflow: 'hidden' }}>
-                            <div style={{ background: 'rgba(255, 255, 255, 0.03)', padding: '0.75rem 1rem', borderBottom: '1px solid #E5E8EF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'white', textTransform: 'uppercase' }}>
+                            <div style={{ background: '#F8FAFC', padding: '0.75rem 1rem', borderBottom: '1px solid #E5E8EF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                                 Side-by-Side Comparison: Master Data vs Uploaded Source ({m.billingMonth})
                               </span>
                               <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -4667,14 +4667,14 @@ const CustomerDetails = () => {
                                   const isMism = c.isMismatch;
                                   return (
                                     <tr key={idx} style={{ background: isMism ? 'rgba(239, 68, 68, 0.04)' : undefined }}>
-                                      <td style={{ fontWeight: 600, color: 'white' }}>{c.field}</td>
+                                      <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{c.field}</td>
                                       <td style={{ color: 'var(--text-secondary)' }}>{String(c.masterValue || '—')}</td>
-                                      <td style={{ color: isMism ? '#f87171' : 'var(--text-secondary)', fontWeight: isMism ? 600 : 400 }}>
+                                      <td style={{ color: isMism ? '#B91C1C' : 'var(--text-secondary)', fontWeight: isMism ? 600 : 400 }}>
                                         {String(c.sourceValue || '—')}
                                       </td>
                                       <td style={{ textAlign: 'center' }}>
                                         {isMism ? (
-                                          <span className="badge danger" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
+                                          <span className="badge danger" style={{ background: 'rgba(239, 68, 68, 0.1)', color: '#B91C1C', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700 }}>
                                             MISMATCH
                                           </span>
                                         ) : (
@@ -4698,7 +4698,7 @@ const CustomerDetails = () => {
                               </div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
                                 {m.missingFields.map((f, idx) => (
-                                  <span key={idx} style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                                  <span key={idx} style={{ padding: '0.15rem 0.5rem', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', color: '#B91C1C', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
                                     {f}
                                   </span>
                                 ))}
@@ -4717,7 +4717,7 @@ const CustomerDetails = () => {
                   {/* Payment Batch History Table */}
                   {dossier.batchHistory && dossier.batchHistory.length > 0 && (
                     <div className="card" style={{ backgroundColor: 'var(--bg-primary)', borderRadius: '14px', border: '1px solid var(--border-color)', padding: '1.25rem' }}>
-                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'white', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <History size={15} style={{ color: '#818cf8' }} />
                         <span>Payment Batch History</span>
                       </h4>
@@ -4735,9 +4735,9 @@ const CustomerDetails = () => {
                           <tbody>
                             {dossier.batchHistory.map((bh, idx) => (
                               <tr key={idx}>
-                                <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#38bdf8' }}>{bh.batchNumber}</td>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 600, color: '#0369A1' }}>{bh.batchNumber}</td>
                                 <td>{bh.billingPeriod}</td>
-                                <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#10b981' }}>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 700, color: '#047857' }}>
                                   LKR {Number(bh.totalPayable || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                                 </td>
                                 <td>
@@ -4769,11 +4769,11 @@ const CustomerDetails = () => {
           <div className="neon-card animate-fade-in" style={{ width: '100%', maxWidth: '640px', padding: '1.75rem', background: '#FFFFFF', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.85rem', marginBottom: '1.25rem' }}>
               <div>
-                <h3 style={{ color: 'white', fontWeight: 800, fontSize: '1.2rem', margin: 0 }}>
+                <h3 style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.2rem', margin: 0 }}>
                   Resolve Payment Issue — {resolveTargetMonth.billingMonth}
                 </h3>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  Account: <strong style={{ color: '#38bdf8' }}>{selectedCustomer?.accountNo}</strong> • Target Snapshot: #{resolveTargetMonth.snapshotId}
+                  Account: <strong style={{ color: '#0369A1' }}>{selectedCustomer?.accountNo}</strong> • Target Snapshot: #{resolveTargetMonth.snapshotId}
                 </div>
               </div>
               <button
@@ -4785,7 +4785,7 @@ const CustomerDetails = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '65vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
-              <div style={{ background: 'rgba(56, 189, 248, 0.08)', border: '1px solid rgba(56, 189, 248, 0.2)', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#bae6fd' }}>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '0.75rem', fontSize: '0.8rem', color: '#1E40AF' }}>
                 💡 <strong>Automatic Re-validation:</strong> Correcting these values updates the archived {resolveTargetMonth.billingMonth} dataset and immediately re-evaluates all 11 enterprise payment eligibility checks. If all issues are resolved, the payment status automatically promotes to <strong>READY</strong>.
               </div>
 
@@ -4899,7 +4899,7 @@ const CustomerDetails = () => {
                 className="btn btn-primary"
                 onClick={handleSaveCorrection}
                 disabled={resolveLoading}
-                style={{ background: '#10b981', color: 'white', fontWeight: 700, border: 'none' }}
+                style={{ background: '#047857', color: 'white', fontWeight: 700, border: 'none' }}
               >
                 {resolveLoading ? 'Re-evaluating...' : 'Save & Re-evaluate Eligibility'}
               </button>
@@ -4913,7 +4913,7 @@ const CustomerDetails = () => {
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(5, 10, 20, 0.85)', backdropFilter: 'blur(14px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200 }}>
           <div className="neon-card animate-fade-in" style={{ width: '540px', padding: '1.75rem' }}>
             <div className="panel-header" style={{ borderBottom: '1px solid #E5E8EF', paddingBottom: '0.75rem', marginBottom: '1.25rem' }}>
-              <h3 className="panel-title" style={{ color: 'white', fontWeight: 800, fontSize: '1.15rem' }}>Edit Billing Record ({editingBill.refNo})</h3>
+              <h3 className="panel-title" style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: '1.15rem' }}>Edit Billing Record ({editingBill.refNo})</h3>
               <button 
                 style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}
                 onClick={() => setEditingBill(null)}

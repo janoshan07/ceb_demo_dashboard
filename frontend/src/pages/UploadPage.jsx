@@ -6767,7 +6767,7 @@ const UploadPage = () => {
   //  MAIN RENDER
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <div style={{ padding: '2rem', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="upload-workflow-page" style={{ padding: '2rem', maxWidth: 1100, margin: '0 auto' }}>
       {/* Top Breadcrumb Header Bar matching Image 2 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', color: '#94a3b8' }}>

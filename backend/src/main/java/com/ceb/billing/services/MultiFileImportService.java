@@ -40,6 +40,7 @@ public class MultiFileImportService {
     @Autowired private BillingUploadStagingRepository billingUploadStagingRepository;
     // unused repository
     @Autowired private StagingChangeLogRepository stagingChangeLogRepository;
+    @Autowired(required = false) @org.springframework.context.annotation.Lazy private CustomerHashIndexService customerHashIndexService;
 
     // ════════════════════════════════════════════════════════════════════
     //  STEP 1 — MASTER DATA
@@ -4625,6 +4626,7 @@ public class MultiFileImportService {
             // Stage customer profiles — carrying over each row's Officer-review validation result
             // (status + structured messages) instead of hardcoding VALID, so the Admin review shows
             // exactly what the Officer saw.
+            List<BillingUploadStaging> customerProfileStagings = new ArrayList<>();
             for (Map<String, Object> mc : masterStaged) {
                 String acc = (String) mc.get("accountNo");
                 boolean isDeleted = false;
@@ -4646,20 +4648,30 @@ public class MultiFileImportService {
                     stagedErrorRows++;
                 }
 
-                BillingUploadStaging staging = new BillingUploadStaging(
+                customerProfileStagings.add(new BillingUploadStaging(
                         uploadId,
                         mapper.writeValueAsString(mc),
                         valStatus,
                         valReason,
                         "CUSTOMER_PROFILE"
-                );
-                billingUploadStagingRepository.save(staging);
+                ));
+            }
+            if (!customerProfileStagings.isEmpty()) {
+                billingUploadStagingRepository.saveAll(customerProfileStagings);
             }
 
             // Stage billing records with their Officer-review validation preserved; Step 6
             // corrections are logged as APPROVED change entries so the Admin Correction History
-            // shows what the Officer changed.
+            // shows what the Officer changed. Build primaryRowByAccount hash map for O(1) duplicate lookup.
+            Map<String, Map<String, Object>> primaryRowByAccount = new HashMap<>();
+            List<BillingUploadStaging> billingStagings = new ArrayList<>();
+            List<Map<String, Object>> billingRowsWithStaging = new ArrayList<>();
+
             for (Map<String, Object> row : correctedDataset) {
+                String acc = (String) row.get("accountNo");
+                if (acc != null && !acc.trim().isEmpty() && !primaryRowByAccount.containsKey(acc.trim())) {
+                    primaryRowByAccount.put(acc.trim(), row);
+                }
                 String[] validation = stagedValidation(row, mapper);
                 if ("INVALID".equals(validation[0])) stagedErrorRows++;
 
@@ -4670,14 +4682,21 @@ public class MultiFileImportService {
                         validation[1],
                         "BILLING"
                 );
-                billingUploadStagingRepository.save(staging);
+                billingStagings.add(staging);
+                billingRowsWithStaging.add(row);
+            }
 
+            List<BillingUploadStaging> savedBillingStagings = billingUploadStagingRepository.saveAll(billingStagings);
+            List<StagingChangeLog> changeLogsToSave = new ArrayList<>();
+            for (int i = 0; i < billingRowsWithStaging.size(); i++) {
+                Map<String, Object> row = billingRowsWithStaging.get(i);
                 Map<String, Object> original = correctionOriginals.get(row);
                 if (original != null) {
                     try {
+                        BillingUploadStaging savedStaging = savedBillingStagings.get(i);
                         StagingChangeLog changeLog = new StagingChangeLog(
                                 uploadId,
-                                staging.getStagingId(),
+                                savedStaging.getStagingId(),
                                 "BILLING",
                                 "EDIT",
                                 mapper.writeValueAsString(original),
@@ -4685,39 +4704,43 @@ public class MultiFileImportService {
                                 username
                         );
                         changeLog.setStatus("APPROVED");
-                        stagingChangeLogRepository.save(changeLog);
+                        changeLogsToSave.add(changeLog);
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
                 }
             }
+            if (!changeLogsToSave.isEmpty()) {
+                stagingChangeLogRepository.saveAll(changeLogsToSave);
+            }
 
             List<Map<String, Object>> duplicateDataset = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+            List<BillingUploadStaging> dupStagings = new ArrayList<>();
             for (Map<String, Object> row : duplicateDataset) {
                 String acc = (String) row.get("accountNo");
                 String prevReadingDateStr = (String) row.get("prevReadingDate");
                 String currReadingDateStr = (String) row.get("currReadingDate");
                 if (prevReadingDateStr == null || prevReadingDateStr.isEmpty() || "—".equals(prevReadingDateStr)) {
-                    for (Map<String, Object> primaryRow : correctedDataset) {
-                        if (acc != null && acc.equals(primaryRow.get("accountNo"))) {
-                            row.put("prevReadingDate", primaryRow.get("prevReadingDate"));
-                            row.put("currReadingDate", primaryRow.get("currReadingDate"));
-                            break;
-                        }
+                    Map<String, Object> primaryRow = acc != null ? primaryRowByAccount.get(acc.trim()) : null;
+                    if (primaryRow != null) {
+                        row.put("prevReadingDate", primaryRow.get("prevReadingDate"));
+                        row.put("currReadingDate", primaryRow.get("currReadingDate"));
                     }
                 }
 
                 String[] validation = stagedValidation(row, mapper);
                 if ("INVALID".equals(validation[0])) stagedErrorRows++;
 
-                BillingUploadStaging staging = new BillingUploadStaging(
+                dupStagings.add(new BillingUploadStaging(
                         uploadId,
                         mapper.writeValueAsString(row),
                         "DUPLICATE",
                         validation[1],
                         "BILLING"
-                );
-                billingUploadStagingRepository.save(staging);
+                ));
+            }
+            if (!dupStagings.isEmpty()) {
+                billingUploadStagingRepository.saveAll(dupStagings);
             }
 
             uploadHistory.setErrorsCount(stagedErrorRows);
@@ -4753,6 +4776,52 @@ public class MultiFileImportService {
 
         int newCustCount = 0;
         Map<String, Customer> processedCustomers = new HashMap<>();
+
+        // Optimization with Hashing:
+        // Pre-load reference tables into in-memory HashMaps for O(1) resolution
+        Map<String, CostCode> costCodeHash = new HashMap<>();
+        costCodeRepository.findAll().forEach(cc -> {
+            if (cc.getCostCode() != null) costCodeHash.put(cc.getCostCode().trim(), cc);
+        });
+
+        Map<String, NetType> netTypeHash = new HashMap<>();
+        netTypeRepository.findAll().forEach(nt -> {
+            if (nt.getName() != null) netTypeHash.put(nt.getName().trim().toUpperCase(), nt);
+        });
+
+        Map<String, ExpenseCode> expenseCodeHash = new HashMap<>();
+        expenseCodeRepository.findAll().forEach(ec -> {
+            if (ec.getExpCode() != null) expenseCodeHash.put(ec.getExpCode().trim().toUpperCase(), ec);
+        });
+
+        // Pre-load all candidate customers in one batch query into a HashMap
+        Set<String> allAccountNos = new HashSet<>();
+        for (Map<String, Object> stagedCust : masterStaged) {
+            String acc = (String) stagedCust.get("accountNo");
+            if (acc != null && !acc.trim().isEmpty()) {
+                allAccountNos.add(acc.trim());
+            }
+        }
+        for (Map<String, Object> row : correctedDataset) {
+            String acc = (String) row.get("accountNo");
+            if (acc != null && !acc.trim().isEmpty()) {
+                allAccountNos.add(acc.trim());
+            }
+        }
+        List<Map<String, Object>> duplicateDataset = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        for (Map<String, Object> row : duplicateDataset) {
+            String acc = (String) row.get("accountNo");
+            if (acc != null && !acc.trim().isEmpty()) {
+                allAccountNos.add(acc.trim());
+            }
+        }
+
+        Map<String, Customer> existingCustomerHash = new HashMap<>();
+        if (!allAccountNos.isEmpty()) {
+            customerRepository.findAllById(allAccountNos).forEach(c -> existingCustomerHash.put(c.getAccountNo(), c));
+        }
+
+        List<Customer> customersToSave = new ArrayList<>();
 
         // 1. Save / Update Customers
         for (Map<String, Object> stagedCust : masterStaged) {
@@ -4793,9 +4862,9 @@ public class MultiFileImportService {
             String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
             String finalBranch = detBranch != null ? detBranch : (branchCode != null ? branchCode : "");
 
-            Optional<Customer> existing = customerRepository.findById(accountNo);
+            Customer existing = existingCustomerHash.get(accountNo);
             Customer c;
-            if (existing.isEmpty()) {
+            if (existing == null) {
                 c = new Customer(accountNo, customerName, customerAddress, mobileNo,
                         agrDate, panelCapacity, bankCode, finalBranch, bankAccountNo, solarType);
                 c.setRefNo(refNo);
@@ -4804,13 +4873,13 @@ public class MultiFileImportService {
                 c.setCreatedByUploadId(uploadId);
                 newCustCount++;
                 if (isNotBlank(costCode))
-                    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                    c.setCostCode(costCodeHash.get(costCode.trim()));
                 if (isNotBlank(solarType))
-                    c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                    c.setNetType(netTypeHash.get(solarType.trim().toUpperCase()));
                 if (isNotBlank(billingMode))
-                    c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
+                    c.setExpenseCode(expenseCodeHash.get(billingMode.trim().toUpperCase()));
             } else {
-                c = existing.get();
+                c = existing;
                 if (isNotBlank(customerName))
                     c.setCustomerName(customerName);
                 if (isNotBlank(customerAddress))
@@ -4836,18 +4905,35 @@ public class MultiFileImportService {
                 if (isNotBlank(tariffType))
                     c.setTariffType(tariffType);
                 if (isNotBlank(costCode))
-                    c.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                    c.setCostCode(costCodeHash.get(costCode.trim()));
                 if (isNotBlank(solarType))
-                    c.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                    c.setNetType(netTypeHash.get(solarType.trim().toUpperCase()));
                 if (isNotBlank(billingMode))
-                    c.setExpenseCode(expenseCodeRepository.findByExpCode(billingMode.trim()).orElse(null));
+                    c.setExpenseCode(expenseCodeHash.get(billingMode.trim().toUpperCase()));
             }
             excelValidationService.revalidateCustomer(c);
-            customerRepository.save(c);
+            customersToSave.add(c);
             processedCustomers.put(accountNo, c);
+            existingCustomerHash.put(accountNo, c);
         }
 
-        int createdBilling = 0;
+        if (!customersToSave.isEmpty()) {
+            customerRepository.saveAll(customersToSave);
+            if (customerHashIndexService != null) {
+                customersToSave.forEach(customerHashIndexService::putOrUpdate);
+            }
+        }
+
+        // Build primaryRowByAccount hash map for O(1) duplicate reading date resolution
+        Map<String, Map<String, Object>> primaryRowByAccount = new HashMap<>();
+        for (Map<String, Object> primaryRow : correctedDataset) {
+            String acc = (String) primaryRow.get("accountNo");
+            if (acc != null && !acc.trim().isEmpty() && !primaryRowByAccount.containsKey(acc.trim())) {
+                primaryRowByAccount.put(acc.trim(), primaryRow);
+            }
+        }
+
+        List<BillingRecord> billingToSave = new ArrayList<>();
 
         // 2. Save Billing Records
         for (Map<String, Object> row : correctedDataset) {
@@ -4859,7 +4945,7 @@ public class MultiFileImportService {
 
             Customer cust = accountNo != null ? processedCustomers.get(accountNo) : null;
             if (cust == null && accountNo != null) {
-                cust = customerRepository.findById(accountNo).orElse(null);
+                cust = existingCustomerHash.get(accountNo.trim());
             }
             if (cust == null) {
                 continue;
@@ -4907,12 +4993,10 @@ public class MultiFileImportService {
             Double outstandingBalance = row.get("outstandingBalance") != null ? ((Number) row.get("outstandingBalance")).doubleValue() : 0.0;
             br.setOutstandingBalance(outstandingBalance);
 
-            billingRecordRepository.save(br);
-            createdBilling++;
+            billingToSave.add(br);
         }
 
-        // Save Billing Records for duplicates
-        List<Map<String, Object>> duplicateDataset = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        // Save Billing Records for duplicates (O(1) reading date lookup via primaryRowByAccount hash map)
         for (Map<String, Object> row : duplicateDataset) {
             String accountNo = (String) row.get("accountNo");
             Double energyPurchase = row.get("energyPurchase") != null ? ((Number) row.get("energyPurchase")).doubleValue() : 0.0;
@@ -4922,7 +5006,7 @@ public class MultiFileImportService {
 
             Customer cust = accountNo != null ? processedCustomers.get(accountNo) : null;
             if (cust == null && accountNo != null) {
-                cust = customerRepository.findById(accountNo).orElse(null);
+                cust = existingCustomerHash.get(accountNo.trim());
             }
             if (cust == null) {
                 continue;
@@ -4931,12 +5015,10 @@ public class MultiFileImportService {
             String prevReadingDateStr = (String) row.get("prevReadingDate");
             String currReadingDateStr = (String) row.get("currReadingDate");
             if (prevReadingDateStr == null || prevReadingDateStr.isEmpty() || "—".equals(prevReadingDateStr)) {
-                for (Map<String, Object> primaryRow : correctedDataset) {
-                    if (accountNo != null && accountNo.equals(primaryRow.get("accountNo"))) {
-                        prevReadingDateStr = (String) primaryRow.get("prevReadingDate");
-                        currReadingDateStr = (String) primaryRow.get("currReadingDate");
-                        break;
-                    }
+                Map<String, Object> primaryRow = accountNo != null ? primaryRowByAccount.get(accountNo.trim()) : null;
+                if (primaryRow != null) {
+                    prevReadingDateStr = (String) primaryRow.get("prevReadingDate");
+                    currReadingDateStr = (String) primaryRow.get("currReadingDate");
                 }
             }
             LocalDate prevDate = safeParseDate(prevReadingDateStr);
@@ -4979,9 +5061,13 @@ public class MultiFileImportService {
             Double outstandingBalance = row.get("outstandingBalance") != null ? ((Number) row.get("outstandingBalance")).doubleValue() : 0.0;
             br.setOutstandingBalance(outstandingBalance);
 
-            billingRecordRepository.save(br);
-            createdBilling++;
+            billingToSave.add(br);
         }
+
+        if (!billingToSave.isEmpty()) {
+            billingRecordRepository.saveAll(billingToSave);
+        }
+        int createdBilling = billingToSave.size();
 
         uploadHistory.setBillingInserted(createdBilling);
         uploadHistory.setNewCustomers(newCustCount);

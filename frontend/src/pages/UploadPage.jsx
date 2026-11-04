@@ -139,12 +139,11 @@ export const agreementExpiryStatus = (expiry, billingMonthStart, billingMonthEnd
 const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAccessible }) => {
   const stageOrder = ['PENDING_MASTER', 'MASTER_APPROVED', 'CEB_APPROVED', 'NGEN_APPROVED', 'NPAY_APPROVED', 'MAIN_DATASET_GENERATED', 'MAIN_DATASET_APPROVED', 'MASTER_COMPARISON_GENERATED', 'MASTER_COMPARISON_APPROVED', 'COMPLETED'];
   const stageIdx = stageOrder.indexOf(sessionStage);
-  // Map stage index to "last fully completed step number"
-  // MASTER_APPROVED(1)→step1 done, CEB_APPROVED(2)→step2, NGEN_APPROVED(3)→step3, NPAY_APPROVED(4)→step4, MAIN_DATASET_GENERATED(5)→step4 (step5 in progress)
-  const completedUpTo = stageIdx <= 4 ? stageIdx : stageIdx === 5 ? 4 : stageIdx >= 6 ? 5 : 0;
+  // Map stage index to the last fully completed step; generated datasets keep their review step active.
+  const completedUpTo = stageIdx <= 4 ? stageIdx : stageIdx === 5 ? 4 : stageIdx <= 7 ? 5 : 6;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '2.25rem', padding: '0 0.5rem' }}>
+    <div className="upload-wizard-stepper" style={{ display: 'flex', alignItems: 'center', gap: 0, marginBottom: '2.25rem', padding: '0 0.5rem' }}>
       {steps.map((step, i) => {
         const stepNum = i + 1;
         const isActive = currentStep === stepNum;
@@ -154,41 +153,41 @@ const WizardStepBar = ({ currentStep, steps, sessionStage, onStepClick, isStepAc
         return (
           <React.Fragment key={i}>
             <div
+              className="upload-wizard-step"
               onClick={() => isAccessible && onStepClick && onStepClick(stepNum)}
               style={{
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 flex: 1,
+                minWidth: 0,
                 cursor: isAccessible ? 'pointer' : 'not-allowed',
-                opacity: isAccessible ? 1 : 0.45,
+                opacity: 1,
                 transition: 'all 0.3s ease'
               }}
             >
               <div style={{
                 width: 48, height: 48, borderRadius: '50%',
-                background: isDone ? 'linear-gradient(135deg,#10b981,#059669)'
-                  : isActive ? 'linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%)'
-                    : 'rgba(15, 23, 42, 0.8)',
-                border: isActive ? '3px solid #818cf8' : isDone ? '2.5px solid #10b981' : '1.5px solid rgba(255,255,255,0.12)',
+                background: isDone ? '#DCFCE7' : isActive ? 'var(--primary)' : '#F1F5F9',
+                border: isActive ? '2px solid #1D4ED8' : isDone ? '1.5px solid #86EFAC' : '1.5px solid #CBD5E1',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: isDone || isActive ? 'white' : '#94a3b8',
+                color: isDone ? '#047857' : isActive ? '#FFFFFF' : '#64748B',
                 fontWeight: 700, fontSize: '1.05rem',
-                boxShadow: isActive ? '0 0 22px rgba(99,102,241,0.55), inset 0 0 10px rgba(255,255,255,0.2)' : isDone ? '0 0 12px rgba(16,185,129,0.35)' : 'none',
+                boxShadow: isActive ? '0 0 0 4px rgba(37,99,235,0.12)' : 'none',
                 transition: 'all 0.3s ease'
               }}>
                 {isDone ? <Check size={22} /> : stepNum}
               </div>
               <div style={{
                 marginTop: '0.6rem', fontSize: '0.75rem', fontWeight: isActive ? 700 : 500, textAlign: 'center',
-                color: isActive ? '#a5b4fc' : isDone ? '#34d399' : '#64748b',
+                color: isActive ? '#1D4ED8' : isDone ? '#047857' : '#475569',
                 maxWidth: 90, letterSpacing: '-0.1px'
               }}>{step.label}</div>
             </div>
             {i < steps.length - 1 && (
-              <div style={{
+              <div className="upload-wizard-connector" style={{
                 height: 2, flex: 2, maxWidth: 100,
-                background: isDone ? 'linear-gradient(90deg,#10b981,#059669)' : isActive ? 'linear-gradient(90deg, #6366f1, rgba(255,255,255,0.1))' : 'rgba(255,255,255,0.08)',
+                background: isDone ? '#10B981' : isActive ? 'linear-gradient(90deg, #2563EB, #BFDBFE)' : '#E2E8F0',
                 marginTop: -22, transition: 'all 0.4s ease'
               }} />
             )}
@@ -793,11 +792,11 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
     return (
       <div style={{ display: 'flex', gap: '0.6rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         {[
-          { key: 'ALL', label: 'All Records', count: allCount, color: '#818cf8' },
-          { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
-          { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
-          { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
-          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#ec4899' },
+          { key: 'ALL', label: 'All Records', count: allCount, color: '#4338CA' },
+          { key: 'VALID', label: 'Valid Records', count: validCount, color: '#047857' },
+          { key: 'ERROR', label: 'Errors', count: errorCount, color: '#B91C1C' },
+          { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#B45309' },
+          { key: 'DUPLICATE', label: 'Duplicates', count: duplicateCount, color: '#BE185D' },
         ].map(tab => {
           const isSelected = activeFilter === tab.key;
           return (
@@ -808,9 +807,9 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
               style={{
                 padding: '0.5rem 1rem',
                 borderRadius: 20,
-                background: isSelected ? 'var(--primary)' : '#FFFFFF',
-                border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border)'}`,
-                color: isSelected ? '#FFFFFF' : 'var(--text-secondary)',
+                background: isSelected ? '#EFF6FF' : '#FFFFFF',
+                border: `1px solid ${isSelected ? '#BFDBFE' : 'var(--border)'}`,
+                color: isSelected ? '#1D4ED8' : 'var(--text-secondary)',
                 cursor: 'pointer',
                 fontSize: '0.8rem',
                 fontWeight: 600,
@@ -823,8 +822,8 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
             >
               <span>{tab.label}</span>
               <span style={{
-                background: isSelected ? 'rgba(255,255,255,0.25)' : 'var(--bg-subtle)',
-                color: isSelected ? '#FFFFFF' : tab.color,
+                background: isSelected ? '#FFFFFF' : '#F1F5F9',
+                color: isSelected ? '#334155' : tab.color,
                 padding: '0.1rem 0.45rem',
                 borderRadius: 12,
                 fontSize: '0.7rem',
@@ -1107,9 +1106,9 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
             style={{
               padding: '0.45rem 0.9rem',
               borderRadius: 8,
-              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              background: activeFilter === tab.key ? '#EFF6FF' : '#FFFFFF',
+              border: `1px solid ${activeFilter === tab.key ? '#BFDBFE' : 'var(--border)'}`,
+              color: activeFilter === tab.key ? '#1D4ED8' : 'var(--text-secondary)',
               cursor: 'pointer',
               fontSize: '0.78rem',
               fontWeight: 600,
@@ -1121,8 +1120,8 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
           >
             <span>{tab.label}</span>
             <span style={{
-              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-              color: activeFilter === tab.key ? 'black' : tab.color,
+              background: activeFilter === tab.key ? '#FFFFFF' : '#F1F5F9',
+              color: activeFilter === tab.key ? '#334155' : tab.color,
               padding: '0.05rem 0.35rem',
               borderRadius: 20,
               fontSize: '0.68rem',
@@ -1407,9 +1406,9 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
             style={{
               padding: '0.45rem 0.9rem',
               borderRadius: 8,
-              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              background: activeFilter === tab.key ? '#EFF6FF' : '#FFFFFF',
+              border: `1px solid ${activeFilter === tab.key ? '#BFDBFE' : 'var(--border)'}`,
+              color: activeFilter === tab.key ? '#1D4ED8' : 'var(--text-secondary)',
               cursor: 'pointer',
               fontSize: '0.78rem',
               fontWeight: 600,
@@ -1421,8 +1420,8 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           >
             <span>{tab.label}</span>
             <span style={{
-              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-              color: activeFilter === tab.key ? 'black' : tab.color,
+              background: activeFilter === tab.key ? '#FFFFFF' : '#F1F5F9',
+              color: activeFilter === tab.key ? '#334155' : tab.color,
               padding: '0.05rem 0.35rem',
               borderRadius: 20,
               fontSize: '0.68rem',
@@ -1760,9 +1759,9 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
             style={{
               padding: '0.45rem 0.9rem',
               borderRadius: 8,
-              background: activeFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-              border: activeFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-              color: activeFilter === tab.key ? 'white' : 'var(--text-secondary)',
+              background: activeFilter === tab.key ? '#EFF6FF' : '#FFFFFF',
+              border: `1px solid ${activeFilter === tab.key ? '#BFDBFE' : 'var(--border)'}`,
+              color: activeFilter === tab.key ? '#1D4ED8' : 'var(--text-secondary)',
               cursor: 'pointer',
               fontSize: '0.78rem',
               fontWeight: 600,
@@ -1774,8 +1773,8 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
           >
             <span>{tab.label}</span>
             <span style={{
-              background: activeFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-              color: activeFilter === tab.key ? 'black' : tab.color,
+              background: activeFilter === tab.key ? '#FFFFFF' : '#F1F5F9',
+              color: activeFilter === tab.key ? '#334155' : tab.color,
               padding: '0.05rem 0.35rem',
               borderRadius: 20,
               fontSize: '0.68rem',
@@ -2015,24 +2014,24 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
 // ═══════════════════════════════════════════════════════════════════════════
 const SessionBanner = ({ session, onDiscard }) => (
   <div style={{
-    background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)',
+    background: '#EFF6FF', border: '1px solid #BFDBFE',
     borderRadius: 12, padding: '1rem 1.5rem', marginBottom: '1.5rem',
     display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap'
   }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(99,102,241,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Layers size={18} color="#818cf8" />
+      <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#DBEAFE', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Layers size={18} color="#2563EB" />
       </div>
       <div>
-        <div style={{ fontWeight: 700, color: 'white', fontSize: '0.92rem' }}>Active Import Session</div>
+        <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.92rem' }}>Active Import Session</div>
         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-          {session.masterCustomerCount} customers imported · Stage: <strong style={{ color: '#818cf8' }}>
+          {session.masterCustomerCount} customers imported · Stage: <strong style={{ color: '#1D4ED8' }}>
             {session.stage === 'MASTER_APPROVED' ? 'Awaiting CEB Assist' : session.stage === 'CEB_APPROVED' ? 'Awaiting NGEN' : session.stage}
           </strong>
         </div>
       </div>
     </div>
-    <button onClick={onDiscard} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444', borderRadius: 8, padding: '0.4rem 1rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+    <button onClick={onDiscard} style={{ background: '#FEF2F2', border: '1px solid #FECACA', color: '#B91C1C', borderRadius: 8, padding: '0.4rem 1rem', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
       Discard &amp; Start Over
     </button>
   </div>
@@ -5019,16 +5018,16 @@ const UploadPage = () => {
               <button key={tab.key} type="button" onClick={() => setMainDatasetFilter(tab.key)}
                 style={{
                   padding: '0.45rem 0.9rem', borderRadius: 8,
-                  background: mainDatasetFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  border: mainDatasetFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-                  color: mainDatasetFilter === tab.key ? 'white' : 'var(--text-secondary)',
+                  background: mainDatasetFilter === tab.key ? '#EFF6FF' : '#FFFFFF',
+                  border: `1px solid ${mainDatasetFilter === tab.key ? '#BFDBFE' : 'var(--border)'}`,
+                  color: mainDatasetFilter === tab.key ? '#1D4ED8' : 'var(--text-secondary)',
                   cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
                   display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
                 }}>
                 <span>{tab.label}</span>
                 <span style={{
-                  background: mainDatasetFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-                  color: mainDatasetFilter === tab.key ? 'black' : tab.color,
+                  background: mainDatasetFilter === tab.key ? '#FFFFFF' : '#F1F5F9',
+                  color: mainDatasetFilter === tab.key ? '#334155' : tab.color,
                   padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
                 }}>{tab.count}</span>
               </button>
@@ -5413,16 +5412,16 @@ const UploadPage = () => {
               <button key={tab.key} type="button" onClick={() => setMasterComparisonFilter(tab.key)}
                 style={{
                   padding: '0.45rem 0.9rem', borderRadius: 8,
-                  background: masterComparisonFilter === tab.key ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  border: masterComparisonFilter === tab.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
-                  color: masterComparisonFilter === tab.key ? 'white' : 'var(--text-secondary)',
+                  background: masterComparisonFilter === tab.key ? '#EFF6FF' : '#FFFFFF',
+                  border: `1px solid ${masterComparisonFilter === tab.key ? '#BFDBFE' : 'var(--border)'}`,
+                  color: masterComparisonFilter === tab.key ? '#1D4ED8' : 'var(--text-secondary)',
                   cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
                   display: 'flex', alignItems: 'center', gap: '0.4rem', transition: 'all 0.2s ease'
                 }}>
                 <span>{tab.label}</span>
                 <span style={{
-                  background: masterComparisonFilter === tab.key ? tab.color : 'rgba(255,255,255,0.08)',
-                  color: masterComparisonFilter === tab.key ? 'black' : tab.color,
+                  background: masterComparisonFilter === tab.key ? '#FFFFFF' : '#F1F5F9',
+                  color: masterComparisonFilter === tab.key ? '#334155' : tab.color,
                   padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
                 }}>{tab.count}</span>
               </button>
@@ -6767,7 +6766,7 @@ const UploadPage = () => {
   //  MAIN RENDER
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <div className="upload-workflow-page" style={{ padding: '2rem', maxWidth: 1100, margin: '0 auto' }}>
+    <div className="upload-workflow-page" style={{ width: '100%', boxSizing: 'border-box', padding: '2rem', maxWidth: 1100, margin: '0 auto' }}>
       {/* Top Breadcrumb Header Bar matching Image 2 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.88rem', color: '#94a3b8' }}>

@@ -427,6 +427,9 @@ export const FilterDropdown = ({ value, options, onChange, minWidth = 190, place
   );
 };
 
+// In-Memory Client Hash Table Cache for instant O(1) dataset retrieval
+const datasetHashCache = new Map();
+
 const MonthlyCustomerDirectory = () => {
   const { authFetch, user } = useAuth();
   const { showToast, showConfirm } = useToast();
@@ -467,6 +470,11 @@ const MonthlyCustomerDirectory = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [netTypeFilter, setNetTypeFilter] = useState('ALL');
+  const [cardLimit, setCardLimit] = useState(48);
+
+  useEffect(() => {
+    setCardLimit(48);
+  }, [searchTerm, statusFilter, netTypeFilter]);
 
   const loadList = useCallback(async () => {
     try {
@@ -531,6 +539,33 @@ const MonthlyCustomerDirectory = () => {
       });
       return;
     }
+    // Fast-path: In-Memory Client Hash Table lookup [O(1) Instant Access]
+    const cached = datasetHashCache.get(item.id);
+    if (cached) {
+      setSearchTerm('');
+      setStatusFilter('ALL');
+      setNetTypeFilter('ALL');
+      setDetailsIdx(null);
+      setAuditScope(null);
+      setCardLimit(48);
+      setViewing(cached);
+      setViewLoading(false);
+      // Background revalidation (stale-while-revalidate)
+      authFetch('/api/officer/monthly-directory/' + item.id)
+        .then(res => res.ok ? res.json() : null)
+        .then(freshData => {
+          if (freshData) {
+            if (Array.isArray(freshData.records)) {
+              freshData.records = freshData.records.filter(r => !(String(r.status || '').toUpperCase() === 'REJECTED' || r.rejected === true));
+            }
+            datasetHashCache.set(item.id, freshData);
+            setViewing(prev => (prev && prev.id === item.id ? freshData : prev));
+          }
+        })
+        .catch(() => {});
+      return;
+    }
+
     try {
       setViewLoading(true);
       // Fresh working area each time a snapshot is opened.
@@ -539,6 +574,7 @@ const MonthlyCustomerDirectory = () => {
       setNetTypeFilter('ALL');
       setDetailsIdx(null);
       setAuditScope(null);
+      setCardLimit(48);
       setViewing({ ...item, records: [], validationSummary: null });
       const res = await authFetch(`/api/officer/monthly-directory/${item.id}`);
       const data = await res.json();
@@ -554,6 +590,7 @@ const MonthlyCustomerDirectory = () => {
       if (data && Array.isArray(data.records)) {
         data.records = data.records.filter(r => !(String(r.status || '').toUpperCase() === 'REJECTED' || r.rejected === true));
       }
+      datasetHashCache.set(item.id, data);
       setViewing(data);
     } catch (e) {
       showToast({
@@ -652,6 +689,7 @@ const MonthlyCustomerDirectory = () => {
         });
       }
       
+      datasetHashCache.delete(item.id);
       if (viewing && viewing.id === item.id) setViewing(null);
       loadList();
     } catch (e) {
@@ -734,12 +772,14 @@ const MonthlyCustomerDirectory = () => {
         }); 
         return; 
       }
-      // Merge the server's authoritative record + refreshed summary + audit history back into view.
+      // Merge the server's authoritative record + refreshed summary + audit history back into view & Hash Cache.
       setViewing(prev => {
         if (!prev) return prev;
         const records = [...(prev.records || [])];
         records[data.recordIndex] = data.record;
-        return { ...prev, records, validationSummary: data.validationSummary, auditLog: data.auditLog };
+        const updated = { ...prev, records, validationSummary: data.validationSummary, auditLog: data.auditLog };
+        datasetHashCache.set(viewing.id, updated);
+        return updated;
       });
       setEditing({ index: data.recordIndex, record: data.record });
       setEditForm(pickEditable(data.record));
@@ -892,15 +932,34 @@ const MonthlyCustomerDirectory = () => {
     }
   }, [rowExpiry, isRecordComplete]);
 
-  // Live count per filter, shown on the summary cards and beside each dropdown option.
+  // Live count per filter, computed in a SINGLE O(N) pass using a Hash Map
   const filterCounts = useMemo(() => {
     const recs = viewing?.records || [];
     const counts = { ALL: recs.length };
-    STATUS_FILTERS.forEach(f => {
-      if (f.key !== 'ALL') counts[f.key] = recs.filter(r => matchesFilter(r, f.key)).length;
-    });
+    for (let i = 0; i < STATUS_FILTERS.length; i++) {
+      if (STATUS_FILTERS[i].key !== 'ALL') counts[STATUS_FILTERS[i].key] = 0;
+    }
+    for (let i = 0; i < recs.length; i++) {
+      const r = recs[i];
+      for (let j = 0; j < STATUS_FILTERS.length; j++) {
+        const k = STATUS_FILTERS[j].key;
+        if (k !== 'ALL' && matchesFilter(r, k)) {
+          counts[k]++;
+        }
+      }
+    }
     return counts;
   }, [viewing, matchesFilter]);
+
+  // Pre-computed Account Number Hash Table for O(1) Instant Search
+  const accountNoHashIndex = useMemo(() => {
+    const map = new Map();
+    (viewing?.records || []).forEach((row, idx) => {
+      const acc = String(row.accountNo ?? '').trim().toLowerCase();
+      if (acc) map.set(acc, { row, idx });
+    });
+    return map;
+  }, [viewing?.records]);
 
   // Snapshot records shown as Customer Cards: search + filters applied, always sorted by
   // Account No ascending. `idx` keeps each record's position in the stored snapshot array so
@@ -910,9 +969,13 @@ const MonthlyCustomerDirectory = () => {
     const term = searchTerm.trim().toLowerCase();
     let list = recs;
     if (term) {
-      list = list.filter(({ row }) =>
-        [row.accountNo, row.refNo, row.npayName, row.customerName]
-          .some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(term)));
+      if (accountNoHashIndex.has(term)) {
+        list = [accountNoHashIndex.get(term)];
+      } else {
+        list = list.filter(({ row }) =>
+          [row.accountNo, row.refNo, row.npayName, row.customerName]
+            .some(v => v !== null && v !== undefined && String(v).toLowerCase().includes(term)));
+      }
     }
     if (statusFilter !== 'ALL') {
       list = list.filter(({ row }) => matchesFilter(row, statusFilter));
@@ -922,7 +985,7 @@ const MonthlyCustomerDirectory = () => {
     }
     return [...list].sort((a, b) =>
       String(a.row.accountNo ?? '').localeCompare(String(b.row.accountNo ?? ''), undefined, { numeric: true }));
-  }, [viewing, searchTerm, statusFilter, netTypeFilter, matchesFilter]);
+  }, [viewing, searchTerm, statusFilter, netTypeFilter, matchesFilter, accountNoHashIndex]);
 
   // Net Type dropdown options: normalized display names, deduped, alphabetical, with counts.
   const netTypeOptions = useMemo(() => {
@@ -1395,7 +1458,7 @@ const MonthlyCustomerDirectory = () => {
                 <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}>No records match the current search / filters.</div>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(330px, 1fr))', gap: '1rem' }}>
-                  {displayRecords.map(({ row, idx }) => (
+                  {displayRecords.slice(0, cardLimit).map(({ row, idx }) => (
                     <CustomerCard
                       key={idx}
                       row={row}
@@ -1404,6 +1467,29 @@ const MonthlyCustomerDirectory = () => {
                       onHistory={() => setAuditScope(idx)}
                     />
                   ))}
+                  {displayRecords.length > cardLimit && (
+                    <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '1.25rem 0' }}>
+                      <button
+                        onClick={() => setCardLimit(prev => prev + 48)}
+                        style={{
+                          padding: '0.65rem 1.5rem',
+                          background: '#EFF6FF',
+                          color: '#2563EB',
+                          border: '1px solid #BFDBFE',
+                          borderRadius: 10,
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          boxShadow: '0 1px 2px rgba(37,99,235,0.08)'
+                        }}
+                      >
+                        Load More Records (showing {Math.min(cardLimit, displayRecords.length)} of {displayRecords.length})
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

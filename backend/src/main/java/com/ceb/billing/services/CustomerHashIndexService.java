@@ -47,6 +47,7 @@ public class CustomerHashIndexService {
     private ObjectMapper objectMapper;
 
     @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
     private PaymentControlService paymentControlService;
 
     // Primary Hash Index: accountNo (Key) -> Pre-parsed DTO Map (Value) [O(1) Access]

@@ -1858,6 +1858,39 @@ input.pcc-search-input:focus {
   color: var(--text-primary);
 }
 
+.upload-wizard-stepper {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.upload-wizard-step {
+  min-width: 64px;
+}
+
+@media (max-width: 640px) {
+  .upload-workflow-page {
+    padding: 1rem !important;
+  }
+
+  .upload-workflow-page > .card {
+    padding: 1.25rem !important;
+  }
+
+  .upload-wizard-stepper {
+    justify-content: flex-start !important;
+  }
+
+  .upload-wizard-step {
+    flex: 0 0 64px !important;
+  }
+
+  .upload-wizard-connector {
+    flex: 0 0 16px !important;
+  }
+}
+
 .upload-workflow-page [style*="rgba(10, 16, 30, 0.7)"],
 .upload-workflow-page [style*="rgba(15, 23, 42, 0.8)"],
 .upload-workflow-page [style*="rgba(15, 23, 42, 0.2)"],

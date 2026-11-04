@@ -1,9 +1,6 @@
 package com.ceb.billing.services;
 
-import com.ceb.billing.entities.BillingRecord;
-import com.ceb.billing.entities.Customer;
-import com.ceb.billing.entities.UploadHistory;
-import com.ceb.billing.entities.BillingUploadStaging;
+import com.ceb.billing.entities.*;
 import com.ceb.billing.repositories.BillingRecordRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.UploadHistoryRepository;
@@ -62,6 +59,10 @@ public class StagingMigrationService {
     @Autowired
     private CustomerDirectorySyncService customerDirectorySyncService;
 
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private CustomerHashIndexService customerHashIndexService;
+
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
@@ -88,6 +89,46 @@ public class StagingMigrationService {
         int skippedCount = 0;
         int successfulRows = 0;
         Set<String> impactedAccounts = new HashSet<>();
+
+        // Optimization with Hashing:
+        // Pre-load reference tables into in-memory HashMaps for O(1) resolution
+        Map<String, CostCode> costCodeHash = new HashMap<>();
+        costCodeRepository.findAll().forEach(cc -> {
+            if (cc.getCostCode() != null) costCodeHash.put(cc.getCostCode().trim(), cc);
+        });
+
+        Map<String, NetType> netTypeHash = new HashMap<>();
+        netTypeRepository.findAll().forEach(nt -> {
+            if (nt.getName() != null) netTypeHash.put(nt.getName().trim().toUpperCase(), nt);
+        });
+
+        Map<String, ExpenseCode> expenseCodeHash = new HashMap<>();
+        expenseCodeRepository.findAll().forEach(ec -> {
+            if (ec.getExpCode() != null) {
+                expenseCodeHash.put(ec.getExpCode().trim().toUpperCase(), ec);
+                expenseCodeHash.put(String.valueOf(ec.getId()), ec);
+            }
+        });
+
+        // Pre-load all candidate account numbers in a single batch query into a HashMap
+        Set<String> allBatchAccounts = new HashSet<>();
+        for (BillingUploadStaging r : stagingRecords) {
+            try {
+                Map<String, Object> d = objectMapper.readValue(r.getRawJson(), new TypeReference<Map<String, Object>>() {});
+                String acc = (String) d.get("accountNo");
+                if (acc != null && !acc.trim().isEmpty()) {
+                    allBatchAccounts.add(acc.trim());
+                }
+            } catch (Exception ignored) {}
+        }
+
+        Map<String, Customer> customerHash = new HashMap<>();
+        if (!allBatchAccounts.isEmpty()) {
+            customerRepository.findAllById(allBatchAccounts).forEach(c -> customerHash.put(c.getAccountNo(), c));
+        }
+
+        Map<String, Customer> customersToSave = new HashMap<>();
+        List<BillingRecord> billingRecordsToSave = new ArrayList<>();
 
         for (BillingUploadStaging record : stagingRecords) {
             String status = record.getValidationStatus();
@@ -135,30 +176,22 @@ public class StagingMigrationService {
             }
             impactedAccounts.add(accountNo);
 
-            // ── Upsert Customer ───────────────────────────────────────────
-            Optional<Customer> optCustomer = customerRepository.findById(accountNo);
-            Customer customer;
-            if (optCustomer.isEmpty()) {
+            // ── Upsert Customer via O(1) Hash Map lookups ───────────────────
+            Customer customer = customerHash.get(accountNo);
+            if (customer == null) {
                 customer = new Customer(accountNo, customerName, customerAddress, mobileNo,
                         agreementDate, panelCapacity, bankCode, branchCode, bankAccountNo, solarType);
                 customer.setCreatedByUploadId(batchId); // Tag creation upload reference
 
                 if (isNotBlank(costCode)) {
-                    customer.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                    customer.setCostCode(costCodeHash.get(costCode.trim()));
                 }
                 if (isNotBlank(solarType)) {
-                    customer.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                    customer.setNetType(netTypeHash.get(solarType.trim().toUpperCase()));
                 }
                 if (isNotBlank(billingMode)) {
-                    String cleanEc = billingMode.trim();
-                    customer.setExpenseCode(expenseCodeRepository.findByExpCode(cleanEc)
-                        .orElseGet(() -> {
-                            try {
-                                return expenseCodeRepository.findById(Long.parseLong(cleanEc)).orElse(null);
-                            } catch (Exception ignored) {
-                                return null;
-                            }
-                        }));
+                    String cleanEc = billingMode.trim().toUpperCase();
+                    customer.setExpenseCode(expenseCodeHash.get(cleanEc));
                 }
                 if (isNotBlank(refNo)) {
                     customer.setRefNo(refNo);
@@ -170,10 +203,10 @@ public class StagingMigrationService {
                     customer.setTariffType(tariffType);
                 }
 
-                customerRepository.save(Objects.requireNonNull(customer));
+                customersToSave.put(accountNo, customer);
+                customerHash.put(accountNo, customer);
                 newCustomers++;
             } else {
-                customer = optCustomer.get();
                 // Only fill in fields that are currently null/empty — never overwrite existing data
                 if (isNotBlank(customerName) && isBlank(customer.getCustomerName()))
                     customer.setCustomerName(customerName);
@@ -195,21 +228,14 @@ public class StagingMigrationService {
                     customer.setSolarType(solarType);
 
                 if (isNotBlank(costCode) && customer.getCostCode() == null) {
-                    customer.setCostCode(costCodeRepository.findByCostCode(costCode.trim()).orElse(null));
+                    customer.setCostCode(costCodeHash.get(costCode.trim()));
                 }
                 if (isNotBlank(solarType) && customer.getNetType() == null) {
-                    customer.setNetType(netTypeRepository.findByName(solarType.trim()).orElse(null));
+                    customer.setNetType(netTypeHash.get(solarType.trim().toUpperCase()));
                 }
                 if (isNotBlank(billingMode) && customer.getExpenseCode() == null) {
-                    String cleanEc = billingMode.trim();
-                    customer.setExpenseCode(expenseCodeRepository.findByExpCode(cleanEc)
-                        .orElseGet(() -> {
-                            try {
-                                return expenseCodeRepository.findById(Long.parseLong(cleanEc)).orElse(null);
-                            } catch (Exception ignored) {
-                                return null;
-                            }
-                        }));
+                    String cleanEc = billingMode.trim().toUpperCase();
+                    customer.setExpenseCode(expenseCodeHash.get(cleanEc));
                 }
                 if (isNotBlank(refNo) && isBlank(customer.getRefNo())) {
                     customer.setRefNo(refNo);
@@ -221,7 +247,7 @@ public class StagingMigrationService {
                     customer.setTariffType(tariffType);
                 }
 
-                customerRepository.save(Objects.requireNonNull(customer));
+                customersToSave.put(accountNo, customer);
             }
 
             // ── CUSTOMER_PROFILE rows: no billing record to create ────────
@@ -303,9 +329,20 @@ public class StagingMigrationService {
             billingRecord.setPrevReadingDate(fromDate);
             billingRecord.setCurrReadingDate(toDate);
 
-            billingRecordRepository.save(Objects.requireNonNull(billingRecord));
+            billingRecordsToSave.add(billingRecord);
             billingInserted++;
             successfulRows++;
+        }
+
+        // Batch save accumulated customers and billing records
+        if (!customersToSave.isEmpty()) {
+            customerRepository.saveAll(customersToSave.values());
+            if (customerHashIndexService != null) {
+                customersToSave.values().forEach(customerHashIndexService::putOrUpdate);
+            }
+        }
+        if (!billingRecordsToSave.isEmpty()) {
+            billingRecordRepository.saveAll(billingRecordsToSave);
         }
 
         // ── Determine final status ────────────────────────────────────────

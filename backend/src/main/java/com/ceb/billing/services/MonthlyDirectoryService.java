@@ -4,6 +4,12 @@ import com.ceb.billing.entities.BillingUploadStaging;
 import com.ceb.billing.entities.Customer;
 import com.ceb.billing.entities.ImportSession;
 import com.ceb.billing.entities.MonthlyDirectorySnapshot;
+import com.ceb.billing.entities.CostCode;
+import com.ceb.billing.entities.NetType;
+import com.ceb.billing.entities.ExpenseCode;
+import com.ceb.billing.repositories.CostCodeRepository;
+import com.ceb.billing.repositories.NetTypeRepository;
+import com.ceb.billing.repositories.ExpenseCodeRepository;
 import com.ceb.billing.repositories.BillingUploadStagingRepository;
 import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.ImportSessionRepository;
@@ -60,6 +66,21 @@ public class MonthlyDirectoryService {
 
     @Autowired
     private UploadHistoryRepository uploadHistoryRepository;
+
+    @Autowired(required = false)
+    private MonthlyDirectoryHashService monthlyDirectoryHashService;
+
+    @Autowired(required = false)
+    private CustomerHashIndexService customerHashIndexService;
+
+    @Autowired(required = false)
+    private CostCodeRepository costCodeRepository;
+
+    @Autowired(required = false)
+    private NetTypeRepository netTypeRepository;
+
+    @Autowired(required = false)
+    private ExpenseCodeRepository expenseCodeRepository;
 
     private final ObjectMapper mapper = new ObjectMapper();
 
@@ -196,6 +217,9 @@ public class MonthlyDirectoryService {
         }
 
         snap = snapshotRepository.save(snap);
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.putSnapshot(snap, finalData, computeSummary(finalData), parseJsonArray(snap.getAuditLogJson()));
+        }
         // If this snapshot is immediately approved (Admin save), push its records into the
         // permanent Customer Directory right away so both directories stay in sync.
         if ("APPROVED".equals(snap.getStatus())) {
@@ -221,6 +245,9 @@ public class MonthlyDirectoryService {
         s.setApprovedBy(adminUsername);
         s.setApprovalDate(java.time.LocalDateTime.now());
         s = snapshotRepository.save(s);
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.updateMetadata(s.getId(), s.getDatasetName(), s.getStatus(), s.getApprovedBy(), s.getApprovalDate());
+        }
 
         try {
             customerDirectorySyncService.syncSnapshot(s);
@@ -351,6 +378,9 @@ public class MonthlyDirectoryService {
 
     /** Returns one snapshot including the parsed final dataset and validation summary. */
     public Map<String, Object> getSnapshot(Long id) throws Exception {
+        if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isCached(id)) {
+            return monthlyDirectoryHashService.getSnapshot(id);
+        }
         MonthlyDirectorySnapshot s = snapshotRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
         Map<String, Object> out = toMetadata(s);
@@ -385,7 +415,12 @@ public class MonthlyDirectoryService {
         out.put("validationSummary", summary);
         out.put("records", records);
         out.put("totalRecords", records.size());
-        out.put("auditLog", parseJsonArray(s.getAuditLogJson()));
+        List<Map<String, Object>> auditLog = parseJsonArray(s.getAuditLogJson());
+        out.put("auditLog", auditLog);
+
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.putSnapshot(s, records, summary, auditLog);
+        }
         return out;
     }
 
@@ -424,11 +459,25 @@ public class MonthlyDirectoryService {
             }
         }
 
-        // 3. Try fetching from Customer table by division
+        // 3. Try fetching from Customer in-memory Hash Index first (O(1) memory lookup)
         try {
+            String targetDiv = canonicalDivision(s.getDivision());
+            if (customerHashIndexService != null && customerHashIndexService.isReady()) {
+                for (Map<String, Object> dto : customerHashIndexService.getAllCachedDtos()) {
+                    String div = String.valueOf(dto.get("division"));
+                    String branch = String.valueOf(dto.get("branchCode"));
+                    if (targetDiv == null || targetDiv.isEmpty() || targetDiv.equalsIgnoreCase(div) || targetDiv.equalsIgnoreCase(branch)) {
+                        Map<String, Object> map = new LinkedHashMap<>(dto);
+                        map.put("npayName", dto.get("customerName"));
+                        map.put("status", dto.get("validationStatus") != null ? dto.get("validationStatus") : "APPROVED");
+                        records.add(map);
+                    }
+                }
+                if (!records.isEmpty()) return records;
+            }
             List<Customer> customers = customerRepository.findAll();
             if (customers != null && !customers.isEmpty()) {
-                String targetDiv = canonicalDivision(s.getDivision());
+                targetDiv = canonicalDivision(s.getDivision());
                 for (Customer c : customers) {
                     if (targetDiv == null || targetDiv.isEmpty() || targetDiv.equalsIgnoreCase(c.getDivision()) || targetDiv.equalsIgnoreCase(c.getBranchCode())) {
                         Map<String, Object> map = new LinkedHashMap<>();
@@ -536,7 +585,12 @@ public class MonthlyDirectoryService {
         out.put("recordIndex", recordIndex);
         out.put("record", record);
         out.put("validationSummary", computeSummary(records));
-        out.put("auditLog", parseJsonArray(s.getAuditLogJson()));
+        List<Map<String, Object>> auditLog = parseJsonArray(s.getAuditLogJson());
+        out.put("auditLog", auditLog);
+
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.updateRecord(id, recordIndex, record, (Map<String, Object>) out.get("validationSummary"), auditLog);
+        }
         return out;
     }
 
@@ -550,6 +604,9 @@ public class MonthlyDirectoryService {
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
         s.setDatasetName(newName.trim());
         s = snapshotRepository.save(s);
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.updateMetadata(s.getId(), s.getDatasetName(), s.getStatus(), s.getApprovedBy(), s.getApprovalDate());
+        }
         return toMetadata(s);
     }
 
@@ -560,6 +617,9 @@ public class MonthlyDirectoryService {
             throw new IllegalArgumentException("Directory snapshot not found: " + id);
         }
         snapshotRepository.deleteById(id);
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.evict(id);
+        }
     }
 
     @Transactional
@@ -567,61 +627,177 @@ public class MonthlyDirectoryService {
         MonthlyDirectorySnapshot snap = snapshotRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
 
-        // 1. Parse JSON to get all customer account numbers
-        List<Map<String, Object>> records = parseJsonArray(snap.getFinalDataJson());
+        // 1. Get all customer account numbers (O(1) from in-memory hash cache if available, fallback to JSON)
         Set<String> accountNumbers = new HashSet<>();
-        for (Map<String, Object> r : records) {
-            String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : null;
-            if (acc != null && !acc.isEmpty()) {
-                accountNumbers.add(acc);
+        Map<String, Object> cachedDto = monthlyDirectoryHashService != null ? monthlyDirectoryHashService.getSnapshot(id) : null;
+        if (cachedDto != null && cachedDto.get("records") instanceof List) {
+            List<Map<String, Object>> cachedRecs = (List<Map<String, Object>>) cachedDto.get("records");
+            for (Map<String, Object> r : cachedRecs) {
+                String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : null;
+                if (acc != null && !acc.isEmpty()) accountNumbers.add(acc);
+            }
+        } else {
+            List<Map<String, Object>> records = parseJsonArray(snap.getFinalDataJson());
+            for (Map<String, Object> r : records) {
+                String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : null;
+                if (acc != null && !acc.isEmpty()) accountNumbers.add(acc);
             }
         }
 
-        // 2. Find and delete associated BillingRecords and UploadHistory
+        // 2. Find and delete associated BillingRecords and UploadHistory (bulk delete)
         UploadHistory history = findUploadHistoryForSnapshot(snap);
         if (history != null) {
             billingRecordRepository.deleteByUploadHistoryId(history.getId());
             uploadHistoryRepository.delete(history);
         }
 
-        // 3. Delete the snapshot
+        // 3. Delete the snapshot and evict from in-memory hash cache
         snapshotRepository.delete(snap);
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.evict(id);
+        }
 
-        // 4. Update or delete Customer profiles in Customer Directory
-        for (String accNo : accountNumbers) {
-            // Find all OTHER approved snapshots that contain this customer
-            List<MonthlyDirectorySnapshot> otherApprovedSnaps = snapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
-            MonthlyDirectorySnapshot latestOtherSnap = null;
-            Map<String, Object> latestOtherRecord = null;
+        if (accountNumbers.isEmpty()) {
+            com.ceb.billing.controllers.DashboardController.invalidateCache();
+            return;
+        }
 
-            outerLoop:
-            for (MonthlyDirectorySnapshot otherSnap : otherApprovedSnaps) {
-                if (otherSnap.getId().equals(id)) continue;
-                List<Map<String, Object>> otherRecords = parseJsonArray(otherSnap.getFinalDataJson());
-                for (Map<String, Object> or : otherRecords) {
-                    String oAcc = or.get("accountNo") != null ? String.valueOf(or.get("accountNo")).trim() : null;
-                    if (accNo.equals(oAcc)) {
-                        latestOtherSnap = otherSnap;
-                        latestOtherRecord = or;
-                        break outerLoop;
+        // 4. Update or delete Customer profiles in Customer Directory using HASHING:
+        // Pre-build a Fallback Map across other approved snapshots in a SINGLE pass using O(1) in-memory hash maps
+        List<MonthlyDirectorySnapshot> otherApprovedSnaps = snapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
+        Map<String, Map<String, Object>> fallbackRecords = new HashMap<>();
+        Map<String, String> fallbackDivisions = new HashMap<>();
+
+        for (MonthlyDirectorySnapshot otherSnap : otherApprovedSnaps) {
+            if (otherSnap.getId().equals(id)) continue;
+            Long otherId = otherSnap.getId();
+            String otherDivision = otherSnap.getDivision();
+
+            Map<String, Map<String, Object>> otherAccMap = monthlyDirectoryHashService != null
+                    ? monthlyDirectoryHashService.getRecordsMap(otherId) : null;
+
+            if (otherAccMap != null) {
+                for (String accNo : accountNumbers) {
+                    if (!fallbackRecords.containsKey(accNo) && otherAccMap.containsKey(accNo)) {
+                        fallbackRecords.put(accNo, otherAccMap.get(accNo));
+                        fallbackDivisions.put(accNo, otherDivision);
+                    }
+                }
+            } else {
+                List<Map<String, Object>> otherRecs = parseJsonArray(otherSnap.getFinalDataJson());
+                for (Map<String, Object> r : otherRecs) {
+                    String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : "";
+                    if (accountNumbers.contains(acc) && !fallbackRecords.containsKey(acc)) {
+                        fallbackRecords.put(acc, r);
+                        fallbackDivisions.put(acc, otherDivision);
                     }
                 }
             }
 
-            if (latestOtherRecord != null) {
-                customerDirectorySyncService.upsertCustomer(latestOtherRecord, latestOtherSnap.getDivision());
-            } else {
-                long remainingBills = billingRecordRepository.countByCustomerAccountNo(accNo);
-                if (remainingBills == 0) {
-                    customerRepository.findById(accNo).ifPresent(customerRepository::delete);
-                } else {
-                    customerRepository.findById(accNo).ifPresent(c -> {
-                        c.setDirectoryJson(null);
-                        customerRepository.save(c);
-                    });
+            if (fallbackRecords.size() == accountNumbers.size()) {
+                break; // All candidate customers found their latest historical fallback!
+            }
+        }
+
+        // Pre-load reference tables once into HashMaps for O(1) attribute lookup
+        Map<String, NetType> netTypeHash = new HashMap<>();
+        if (netTypeRepository != null) {
+            try {
+                for (NetType nt : netTypeRepository.findAll()) {
+                    if (nt.getName() != null) netTypeHash.put(nt.getName().trim().toLowerCase(), nt);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        Map<String, CostCode> costCodeHash = new HashMap<>();
+        if (costCodeRepository != null) {
+            try {
+                for (CostCode cc : costCodeRepository.findAll()) {
+                    if (cc.getCostCode() != null) costCodeHash.put(cc.getCostCode().trim().toLowerCase(), cc);
+                    costCodeHash.put(String.valueOf(cc.getId()), cc);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        Map<String, ExpenseCode> expenseCodeHash = new HashMap<>();
+        if (expenseCodeRepository != null) {
+            try {
+                for (ExpenseCode ec : expenseCodeRepository.findAll()) {
+                    if (ec.getExpCode() != null) expenseCodeHash.put(ec.getExpCode().trim().toLowerCase(), ec);
+                    if (ec.getExp() != null) expenseCodeHash.put(ec.getExp().trim().toLowerCase(), ec);
+                    expenseCodeHash.put(String.valueOf(ec.getId()), ec);
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // Pre-load all candidate customer entities in ONE batch query
+        Map<String, Customer> customerHash = new HashMap<>();
+        customerRepository.findAllById(accountNumbers).forEach(c -> {
+            if (c.getAccountNo() != null) customerHash.put(c.getAccountNo().trim(), c);
+        });
+
+        // Pre-calculate remaining billing records in ONE query for accounts without fallback
+        Set<String> noFallbackAccounts = new HashSet<>(accountNumbers);
+        noFallbackAccounts.removeAll(fallbackRecords.keySet());
+
+        Map<String, Long> remainingBillsHash = new HashMap<>();
+        if (!noFallbackAccounts.isEmpty()) {
+            try {
+                List<Object[]> counts = billingRecordRepository.countByCustomerAccountNos(noFallbackAccounts);
+                for (Object[] row : counts) {
+                    if (row != null && row.length >= 2 && row[0] != null && row[1] != null) {
+                        remainingBillsHash.put(String.valueOf(row[0]).trim(), ((Number) row[1]).longValue());
+                    }
+                }
+            } catch (Exception e) {
+                for (String noFallAcc : noFallbackAccounts) {
+                    remainingBillsHash.put(noFallAcc, billingRecordRepository.countByCustomerAccountNo(noFallAcc));
                 }
             }
         }
+
+        List<Customer> customersToSave = new ArrayList<>();
+        List<Customer> customersToDelete = new ArrayList<>();
+
+        for (String accNo : accountNumbers) {
+            Map<String, Object> fallbackRecord = fallbackRecords.get(accNo);
+            if (fallbackRecord != null) {
+                Customer c = customerHash.get(accNo);
+                if (c == null) {
+                    c = new Customer();
+                    c.setAccountNo(accNo);
+                    customerHash.put(accNo, c);
+                }
+                customerDirectorySyncService.populateCustomerFields(c, fallbackRecord, fallbackDivisions.get(accNo),
+                        netTypeHash, costCodeHash, expenseCodeHash);
+                customersToSave.add(c);
+            } else {
+                long remainingBills = remainingBillsHash.getOrDefault(accNo, 0L);
+                Customer c = customerHash.get(accNo);
+                if (c != null) {
+                    if (remainingBills == 0) {
+                        customersToDelete.add(c);
+                    } else {
+                        c.setDirectoryJson(null);
+                        customersToSave.add(c);
+                    }
+                }
+            }
+        }
+
+        if (!customersToSave.isEmpty()) {
+            customerRepository.saveAll(customersToSave);
+        }
+        if (!customersToDelete.isEmpty()) {
+            customerRepository.deleteAll(customersToDelete);
+        }
+
+        if (customerHashIndexService != null) {
+            customersToDelete.forEach(c -> customerHashIndexService.evict(c.getAccountNo()));
+            customersToSave.forEach(customerHashIndexService::putOrUpdate);
+        }
+
+        com.ceb.billing.controllers.DashboardController.invalidateCache();
     }
 
     private UploadHistory findUploadHistoryForSnapshot(MonthlyDirectorySnapshot snap) {
@@ -724,6 +900,10 @@ public class MonthlyDirectoryService {
         m.put("status", s.getStatus());
         m.put("sessionId", s.getSessionId());
         return m;
+    }
+
+    public Map<String, Object> computeSummaryStats(List<Map<String, Object>> rows) {
+        return computeSummary(rows);
     }
 
     private Map<String, Object> computeSummary(List<Map<String, Object>> rows) {

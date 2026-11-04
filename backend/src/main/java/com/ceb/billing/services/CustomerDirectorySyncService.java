@@ -1,6 +1,9 @@
 package com.ceb.billing.services;
 
 import com.ceb.billing.entities.Customer;
+import com.ceb.billing.entities.CostCode;
+import com.ceb.billing.entities.NetType;
+import com.ceb.billing.entities.ExpenseCode;
 import com.ceb.billing.entities.MonthlyDirectorySnapshot;
 import com.ceb.billing.repositories.CostCodeRepository;
 import com.ceb.billing.repositories.CustomerRepository;
@@ -13,22 +16,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.logging.Logger;
 
 /**
  * Keeps the permanent {@code customers} directory in sync with the Monthly Customer Directory.
  *
- * Whenever a monthly snapshot is APPROVED (or an approved record is edited), every record it
- * contains is upserted into the {@link Customer} table: the customer's master fields are refreshed
- * from the approved data, the Eastern Province {@code division} is stamped, and the complete merged
- * record (Master / CEB Assist / NGEN / NPAY + validation) is stored as JSON so the Customer 360
- * view can show the exact same detail as the Monthly Directory. The Monthly Directory is the source
- * of truth, so non-blank approved values overwrite existing customer fields; blank values never
- * erase existing data. This service only writes to the customer directory — it never modifies any
- * snapshot, validation or approval logic.
+ * Uses in-memory Hash Maps and batching to achieve high-speed O(1) lookups and eliminate
+ * thousands of redundant N+1 SQL queries during snapshot approvals.
  */
 @Service
 public class CustomerDirectorySyncService {
@@ -53,7 +48,10 @@ public class CustomerDirectorySyncService {
     @Autowired(required = false)
     private CustomerHashIndexService customerHashIndexService;
 
-    /** Syncs every record of an approved snapshot into the Customer Directory. */
+    /**
+     * High-speed sync of every record in an approved snapshot into the Customer Directory
+     * using in-memory Hash Maps and batch persistence.
+     */
     @Transactional
     public int syncSnapshot(MonthlyDirectorySnapshot snap) {
         if (snap == null || snap.getFinalDataJson() == null) return 0;
@@ -65,9 +63,60 @@ public class CustomerDirectorySyncService {
             log.warning("CustomerDirectorySync: could not parse snapshot " + snap.getId() + ": " + e.getMessage());
             return 0;
         }
+        if (records == null || records.isEmpty()) return 0;
+
         String division = snap.getDivision();
         String billingMonth = snap.getBillingMonth();
+
+        // 1. Pre-load reference lookup tables into Hash Maps once [O(1) Access]
+        Map<String, NetType> netTypeHash = new HashMap<>();
+        try {
+            for (NetType nt : netTypeRepository.findAll()) {
+                if (nt.getName() != null) netTypeHash.put(nt.getName().trim().toLowerCase(), nt);
+            }
+        } catch (Exception ignored) {}
+
+        Map<String, CostCode> costCodeHash = new HashMap<>();
+        try {
+            for (CostCode cc : costCodeRepository.findAll()) {
+                if (cc.getCostCode() != null) costCodeHash.put(cc.getCostCode().trim().toLowerCase(), cc);
+                costCodeHash.put(String.valueOf(cc.getId()), cc);
+            }
+        } catch (Exception ignored) {}
+
+        Map<String, ExpenseCode> expenseCodeHash = new HashMap<>();
+        try {
+            for (ExpenseCode ec : expenseCodeRepository.findAll()) {
+                if (ec.getExpCode() != null) expenseCodeHash.put(ec.getExpCode().trim().toLowerCase(), ec);
+                if (ec.getExp() != null) expenseCodeHash.put(ec.getExp().trim().toLowerCase(), ec);
+                expenseCodeHash.put(String.valueOf(ec.getId()), ec);
+            }
+        } catch (Exception ignored) {}
+
+        // 2. Pre-load existing customers in ONE batch query into an Account Hash Map [O(1) Access]
+        Set<String> accountNos = new HashSet<>();
+        for (Map<String, Object> record : records) {
+            String acc = str(record, "accountNo");
+            if (acc != null && !acc.isEmpty()) {
+                accountNos.add(acc);
+            }
+        }
+
+        Map<String, Customer> customerHash = new HashMap<>();
+        if (!accountNos.isEmpty()) {
+            try {
+                for (Customer c : customerRepository.findAllById(accountNos)) {
+                    if (c.getAccountNo() != null) {
+                        customerHash.put(c.getAccountNo().trim(), c);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // 3. Process records with O(1) lookups
+        List<Customer> toSave = new ArrayList<>(records.size());
         int synced = 0;
+
         for (Map<String, Object> record : records) {
             try {
                 if (billingMonth != null) {
@@ -76,14 +125,34 @@ public class CustomerDirectorySyncService {
                 if (division != null) {
                     record.put("division", division);
                 }
-                if (upsertCustomer(record, division)) synced++;
+
+                String accountNo = str(record, "accountNo");
+                if (accountNo == null) continue;
+
+                Customer c = customerHash.get(accountNo);
+                if (c == null) {
+                    c = new Customer();
+                    c.setAccountNo(accountNo);
+                    customerHash.put(accountNo, c);
+                }
+
+                populateCustomerFields(c, record, division, netTypeHash, costCodeHash, expenseCodeHash);
+                toSave.add(c);
+                synced++;
             } catch (Exception e) {
-                log.warning("CustomerDirectorySync: failed to sync a record from snapshot "
-                        + snap.getId() + ": " + e.getMessage());
+                log.warning("CustomerDirectorySync: failed to sync record: " + e.getMessage());
             }
         }
+
+        // 4. Single Batch Save
+        if (!toSave.isEmpty()) {
+            customerRepository.saveAll(toSave);
+        }
+
         log.info("CustomerDirectorySync: synced " + synced + " customer(s) from snapshot " + snap.getId()
-                + " (division=" + division + ").");
+                + " (division=" + division + ") in high-performance batch mode.");
+
+        // 5. In-Memory Hash Index Warmup / Rebuild
         if (customerHashIndexService != null && synced > 0) {
             customerHashIndexService.rebuildIndex();
         }
@@ -102,6 +171,19 @@ public class CustomerDirectorySyncService {
             c.setAccountNo(accountNo);
         }
 
+        populateCustomerFields(c, record, division, null, null, null);
+        customerRepository.save(c);
+        if (customerHashIndexService != null) {
+            customerHashIndexService.putOrUpdate(c);
+        }
+        return true;
+    }
+
+    public void populateCustomerFields(Customer c, Map<String, Object> record, String division,
+                                        Map<String, NetType> netTypeHash,
+                                        Map<String, CostCode> costCodeHash,
+                                        Map<String, ExpenseCode> expenseCodeHash) {
+        String accountNo = str(record, "accountNo");
         String name = str(record, "masterName", "customerName", "npayName", "ngenName");
         if (name != null) c.setCustomerName(name);
         else if (isBlank(c.getCustomerName())) c.setCustomerName(accountNo); // NOT NULL guard
@@ -117,7 +199,12 @@ public class CustomerDirectorySyncService {
         String solarType = str(record, "masterNetType", "ngenNetType", "npayNetType", "solarType");
         if (solarType != null) {
             c.setSolarType(solarType);
-            netTypeRepository.findByName(solarType.trim()).ifPresent(c::setNetType);
+            String cleanSt = solarType.trim().toLowerCase();
+            if (netTypeHash != null && netTypeHash.containsKey(cleanSt)) {
+                c.setNetType(netTypeHash.get(cleanSt));
+            } else {
+                netTypeRepository.findByName(solarType.trim()).ifPresent(c::setNetType);
+            }
         }
 
         Double unitRate = dbl(record, "masterUnitRate", "unitRate", "ngenUnitRate");
@@ -132,11 +219,16 @@ public class CustomerDirectorySyncService {
         String costCode = str(record, "costCode", "masterCostCode", "cost_code");
         if (costCode != null) {
             final String ccTrim = costCode.trim();
-            costCodeRepository.findByCostCode(ccTrim).ifPresentOrElse(c::setCostCode, () -> {
-                try {
-                    costCodeRepository.findById(Long.parseLong(ccTrim)).ifPresent(c::setCostCode);
-                } catch (Exception ignored) {}
-            });
+            final String ccLower = ccTrim.toLowerCase();
+            if (costCodeHash != null && costCodeHash.containsKey(ccLower)) {
+                c.setCostCode(costCodeHash.get(ccLower));
+            } else {
+                costCodeRepository.findByCostCode(ccTrim).ifPresentOrElse(c::setCostCode, () -> {
+                    try {
+                        costCodeRepository.findById(Long.parseLong(ccTrim)).ifPresent(c::setCostCode);
+                    } catch (Exception ignored) {}
+                });
+            }
         }
 
         String expCode = str(record, "billingMode", "expenseCode", "lCode", "masterBillingMode", "masterExpenseCode", "masterLCode", "expCode");
@@ -145,19 +237,23 @@ public class CustomerDirectorySyncService {
         }
         if (expCode != null) {
             final String cleanEc = expCode.trim();
-            expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(c::setExpenseCode, () -> {
-                try {
-                    expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(c::setExpenseCode);
-                } catch (Exception ignored) {
-                    expenseCodeRepository.findAll().stream()
-                        .filter(e -> cleanEc.equalsIgnoreCase(e.getExp()) || cleanEc.equalsIgnoreCase(e.getExpCode()))
-                        .findFirst()
-                        .ifPresent(c::setExpenseCode);
-                }
-            });
+            final String cleanEcLower = cleanEc.toLowerCase();
+            if (expenseCodeHash != null && expenseCodeHash.containsKey(cleanEcLower)) {
+                c.setExpenseCode(expenseCodeHash.get(cleanEcLower));
+            } else {
+                expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(c::setExpenseCode, () -> {
+                    try {
+                        expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(c::setExpenseCode);
+                    } catch (Exception ignored) {
+                        expenseCodeRepository.findAll().stream()
+                            .filter(e -> cleanEc.equalsIgnoreCase(e.getExp()) || cleanEc.equalsIgnoreCase(e.getExpCode()))
+                            .findFirst()
+                            .ifPresent(c::setExpenseCode);
+                    }
+                });
+            }
         }
 
-        // Stamp the division this billing belongs to (folds onto branch code when absent).
         String divTag = division;
         if (divTag == null || divTag.trim().isEmpty()) {
             divTag = str(record, "division", "location");
@@ -166,7 +262,6 @@ public class CustomerDirectorySyncService {
             c.setDivision(divTag.trim());
         }
 
-        // Preserve the approved validation state so the directory reflects the snapshot.
         String status = str(record, "status");
         if ("ERROR".equalsIgnoreCase(status)) {
             c.setValidationStatus("ERROR");
@@ -175,20 +270,15 @@ public class CustomerDirectorySyncService {
         }
         c.setValidationErrors(joinIssues(record));
 
-        // Store the complete merged record so the Customer 360 view mirrors the Monthly Directory.
         try {
             c.setDirectoryJson(objectMapper.writeValueAsString(record));
         } catch (Exception e) {
             log.warning("CustomerDirectorySync: could not serialise directory record for " + accountNo);
         }
-
-        customerRepository.save(c);
-        return true;
     }
 
     // ── field helpers ─────────────────────────────────────────────────────────
 
-    /** First non-blank value across the given keys, unwrapping {value:...} cells and dropping "—". */
     private String str(Map<String, Object> r, String... keys) {
         if (r == null) return null;
         for (String k : keys) {
@@ -216,36 +306,35 @@ public class CustomerDirectorySyncService {
         String s = str(r, keys);
         if (s == null) return null;
         try {
-            return LocalDate.parse(s.trim());
-        } catch (Exception e) {
+            return LocalDate.parse(s);
+        } catch (Exception ignored) {
             return null;
         }
     }
 
-    /** Joins any validation error/warning strings carried on the record for the customer flag. */
-    @SuppressWarnings("unchecked")
-    private String joinIssues(Map<String, Object> r) {
-        StringBuilder sb = new StringBuilder();
-        for (String key : new String[]{"errors", "warnings"}) {
-            Object v = r.get(key);
-            if (v instanceof List) {
-                for (Object item : (List<Object>) v) {
-                    if (item == null) continue;
-                    String s = String.valueOf(item).trim();
-                    if (s.isEmpty()) continue;
-                    if (sb.length() > 0) sb.append("; ");
-                    sb.append(s);
-                }
-            }
-        }
-        return sb.length() > 0 ? sb.toString() : null;
-    }
-
-    private void setIfPresent(String value, java.util.function.Consumer<String> setter) {
-        if (value != null) setter.accept(value);
-    }
-
     private boolean isBlank(String s) {
         return s == null || s.trim().isEmpty();
+    }
+
+    private void setIfPresent(String val, java.util.function.Consumer<String> setter) {
+        if (val != null) setter.accept(val);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String joinIssues(Map<String, Object> record) {
+        List<String> issues = new ArrayList<>();
+        Object errs = record.get("errors");
+        if (errs instanceof List) {
+            for (Object e : (List<?>) errs) {
+                if (e != null) issues.add("ERROR: " + e);
+            }
+        }
+        Object warns = record.get("warnings");
+        if (warns instanceof List) {
+            for (Object w : (List<?>) warns) {
+                if (w != null) issues.add("WARN: " + w);
+            }
+        }
+        return issues.isEmpty() ? null : String.join("; ", issues);
     }
 }

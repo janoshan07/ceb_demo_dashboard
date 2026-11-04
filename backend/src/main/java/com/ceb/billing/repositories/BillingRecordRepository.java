@@ -2,7 +2,9 @@ package com.ceb.billing.repositories;
 
 import com.ceb.billing.entities.BillingRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import java.util.Collection;
 import org.springframework.stereotype.Repository;
 
 import jakarta.transaction.Transactional;
@@ -34,7 +36,9 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
     Double sumTotalExports();
 
     @Transactional
-    void deleteByUploadHistoryId(Long uploadHistoryId);
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM BillingRecord b WHERE b.uploadHistoryId = :uploadHistoryId")
+    void deleteByUploadHistoryId(@org.springframework.data.repository.query.Param("uploadHistoryId") Long uploadHistoryId);
 
     // Top 5 highest exporters
     List<BillingRecord> findTop5ByOrderByExportUnitsDesc();
@@ -85,6 +89,9 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
     List<Object[]> getBranchWiseAnalytics();
 
     long countByCustomerAccountNo(String accountNo);
+
+    @Query("SELECT b.customer.accountNo, COUNT(b) FROM BillingRecord b WHERE b.customer.accountNo IN ?1 GROUP BY b.customer.accountNo")
+    List<Object[]> countByCustomerAccountNos(Collection<String> accountNos);
 
     @Query("SELECT MAX(b.toDate) FROM BillingRecord b")
     LocalDate findMaxToDate();

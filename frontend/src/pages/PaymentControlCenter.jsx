@@ -2324,18 +2324,17 @@ const PaymentControlCenter = () => {
 
       {/* ── 7. PROFESSIONAL PAYMENT DETAILS DRAWER / MODAL ─────────────── */}
       {detailsModalOpen && selectedCustomerDetails && (
-        <div style={{
+        <div className="payment-dossier-overlay" style={{
           position: 'fixed',
           top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
-          backdropFilter: 'blur(8px)',
+          background: 'rgba(15, 23, 42, 0.4)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 99999,
           padding: '1.5rem'
         }}>
-          <div style={{
+          <div className="payment-dossier-modal" style={{
             background: '#FFFFFF',
             border: '1px solid var(--border-color)',
             borderRadius: '16px',
@@ -2345,16 +2344,16 @@ const PaymentControlCenter = () => {
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)'
+            boxShadow: '0 16px 40px -12px rgba(15, 23, 42, 0.2)'
           }}>
             {/* Modal Header */}
-            <div style={{
+            <div className="payment-dossier-header" style={{
               padding: '1.25rem 1.75rem',
               borderBottom: '1px solid var(--border-color)',
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
-              background: 'rgba(0,0,0,0.15)'
+              background: '#F8FAFC'
             }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
@@ -2438,12 +2437,12 @@ const PaymentControlCenter = () => {
             </div>
 
             {/* Modal Internal Navigation Tabs */}
-            <div style={{
+            <div className="payment-dossier-tabs" style={{
               display: 'flex',
               gap: '0.5rem',
               padding: '0.6rem 1.75rem',
               borderBottom: '1px solid var(--border-color)',
-              background: 'rgba(255,255,255,0.015)'
+              background: '#FFFFFF'
             }}>
               <button
                 onClick={() => setDrawerTab('overview')}
@@ -2516,7 +2515,7 @@ const PaymentControlCenter = () => {
             </div>
 
             {/* Modal Body */}
-            <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="payment-dossier-body" style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {/* TAB 1: OVERVIEW & FINANCIALS */}
               {drawerTab === 'overview' && (
                 <>
@@ -3054,7 +3053,7 @@ const PaymentControlCenter = () => {
             </div>
 
             {/* Modal Footer */}
-            <div style={{
+            <div className="payment-dossier-footer" style={{
               padding: '1rem 1.75rem',
               borderTop: '1px solid var(--border-color)',
               display: 'flex',

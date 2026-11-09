@@ -2058,3 +2058,142 @@ input.pcc-search-input:focus {
   .upload-summary-grid { grid-template-columns: 1fr; }
   .login-form-card { padding: 1.75rem 1.25rem; }
 }
+
+/* Payment dossier modal */
+.payment-dossier-overlay {
+  padding: 1rem !important;
+  background: rgba(15, 23, 42, 0.42) !important;
+  backdrop-filter: blur(2px) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+}
+
+.payment-dossier-modal {
+  width: min(100%, 960px) !important;
+  max-height: min(92vh, 880px) !important;
+  max-height: min(92dvh, 880px) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--shadow-xl) !important;
+  color: var(--text-primary);
+}
+
+.payment-dossier-header,
+.payment-dossier-footer {
+  background: #F8FAFC !important;
+}
+
+.payment-dossier-header {
+  gap: 1rem;
+  padding: 1.125rem 1.5rem !important;
+}
+
+.payment-dossier-header h3 {
+  font-size: 1.1rem !important;
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+}
+
+.payment-dossier-tabs {
+  flex-wrap: wrap;
+  gap: 0.35rem !important;
+  padding: 0.65rem 1.5rem !important;
+}
+
+.payment-dossier-tabs button {
+  border-radius: var(--radius-sm) !important;
+  transition: var(--transition);
+}
+
+.payment-dossier-tabs button:hover {
+  background: var(--bg-muted) !important;
+  color: var(--text-primary) !important;
+}
+
+.payment-dossier-tabs button[style*="rgba(56, 189, 248"],
+.payment-dossier-tabs button[style*="rgba(239, 68, 68"],
+.payment-dossier-tabs button[style*="rgba(245, 158, 11"] {
+  background: var(--primary-light) !important;
+  border-color: #D7E5FF !important;
+  color: var(--primary) !important;
+}
+
+.payment-dossier-body {
+  padding: 1.25rem 1.5rem !important;
+}
+
+.payment-dossier-body [style*="rgba(0,0,0"],
+.payment-dossier-body [style*="rgba(0, 0, 0"],
+.payment-dossier-body [style*="rgba(17, 24, 39"],
+.payment-dossier-body [style*="linear-gradient"] {
+  background: var(--bg-muted) !important;
+  border-color: var(--border) !important;
+  box-shadow: none !important;
+}
+
+.payment-dossier-body [style*="rgba(255,255,255"],
+.payment-dossier-body [style*="rgba(255, 255, 255"] {
+  border-color: var(--border-light) !important;
+}
+
+.payment-dossier-body [style*="#38bdf8"],
+.payment-dossier-body [style*="#3B82F6"],
+.payment-dossier-body [style*="#3B7EF6"],
+.payment-dossier-body [style*="#818cf8"],
+.payment-dossier-header [style*="#38bdf8"] {
+  color: var(--primary) !important;
+  border-color: var(--primary) !important;
+}
+
+.payment-dossier-footer {
+  padding: 0.875rem 1.5rem !important;
+}
+
+.payment-dossier-footer button {
+  min-height: 40px;
+  border-radius: var(--radius-sm) !important;
+}
+
+.payment-dossier-footer button:first-child {
+  background: var(--primary-light) !important;
+  border-color: #D7E5FF !important;
+  color: var(--primary) !important;
+}
+
+.payment-dossier-footer button:last-child {
+  background: #FFFFFF !important;
+  border-color: var(--border) !important;
+  color: var(--text-primary) !important;
+}
+
+@media (max-width: 640px) {
+  .payment-dossier-overlay {
+    align-items: flex-end !important;
+    padding: 0.5rem !important;
+  }
+
+  .payment-dossier-modal {
+    width: 100% !important;
+    max-height: 94vh !important;
+    max-height: 94dvh !important;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important;
+  }
+
+  .payment-dossier-header {
+    align-items: flex-start !important;
+    padding: 1rem !important;
+  }
+
+  .payment-dossier-header h3 { font-size: 1rem !important; }
+  .payment-dossier-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 0.5rem 1rem !important;
+  }
+
+  .payment-dossier-tabs button { flex: 0 0 auto; }
+  .payment-dossier-body { padding: 1rem !important; }
+  .payment-dossier-footer {
+    padding: 0.75rem 1rem !important;
+    flex-wrap: wrap;
+  }
+}

@@ -1,45 +1,49 @@
 package com.ceb.billing;
 
+import java.net.URI;
 import java.sql.*;
 
+/** Read-only aggregate diagnostics for an explicitly authorized local test database. */
 public class QueryDbDirect {
     public static void main(String[] args) {
-        String url = "jdbc:mysql://localhost:3306/ceb_billing_db?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
-        String user = "root";
-        String password = "Mj@251677";
-        try (Connection conn = DriverManager.getConnection(url, user, password)) {
-            System.out.println("Connected to MySQL database!");
-            
-            // Query 1: Total records count in billing_records
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM billing_records")) {
-                if (rs.next()) {
-                    System.out.println("Total Billing Records in billing_records: " + rs.getInt(1));
-                }
+        try {
+            if (!"true".equalsIgnoreCase(System.getenv("CEB_ALLOW_LOCAL_DB_DIAGNOSTICS"))) {
+                throw new IllegalStateException();
             }
-            
-            // Query 1b: Total records count in upload_history
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT * FROM upload_history")) {
-                System.out.println("Upload History rows:");
-                while (rs.next()) {
-                    System.out.println(String.format("  ID: %d, FileName: %s, Status: %s, Processed: %d, NewCust: %d, BillingIns: %d, Errors: %d",
-                            rs.getLong("id"), rs.getString("filename"), rs.getString("status"),
-                            rs.getInt("rows_processed"), rs.getInt("new_customers"), rs.getInt("billing_inserted"), rs.getInt("errors_count")));
-                }
+            String url = requireLocalTestUrl(requiredEnv("DB_URL"));
+            try (Connection conn = DriverManager.getConnection(url, requiredEnv("DB_USERNAME"), requiredEnv("DB_PASSWORD"))) {
+                conn.setReadOnly(true);
+                System.out.println("Connected to authorized local test database.");
+                printCount(conn, "billing_records", "Billing records");
+                printCount(conn, "upload_history", "Upload history entries");
+                printCount(conn, "audit_logs", "Audit log entries");
             }
-            
-            // Query 1c: Print STAGING_APPROVED audit logs
-            try (Statement stmt = conn.createStatement();
-                 ResultSet rs = stmt.executeQuery("SELECT * FROM audit_logs ORDER BY id DESC LIMIT 5")) {
-                System.out.println("Audit Log messages:");
-                while (rs.next()) {
-                    System.out.println(String.format("  ID: %d, Action: %s, Message: %s",
-                            rs.getLong("id"), rs.getString("action"), rs.getString("details")));
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
+        } catch (Exception ignored) {
+            System.err.println("Database diagnostics stopped; verify local test database authorization and configuration.");
         }
+    }
+
+    private static void printCount(Connection conn, String table, String label) throws SQLException {
+        try (Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM " + table)) {
+            if (rs.next()) System.out.printf("%s: %d%n", label, rs.getLong(1));
+        }
+    }
+
+    private static String requireLocalTestUrl(String url) {
+        String prefix = "jdbc:mysql://";
+        if (!url.startsWith(prefix)) throw new IllegalArgumentException();
+        URI uri = URI.create(url.substring("jdbc:".length()));
+        String host = uri.getHost();
+        String database = uri.getPath() == null ? "" : uri.getPath().replaceFirst("^/", "");
+        if (uri.getUserInfo() != null
+                || !("localhost".equalsIgnoreCase(host) || "127.0.0.1".equals(host) || "::1".equals(host))
+                || !database.matches("(?i).+_test(?:_[a-z0-9]+)*")) throw new IllegalArgumentException();
+        return url;
+    }
+
+    private static String requiredEnv(String name) {
+        String value = System.getenv(name);
+        if (value == null || value.isBlank()) throw new IllegalStateException();
+        return value;
     }
 }

@@ -73,6 +73,14 @@ target/
 .h2.db
 *.tmp
 *.bak
+*.backup
+*.dump
+*.sql.gz
+*.sql.zip
+production-exports/
+production_exports/
+**/*-production-export.*
+**/*-prod-export.*
 
 # --------------------------------------------------------------------
 # Frontend - Node.js, npm & Vite Specifics
@@ -106,6 +114,20 @@ app-port
 *.env
 *.env.*
 secrets.properties
+credentials.properties
+credentials.json
+credentials.yml
+credentials.yaml
+**/credentials.properties
+**/credentials.json
+**/credentials.yml
+**/credentials.yaml
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
 
 # --------------------------------------------------------------------
 # Project Data & Large Binary Files (e.g., test spreadsheets)

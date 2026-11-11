@@ -16,6 +16,7 @@ import com.ceb.billing.services.MonthlyDirectoryService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -58,6 +59,12 @@ public class ApprovalController {
 
     @Autowired
     private MonthlyDirectoryService monthlyDirectoryService;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private com.ceb.billing.services.CustomerHashIndexService customerHashIndexService;
 
     @Autowired
     private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository monthlyDirectorySnapshotRepository;
@@ -150,6 +157,9 @@ public class ApprovalController {
                     if (optCustomer.isPresent()) {
                         customerRepository.delete(Objects.requireNonNull(optCustomer.get()));
                     }
+                    removeCustomerFromSnapshots(request.getAccountNo());
+                    customerHashIndexService.evict(request.getAccountNo());
+                    eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
                     auditLogService.log("CUSTOMER_DELETE_APPROVED",
                             String.format("Admin %s approved customer deletion for %s requested by %s", adminUsername,
                                      request.getAccountNo(), request.getChangedBy()));
@@ -213,6 +223,10 @@ public class ApprovalController {
 
             request.setStatus("APPROVED");
             approvalRequestRepository.save(Objects.requireNonNull(request));
+
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+            }
 
             return ResponseEntity.ok(new MessageResponse("Approval request approved and applied successfully."));
         } catch (Exception e) {
@@ -442,6 +456,7 @@ public class ApprovalController {
                             modified = true;
                         }
                     }
+
                     if (modified) {
                         snap.setFinalDataJson(objectMapper.writeValueAsString(list));
                         monthlyDirectorySnapshotRepository.save(snap);
@@ -451,6 +466,40 @@ public class ApprovalController {
         } catch (Exception ex) {
             log.warning("Failed to clear pending approval flag in snapshots for account " + accountNo + ": " + ex.getMessage());
         }
+    }
+
+    private void removeCustomerFromSnapshots(String accountNo) throws Exception {
+        ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+        Map<com.ceb.billing.entities.MonthlyDirectorySnapshot, String> updatedSnapshots = new java.util.LinkedHashMap<>();
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot snapshot : monthlyDirectorySnapshotRepository.findAll()) {
+            if (snapshot.getFinalDataJson() == null || snapshot.getFinalDataJson().trim().isEmpty()) {
+                continue;
+            }
+            List<Map<String, Object>> records = objectMapper.readValue(snapshot.getFinalDataJson(),
+                    new TypeReference<List<Map<String, Object>>>() {});
+            if (records == null) {
+                continue;
+            }
+            int originalSize = records.size();
+            records.removeIf(record -> accountNo.equals(str(record, "accountNo")));
+            if (records.size() != originalSize) {
+                updatedSnapshots.put(snapshot, objectMapper.writeValueAsString(records));
+            }
+        }
+        for (Map.Entry<com.ceb.billing.entities.MonthlyDirectorySnapshot, String> update : updatedSnapshots.entrySet()) {
+            com.ceb.billing.entities.MonthlyDirectorySnapshot snapshot =
+                    Objects.requireNonNull(update.getKey(), "Updated snapshot entry must have a key");
+            snapshot.setFinalDataJson(update.getValue());
+            snapshot.setTotalRecords(readSnapshotRecordCount(update.getValue(), objectMapper));
+            monthlyDirectorySnapshotRepository.save(snapshot);
+        }
+    }
+
+    private int readSnapshotRecordCount(String finalDataJson, ObjectMapper objectMapper) throws Exception {
+        List<Map<String, Object>> records = objectMapper.readValue(finalDataJson,
+                new TypeReference<List<Map<String, Object>>>() {});
+        return records == null ? 0 : records.size();
     }
 
     private void applyCustomerEdits(Customer customer, Map<String, Object> values) {

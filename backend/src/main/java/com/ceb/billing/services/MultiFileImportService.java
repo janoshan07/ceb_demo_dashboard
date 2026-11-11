@@ -41,12 +41,62 @@ public class MultiFileImportService {
     // unused repository
     @Autowired private StagingChangeLogRepository stagingChangeLogRepository;
     @Autowired(required = false) @org.springframework.context.annotation.Lazy private CustomerHashIndexService customerHashIndexService;
+    @Autowired(required = false) private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    // Fast in-memory preview cache for all import steps keyed by file MD5 / sessionId / filename
+    private static final Map<String, List<Map<String, Object>>> MASTER_PREVIEW_ROWS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, List<Map<String, Object>>> CEB_PREVIEW_ROWS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, List<Map<String, Object>>> NGEN_PREVIEW_ROWS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, List<Map<String, Object>>> NPAY_PREVIEW_ROWS_CACHE = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, String> DATE_PARSE_CACHE = new java.util.concurrent.ConcurrentHashMap<>(512);
+    private static final Map<String, String> LCODE_CACHE = new java.util.concurrent.ConcurrentHashMap<>(64);
+
+    private static final java.time.format.DateTimeFormatter[] STATIC_DATE_FORMATTERS = new java.time.format.DateTimeFormatter[]{
+            java.time.format.DateTimeFormatter.ISO_LOCAL_DATE,
+            java.time.format.DateTimeFormatter.ofPattern("M/d/yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("d/M/yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("MM/dd/yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("MM-dd-yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("yyyy/MM/dd"),
+            java.time.format.DateTimeFormatter.ofPattern("yyyy.MM.dd"),
+            java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy"),
+            java.time.format.DateTimeFormatter.ofPattern("yyyy.M.d"),
+            java.time.format.DateTimeFormatter.ofPattern("d.M.yyyy")
+    };
+
+    private String computeFileHash(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) return "";
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            byte[] digest = md.digest(bytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return String.valueOf(java.util.Arrays.hashCode(bytes));
+        }
+    }
+
+    private String deriveLCodeFast(String solarType, String tariffType) {
+        String key = (solarType != null ? solarType.trim().toUpperCase() : "") + "::"
+                   + (tariffType != null ? tariffType.trim().toUpperCase() : "");
+        return LCODE_CACHE.computeIfAbsent(key, k -> ExcelValidationService.deriveLCode(solarType, tariffType));
+    }
 
     // ════════════════════════════════════════════════════════════════════
     //  STEP 1 — MASTER DATA
     // ════════════════════════════════════════════════════════════════════
 
     public Map<String, Object> previewMasterData(byte[] fileBytes, String filename) throws Exception {
+        return previewMasterData(fileBytes, filename, null);
+    }
+
+    public Map<String, Object> previewMasterData(byte[] fileBytes, String filename, String username) throws Exception {
+        ensureReferenceDataLoaded();
         List<Map<String, Object>> rows = new ArrayList<>();
         List<String> globalErrors = new ArrayList<>();
         int errorCount = 0;
@@ -112,7 +162,7 @@ public class MultiFileImportService {
                         rawTariff = strVal(row, colMap.get("billingmode"));
                     }
                     String tariffType = ExcelValidationService.normalizeTariffType(rawTariff);
-                    String billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
+                    String billingMode = deriveLCodeFast(solarType, tariffType);
                     rowData.put("solarType",       solarType);
                     rowData.put("unitRate",        numVal(row, colMap.get("unitcost"))); // maps unitrate/unitcost
                     rowData.put("tariffType",      tariffType);
@@ -134,7 +184,7 @@ public class MultiFileImportService {
             }
         }
 
-        // Run duplicate detection
+        // Run fast in-memory duplicate detection
         detectDuplicates(rows, "Master Data");
 
         errorCount = 0;
@@ -154,6 +204,18 @@ public class MultiFileImportService {
             }
         }
 
+        // Cache parsed preview rows in fast in-memory Hash Map for immediate O(1) Proceed step
+        String fHash = computeFileHash(fileBytes);
+        if (!fHash.isEmpty()) {
+            MASTER_PREVIEW_ROWS_CACHE.put(fHash, rows);
+        }
+        if (filename != null && !filename.trim().isEmpty()) {
+            MASTER_PREVIEW_ROWS_CACHE.put(filename.trim(), rows);
+        }
+        if (username != null && !username.trim().isEmpty()) {
+            MASTER_PREVIEW_ROWS_CACHE.put(username.trim() + "-MASTER", rows);
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("filename", filename);
         result.put("fileType", "MASTER_DATA");
@@ -171,38 +233,28 @@ public class MultiFileImportService {
     public Map<String, Object> approveMasterData(byte[] fileBytes, String filename, String username,
                                                   Map<String, Map<String, Object>> corrections,
                                                   String billingMonth, String division) throws Exception {
+        ensureReferenceDataLoaded();
         List<Map<String, Object>> cachedRows = new ArrayList<>();
         int skippedRows = 0;
 
-        try (InputStream is = new ByteArrayInputStream(fileBytes);
-             Workbook workbook = WorkbookFactory.create(is)) {
+        // FAST PATH VIA HASHING:
+        // Check if pre-parsed rows from previewMasterData are available in the in-memory cache
+        List<Map<String, Object>> previewRows = null;
+        if (username != null) {
+            previewRows = MASTER_PREVIEW_ROWS_CACHE.get(username.trim() + "-MASTER");
+        }
+        if (previewRows == null && fileBytes != null) {
+            previewRows = MASTER_PREVIEW_ROWS_CACHE.get(computeFileHash(fileBytes));
+        }
+        if (previewRows == null && filename != null) {
+            previewRows = MASTER_PREVIEW_ROWS_CACHE.get(filename.trim());
+        }
 
-            Sheet sheet = workbook.getSheetAt(0);
-            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+        if (previewRows != null && !previewRows.isEmpty()) {
+            for (Map<String, Object> origRow : previewRows) {
+                String accountNo = strVal(origRow.get("accountNo"));
+                String rowNumStr = String.valueOf(origRow.get("rowNum"));
 
-            if (!colMap.containsKey("tarifftype")) {
-                int contentCol = previewService.detectTariffTypeByContent(sheet, headerRowIdx, colMap);
-                if (contentCol != -1) {
-                    colMap.put("tarifftype", contentCol);
-                }
-            }
-            if (!colMap.containsKey("tarifftype") && colMap.containsKey("billingmode")) {
-                colMap.put("tarifftype", colMap.get("billingmode"));
-            }
-
-            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
-            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
-            int lastRow = sheet.getLastRowNum();
-
-            for (int r = dataStart; r <= lastRow; r++) {
-                Row row = sheet.getRow(r);
-                if (row == null || isRowEmpty(row)) continue;
-
-                String accountNo = strVal(row, colMap.get("accountno"));
-                String rowNumStr = String.valueOf(r + 1);
-
-                // Corrections overlay by row number (primary) or accountNo (fallback for non-empty accounts)
                 Map<String, Object> corr = null;
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
@@ -212,87 +264,61 @@ public class MultiFileImportService {
                     }
                 }
 
-                // Apply corrections overlay before any skip/delete decisions
-                if (corr != null) {
-                    if (corr.containsKey("accountNo")) accountNo = (String) corr.get("accountNo");
+                if (corr != null && corr.containsKey("accountNo")) {
+                    accountNo = (String) corr.get("accountNo");
                 }
 
-                // Skip rows that are permanently deleted by the user
+                // Skip rows that are permanently deleted
                 if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
                     String displayAcct = (accountNo != null && !accountNo.trim().isEmpty()) ? accountNo.trim() : "[empty]";
-                    auditLogService.log("EXCEL_ROW_DELETED", String.format("Master Data Row %d (Account %s) excluded from batch during import.", r + 1, displayAcct));
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("Master Data Row %s (Account %s) excluded from batch during import.", rowNumStr, displayAcct));
                     skippedRows++;
                     continue;
                 }
 
-                // Skip rows where Account No is still empty/blank after corrections
-                if (accountNo == null || accountNo.trim().isEmpty()) { skippedRows++; continue; }
+                if (accountNo == null || accountNo.trim().isEmpty()) {
+                    skippedRows++;
+                    continue;
+                }
                 accountNo = accountNo.trim();
 
-                String customerName    = strVal(row, colMap.get("customername"));
-                String customerAddress = strVal(row, colMap.get("customeraddress"));
-                String refNo           = strVal(row, colMap.get("refno"));
-                String costCode        = strVal(row, colMap.get("costcode"));
-                String mobileNo        = strVal(row, colMap.get("mobileno"));
-                Double panelCapacity   = numVal(row, colMap.get("panelcapacity"));
-                String agreementDate   = dateStr(row, colMap.get("agreementdate"));
-                String bankCode        = strVal(row, colMap.get("bankcode"));
-                String branchCode      = strVal(row, colMap.get("branchcode"));
-                String bankAccountNo   = strVal(row, colMap.get("bankaccountno"));
-                String solarType       = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
-                Double unitRate        = numVal(row, colMap.get("unitcost"));
-                String rawTariff       = strVal(row, colMap.get("tarifftype"));
-                if ((rawTariff == null || rawTariff.trim().isEmpty()) && colMap.containsKey("billingmode")) {
-                    rawTariff = strVal(row, colMap.get("billingmode"));
-                }
-                String tariffType      = ExcelValidationService.normalizeTariffType(rawTariff);
-                String billingMode     = ExcelValidationService.deriveLCode(solarType, tariffType);
-
-                // Apply remaining corrections (non-accountNo fields)
-                if (corr != null) {
-                    if (corr.containsKey("customerName"))    customerName    = (String) corr.get("customerName");
-                    if (corr.containsKey("customerAddress")) customerAddress = (String) corr.get("customerAddress");
-                    if (corr.containsKey("refNo"))           refNo           = (String) corr.get("refNo");
-                    if (corr.containsKey("mobileNo"))        mobileNo        = (String) corr.get("mobileNo");
-                    if (corr.containsKey("panelCapacity")) {
-                        panelCapacity = parseDouble(corr.get("panelCapacity"));
-                    }
-                    if (corr.containsKey("agreementDate"))   agreementDate   = (String) corr.get("agreementDate");
-                    if (corr.containsKey("bankCode"))        bankCode        = (String) corr.get("bankCode");
-                    if (corr.containsKey("branchCode"))      branchCode      = (String) corr.get("branchCode");
-                    if (corr.containsKey("bankAccountNo"))   bankAccountNo   = (String) corr.get("bankAccountNo");
-                    if (corr.containsKey("solarType"))       solarType       = ExcelValidationService.normalizeSolarType((String) corr.get("solarType"));
-                    if (corr.containsKey("unitRate")) {
-                        unitRate = parseDouble(corr.get("unitRate"));
-                    }
-                    if (corr.containsKey("tariffType"))      tariffType      = ExcelValidationService.normalizeTariffType((String) corr.get("tariffType"));
-                    if (corr.containsKey("costCode"))        costCode        = (String) corr.get("costCode");
-                }
-
-
-                billingMode = ExcelValidationService.deriveLCode(solarType, tariffType);
-
-                Map<String, Object> cachedRow = new LinkedHashMap<>();
+                Map<String, Object> cachedRow = new LinkedHashMap<>(origRow);
                 cachedRow.put("accountNo", accountNo);
-                cachedRow.put("customerName", customerName);
-                cachedRow.put("customerAddress", customerAddress);
-                cachedRow.put("refNo", refNo);
-                cachedRow.put("costCode", costCode);
-                cachedRow.put("mobileNo", mobileNo);
-                cachedRow.put("panelCapacity", panelCapacity);
-                cachedRow.put("agreementDate", agreementDate);
-                cachedRow.put("bankCode", bankCode);
-                cachedRow.put("branchCode", branchCode);
-                cachedRow.put("bankAccountNo", bankAccountNo);
-                cachedRow.put("solarType", solarType);
-                cachedRow.put("unitRate", unitRate);
-                cachedRow.put("tariffType", tariffType);
-                cachedRow.put("billingMode", billingMode);
-                cachedRow.put("rowNum", r + 1);
 
-                // Store validation status so unresolved records are tracked as Pending
-                List<String> rowErrors = validateMasterDataRow(cachedRow);
-                if (rowErrors.isEmpty()) {
+                if (corr != null) {
+                    if (corr.containsKey("customerName"))    cachedRow.put("customerName", corr.get("customerName"));
+                    if (corr.containsKey("customerAddress")) cachedRow.put("customerAddress", corr.get("customerAddress"));
+                    if (corr.containsKey("refNo"))           cachedRow.put("refNo", corr.get("refNo"));
+                    if (corr.containsKey("mobileNo"))        cachedRow.put("mobileNo", corr.get("mobileNo"));
+                    if (corr.containsKey("panelCapacity"))   cachedRow.put("panelCapacity", parseDouble(corr.get("panelCapacity")));
+                    if (corr.containsKey("agreementDate"))   cachedRow.put("agreementDate", corr.get("agreementDate"));
+                    if (corr.containsKey("bankCode"))        cachedRow.put("bankCode", corr.get("bankCode"));
+                    if (corr.containsKey("branchCode"))      cachedRow.put("branchCode", corr.get("branchCode"));
+                    if (corr.containsKey("bankAccountNo"))   cachedRow.put("bankAccountNo", corr.get("bankAccountNo"));
+                    if (corr.containsKey("solarType"))       cachedRow.put("solarType", ExcelValidationService.normalizeSolarType((String) corr.get("solarType")));
+                    if (corr.containsKey("unitRate"))        cachedRow.put("unitRate", parseDouble(corr.get("unitRate")));
+                    if (corr.containsKey("tariffType"))      cachedRow.put("tariffType", ExcelValidationService.normalizeTariffType((String) corr.get("tariffType")));
+                    if (corr.containsKey("costCode"))        cachedRow.put("costCode", corr.get("costCode"));
+
+                    String sType = (String) cachedRow.get("solarType");
+                    String tType = (String) cachedRow.get("tariffType");
+                    cachedRow.put("billingMode", deriveLCodeFast(sType, tType));
+                }
+
+                // If row had corrections, re-evaluate validationStatus
+                List<String> rowErrors;
+                if (corr != null) {
+                    rowErrors = validateMasterDataRow(cachedRow);
+                } else {
+                    Object errObj = origRow.get("errors");
+                    if (errObj instanceof List<?> errors) {
+                        rowErrors = errors.stream().map(String.class::cast).toList();
+                    } else {
+                        rowErrors = Collections.emptyList();
+                    }
+                }
+
+                if (rowErrors == null || rowErrors.isEmpty()) {
                     cachedRow.put("validationStatus", "VALID");
                     cachedRow.put("validationErrors", "");
                 } else {
@@ -301,6 +327,123 @@ public class MultiFileImportService {
                 }
 
                 cachedRows.add(cachedRow);
+            }
+        } else {
+            // FALLBACK PATH: parse workbook if cache miss
+            try (InputStream is = new ByteArrayInputStream(fileBytes);
+                 Workbook workbook = WorkbookFactory.create(is)) {
+
+                Sheet sheet = workbook.getSheetAt(0);
+                int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+                Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+
+                if (!colMap.containsKey("tarifftype")) {
+                    int contentCol = previewService.detectTariffTypeByContent(sheet, headerRowIdx, colMap);
+                    if (contentCol != -1) {
+                        colMap.put("tarifftype", contentCol);
+                    }
+                }
+                if (!colMap.containsKey("tarifftype") && colMap.containsKey("billingmode")) {
+                    colMap.put("tarifftype", colMap.get("billingmode"));
+                }
+
+                boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+                int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+                int lastRow = sheet.getLastRowNum();
+
+                for (int r = dataStart; r <= lastRow; r++) {
+                    Row row = sheet.getRow(r);
+                    if (row == null || isRowEmpty(row)) continue;
+
+                    String accountNo = strVal(row, colMap.get("accountno"));
+                    String rowNumStr = String.valueOf(r + 1);
+
+                    Map<String, Object> corr = null;
+                    if (corrections != null) {
+                        if (corrections.containsKey(rowNumStr)) {
+                            corr = corrections.get(rowNumStr);
+                        } else if (accountNo != null && !accountNo.trim().isEmpty() && corrections.containsKey(accountNo.trim())) {
+                            corr = corrections.get(accountNo.trim());
+                        }
+                    }
+
+                    if (corr != null && corr.containsKey("accountNo")) accountNo = (String) corr.get("accountNo");
+
+                    if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                        String displayAcct = (accountNo != null && !accountNo.trim().isEmpty()) ? accountNo.trim() : "[empty]";
+                        auditLogService.log("EXCEL_ROW_DELETED", String.format("Master Data Row %d (Account %s) excluded from batch during import.", r + 1, displayAcct));
+                        skippedRows++;
+                        continue;
+                    }
+
+                    if (accountNo == null || accountNo.trim().isEmpty()) { skippedRows++; continue; }
+                    accountNo = accountNo.trim();
+
+                    String customerName    = strVal(row, colMap.get("customername"));
+                    String customerAddress = strVal(row, colMap.get("customeraddress"));
+                    String refNo           = strVal(row, colMap.get("refno"));
+                    String costCode        = strVal(row, colMap.get("costcode"));
+                    String mobileNo        = strVal(row, colMap.get("mobileno"));
+                    Double panelCapacity   = numVal(row, colMap.get("panelcapacity"));
+                    String agreementDate   = dateStr(row, colMap.get("agreementdate"));
+                    String bankCode        = strVal(row, colMap.get("bankcode"));
+                    String branchCode      = strVal(row, colMap.get("branchcode"));
+                    String bankAccountNo   = strVal(row, colMap.get("bankaccountno"));
+                    String solarType       = ExcelValidationService.normalizeSolarType(strVal(row, colMap.get("solartype")));
+                    Double unitRate        = numVal(row, colMap.get("unitcost"));
+                    String rawTariff       = strVal(row, colMap.get("tarifftype"));
+                    if ((rawTariff == null || rawTariff.trim().isEmpty()) && colMap.containsKey("billingmode")) {
+                        rawTariff = strVal(row, colMap.get("billingmode"));
+                    }
+                    String tariffType      = ExcelValidationService.normalizeTariffType(rawTariff);
+                    String billingMode     = deriveLCodeFast(solarType, tariffType);
+
+                    if (corr != null) {
+                        if (corr.containsKey("customerName"))    customerName    = (String) corr.get("customerName");
+                        if (corr.containsKey("customerAddress")) customerAddress = (String) corr.get("customerAddress");
+                        if (corr.containsKey("refNo"))           refNo           = (String) corr.get("refNo");
+                        if (corr.containsKey("mobileNo"))        mobileNo        = (String) corr.get("mobileNo");
+                        if (corr.containsKey("panelCapacity"))   panelCapacity   = parseDouble(corr.get("panelCapacity"));
+                        if (corr.containsKey("agreementDate"))   agreementDate   = (String) corr.get("agreementDate");
+                        if (corr.containsKey("bankCode"))        bankCode        = (String) corr.get("bankCode");
+                        if (corr.containsKey("branchCode"))      branchCode      = (String) corr.get("branchCode");
+                        if (corr.containsKey("bankAccountNo"))   bankAccountNo   = (String) corr.get("bankAccountNo");
+                        if (corr.containsKey("solarType"))       solarType       = ExcelValidationService.normalizeSolarType((String) corr.get("solarType"));
+                        if (corr.containsKey("unitRate"))        unitRate        = parseDouble(corr.get("unitRate"));
+                        if (corr.containsKey("tariffType"))      tariffType      = ExcelValidationService.normalizeTariffType((String) corr.get("tariffType"));
+                        if (corr.containsKey("costCode"))        costCode        = (String) corr.get("costCode");
+                        billingMode = deriveLCodeFast(solarType, tariffType);
+                    }
+
+                    Map<String, Object> cachedRow = new LinkedHashMap<>();
+                    cachedRow.put("accountNo", accountNo);
+                    cachedRow.put("customerName", customerName);
+                    cachedRow.put("customerAddress", customerAddress);
+                    cachedRow.put("refNo", refNo);
+                    cachedRow.put("costCode", costCode);
+                    cachedRow.put("mobileNo", mobileNo);
+                    cachedRow.put("panelCapacity", panelCapacity);
+                    cachedRow.put("agreementDate", agreementDate);
+                    cachedRow.put("bankCode", bankCode);
+                    cachedRow.put("branchCode", branchCode);
+                    cachedRow.put("bankAccountNo", bankAccountNo);
+                    cachedRow.put("solarType", solarType);
+                    cachedRow.put("unitRate", unitRate);
+                    cachedRow.put("tariffType", tariffType);
+                    cachedRow.put("billingMode", billingMode);
+                    cachedRow.put("rowNum", r + 1);
+
+                    List<String> rowErrors = validateMasterDataRow(cachedRow);
+                    if (rowErrors.isEmpty()) {
+                        cachedRow.put("validationStatus", "VALID");
+                        cachedRow.put("validationErrors", "");
+                    } else {
+                        cachedRow.put("validationStatus", "PENDING");
+                        cachedRow.put("validationErrors", String.join("; ", rowErrors));
+                    }
+
+                    cachedRows.add(cachedRow);
+                }
             }
         }
 
@@ -427,6 +570,19 @@ public class MultiFileImportService {
             }
         }
 
+        // Cache parsed preview rows in fast in-memory Hash Map for immediate O(1) Proceed step
+        String fHash = computeFileHash(fileBytes);
+        if (!fHash.isEmpty()) {
+            CEB_PREVIEW_ROWS_CACHE.put(fHash, rows);
+        }
+        if (filename != null && !filename.trim().isEmpty()) {
+            CEB_PREVIEW_ROWS_CACHE.put(filename.trim(), rows);
+        }
+        if (sessionId != null) {
+            CEB_PREVIEW_ROWS_CACHE.put(sessionId + "-CEB", rows);
+            CEB_PREVIEW_ROWS_CACHE.put(String.valueOf(sessionId), rows);
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("filename", filename);
         result.put("fileType", "CEB_ASSIST");
@@ -451,27 +607,25 @@ public class MultiFileImportService {
         List<Map<String, Object>> processedRows = new ArrayList<>();
         int skippedCount = 0;
 
-        try (InputStream is = new ByteArrayInputStream(fileBytes);
-             Workbook workbook = WorkbookFactory.create(is)) {
+        // FAST PATH VIA HASHING:
+        // Check if pre-parsed rows from previewCebAssist are available in the in-memory cache
+        List<Map<String, Object>> previewRows = null;
+        if (sessionId != null) {
+            previewRows = CEB_PREVIEW_ROWS_CACHE.get(sessionId + "-CEB");
+            if (previewRows == null) previewRows = CEB_PREVIEW_ROWS_CACHE.get(String.valueOf(sessionId));
+        }
+        if (previewRows == null && fileBytes != null) {
+            previewRows = CEB_PREVIEW_ROWS_CACHE.get(computeFileHash(fileBytes));
+        }
 
-            Sheet sheet = workbook.getSheetAt(0);
-            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+        if (previewRows != null && !previewRows.isEmpty()) {
+            for (Map<String, Object> origRow : previewRows) {
+                String accountNo      = strVal(origRow.get("accountNo"));
+                String customerName   = strVal(origRow.get("customerName"));
+                String prevDate       = strVal(origRow.get("prevReadingDate"));
+                String currDate       = strVal(origRow.get("currReadingDate"));
 
-            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
-            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
-            int lastRow = sheet.getLastRowNum();
-
-            for (int r = dataStart; r <= lastRow; r++) {
-                Row row = sheet.getRow(r);
-                if (row == null || isRowEmpty(row)) continue;
-
-                String accountNo      = strVal(row, colMap.get("accountno"));
-                String customerName   = colMap.containsKey("customername") && colMap.get("customername") != null ? strVal(row, colMap.get("customername")) : null;
-                String prevDate       = dateStr(row, colMap.get("prevreadingdate"));
-                String currDate       = dateStr(row, colMap.get("currreadingdate"));
-
-                String rowNumStr = String.valueOf(r + 1);
+                String rowNumStr = String.valueOf(origRow.get("rowNum"));
                 Map<String, Object> corr = null;
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
@@ -495,19 +649,79 @@ public class MultiFileImportService {
                 accountNo = accountNo.trim();
 
                 if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
-                    auditLogService.log("EXCEL_ROW_DELETED", String.format("CEB Assist Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("CEB Assist Row %s (Account %s) excluded from batch during import.", rowNumStr, accountNo));
                     skippedCount++;
                     continue;
                 }
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
-                rowData.put("rowNum", r + 1);
+                rowData.put("rowNum", origRow.get("rowNum"));
                 rowData.put("accountNo", accountNo);
                 rowData.put("customerName", customerName != null ? customerName : "");
                 rowData.put("prevReadingDate", prevDate != null ? prevDate : "");
                 rowData.put("currReadingDate", currDate != null ? currDate : "");
 
                 processedRows.add(rowData);
+            }
+        } else {
+            try (InputStream is = new ByteArrayInputStream(fileBytes);
+                 Workbook workbook = WorkbookFactory.create(is)) {
+
+                Sheet sheet = workbook.getSheetAt(0);
+                int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+                Map<String, Integer> colMap = previewService.autoDetectColumns(sheet, headerRowIdx);
+
+                boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+                int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+                int lastRow = sheet.getLastRowNum();
+
+                for (int r = dataStart; r <= lastRow; r++) {
+                    Row row = sheet.getRow(r);
+                    if (row == null || isRowEmpty(row)) continue;
+
+                    String accountNo      = strVal(row, colMap.get("accountno"));
+                    String customerName   = colMap.containsKey("customername") && colMap.get("customername") != null ? strVal(row, colMap.get("customername")) : null;
+                    String prevDate       = dateStr(row, colMap.get("prevreadingdate"));
+                    String currDate       = dateStr(row, colMap.get("currreadingdate"));
+
+                    String rowNumStr = String.valueOf(r + 1);
+                    Map<String, Object> corr = null;
+                    if (corrections != null) {
+                        if (corrections.containsKey(rowNumStr)) {
+                            corr = corrections.get(rowNumStr);
+                        } else if (accountNo != null && corrections.containsKey(accountNo.trim())) {
+                            corr = corrections.get(accountNo.trim());
+                        }
+                    }
+
+                    if (corr != null) {
+                        if (corr.containsKey("accountNo"))        accountNo = (String) corr.get("accountNo");
+                        if (corr.containsKey("customerName"))     customerName = (String) corr.get("customerName");
+                        if (corr.containsKey("prevReadingDate"))  prevDate  = (String) corr.get("prevReadingDate");
+                        if (corr.containsKey("currReadingDate"))  currDate  = (String) corr.get("currReadingDate");
+                    }
+
+                    if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                        skippedCount++;
+                        continue;
+                    }
+                    accountNo = accountNo.trim();
+
+                    if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                        auditLogService.log("EXCEL_ROW_DELETED", String.format("CEB Assist Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                        skippedCount++;
+                        continue;
+                    }
+
+                    Map<String, Object> rowData = new LinkedHashMap<>();
+                    rowData.put("rowNum", r + 1);
+                    rowData.put("accountNo", accountNo);
+                    rowData.put("customerName", customerName != null ? customerName : "");
+                    rowData.put("prevReadingDate", prevDate != null ? prevDate : "");
+                    rowData.put("currReadingDate", currDate != null ? currDate : "");
+
+                    processedRows.add(rowData);
+                }
             }
         }
 
@@ -797,6 +1011,19 @@ public class MultiFileImportService {
             }
         }
 
+        // Cache parsed preview rows in fast in-memory Hash Map for immediate O(1) Proceed step
+        String fHash = computeFileHash(fileBytes);
+        if (!fHash.isEmpty()) {
+            NGEN_PREVIEW_ROWS_CACHE.put(fHash, rows);
+        }
+        if (filename != null && !filename.trim().isEmpty()) {
+            NGEN_PREVIEW_ROWS_CACHE.put(filename.trim(), rows);
+        }
+        if (sessionId != null) {
+            NGEN_PREVIEW_ROWS_CACHE.put(sessionId + "-NGEN", rows);
+            NGEN_PREVIEW_ROWS_CACHE.put(String.valueOf(sessionId), rows);
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("filename", filename);
         result.put("fileType", "NGEN");
@@ -822,17 +1049,18 @@ public class MultiFileImportService {
         List<Map<String, Object>> processedRows = new ArrayList<>();
         int skippedRowsCount = 0;
 
-        try (InputStream is = new ByteArrayInputStream(fileBytes);
-             Workbook workbook = WorkbookFactory.create(is)) {
+        // FAST PATH VIA HASHING:
+        // Check if pre-parsed rows from previewNgen are available in the in-memory cache
+        List<Map<String, Object>> previewRows = null;
+        if (sessionId != null) {
+            previewRows = NGEN_PREVIEW_ROWS_CACHE.get(sessionId + "-NGEN");
+            if (previewRows == null) previewRows = NGEN_PREVIEW_ROWS_CACHE.get(String.valueOf(sessionId));
+        }
+        if (previewRows == null && fileBytes != null) {
+            previewRows = NGEN_PREVIEW_ROWS_CACHE.get(computeFileHash(fileBytes));
+        }
 
-            Sheet sheet = workbook.getSheetAt(0);
-            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> ngenCols = detectNgenColumns(sheet, headerRowIdx);
-
-            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
-            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
-            int lastRow = sheet.getLastRowNum();
-
+        if (previewRows != null && !previewRows.isEmpty()) {
             Map<String, Double> masterRateMap = new HashMap<>();
             if (sessionId != null) {
                 List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
@@ -848,26 +1076,23 @@ public class MultiFileImportService {
                     }
                 }
             }
-            Map<String, Double> dbCustomerRateCache = new HashMap<>();
 
-            for (int r = dataStart; r <= lastRow; r++) {
-                Row row = sheet.getRow(r);
-                if (row == null || isRowEmpty(row)) continue;
+            for (Map<String, Object> origRow : previewRows) {
+                String accountNo          = strVal(origRow.get("accountNo"));
+                String ngenNetType        = strVal(origRow.get("ngenNetType"));
+                Double kwhImport          = parseDouble(origRow.get("kwhImport"));
+                Double kwhExport          = parseDouble(origRow.get("kwhExport"));
+                Double kwhUnitSales       = parseDouble(origRow.get("kwhUnitSales"));
+                if (kwhUnitSales == null) kwhUnitSales = parseDouble(origRow.get("kwhSales"));
+                Double ngenUnitRate       = parseDouble(origRow.get("ngenUnitRate"));
+                Double retentionMoney     = parseDouble(origRow.get("retentionMoney"));
+                Double billSetOff         = parseDouble(origRow.get("billSetOff"));
+                Double kwhSalesAmount     = parseDouble(origRow.get("kwhSalesAmount"));
+                if (kwhSalesAmount == null) kwhSalesAmount = parseDouble(origRow.get("salesAmount"));
+                Double paymentSettled     = parseDouble(origRow.get("paymentSettled"));
+                Double outstandingBalance = parseDouble(origRow.get("outstandingBalance"));
 
-                // Read values directly from the uploaded Excel file — no calculations.
-                String accountNo          = strVal(row, ngenCols.get("accountNo"));
-                String ngenNetType        = strVal(row, ngenCols.get("ngenNetType"));
-                Double kwhImport          = numVal(row, ngenCols.get("kwhImport"));
-                Double kwhExport          = numVal(row, ngenCols.get("kwhExport"));
-                Double kwhUnitSales       = numVal(row, ngenCols.get("kwhUnitSales"));
-                Double ngenUnitRate       = numVal(row, ngenCols.get("ngenUnitRate"));
-                Double retentionMoney     = numVal(row, ngenCols.get("retentionMoney"));
-                Double billSetOff         = numVal(row, ngenCols.get("billSetOff"));
-                Double kwhSalesAmount     = numVal(row, ngenCols.get("kwhSalesAmount"));
-                Double paymentSettled     = numVal(row, ngenCols.get("paymentSettled"));
-                Double outstandingBalance = numVal(row, ngenCols.get("outstandingBalance"));
-
-                String rowNumStr = String.valueOf(r + 1);
+                String rowNumStr = String.valueOf(origRow.get("rowNum"));
                 Map<String, Object> corr = null;
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
@@ -882,6 +1107,7 @@ public class MultiFileImportService {
                     if (corr.containsKey("kwhImport"))          kwhImport          = parseDouble(corr.get("kwhImport"));
                     if (corr.containsKey("kwhExport"))          kwhExport          = parseDouble(corr.get("kwhExport"));
                     if (corr.containsKey("kwhUnitSales"))       kwhUnitSales       = parseDouble(corr.get("kwhUnitSales"));
+                    if (corr.containsKey("kwhSales"))           kwhUnitSales       = parseDouble(corr.get("kwhSales"));
                     if (corr.containsKey("ngenUnitRate"))       ngenUnitRate       = parseDouble(corr.get("ngenUnitRate"));
                     if (corr.containsKey("billSetOff"))         billSetOff         = parseDouble(corr.get("billSetOff"));
                     if (corr.containsKey("retentionMoney"))     retentionMoney     = parseDouble(corr.get("retentionMoney"));
@@ -891,7 +1117,7 @@ public class MultiFileImportService {
                 }
 
                 if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
-                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %s (Account %s) excluded from batch during import.", rowNumStr, accountNo));
                     skippedRowsCount++;
                     continue;
                 }
@@ -902,44 +1128,16 @@ public class MultiFileImportService {
                 }
                 accountNo = accountNo.trim();
 
-                // 1. Fallback: Calculate Unit Rate from Sales Amount / Unit Sales if missing or invalid
+                // Unit Rate fallbacks
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
                     ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
                 }
-
-                // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid (O(1) lookup)
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
                     ngenUnitRate = masterRateMap.get(accountNo);
                 }
 
-                // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid (cached lookup)
-                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
-                    ngenUnitRate = dbCustomerRateCache.computeIfAbsent(accountNo, acc -> {
-                        try {
-                            Optional<Customer> custOpt = customerRepository.findById(acc);
-                            if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
-                                return custOpt.get().getUnitRate();
-                            }
-                        } catch (Exception ignored) {}
-                        return null;
-                    });
-                }
-
-                // 4. Fallback: Unassigned numeric column scan (scan row for plausible unit rate value between 5.0 and 150.0)
-                if (ngenUnitRate == null || ngenUnitRate <= 0.0) {
-                    for (int c = 0; c < row.getLastCellNum(); c++) {
-                        if (ngenCols.values().contains(c)) continue;
-                        Double candidate = numVal(row, c);
-                        if (candidate != null && candidate >= 5.0 && candidate <= 150.0) {
-                            ngenUnitRate = candidate;
-                            break;
-                        }
-                    }
-                }
-
-                // Store Excel values exactly as read. Field names preserved for Step 5 (Main Data Set).
                 Map<String, Object> rowData = new LinkedHashMap<>();
-                rowData.put("rowNum", r + 1);
+                rowData.put("rowNum", origRow.get("rowNum"));
                 rowData.put("accountNo", accountNo);
                 rowData.put("kwhImport", kwhImport != null ? kwhImport : 0.0);
                 rowData.put("kwhExport", kwhExport != null ? kwhExport : 0.0);
@@ -953,6 +1151,140 @@ public class MultiFileImportService {
                 rowData.put("ngenNetType", ngenNetType != null ? ngenNetType : "");
 
                 processedRows.add(rowData);
+            }
+        } else {
+            try (InputStream is = new ByteArrayInputStream(fileBytes);
+                 Workbook workbook = WorkbookFactory.create(is)) {
+
+                Sheet sheet = workbook.getSheetAt(0);
+                int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+                Map<String, Integer> ngenCols = detectNgenColumns(sheet, headerRowIdx);
+
+                boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+                int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+                int lastRow = sheet.getLastRowNum();
+
+                Map<String, Double> masterRateMap = new HashMap<>();
+                if (sessionId != null) {
+                    List<Map<String, Object>> masterList = MASTER_DATA_CACHE.get(sessionId);
+                    if (masterList != null) {
+                        for (Map<String, Object> mRow : masterList) {
+                            String mAcc = (String) mRow.get("accountNo");
+                            if (mAcc != null && !mAcc.trim().isEmpty()) {
+                                Double mRate = parseDouble(mRow.get("unitRate"));
+                                if (mRate != null && mRate > 0.0) {
+                                    masterRateMap.put(mAcc.trim(), mRate);
+                                }
+                            }
+                        }
+                    }
+                }
+                Map<String, Double> dbCustomerRateCache = new HashMap<>();
+
+                for (int r = dataStart; r <= lastRow; r++) {
+                    Row row = sheet.getRow(r);
+                    if (row == null || isRowEmpty(row)) continue;
+
+                    // Read values directly from the uploaded Excel file — no calculations.
+                    String accountNo          = strVal(row, ngenCols.get("accountNo"));
+                    String ngenNetType        = strVal(row, ngenCols.get("ngenNetType"));
+                    Double kwhImport          = numVal(row, ngenCols.get("kwhImport"));
+                    Double kwhExport          = numVal(row, ngenCols.get("kwhExport"));
+                    Double kwhUnitSales       = numVal(row, ngenCols.get("kwhUnitSales"));
+                    Double ngenUnitRate       = numVal(row, ngenCols.get("ngenUnitRate"));
+                    Double retentionMoney     = numVal(row, ngenCols.get("retentionMoney"));
+                    Double billSetOff         = numVal(row, ngenCols.get("billSetOff"));
+                    Double kwhSalesAmount     = numVal(row, ngenCols.get("kwhSalesAmount"));
+                    Double paymentSettled     = numVal(row, ngenCols.get("paymentSettled"));
+                    Double outstandingBalance = numVal(row, ngenCols.get("outstandingBalance"));
+
+                    String rowNumStr = String.valueOf(r + 1);
+                    Map<String, Object> corr = null;
+                    if (corrections != null) {
+                        if (corrections.containsKey(rowNumStr)) {
+                            corr = corrections.get(rowNumStr);
+                        } else if (accountNo != null && corrections.containsKey(accountNo.trim())) {
+                            corr = corrections.get(accountNo.trim());
+                        }
+                    }
+
+                    if (corr != null) {
+                        if (corr.containsKey("accountNo"))          accountNo          = (String) corr.get("accountNo");
+                        if (corr.containsKey("kwhImport"))          kwhImport          = parseDouble(corr.get("kwhImport"));
+                        if (corr.containsKey("kwhExport"))          kwhExport          = parseDouble(corr.get("kwhExport"));
+                        if (corr.containsKey("kwhUnitSales"))       kwhUnitSales       = parseDouble(corr.get("kwhUnitSales"));
+                        if (corr.containsKey("ngenUnitRate"))       ngenUnitRate       = parseDouble(corr.get("ngenUnitRate"));
+                        if (corr.containsKey("billSetOff"))         billSetOff         = parseDouble(corr.get("billSetOff"));
+                        if (corr.containsKey("retentionMoney"))     retentionMoney     = parseDouble(corr.get("retentionMoney"));
+                        if (corr.containsKey("paymentSettled"))     paymentSettled     = parseDouble(corr.get("paymentSettled"));
+                        if (corr.containsKey("outstandingBalance")) outstandingBalance = parseDouble(corr.get("outstandingBalance"));
+                        if (corr.containsKey("ngenNetType"))        ngenNetType        = (String) corr.get("ngenNetType");
+                    }
+
+                    if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                        auditLogService.log("EXCEL_ROW_DELETED", String.format("NGEN Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                        skippedRowsCount++;
+                        continue;
+                    }
+
+                    if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                        skippedRowsCount++;
+                        continue;
+                    }
+                    accountNo = accountNo.trim();
+
+                    // 1. Fallback: Calculate Unit Rate from Sales Amount / Unit Sales if missing or invalid
+                    if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
+                        ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
+                    }
+
+                    // 2. Fallback: Retrieve Unit Rate from Session Master Data Cache if missing or invalid (O(1) lookup)
+                    if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
+                        ngenUnitRate = masterRateMap.get(accountNo);
+                    }
+
+                    // 3. Fallback: Retrieve Unit Rate from Master Data Customer Entity if missing or invalid (cached lookup)
+                    if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
+                        ngenUnitRate = dbCustomerRateCache.computeIfAbsent(accountNo, acc -> {
+                            try {
+                                Optional<Customer> custOpt = customerRepository.findById(acc);
+                                if (custOpt.isPresent() && custOpt.get().getUnitRate() != null && custOpt.get().getUnitRate() > 0) {
+                                    return custOpt.get().getUnitRate();
+                                }
+                            } catch (Exception ignored) {}
+                            return null;
+                        });
+                    }
+
+                    // 4. Fallback: Unassigned numeric column scan (scan row for plausible unit rate value between 5.0 and 150.0)
+                    if (ngenUnitRate == null || ngenUnitRate <= 0.0) {
+                        for (int c = 0; c < row.getLastCellNum(); c++) {
+                            if (ngenCols.values().contains(c)) continue;
+                            Double candidate = numVal(row, c);
+                            if (candidate != null && candidate >= 5.0 && candidate <= 150.0) {
+                                ngenUnitRate = candidate;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Store Excel values exactly as read. Field names preserved for Step 5 (Main Data Set).
+                    Map<String, Object> rowData = new LinkedHashMap<>();
+                    rowData.put("rowNum", r + 1);
+                    rowData.put("accountNo", accountNo);
+                    rowData.put("kwhImport", kwhImport != null ? kwhImport : 0.0);
+                    rowData.put("kwhExport", kwhExport != null ? kwhExport : 0.0);
+                    rowData.put("kwhSales", kwhUnitSales != null ? kwhUnitSales : 0.0);
+                    rowData.put("ngenUnitRate", ngenUnitRate != null ? ngenUnitRate : 0.0);
+                    rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                    rowData.put("retentionMoney", retentionMoney != null ? retentionMoney : 0.0);
+                    rowData.put("salesAmount", kwhSalesAmount != null ? kwhSalesAmount : 0.0);
+                    rowData.put("paymentSettled", paymentSettled != null ? paymentSettled : 0.0);
+                    rowData.put("outstandingBalance", outstandingBalance != null ? outstandingBalance : 0.0);
+                    rowData.put("ngenNetType", ngenNetType != null ? ngenNetType : "");
+
+                    processedRows.add(rowData);
+                }
             }
         }
 
@@ -1373,6 +1705,10 @@ public class MultiFileImportService {
 
     private void cleanupCebStaging(Long sessionId) {
         CEB_DATA_CACHE.remove(sessionId);
+        if (sessionId != null) {
+            CEB_PREVIEW_ROWS_CACHE.remove(sessionId + "-CEB");
+            CEB_PREVIEW_ROWS_CACHE.remove(String.valueOf(sessionId));
+        }
     }
 
     private void saveMasterDataToStaging(Long sessionId, List<Map<String, Object>> data) {
@@ -1399,6 +1735,10 @@ public class MultiFileImportService {
 
     private void cleanupNgenStaging(Long sessionId) {
         NGEN_DATA_CACHE.remove(sessionId);
+        if (sessionId != null) {
+            NGEN_PREVIEW_ROWS_CACHE.remove(sessionId + "-NGEN");
+            NGEN_PREVIEW_ROWS_CACHE.remove(String.valueOf(sessionId));
+        }
     }
 
     private static final Map<Long, List<Map<String, Object>>> NPAY_DATA_CACHE = new HashMap<>();
@@ -1413,6 +1753,10 @@ public class MultiFileImportService {
 
     private void cleanupNpayStaging(Long sessionId) {
         NPAY_DATA_CACHE.remove(sessionId);
+        if (sessionId != null) {
+            NPAY_PREVIEW_ROWS_CACHE.remove(sessionId + "-NPAY");
+            NPAY_PREVIEW_ROWS_CACHE.remove(String.valueOf(sessionId));
+        }
     }
 
     private static final Map<Long, List<Map<String, Object>>> MAIN_DATA_CACHE = new HashMap<>();
@@ -1459,19 +1803,25 @@ public class MultiFileImportService {
             synchronized (this) {
                 if (now - lastRefDataLoadTime > REF_DATA_TTL_MS || cachedValidCostCodes.isEmpty()) {
                     cachedValidCostCodes.clear();
-                    costCodeRepository.findAll().forEach(c -> {
-                        if (c.getCostCode() != null) cachedValidCostCodes.add(c.getCostCode().trim().toUpperCase());
-                    });
+                    if (costCodeRepository != null) {
+                        costCodeRepository.findAll().forEach(c -> {
+                            if (c.getCostCode() != null) cachedValidCostCodes.add(c.getCostCode().trim().toUpperCase());
+                        });
+                    }
 
                     cachedValidNetTypes.clear();
-                    netTypeRepository.findAll().forEach(n -> {
-                        if (n.getName() != null) cachedValidNetTypes.add(n.getName().trim().toUpperCase());
-                    });
+                    if (netTypeRepository != null) {
+                        netTypeRepository.findAll().forEach(n -> {
+                            if (n.getName() != null) cachedValidNetTypes.add(n.getName().trim().toUpperCase());
+                        });
+                    }
 
                     cachedValidExpCodes.clear();
-                    expenseCodeRepository.findAll().forEach(e -> {
-                        if (e.getExpCode() != null) cachedValidExpCodes.add(e.getExpCode().trim().toUpperCase());
-                    });
+                    if (expenseCodeRepository != null) {
+                        expenseCodeRepository.findAll().forEach(e -> {
+                            if (e.getExpCode() != null) cachedValidExpCodes.add(e.getExpCode().trim().toUpperCase());
+                        });
+                    }
 
                     lastRefDataLoadTime = now;
                 }
@@ -1644,13 +1994,17 @@ public class MultiFileImportService {
         }
         String str = cellStr(cell);
         if (str == null || str.trim().isEmpty()) return null;
-        String[] patterns = {"yyyy-MM-dd", "M/d/yyyy", "d/M/yyyy", "MM/dd/yyyy", "dd/MM/yyyy",
-                "dd-MM-yyyy", "MM-dd-yyyy", "yyyy/MM/dd", "yyyy.MM.dd", "dd.MM.yyyy", "yyyy.M.d", "d.M.yyyy"};
-        for (String p : patterns) {
-            try { return LocalDate.parse(str.trim(), DateTimeFormatter.ofPattern(p)).toString(); }
-            catch (Exception ignored) {}
+        String trimmed = str.trim();
+        return DATE_PARSE_CACHE.computeIfAbsent(trimmed, this::fastParseDate);
+    }
+
+    private String fastParseDate(String str) {
+        for (DateTimeFormatter dtf : STATIC_DATE_FORMATTERS) {
+            try {
+                return LocalDate.parse(str, dtf).toString();
+            } catch (Exception ignored) {}
         }
-        return str.trim();
+        return str;
     }
 
     private String cellStr(Cell cell) {
@@ -1676,11 +2030,24 @@ public class MultiFileImportService {
 
     private boolean isRowEmpty(Row row) {
         if (row == null) return true;
-        for (int c = row.getFirstCellNum(); c < row.getLastCellNum(); c++) {
+        short first = row.getFirstCellNum();
+        short last = row.getLastCellNum();
+        if (first < 0 || last <= 0) return true;
+        for (int c = first; c < last; c++) {
             Cell cell = row.getCell(c);
             if (cell != null && cell.getCellType() != CellType.BLANK) {
-                String v = cellStr(cell);
-                if (v != null && !v.trim().isEmpty()) return false;
+                switch (cell.getCellType()) {
+                    case STRING:
+                        String s = cell.getStringCellValue();
+                        if (s != null && !s.trim().isEmpty()) return false;
+                        break;
+                    case NUMERIC:
+                    case BOOLEAN:
+                    case FORMULA:
+                        return false;
+                    default:
+                        break;
+                }
             }
         }
         return true;
@@ -1692,7 +2059,7 @@ public class MultiFileImportService {
             return;
         }
 
-        Map<String, List<Map<String, Object>>> groups = new LinkedHashMap<>();
+        Map<String, List<Map<String, Object>>> groups = new LinkedHashMap<>(rows.size());
         for (Map<String, Object> row : rows) {
             String acc = (String) row.get("accountNo");
             if (acc != null && !acc.trim().isEmpty() && acc.trim().matches("\\d+") && acc.trim().length() == 10) {
@@ -1721,7 +2088,7 @@ public class MultiFileImportService {
                         dupKey = cleanAcc + (amt != null ? "::amt=" + amt : "::row=" + row.get("rowNum"));
                     }
                 }
-                groups.computeIfAbsent(dupKey, k -> new ArrayList<>()).add(row);
+                groups.computeIfAbsent(dupKey, k -> new ArrayList<>(2)).add(row);
             }
         }
 
@@ -1830,11 +2197,18 @@ public class MultiFileImportService {
 
     private boolean isDoubleEqual(Object o1, Object o2) {
         if (o1 == null && o2 == null) return true;
+        if (o1 == null || o2 == null) return false;
+        if (o1 instanceof Number && o2 instanceof Number) {
+            return Math.abs(((Number) o1).doubleValue() - ((Number) o2).doubleValue()) < 0.001;
+        }
         double d1 = 0.0;
         double d2 = 0.0;
         try {
-            if (o1 != null) d1 = Double.parseDouble(String.valueOf(o1));
-            if (o2 != null) d2 = Double.parseDouble(String.valueOf(o2));
+            if (o1 instanceof Number) d1 = ((Number) o1).doubleValue();
+            else d1 = Double.parseDouble(String.valueOf(o1).trim().replace(",", ""));
+
+            if (o2 instanceof Number) d2 = ((Number) o2).doubleValue();
+            else d2 = Double.parseDouble(String.valueOf(o2).trim().replace(",", ""));
         } catch (Exception ignored) {
             return Objects.equals(o1, o2);
         }
@@ -2054,6 +2428,19 @@ public class MultiFileImportService {
             }
         }
 
+        // Cache parsed preview rows in fast in-memory Hash Map for immediate O(1) Proceed step
+        String fHash = computeFileHash(fileBytes);
+        if (!fHash.isEmpty()) {
+            NPAY_PREVIEW_ROWS_CACHE.put(fHash, rows);
+        }
+        if (filename != null && !filename.trim().isEmpty()) {
+            NPAY_PREVIEW_ROWS_CACHE.put(filename.trim(), rows);
+        }
+        if (sessionId != null) {
+            NPAY_PREVIEW_ROWS_CACHE.put(sessionId + "-NPAY", rows);
+            NPAY_PREVIEW_ROWS_CACHE.put(String.valueOf(sessionId), rows);
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("filename", filename);
         result.put("fileType", "NPAY");
@@ -2079,31 +2466,28 @@ public class MultiFileImportService {
         List<Map<String, Object>> processedRows = new ArrayList<>();
         int skippedCount = 0;
 
-        try (InputStream is = new ByteArrayInputStream(fileBytes);
-             Workbook workbook = WorkbookFactory.create(is)) {
+        // FAST PATH VIA HASHING:
+        // Check if pre-parsed rows from previewNpay are available in the in-memory cache
+        List<Map<String, Object>> previewRows = null;
+        if (sessionId != null) {
+            previewRows = NPAY_PREVIEW_ROWS_CACHE.get(sessionId + "-NPAY");
+            if (previewRows == null) previewRows = NPAY_PREVIEW_ROWS_CACHE.get(String.valueOf(sessionId));
+        }
+        if (previewRows == null && fileBytes != null) {
+            previewRows = NPAY_PREVIEW_ROWS_CACHE.get(computeFileHash(fileBytes));
+        }
 
-            Sheet sheet = workbook.getSheetAt(0);
-            int headerRowIdx = previewService.findHeaderRowIndex(sheet);
-            Map<String, Integer> npayCols = detectNpayColumns(sheet, headerRowIdx);
+        if (previewRows != null && !previewRows.isEmpty()) {
+            for (Map<String, Object> origRow : previewRows) {
+                String accountNo        = strVal(origRow.get("accountNo"));
+                String npayNetType      = strVal(origRow.get("npayNetType"));
+                String npayName         = strVal(origRow.get("npayName"));
+                Double energyPurchase   = parseDouble(origRow.get("energyPurchase"));
+                Double billSetOff       = parseDouble(origRow.get("billSetOff"));
+                Double retentionMoney   = parseDouble(origRow.get("retentionMoney"));
+                Double payment          = parseDouble(origRow.get("payment"));
 
-            boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
-            int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
-            int lastRow = sheet.getLastRowNum();
-
-            for (int r = dataStart; r <= lastRow; r++) {
-                Row row = sheet.getRow(r);
-                if (row == null || isRowEmpty(row)) continue;
-
-                // Read values directly from the uploaded Excel file — no calculations, no comparisons.
-                String accountNo        = strVal(row, npayCols.get("accountNo"));
-                String npayNetType      = strVal(row, npayCols.get("npayNetType"));
-                String npayName         = strVal(row, npayCols.get("npayName"));
-                Double energyPurchase   = numVal(row, npayCols.get("energyPurchase"));
-                Double billSetOff       = numVal(row, npayCols.get("billSetOff"));
-                Double retentionMoney   = numVal(row, npayCols.get("retentionMoney"));
-                Double payment          = numVal(row, npayCols.get("payment"));
-
-                String rowNumStr = String.valueOf(r + 1);
+                String rowNumStr = String.valueOf(origRow.get("rowNum"));
                 Map<String, Object> corr = null;
                 if (corrections != null) {
                     if (corrections.containsKey(rowNumStr)) {
@@ -2138,13 +2522,13 @@ public class MultiFileImportService {
                 accountNo = accountNo.trim();
 
                 if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
-                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NPAY Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                    auditLogService.log("EXCEL_ROW_DELETED", String.format("NPAY Row %s (Account %s) excluded from batch during import.", rowNumStr, accountNo));
                     skippedCount++;
                     continue;
                 }
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
-                rowData.put("rowNum", r + 1);
+                rowData.put("rowNum", origRow.get("rowNum"));
                 rowData.put("accountNo", accountNo);
                 rowData.put("npayNetType", npayNetType != null ? npayNetType : "");
                 rowData.put("npayName", npayName != null ? npayName : "");
@@ -2154,6 +2538,84 @@ public class MultiFileImportService {
                 rowData.put("payment", payment != null ? payment : 0.0);
 
                 processedRows.add(rowData);
+            }
+        } else {
+            try (InputStream is = new ByteArrayInputStream(fileBytes);
+                 Workbook workbook = WorkbookFactory.create(is)) {
+
+                Sheet sheet = workbook.getSheetAt(0);
+                int headerRowIdx = previewService.findHeaderRowIndex(sheet);
+                Map<String, Integer> npayCols = detectNpayColumns(sheet, headerRowIdx);
+
+                boolean hasSubHeader = headerRowIdx + 1 <= sheet.getLastRowNum() && previewService.isSubHeaderRow(sheet, headerRowIdx + 1);
+                int dataStart = hasSubHeader ? headerRowIdx + 2 : headerRowIdx + 1;
+                int lastRow = sheet.getLastRowNum();
+
+                for (int r = dataStart; r <= lastRow; r++) {
+                    Row row = sheet.getRow(r);
+                    if (row == null || isRowEmpty(row)) continue;
+
+                    // Read values directly from the uploaded Excel file — no calculations, no comparisons.
+                    String accountNo        = strVal(row, npayCols.get("accountNo"));
+                    String npayNetType      = strVal(row, npayCols.get("npayNetType"));
+                    String npayName         = strVal(row, npayCols.get("npayName"));
+                    Double energyPurchase   = numVal(row, npayCols.get("energyPurchase"));
+                    Double billSetOff       = numVal(row, npayCols.get("billSetOff"));
+                    Double retentionMoney   = numVal(row, npayCols.get("retentionMoney"));
+                    Double payment          = numVal(row, npayCols.get("payment"));
+
+                    String rowNumStr = String.valueOf(r + 1);
+                    Map<String, Object> corr = null;
+                    if (corrections != null) {
+                        if (corrections.containsKey(rowNumStr)) {
+                            corr = corrections.get(rowNumStr);
+                        } else if (accountNo != null && corrections.containsKey(accountNo.trim())) {
+                            corr = corrections.get(accountNo.trim());
+                        }
+                    }
+
+                    if (corr != null) {
+                        if (corr.containsKey("accountNo"))      accountNo = (String) corr.get("accountNo");
+                        if (corr.containsKey("npayName"))        npayName  = (String) corr.get("npayName");
+                        if (corr.containsKey("npayNetType"))     npayNetType = (String) corr.get("npayNetType");
+                        if (corr.containsKey("energyPurchase")) {
+                            energyPurchase = parseDouble(corr.get("energyPurchase"));
+                        }
+                        if (corr.containsKey("billSetOff")) {
+                            billSetOff = parseDouble(corr.get("billSetOff"));
+                        }
+                        if (corr.containsKey("retentionMoney")) {
+                            retentionMoney = parseDouble(corr.get("retentionMoney"));
+                        }
+                        if (corr.containsKey("payment")) {
+                            payment = parseDouble(corr.get("payment"));
+                        }
+                    }
+
+                    if (accountNo == null || accountNo.trim().isEmpty() || !accountNo.trim().matches("\\d+") || accountNo.trim().length() != 10) {
+                        skippedCount++;
+                        continue;
+                    }
+                    accountNo = accountNo.trim();
+
+                    if (corr != null && (Boolean.TRUE.equals(corr.get("deleted")) || "true".equals(String.valueOf(corr.get("deleted"))))) {
+                        auditLogService.log("EXCEL_ROW_DELETED", String.format("NPAY Row %d (Account %s) excluded from batch during import.", r + 1, accountNo));
+                        skippedCount++;
+                        continue;
+                    }
+
+                    Map<String, Object> rowData = new LinkedHashMap<>();
+                    rowData.put("rowNum", r + 1);
+                    rowData.put("accountNo", accountNo);
+                    rowData.put("npayNetType", npayNetType != null ? npayNetType : "");
+                    rowData.put("npayName", npayName != null ? npayName : "");
+                    rowData.put("energyPurchase", energyPurchase != null ? energyPurchase : 0.0);
+                    rowData.put("billSetOff", billSetOff != null ? billSetOff : 0.0);
+                    rowData.put("retentionMoney", retentionMoney != null ? retentionMoney : 0.0);
+                    rowData.put("payment", payment != null ? payment : 0.0);
+
+                    processedRows.add(rowData);
+                }
             }
         }
 
@@ -3000,6 +3462,22 @@ public class MultiFileImportService {
         // remaining (unmatched) Master Data records can be preserved as base rows afterwards.
         Set<String> matchedMasterAccounts = new HashSet<>();
         Map<String, Optional<Customer>> dbCustomerCache = new HashMap<>();
+        Set<String> nonMasterAccounts = new HashSet<>();
+        for (Map<String, Object> r : mainDataset) {
+            String a = (String) r.get("accountNo");
+            if (a != null && !masterMap.containsKey(a.trim())) {
+                nonMasterAccounts.add(a.trim());
+            }
+        }
+        if (!nonMasterAccounts.isEmpty()) {
+            try {
+                customerRepository.findAllById(nonMasterAccounts).forEach(c -> {
+                    if (c.getAccountNo() != null) {
+                        dbCustomerCache.put(c.getAccountNo().trim(), Optional.of(c));
+                    }
+                });
+            } catch (Exception ignored) {}
+        }
 
         for (Map<String, Object> row : mainDataset) {
             Map<String, Object> enriched = new LinkedHashMap<>(row);
@@ -4859,8 +5337,21 @@ public class MultiFileImportService {
             String billingMode = (String) stagedCust.get("billingMode");
 
             LocalDate agrDate = agreementDate != null && !agreementDate.isEmpty() ? safeParseDate(agreementDate) : null;
-            String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
-            String finalBranch = detBranch != null ? detBranch : (branchCode != null ? branchCode : "");
+            String targetDiv = "";
+            if (session.getDivision() != null && !session.getDivision().trim().isEmpty()) {
+                targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(session.getDivision().trim());
+            }
+            if (targetDiv.isEmpty() && isNotBlank(costCode)) {
+                targetDiv = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(costCode);
+            }
+            if (targetDiv.isEmpty()) {
+                targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(branchCode);
+            }
+            if (targetDiv.isEmpty()) {
+                String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+                if (detBranch != null && !detBranch.isEmpty()) targetDiv = detBranch;
+            }
+            String finalBranch = !targetDiv.isEmpty() ? targetDiv : (branchCode != null ? branchCode : "");
 
             Customer existing = existingCustomerHash.get(accountNo);
             Customer c;
@@ -4871,6 +5362,9 @@ public class MultiFileImportService {
                 c.setUnitRate(unitRate);
                 c.setTariffType(tariffType);
                 c.setCreatedByUploadId(uploadId);
+                if (finalBranch != null && !finalBranch.isEmpty()) {
+                    c.setDivision(finalBranch);
+                }
                 newCustCount++;
                 if (isNotBlank(costCode))
                     c.setCostCode(costCodeHash.get(costCode.trim()));
@@ -4880,6 +5374,11 @@ public class MultiFileImportService {
                     c.setExpenseCode(expenseCodeHash.get(billingMode.trim().toUpperCase()));
             } else {
                 c = existing;
+                if (!targetDiv.isEmpty()) {
+                    c.setDivision(targetDiv);
+                } else if (finalBranch != null && !finalBranch.isEmpty() && (c.getDivision() == null || c.getDivision().isEmpty())) {
+                    c.setDivision(finalBranch);
+                }
                 if (isNotBlank(customerName))
                     c.setCustomerName(customerName);
                 if (isNotBlank(customerAddress))
@@ -5083,6 +5582,9 @@ public class MultiFileImportService {
         MAIN_DATA_CACHE.remove(sessionId);
         MAIN_DUP_CACHE.remove(sessionId);
         com.ceb.billing.controllers.DashboardController.invalidateCache();
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);

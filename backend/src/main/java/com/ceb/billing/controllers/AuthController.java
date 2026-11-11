@@ -6,7 +6,6 @@ import com.ceb.billing.entities.User;
 import com.ceb.billing.models.*;
 import com.ceb.billing.repositories.UserRepository;
 import com.ceb.billing.services.AuditLogService;
-import com.ceb.billing.services.OtpService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -35,12 +34,9 @@ public class AuthController {
     @Autowired
     private AuditLogService auditLogService;
 
-    @Autowired
-    private OtpService otpService;
-
     @PostMapping("/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
-        // 1. Verify username and password credentials
+        // Verify credentials and issue the session token for every role without an OTP challenge.
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.getUsername(), loginRequest.getPassword()));
 
@@ -48,52 +44,11 @@ public class AuthController {
         User user = userRepository.findByUsername(userDetails.getUsername())
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + userDetails.getUsername()));
 
-        // 2. Issue JWT token directly upon successful credentials verification (OTP bypassed)
         String role = user.getRole();
         String jwt = jwtUtils.generateJwtTokenFromUsername(user.getUsername(), role);
-
-        auditLogService.log("USER_LOGIN_SUCCESS", "User " + user.getUsername() + " successfully authenticated with credentials.");
-
+        auditLogService.log("USER_LOGIN_SUCCESS",
+                "User " + user.getUsername() + " authenticated with username and password.");
         return ResponseEntity.ok(new JwtResponse(jwt, user.getUsername(), role));
-    }
-
-    @PostMapping("/verify-otp")
-    public ResponseEntity<?> verifyOtp(@Valid @RequestBody VerifyOtpRequest request) {
-        try {
-            // Verify OTP correctness, expiry, session authenticity, and attempt limit
-            String verifiedUsername = otpService.verifyOtp(request.getOtpSessionId(), request.getOtp());
-            User user = userRepository.findByUsername(verifiedUsername)
-                    .orElseThrow(() -> new IllegalArgumentException("User account not found"));
-
-            // Issue JWT token exclusively after successful OTP verification
-            String role = user.getRole();
-            String jwt = jwtUtils.generateJwtTokenFromUsername(user.getUsername(), role);
-
-            auditLogService.log("USER_LOGIN_OTP_VERIFIED", "User " + user.getUsername() + " successfully verified OTP and authenticated.");
-
-            return ResponseEntity.ok(new JwtResponse(jwt, user.getUsername(), role));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(400).body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(new MessageResponse("An error occurred during verification."));
-        }
-    }
-
-    @PostMapping("/resend-otp")
-    public ResponseEntity<?> resendOtp(@Valid @RequestBody ResendOtpRequest request) {
-        try {
-            // Enforces 60-second cooldown, invalidates old OTP, and sends fresh OTP
-            OtpLoginResponse response = otpService.resendOtp(request.getOtpSessionId());
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
-        } catch (IllegalStateException e) {
-            return ResponseEntity.status(429).body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(new MessageResponse("Failed to resend code: " + e.getMessage()));
-        }
     }
 
     @PostMapping("/register")
@@ -136,7 +91,7 @@ public class AuthController {
             userRepository.save(cust);
 
             auditLogService.log("SYSTEM_SETUP", "Default system users seeded (admin, officer, viewer, 3202345091)");
-            return ResponseEntity.ok(new MessageResponse("Default users initialized: admin/admin123 (ADMIN), officer/officer123 (OFFICER), viewer/viewer123 (USER)"));
+            return ResponseEntity.ok(new MessageResponse("Default users initialized."));
         }
         return ResponseEntity.badRequest().body(new MessageResponse("System already initialized. Setup skipped."));
     }

@@ -390,30 +390,42 @@ public class CustomerHashIndexService {
 
     public static String resolveLocation(Map<String, Object> dto) {
         if (dto == null) return "";
+        // 1. Direct snapshotDivision (authoritative upload context)
         Object snapDiv = dto.get("snapshotDivision");
         if (snapDiv != null) {
             String canon = canonicalDivision(snapDiv.toString());
             if (!canon.isEmpty()) return canon;
         }
+        // 2. Direct division
         Object divObj = dto.get("division");
         if (divObj != null) {
             String canon = canonicalDivision(divObj.toString());
             if (!canon.isEmpty()) return canon;
         }
+        // 3. Official CEB Cost Code
+        Object ccObj = dto.get("costCode");
+        if (ccObj == null) ccObj = dto.get("masterCostCode");
+        if (ccObj != null) {
+            String canon = BranchDetector.divisionFromCostCode(ccObj.toString());
+            if (!canon.isEmpty()) return canon;
+        }
+        // 4. Branch code
+        Object branchObj = dto.get("branchCode");
+        if (branchObj != null) {
+            String canon = canonicalDivision(branchObj.toString());
+            if (!canon.isEmpty()) return canon;
+        }
+        // 5. Raw division string
+        if (divObj != null && !divObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(divObj.toString().trim()) && !"—".equals(divObj.toString().trim())) {
+            return divObj.toString().trim();
+        }
+        // 6. Fallback to Account Number prefix
         Object accObj = dto.get("accountNo");
         if (accObj != null) {
             String detected = BranchDetector.detectBranch(accObj.toString().trim());
             if (detected != null && !detected.trim().isEmpty()) {
                 return detected.trim();
             }
-        }
-        Object branchObj = dto.get("branchCode");
-        if (branchObj != null) {
-            String canon = canonicalDivision(branchObj.toString());
-            if (!canon.isEmpty()) return canon;
-        }
-        if (divObj != null && !divObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(divObj.toString().trim()) && !"—".equals(divObj.toString().trim())) {
-            return divObj.toString().trim();
         }
         return "";
     }
@@ -429,6 +441,9 @@ public class CustomerHashIndexService {
         String canonCust = canonicalDivision(customerLoc);
         if (!canonTarget.isEmpty() && !canonCust.isEmpty()) {
             return canonTarget.equalsIgnoreCase(canonCust);
+        }
+        if (!canonTarget.isEmpty()) {
+            return customerLoc.trim().toLowerCase().contains(canonTarget.toLowerCase());
         }
         return customerLoc.trim().equalsIgnoreCase(targetLoc.trim());
     }
@@ -589,17 +604,20 @@ public class CustomerHashIndexService {
             dto.put("validationErrors", c.getValidationErrors());
 
             String div = canonicalDivision(c.getDivision());
+            if (div.isEmpty() && c.getCostCode() != null) {
+                div = BranchDetector.divisionFromCostCode(c.getCostCode().getCostCode());
+            }
             if (div.isEmpty() && dirMap != null) {
                 div = canonicalDivision(str(dirMap, "snapshotDivision", "division", "location"));
-            }
-            if (div.isEmpty() && c.getAccountNo() != null) {
-                div = BranchDetector.detectBranch(c.getAccountNo().trim());
             }
             if (div.isEmpty()) {
                 div = canonicalDivision(c.getBranchCode());
             }
             if (div.isEmpty() && c.getDivision() != null && !c.getDivision().trim().isEmpty() && !"—".equals(c.getDivision().trim())) {
                 div = c.getDivision().trim();
+            }
+            if (div.isEmpty() && c.getAccountNo() != null) {
+                div = BranchDetector.detectBranch(c.getAccountNo().trim());
             }
             dto.put("division", div != null ? div : "");
             dto.put("directory", directory);

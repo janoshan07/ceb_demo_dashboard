@@ -18,9 +18,13 @@ import {
   ArrowLeft,
   Lock,
   Eye,
-  EyeOff
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import StagingReview from './StagingReview';
+
+// Client-side Hash Cache for instant 0ms tab switching and audit log rendering
+const auditLogsHashCache = new Map();
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -78,7 +82,26 @@ const Admin = () => {
     }
   };
 
-  const fetchLogs = async () => {
+  const [visibleLogsCount, setVisibleLogsCount] = useState(50);
+
+  const fetchLogs = async (forceRefresh = false) => {
+    if (!forceRefresh && auditLogsHashCache.has('logs')) {
+      const cached = auditLogsHashCache.get('logs');
+      setAuditLogs(cached);
+      setLogsLoading(false);
+      // Fast background refresh without displaying loading shimmer
+      authFetch('/api/admin/audit-logs')
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (Array.isArray(data)) {
+            auditLogsHashCache.set('logs', data);
+            setAuditLogs(data);
+          }
+        })
+        .catch(console.error);
+      return;
+    }
+
     try {
       setLogsLoading(true);
       setLogsError(null);
@@ -87,6 +110,7 @@ const Admin = () => {
         throw new Error('Failed to retrieve system audit logs.');
       }
       const data = await res.json();
+      auditLogsHashCache.set('logs', data);
       setAuditLogs(data);
     } catch (err) {
       setLogsError(err.message || 'Error occurred while fetching audit logs.');
@@ -782,15 +806,39 @@ const Admin = () => {
       {/* Security Audit Logs Tab */}
       {activeTab === 'logs' && (
         <div className="card">
-          <div className="panel-header">
+          <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Clock size={18} className="text-primary" />
               Traceability Trail
+              {auditLogs.length > 0 && (
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.15rem 0.5rem', borderRadius: '12px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }}>
+                  {auditLogs.length} events
+                </span>
+              )}
             </h2>
+            <button
+              onClick={() => fetchLogs(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.8rem',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '6px',
+                border: '1px solid var(--border)',
+                background: 'transparent',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)'
+              }}
+              title="Refresh audit logs"
+            >
+              <RefreshCw size={13} className={logsLoading ? 'spin' : ''} />
+              Refresh
+            </button>
           </div>
 
           <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
-            {logsLoading ? (
+            {logsLoading && auditLogs.length === 0 ? (
               <div className="timeline" style={{ padding: '1rem', opacity: 0.8 }}>
                 {[...Array(4)].map((_, i) => (
                   <div key={i} className="timeline-item">
@@ -810,7 +858,7 @@ const Admin = () => {
               <div style={{ padding: '3rem 0', textAlignment: 'center', color: 'var(--text-muted)' }}>No audit logs found.</div>
             ) : (
               <div className="timeline" style={{ padding: '1rem' }}>
-                {auditLogs.map((log) => (
+                {auditLogs.slice(0, visibleLogsCount).map((log) => (
                   <div key={log.id} className="timeline-item">
                     <div className={`timeline-dot ${
                       log.action.includes('FAILED') || log.action.includes('DELETE') || log.action.includes('REJECT') ? 'danger' :
@@ -832,6 +880,26 @@ const Admin = () => {
                     </div>
                   </div>
                 ))}
+
+                {auditLogs.length > visibleLogsCount && (
+                  <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                    <button
+                      onClick={() => setVisibleLogsCount(prev => prev + 50)}
+                      style={{
+                        padding: '0.5rem 1.25rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        background: 'var(--bg-secondary)',
+                        border: '1px solid var(--border)',
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)'
+                      }}
+                    >
+                      Load More Events ({auditLogs.length - visibleLogsCount} remaining)
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>

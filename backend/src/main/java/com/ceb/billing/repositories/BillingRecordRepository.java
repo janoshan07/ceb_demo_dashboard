@@ -95,4 +95,10 @@ public interface BillingRecordRepository extends JpaRepository<BillingRecord, Lo
 
     @Query("SELECT MAX(b.toDate) FROM BillingRecord b")
     LocalDate findMaxToDate();
+
+    @Query("SELECT b.customer.accountNo, b.refNo, b.fromDate, b.toDate FROM BillingRecord b WHERE b.customer.accountNo IN :accountNos")
+    List<Object[]> findBillingKeysByAccountNos(@org.springframework.data.repository.query.Param("accountNos") Collection<String> accountNos);
+
+    @Query("SELECT b FROM BillingRecord b WHERE b.customer.accountNo IN :accountNos ORDER BY b.customer.accountNo ASC, b.fromDate ASC")
+    List<BillingRecord> findByCustomerAccountNoInOrderByFromDateAsc(@org.springframework.data.repository.query.Param("accountNos") Collection<String> accountNos);
 }

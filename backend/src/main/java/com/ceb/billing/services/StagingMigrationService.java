@@ -63,6 +63,9 @@ public class StagingMigrationService {
     @org.springframework.context.annotation.Lazy
     private CustomerHashIndexService customerHashIndexService;
 
+    @Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     @Transactional
     public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
@@ -71,14 +74,16 @@ public class StagingMigrationService {
         }
         UploadHistory history = optHistory.get();
 
-        // Auto-reject any remaining pending proposals on this batch
+        // Auto-reject any remaining pending proposals on this batch in bulk
         List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");
         for (com.ceb.billing.entities.StagingChangeLog p : pending) {
             p.setStatus("REJECTED");
             p.setReviewedBy(approvedBy);
             p.setReviewedAt(java.time.LocalDateTime.now());
             p.setRejectionReason("Batch approved & finalized.");
-            changeLogRepository.save(p);
+        }
+        if (!pending.isEmpty()) {
+            changeLogRepository.saveAll(pending);
         }
 
         List<BillingUploadStaging> stagingRecords = stagingRepository.findByUploadBatchId(batchId);
@@ -91,46 +96,97 @@ public class StagingMigrationService {
         Set<String> impactedAccounts = new HashSet<>();
 
         // Optimization with Hashing:
-        // Pre-load reference tables into in-memory HashMaps for O(1) resolution
+        // 1. Pre-load reference tables into in-memory HashMaps for O(1) resolution
         Map<String, CostCode> costCodeHash = new HashMap<>();
         costCodeRepository.findAll().forEach(cc -> {
-            if (cc.getCostCode() != null) costCodeHash.put(cc.getCostCode().trim(), cc);
+            if (cc.getCostCode() != null) {
+                costCodeHash.put(cc.getCostCode().trim(), cc);
+                costCodeHash.put(cc.getCostCode().trim().toLowerCase(), cc);
+            }
         });
 
         Map<String, NetType> netTypeHash = new HashMap<>();
         netTypeRepository.findAll().forEach(nt -> {
-            if (nt.getName() != null) netTypeHash.put(nt.getName().trim().toUpperCase(), nt);
+            if (nt.getName() != null) {
+                netTypeHash.put(nt.getName().trim().toUpperCase(), nt);
+                netTypeHash.put(nt.getName().trim().toLowerCase(), nt);
+            }
         });
 
         Map<String, ExpenseCode> expenseCodeHash = new HashMap<>();
         expenseCodeRepository.findAll().forEach(ec -> {
             if (ec.getExpCode() != null) {
                 expenseCodeHash.put(ec.getExpCode().trim().toUpperCase(), ec);
+                expenseCodeHash.put(ec.getExpCode().trim().toLowerCase(), ec);
                 expenseCodeHash.put(String.valueOf(ec.getId()), ec);
+            }
+            if (ec.getExp() != null) {
+                expenseCodeHash.put(ec.getExp().trim().toLowerCase(), ec);
             }
         });
 
-        // Pre-load all candidate account numbers in a single batch query into a HashMap
-        Set<String> allBatchAccounts = new HashSet<>();
-        for (BillingUploadStaging r : stagingRecords) {
-            try {
-                Map<String, Object> d = objectMapper.readValue(r.getRawJson(), new TypeReference<Map<String, Object>>() {});
-                String acc = (String) d.get("accountNo");
-                if (acc != null && !acc.trim().isEmpty()) {
-                    allBatchAccounts.add(acc.trim());
-                }
-            } catch (Exception ignored) {}
+        // 2. Single-pass JSON parsing: parse each staging record once and collect all candidate accounts
+        class ParsedStagingRow {
+            final BillingUploadStaging record;
+            final Map<String, Object> data;
+            final String accountNo;
+            ParsedStagingRow(BillingUploadStaging record, Map<String, Object> data, String accountNo) {
+                this.record = record;
+                this.data = data;
+                this.accountNo = accountNo;
+            }
         }
 
+        List<ParsedStagingRow> parsedRows = new ArrayList<>(stagingRecords.size());
+        Set<String> allBatchAccounts = new HashSet<>();
+
+        for (BillingUploadStaging r : stagingRecords) {
+            Map<String, Object> d = Collections.emptyMap();
+            String acc = null;
+            try {
+                if (r.getRawJson() != null && !r.getRawJson().trim().isEmpty()) {
+                    d = objectMapper.readValue(r.getRawJson(), new TypeReference<Map<String, Object>>() {});
+                    Object rawAcc = d.get("accountNo");
+                    if (rawAcc != null && !rawAcc.toString().trim().isEmpty()) {
+                        acc = rawAcc.toString().trim();
+                        allBatchAccounts.add(acc);
+                    }
+                }
+            } catch (Exception ignored) {}
+            parsedRows.add(new ParsedStagingRow(r, d, acc));
+        }
+
+        // 3. Pre-load candidate customers into an in-memory Hash Map [O(1) Access]
         Map<String, Customer> customerHash = new HashMap<>();
-        if (!allBatchAccounts.isEmpty()) {
-            customerRepository.findAllById(allBatchAccounts).forEach(c -> customerHash.put(c.getAccountNo(), c));
+        List<String> accList = new ArrayList<>(allBatchAccounts);
+        int chunkSize = 1000;
+        for (int i = 0; i < accList.size(); i += chunkSize) {
+            List<String> sub = accList.subList(i, Math.min(i + chunkSize, accList.size()));
+            customerRepository.findAllById(Objects.requireNonNull(sub)).forEach(c -> {
+                if (c.getAccountNo() != null) customerHash.put(c.getAccountNo().trim(), c);
+            });
+        }
+
+        // 4. Pre-load existing billing records into a HashSet for O(1) duplicate checks (eliminates N+1 queries)
+        Set<String> existingBillingKeyHash = new HashSet<>();
+        for (int i = 0; i < accList.size(); i += chunkSize) {
+            List<String> sub = accList.subList(i, Math.min(i + chunkSize, accList.size()));
+            List<Object[]> rows = billingRecordRepository.findBillingKeysByAccountNos(sub);
+            for (Object[] row : rows) {
+                String acc = row[0] != null ? row[0].toString().trim() : "";
+                String ref = row[1] != null ? row[1].toString().trim() : "";
+                String from = row[2] != null ? row[2].toString().trim() : "";
+                String to = row[3] != null ? row[3].toString().trim() : "";
+                existingBillingKeyHash.add(buildBillingHashKey(acc, ref, from, to));
+            }
         }
 
         Map<String, Customer> customersToSave = new HashMap<>();
         List<BillingRecord> billingRecordsToSave = new ArrayList<>();
 
-        for (BillingUploadStaging record : stagingRecords) {
+        for (ParsedStagingRow item : parsedRows) {
+            BillingUploadStaging record = item.record;
+            Map<String, Object> data = item.data;
             String status = record.getValidationStatus();
 
             if ("INVALID".equals(status) || "REJECTED".equals(status)) {
@@ -148,11 +204,7 @@ public class StagingMigrationService {
                 }
             }
 
-            // Parse shared fields
-            Map<String, Object> data = objectMapper.readValue(record.getRawJson(),
-                    new TypeReference<Map<String, Object>>() {});
-
-            String accountNo   = (String) data.get("accountNo");
+            String accountNo   = item.accountNo;
             String customerName = (String) data.get("customerName");
             String bankCode    = (String) data.get("bankCode");
             String branchCode  = (String) data.get("branchCode");
@@ -203,6 +255,23 @@ public class StagingMigrationService {
                     customer.setTariffType(tariffType);
                 }
 
+                String targetDiv = "";
+                Object snapDiv = data.get("snapshotDivision");
+                if (snapDiv != null) targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(snapDiv.toString());
+                if (targetDiv.isEmpty() && data.get("division") != null) targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(data.get("division").toString());
+                if (targetDiv.isEmpty() && isNotBlank(costCode)) targetDiv = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(costCode);
+                if (targetDiv.isEmpty()) targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(branchCode);
+                if (targetDiv.isEmpty()) {
+                    String detectedDiv = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+                    if (detectedDiv != null && !detectedDiv.isEmpty()) targetDiv = detectedDiv;
+                }
+                if (!targetDiv.isEmpty()) {
+                    customer.setDivision(targetDiv);
+                    if (isBlank(customer.getBranchCode())) {
+                        customer.setBranchCode(targetDiv);
+                    }
+                }
+
                 customersToSave.put(accountNo, customer);
                 customerHash.put(accountNo, customer);
                 newCustomers++;
@@ -247,6 +316,22 @@ public class StagingMigrationService {
                     customer.setTariffType(tariffType);
                 }
 
+                if (isBlank(customer.getDivision())) {
+                    String targetDiv = "";
+                    Object snapDiv = data.get("snapshotDivision");
+                    if (snapDiv != null) targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(snapDiv.toString());
+                    if (targetDiv.isEmpty() && data.get("division") != null) targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(data.get("division").toString());
+                    if (targetDiv.isEmpty() && isNotBlank(costCode)) targetDiv = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(costCode);
+                    if (targetDiv.isEmpty()) targetDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(branchCode);
+                    if (targetDiv.isEmpty()) {
+                        String detectedDiv = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+                        if (detectedDiv != null && !detectedDiv.isEmpty()) targetDiv = detectedDiv;
+                    }
+                    if (!targetDiv.isEmpty()) {
+                        customer.setDivision(targetDiv);
+                    }
+                }
+
                 customersToSave.put(accountNo, customer);
             }
 
@@ -288,17 +373,16 @@ public class StagingMigrationService {
                 continue;
             }
 
-            // Guard: skip if a billing record already exists for this account + period + refNo (unless forceImport is true)
+            // Guard: skip if a billing record already exists for this account + period + refNo (via O(1) Hash Set check)
             Boolean forceImport = data.get("forceImport") instanceof Boolean ? (Boolean) data.get("forceImport") : false;
+            String billHashKey = buildBillingHashKey(accountNo, refNo, fromDate, toDate);
             if (!forceImport) {
-                boolean alreadyExists = billingRecordRepository
-                        .findByCustomerAccountNoAndRefNoAndFromDateAndToDate(accountNo, refNo, fromDate, toDate)
-                        .isPresent();
-                if (alreadyExists) {
+                if (existingBillingKeyHash.contains(billHashKey)) {
                     duplicateCount++;
                     continue;
                 }
             }
+            existingBillingKeyHash.add(billHashKey);
 
             // Create billing record
             BillingRecord billingRecord = new BillingRecord(customer, refNo, fromDate, toDate,
@@ -334,15 +418,22 @@ public class StagingMigrationService {
             successfulRows++;
         }
 
-        // Batch save accumulated customers and billing records
+        // Batch save accumulated customers and billing records in chunks
         if (!customersToSave.isEmpty()) {
-            customerRepository.saveAll(customersToSave.values());
+            List<Customer> custList = new ArrayList<>(customersToSave.values());
+            for (int i = 0; i < custList.size(); i += chunkSize) {
+                customerRepository.saveAll(Objects.requireNonNull(
+                        custList.subList(i, Math.min(i + chunkSize, custList.size()))));
+            }
             if (customerHashIndexService != null) {
-                customersToSave.values().forEach(customerHashIndexService::putOrUpdate);
+                custList.forEach(customerHashIndexService::putOrUpdate);
             }
         }
         if (!billingRecordsToSave.isEmpty()) {
-            billingRecordRepository.saveAll(billingRecordsToSave);
+            for (int i = 0; i < billingRecordsToSave.size(); i += chunkSize) {
+                billingRecordRepository.saveAll(Objects.requireNonNull(
+                        billingRecordsToSave.subList(i, Math.min(i + chunkSize, billingRecordsToSave.size()))));
+            }
         }
 
         // ── Determine final status ────────────────────────────────────────
@@ -386,9 +477,20 @@ public class StagingMigrationService {
         //    of the staged batch automatically promotes it to APPROVED — no
         //    data is rebuilt or recompared.
         updateDirectorySnapshotStatus(history, "APPROVED", approvedBy);
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private String buildBillingHashKey(String accountNo, String refNo, Object fromDate, Object toDate) {
+        return (accountNo != null ? accountNo.trim() : "") + "#"
+                + (refNo != null ? refNo.trim() : "") + "#"
+                + (fromDate != null ? fromDate.toString().trim() : "") + "#"
+                + (toDate != null ? toDate.toString().trim() : "");
+    }
 
     private LocalDate safeParseDate(String dateStr) {
         if (dateStr == null || dateStr.trim().isEmpty()) return null;
@@ -483,5 +585,9 @@ public class StagingMigrationService {
         // A rejected batch never received the final Admin approval — mark the pending
         // Monthly Customer Directory snapshot for that session as REJECTED too.
         updateDirectorySnapshotStatus(history, "REJECTED", rejectedBy);
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
     }
 }

@@ -13,13 +13,16 @@ import com.ceb.billing.repositories.NetTypeRepository;
 import com.ceb.billing.repositories.ExpenseCodeRepository;
 import com.ceb.billing.services.ExcelValidationService;
 import com.ceb.billing.services.AuditLogService;
+import com.ceb.billing.security.OfficerStepUp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.event.EventListener;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
+import org.springframework.lang.NonNull;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -132,7 +135,7 @@ public class CustomerController {
     public static String resolveLocation(Map<String, Object> dto) {
         if (dto == null) return "";
 
-        // 1. Direct snapshotDivision (e.g. from MonthlyDirectorySnapshot)
+        // 1. Direct snapshotDivision (authoritative upload context, e.g. from MonthlyDirectorySnapshot)
         Object snapDiv = dto.get("snapshotDivision");
         if (snapDiv != null) {
             String canon = canonicalDivision(snapDiv.toString());
@@ -146,7 +149,15 @@ public class CustomerController {
             if (!canon.isEmpty()) return canon;
         }
 
-        // 3. From directory record if nested
+        // 3. Official CEB Cost Code (464->Kalmunai, 462->Batticaloa, 463->Ampara, 461->Trincomalee, 465->Valaichenai)
+        Object ccObj = dto.get("costCode");
+        if (ccObj == null) ccObj = dto.get("masterCostCode");
+        if (ccObj != null) {
+            String canon = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(ccObj.toString());
+            if (!canon.isEmpty()) return canon;
+        }
+
+        // 4. From directory record if nested
         Object dirObj = dto.get("directory");
         if (dirObj instanceof Map) {
             Map<?, ?> dir = (Map<?, ?>) dirObj;
@@ -160,19 +171,15 @@ public class CustomerController {
                 String canon = canonicalDivision(dDiv.toString());
                 if (!canon.isEmpty()) return canon;
             }
+            Object dCc = dir.get("costCode");
+            if (dCc != null) {
+                String canon = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(dCc.toString());
+                if (!canon.isEmpty()) return canon;
+            }
             Object dLoc = dir.get("location");
             if (dLoc != null) {
                 String canon = canonicalDivision(dLoc.toString());
                 if (!canon.isEmpty()) return canon;
-            }
-        }
-
-        // 4. From Account Number prefix (Ceylon Electricity Board standard: 34=Trincomalee, 24=Ampara, 32=Batticaloa, 56=Valaichenai, 69=Kalmunai)
-        Object accObj = dto.get("accountNo");
-        if (accObj != null) {
-            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accObj.toString().trim());
-            if (detected != null && !detected.trim().isEmpty()) {
-                return detected.trim();
             }
         }
 
@@ -186,6 +193,15 @@ public class CustomerController {
         // 6. If division is a raw non-empty string that didn't match canonical list, return trimmed
         if (divObj != null && !divObj.toString().trim().isEmpty() && !"null".equalsIgnoreCase(divObj.toString().trim()) && !"—".equals(divObj.toString().trim())) {
             return divObj.toString().trim();
+        }
+
+        // 7. Fallback to Account Number prefix ONLY when no authoritative context is provided
+        Object accObj = dto.get("accountNo");
+        if (accObj != null) {
+            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accObj.toString().trim());
+            if (detected != null && !detected.trim().isEmpty()) {
+                return detected.trim();
+            }
         }
 
         return "";
@@ -202,6 +218,9 @@ public class CustomerController {
         String canonCust = canonicalDivision(customerLoc);
         if (!canonTarget.isEmpty() && !canonCust.isEmpty()) {
             return canonTarget.equalsIgnoreCase(canonCust);
+        }
+        if (!canonTarget.isEmpty()) {
+            return customerLoc.trim().toLowerCase().contains(canonTarget.toLowerCase());
         }
         return customerLoc.trim().equalsIgnoreCase(targetLoc.trim());
     }
@@ -246,7 +265,7 @@ public class CustomerController {
             Long ccId = (customerHashIndexService != null) ? customerHashIndexService.getCostCodeId(costCode) : null;
             if (ccId != null) {
                 dto.put("costCodeId", ccId);
-            } else {
+            } else if (costCodeRepository != null) {
                 costCodeRepository.findByCostCode(costCode.trim()).ifPresent(cc -> dto.put("costCodeId", cc.getId()));
             }
         }
@@ -260,7 +279,7 @@ public class CustomerController {
             Long ecId = (customerHashIndexService != null) ? customerHashIndexService.getExpenseCodeId(expenseCode) : null;
             if (ecId != null) {
                 dto.put("expenseCodeId", ecId);
-            } else {
+            } else if (expenseCodeRepository != null) {
                 final String cleanEc = expenseCode.trim();
                 expenseCodeRepository.findByExpCode(cleanEc).ifPresent(ec -> dto.put("expenseCodeId", ec.getId()));
             }
@@ -270,7 +289,7 @@ public class CustomerController {
             Long ntId = (customerHashIndexService != null) ? customerHashIndexService.getNetTypeId(solarType) : null;
             if (ntId != null) {
                 dto.put("netTypeId", ntId);
-            } else {
+            } else if (netTypeRepository != null) {
                 netTypeRepository.findByName(solarType.trim()).ifPresent(nt -> dto.put("netTypeId", nt.getId()));
             }
         }
@@ -285,7 +304,7 @@ public class CustomerController {
         dto.put("validationErrors", record.get("errors"));
         dto.put("directory", record);
         
-        // Resolve division: Priority 1: snapshotDivision, Priority 2: canonical division/location, Priority 3: BranchDetector from accountNo
+        // Resolve division: Priority 1: snapshotDivision, Priority 2: division, Priority 3: costCode, Priority 4: branchCode, Priority 5: Fallback BranchDetector
         String recDiv = "";
         Object snapDiv = record.get("snapshotDivision");
         if (snapDiv != null) {
@@ -294,9 +313,9 @@ public class CustomerController {
         if (recDiv.isEmpty()) {
             recDiv = canonicalDivision(str(record, "division", "location"));
         }
-        if (recDiv.isEmpty() && accountNo != null) {
-            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
-            if (detected != null) recDiv = detected;
+        if (recDiv.isEmpty()) {
+            String cc = str(record, "costCode", "masterCostCode");
+            recDiv = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(cc);
         }
         if (recDiv.isEmpty()) {
             recDiv = canonicalDivision(str(record, "branchCode", "masterBranchCode"));
@@ -305,6 +324,12 @@ public class CustomerController {
             String rawDiv = str(record, "division", "location");
             if (rawDiv != null && !rawDiv.trim().isEmpty() && !"—".equals(rawDiv.trim()) && !"null".equalsIgnoreCase(rawDiv.trim())) {
                 recDiv = rawDiv.trim();
+            }
+        }
+        if (recDiv.isEmpty() && accountNo != null) {
+            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo.trim());
+            if (detected != null && !detected.trim().isEmpty()) {
+                recDiv = detected.trim();
             }
         }
         dto.put("division", recDiv != null ? recDiv : "");
@@ -551,17 +576,20 @@ public class CustomerController {
             dto.put("validationErrors", c.getValidationErrors());
 
             String div = canonicalDivision(c.getDivision());
+            if (div.isEmpty() && c.getCostCode() != null) {
+                div = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(c.getCostCode().getCostCode());
+            }
             if (div.isEmpty() && dirMap != null) {
                 div = canonicalDivision(str(dirMap, "snapshotDivision", "division", "location"));
-            }
-            if (div.isEmpty() && c.getAccountNo() != null) {
-                div = com.ceb.billing.utils.BranchDetector.detectBranch(c.getAccountNo().trim());
             }
             if (div.isEmpty()) {
                 div = canonicalDivision(c.getBranchCode());
             }
             if (div.isEmpty() && c.getDivision() != null && !c.getDivision().trim().isEmpty() && !"—".equals(c.getDivision().trim())) {
                 div = c.getDivision().trim();
+            }
+            if (div.isEmpty() && c.getAccountNo() != null) {
+                div = com.ceb.billing.utils.BranchDetector.detectBranch(c.getAccountNo().trim());
             }
             dto.put("division",        div != null ? div : "");
             dto.put("directory", directory);
@@ -738,8 +766,13 @@ public class CustomerController {
             }
         }
 
-        // Sort newest first
+        // Filter out REJECTED snapshots and sort: prefer APPROVED, then newest
+        snaps.removeIf(s -> "REJECTED".equalsIgnoreCase(s.getStatus()));
+
         snaps.sort((a, b) -> {
+            boolean aApp = "APPROVED".equalsIgnoreCase(a.getStatus());
+            boolean bApp = "APPROVED".equalsIgnoreCase(b.getStatus());
+            if (aApp != bApp) return aApp ? -1 : 1; // APPROVED comes first
             java.time.LocalDateTime tA = a.getCreatedDate() != null ? a.getCreatedDate() : java.time.LocalDateTime.MIN;
             java.time.LocalDateTime tB = b.getCreatedDate() != null ? b.getCreatedDate() : java.time.LocalDateTime.MIN;
             int cmp = tB.compareTo(tA);
@@ -749,7 +782,7 @@ public class CustomerController {
             return idB.compareTo(idA);
         });
 
-        // Retain newest snapshot per division slot
+        // Retain best snapshot per division slot
         Map<String, com.ceb.billing.entities.MonthlyDirectorySnapshot> byDivision = new LinkedHashMap<>();
         List<com.ceb.billing.entities.MonthlyDirectorySnapshot> unassigned = new ArrayList<>();
         for (com.ceb.billing.entities.MonthlyDirectorySnapshot s : snaps) {
@@ -764,6 +797,53 @@ public class CustomerController {
         List<com.ceb.billing.entities.MonthlyDirectorySnapshot> result = new ArrayList<>(byDivision.values());
         result.addAll(unassigned);
         return result;
+    }
+
+    private Map<String, Object> convertBillingRecordToMap(BillingRecord br, String billingMonth) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        Customer c = br.getCustomer();
+        String accountNo = c != null ? c.getAccountNo() : "";
+        map.put("accountNo", accountNo);
+        map.put("customerName", c != null ? c.getCustomerName() : "");
+        map.put("customerAddress", c != null ? c.getCustomerAddress() : "");
+        map.put("mobileNo", c != null ? c.getMobileNo() : "");
+        map.put("bankCode", c != null ? c.getBankCode() : "");
+        map.put("branchCode", c != null ? c.getBranchCode() : "");
+        map.put("bankAccountNo", c != null ? c.getBankAccountNo() : "");
+        map.put("refNo", br.getRefNo() != null ? br.getRefNo() : (c != null ? c.getRefNo() : ""));
+        map.put("agreementDate", c != null && c.getAgreementDate() != null ? c.getAgreementDate().toString() : null);
+        map.put("panelCapacity", c != null ? c.getPanelCapacity() : null);
+        map.put("solarType", c != null ? c.getSolarType() : "");
+        map.put("tariffType", c != null ? c.getTariffType() : "");
+        map.put("unitRate", br.getUnitCost() != null ? br.getUnitCost() : (c != null ? c.getUnitRate() : null));
+        map.put("billingMode", br.getBillingMode() != null ? br.getBillingMode() : "");
+        map.put("costCode", c != null && c.getCostCode() != null ? c.getCostCode().getCostCode() : "");
+
+        String div = (c != null) ? canonicalDivision(c.getDivision()) : "";
+        if (div.isEmpty() && c != null && c.getCostCode() != null) {
+            div = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(c.getCostCode().getCostCode());
+        }
+        if (div.isEmpty() && accountNo != null) {
+            String detectedArea = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+            div = (detectedArea != null) ? detectedArea : "";
+        }
+        map.put("division", div != null ? div : "");
+        map.put("snapshotDivision", div != null ? div : "");
+        map.put("billingMonth", billingMonth);
+
+        map.put("prevReadingDate", br.getPrevReadingDate() != null ? br.getPrevReadingDate().toString() : (br.getFromDate() != null ? br.getFromDate().toString() : null));
+        map.put("currReadingDate", br.getCurrReadingDate() != null ? br.getCurrReadingDate().toString() : (br.getToDate() != null ? br.getToDate().toString() : null));
+        map.put("kwhImport", br.getKwhImport() != null ? br.getKwhImport() : br.getImportUnits());
+        map.put("kwhExport", br.getKwhExport() != null ? br.getKwhExport() : br.getExportUnits());
+        map.put("kwhSales", br.getKwhSales() != null ? br.getKwhSales() : br.getNetUnit());
+        map.put("energyPurchase", br.getEnergyPurchase() != null ? br.getEnergyPurchase() : br.getTotalAmount());
+        map.put("billSetOff", br.getBillSetOff() != null ? br.getBillSetOff() : 0.0);
+        map.put("retentionMoney", br.getRetentionMoney() != null ? br.getRetentionMoney() : 0.0);
+        map.put("payment", br.getPayment() != null ? br.getPayment() : 0.0);
+        map.put("paymentSettled", br.getPaymentSettled() != null ? br.getPaymentSettled() : 0.0);
+        map.put("outstandingBalance", br.getOutstandingBalance() != null ? br.getOutstandingBalance() : 0.0);
+        map.put("status", "VALID");
+        return map;
     }
 
     private List<Map<String, Object>> getMappedRecordsForBillingMonth(String bmTrim) {
@@ -799,22 +879,47 @@ public class CustomerController {
                 }
             }
 
-            if (rawRecords.isEmpty()) {
-                List<Customer> allCustomers = customerRepository.findAll();
-                for (Customer c : allCustomers) {
-                    if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
-                        try {
-                            Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
-                                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                            String cMonth = str(dirMap, "billingMonth");
-                            if (cMonth != null && (cMonth.equalsIgnoreCase(month) || isSameMonth(cMonth, month))) {
-                                if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
-                                    dirMap.put("snapshotDivision", c.getDivision().trim());
-                                }
-                                rawRecords.add(dirMap);
+            // Also synchronize with MySQL billing_records for this billing month
+            LocalDate[] monthRange = getBillingMonthRange(month);
+            if (monthRange != null) {
+                try {
+                    int yr = monthRange[0].getYear();
+                    int mo = monthRange[0].getMonthValue();
+                    List<BillingRecord> bRecords = billingRecordRepository.findAll();
+                    for (BillingRecord br : bRecords) {
+                        if (br.getFromDate() != null && br.getFromDate().getYear() == yr && br.getFromDate().getMonthValue() == mo) {
+                            String bAcc = br.getCustomer() != null ? br.getCustomer().getAccountNo() : null;
+                            if (bAcc == null) continue;
+                            if (!seenAccounts.contains(bAcc)) {
+                                Map<String, Object> bMap = convertBillingRecordToMap(br, month);
+                                seenAccounts.add(bAcc);
+                                rawRecords.add(bMap);
                             }
-                        } catch (Exception ignored) {}
+                        }
                     }
+                } catch (Exception ex) {
+                    log.warning("Failed to check billing_records for month " + month + ": " + ex.getMessage());
+                }
+            }
+
+            // Also include any customer records matching this billing month from customer repository
+            List<Customer> allCustomers = customerRepository.findAll();
+            for (Customer c : allCustomers) {
+                String acc = c.getAccountNo();
+                if (acc == null || seenAccounts.contains(acc)) continue;
+                if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                    try {
+                        Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
+                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                        String cMonth = str(dirMap, "billingMonth");
+                        if (cMonth != null && (cMonth.equalsIgnoreCase(month) || isSameMonth(cMonth, month))) {
+                            if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
+                                dirMap.put("snapshotDivision", c.getDivision().trim());
+                            }
+                            seenAccounts.add(acc);
+                            rawRecords.add(dirMap);
+                        }
+                    } catch (Exception ignored) {}
                 }
             }
 
@@ -826,6 +931,39 @@ public class CustomerController {
             }
             return Collections.unmodifiableList(mapped);
         });
+    }
+
+    @EventListener
+    public void invalidateMonthlyRecordsCache(com.ceb.billing.events.CustomerDirectoryChangedEvent event) {
+        monthlyRecordsCache.clear();
+        if (customerHashIndexService != null) {
+            customerHashIndexService.rebuildIndex();
+        }
+    }
+
+    private Optional<Map<String, Object>> findSnapshotCustomerRecord(String accountNo) {
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot snapshot
+                : monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc()) {
+            if (snapshot.getFinalDataJson() == null || snapshot.getFinalDataJson().trim().isEmpty()) {
+                continue;
+            }
+            try {
+                List<Map<String, Object>> records = objectMapper.readValue(snapshot.getFinalDataJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                if (records == null) {
+                    continue;
+                }
+                for (Map<String, Object> record : records) {
+                    if (accountNo.equals(str(record, "accountNo"))) {
+                        return Optional.of(new LinkedHashMap<>(record));
+                    }
+                }
+            } catch (Exception ex) {
+                log.warning("Failed to inspect customer directory snapshot " + snapshot.getId()
+                        + " while looking up account " + accountNo + ": " + ex.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     public static String getAgreementStatus(LocalDate agreementDate, LocalDate start, LocalDate end) {
@@ -1220,7 +1358,7 @@ public class CustomerController {
                 Page<Customer> customerPage = customerRepository.searchCustomersFiltered(
                         q.isEmpty() ? null : q,
                         status.isEmpty() ? null : status,
-                        loc.isEmpty() ? null : loc,
+                        (loc.isEmpty() || "ALL".equalsIgnoreCase(loc)) ? null : loc,
                         pageable);
 
                 for (Customer c : customerPage.getContent()) {
@@ -1455,6 +1593,7 @@ public class CustomerController {
 
     @PutMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "CUSTOMER_UPDATE_REQUEST", recordId = "accountNo")
     public ResponseEntity<?> officerUpdateCustomer(@PathVariable String accountNo,
             @RequestBody Map<String, Object> payload) {
         Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
@@ -1875,29 +2014,36 @@ public class CustomerController {
 
     @DeleteMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
-    public ResponseEntity<?> officerDeleteCustomer(@PathVariable String accountNo) {
-        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
-        if (optCustomer.isEmpty()) {
-            return ResponseEntity.notFound().build();
+    @OfficerStepUp(action = "CUSTOMER_DELETE_REQUEST", recordId = "accountNo")
+    public ResponseEntity<?> officerDeleteCustomer(@PathVariable @NonNull String accountNo) {
+        String normalizedAccountNo = accountNo.trim();
+        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(normalizedAccountNo));
+        Optional<Map<String, Object>> snapshotCustomer = optCustomer.isEmpty()
+                ? findSnapshotCustomerRecord(normalizedAccountNo)
+                : Optional.empty();
+        if (optCustomer.isEmpty() && snapshotCustomer.isEmpty()) {
+            return ResponseEntity.status(404)
+                    .body(new MessageResponse("Customer account " + normalizedAccountNo + " was not found."));
         }
         
-        long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(accountNo);
+        long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(normalizedAccountNo);
         if (activeRecordsCount > 0) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + accountNo + " because they have " + activeRecordsCount + " active billing records."));
+            return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + normalizedAccountNo + " because they have " + activeRecordsCount + " active billing records."));
         }
 
-        Customer customer = optCustomer.get();
         try {
             String username = SecurityContextHolder.getContext().getAuthentication().getName();
             ObjectMapper objectMapper = new ObjectMapper();
             objectMapper.registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
-            Map<String, Object> oldMap = getCustomerFieldMap(customer);
+            Map<String, Object> oldMap = optCustomer.isPresent()
+                    ? getCustomerFieldMap(optCustomer.get())
+                    : snapshotCustomer.orElseThrow();
             String oldJson = objectMapper.writeValueAsString(oldMap);
 
             ApprovalRequest request = new ApprovalRequest(
                     null,
-                    accountNo,
+                    normalizedAccountNo,
                     username,
                     oldJson,
                     "{}",
@@ -1906,7 +2052,9 @@ public class CustomerController {
                     "CUSTOMER"
             );
             approvalRequestRepository.save(request);
-            auditLogService.log("CUSTOMER_DELETE_REQUEST", "Officer " + username + " submitted deletion request for customer account " + accountNo);
+            flagPendingApprovalInSnapshots(normalizedAccountNo);
+            monthlyRecordsCache.clear();
+            auditLogService.log("CUSTOMER_DELETE_REQUEST", "Officer " + username + " submitted deletion request for customer account " + normalizedAccountNo);
 
             Map<String, Object> response = new HashMap<>();
             response.put("requestId", request.getRequestId());

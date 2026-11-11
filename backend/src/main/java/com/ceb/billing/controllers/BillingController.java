@@ -13,6 +13,7 @@ import com.ceb.billing.repositories.CustomerRepository;
 import com.ceb.billing.repositories.ImportAuditLogRepository;
 import com.ceb.billing.entities.Customer;
 import com.ceb.billing.services.ExcelParsingService;
+import com.ceb.billing.security.OfficerStepUp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
@@ -62,6 +63,9 @@ public class BillingController {
     @Autowired
     private com.ceb.billing.repositories.BillingUploadStagingRepository billingUploadStagingRepository;
 
+    @Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     // --- Officer Billing Endpoints ---
 
     @PostMapping("/api/officer/upload/excel")
@@ -91,6 +95,7 @@ public class BillingController {
 
     @DeleteMapping("/api/officer/billing/uploads/{uploadId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "UPLOAD_DELETE", recordId = "uploadId")
     @Transactional
     public ResponseEntity<?> deleteUploadHistory(@PathVariable long uploadId) {
         try {
@@ -162,6 +167,9 @@ public class BillingController {
             response.put("filename", filename);
             response.put("customersDeleted", customersDeleted);
             response.put("customersDetached", customersDetached);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+            }
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             org.springframework.transaction.interceptor.TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
@@ -172,6 +180,7 @@ public class BillingController {
 
     @PutMapping("/api/officer/billing/uploads/{uploadId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "UPLOAD_UPDATE", recordId = "uploadId")
     @Transactional
     public ResponseEntity<?> editUploadHistory(@PathVariable long uploadId, @RequestBody Map<String, Object> payload) {
         Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(uploadId);
@@ -212,6 +221,7 @@ public class BillingController {
 
     @PutMapping("/api/officer/billing/{billingId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "BILLING_UPDATE_REQUEST", recordId = "billingId")
     public ResponseEntity<?> officerUpdateBillingRecord(@PathVariable long billingId,
             @RequestBody BillingRecord billingDetails) {
         Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
@@ -278,6 +288,10 @@ public class BillingController {
         record.calculateFields();
         billingRecordRepository.save(record);
 
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
+
         auditLogService.log("BILLING_UPDATE", "Admin updated billing record ID: " + billingId);
         return ResponseEntity.ok(record);
     }
@@ -312,6 +326,10 @@ public class BillingController {
             mapBillingRecordFields(record, payload);
             billingRecordRepository.save(record);
             
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+            }
+
             String actor = SecurityContextHolder.getContext().getAuthentication().getName();
             auditLogService.log("BILLING_CREATE", "Admin " + actor + " manually created billing record ID: " + record.getBillingId() + " for customer " + accountNo);
             return ResponseEntity.ok(record);
@@ -365,6 +383,9 @@ public class BillingController {
             return ResponseEntity.notFound().build();
         }
         billingRecordRepository.delete(Objects.requireNonNull(optRecord.get()));
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
         auditLogService.log("BILLING_DELETE", "Admin " + actor + " manually deleted billing record ID: " + billingId);
         return ResponseEntity.ok(new MessageResponse("Billing record deleted successfully."));
@@ -372,6 +393,7 @@ public class BillingController {
 
     @DeleteMapping("/api/officer/billing/{billingId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "BILLING_DELETE_REQUEST", recordId = "billingId")
     public ResponseEntity<?> officerDeleteBillingRecord(@PathVariable long billingId) {
         Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
         if (optRecord.isEmpty()) {

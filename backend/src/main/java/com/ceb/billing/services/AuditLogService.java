@@ -14,6 +14,10 @@ public class AuditLogService {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private AuditLogHashService auditLogHashService;
+
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void log(String action, String details) {
         String username = "SYSTEM";
@@ -22,5 +26,8 @@ public class AuditLogService {
         }
         AuditLog auditLog = new AuditLog(action, username, details);
         auditLogRepository.save(auditLog);
+        if (auditLogHashService != null) {
+            auditLogHashService.put(auditLog);
+        }
     }
 }

@@ -39,7 +39,7 @@ public class DatabaseInitializer implements CommandLineRunner {
             // Seed a customer user account matching account number 3202345091 for testing the customer portal
             userRepository.save(new User("3202345091", encoder.encode("customer123"), "USER", "+94774567890"));
             
-            auditLogService.log("DATABASE_INIT", "Default users seeded with phone numbers (admin/admin123, officer/officer123, viewer/viewer123, 3202345091/customer123)");
+            auditLogService.log("DATABASE_INIT", "Default users seeded with phone numbers.");
         } else {
             // Backfill default phone numbers for existing seeded users if phone_number is missing
             userRepository.findByUsername("admin").ifPresent(u -> {

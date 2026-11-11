@@ -82,6 +82,9 @@ public class MonthlyDirectoryService {
     @Autowired(required = false)
     private ExpenseCodeRepository expenseCodeRepository;
 
+    @Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -172,6 +175,13 @@ public class MonthlyDirectoryService {
                 // Skip master-only rejected record from Customer Directory snapshot
                 continue;
             }
+            if (!div.isEmpty()) {
+                finalRow.put("division", div);
+                finalRow.put("snapshotDivision", div);
+            }
+            if (!month.isEmpty()) {
+                finalRow.put("billingMonth", month);
+            }
             finalData.add(finalRow);
         }
 
@@ -229,6 +239,9 @@ public class MonthlyDirectoryService {
                 System.err.println("Customer Directory sync failed for snapshot " + snap.getId() + ": " + e.getMessage());
             }
         }
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
         return toMetadata(snap);
     }
 
@@ -253,6 +266,10 @@ public class MonthlyDirectoryService {
             customerDirectorySyncService.syncSnapshot(s);
         } catch (Exception e) {
             System.err.println("Customer Directory sync failed for approved snapshot " + s.getId() + ": " + e.getMessage());
+        }
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
 
         return toMetadata(s);
@@ -591,6 +608,9 @@ public class MonthlyDirectoryService {
         if (monthlyDirectoryHashService != null) {
             monthlyDirectoryHashService.updateRecord(id, recordIndex, record, (Map<String, Object>) out.get("validationSummary"), auditLog);
         }
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
         return out;
     }
 
@@ -607,6 +627,9 @@ public class MonthlyDirectoryService {
         if (monthlyDirectoryHashService != null) {
             monthlyDirectoryHashService.updateMetadata(s.getId(), s.getDatasetName(), s.getStatus(), s.getApprovedBy(), s.getApprovalDate());
         }
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        }
         return toMetadata(s);
     }
 
@@ -619,6 +642,9 @@ public class MonthlyDirectoryService {
         snapshotRepository.deleteById(id);
         if (monthlyDirectoryHashService != null) {
             monthlyDirectoryHashService.evict(id);
+        }
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
     }
 
@@ -795,6 +821,10 @@ public class MonthlyDirectoryService {
         if (customerHashIndexService != null) {
             customersToDelete.forEach(c -> customerHashIndexService.evict(c.getAccountNo()));
             customersToSave.forEach(customerHashIndexService::putOrUpdate);
+        }
+
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
 
         com.ceb.billing.controllers.DashboardController.invalidateCache();

@@ -372,7 +372,7 @@ public class ExcelImportValidationController {
                             profile.put("solarType",       solarType);
                             profile.put("bankCode",        bankCode);
                             String detBranch = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
-                            profile.put("branchCode",      detBranch != null ? detBranch : branchCode);
+                            profile.put("branchCode",      (branchCode != null && !branchCode.trim().isEmpty()) ? branchCode.trim() : (detBranch != null ? detBranch : ""));
                             profile.put("bankAccountNo",   bankAccountNo);
                             profile.put("costCode",        costCode);
                             profile.put("billingMode",     billingMode);

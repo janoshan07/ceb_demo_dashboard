@@ -1800,12 +1800,19 @@ textarea:focus {
   display: block !important;
 }
 
-/* Search bar override - no extra ring */
+/* Search bar override - no extra ring or inner border */
+input[type="text"].search-bar-input-override,
+input[type="text"].search-bar-input-override:focus,
+input.search-bar-input-override,
 input.search-bar-input-override:focus,
+input[type="text"].pcc-search-input,
+input[type="text"].pcc-search-input:focus,
+input.pcc-search-input,
 input.pcc-search-input:focus {
-  border: 1.5px solid var(--primary) !important;
-  box-shadow: 0 0 0 3px var(--primary-alpha) !important;
+  border: none !important;
+  box-shadow: none !important;
   outline: none !important;
+  background: transparent !important;
 }
 
 .pcc-search-box {

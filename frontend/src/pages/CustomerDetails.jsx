@@ -51,6 +51,20 @@ import {
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 
+const readResponseData = async (response) => {
+  const body = await response.text();
+  if (!body.trim()) return null;
+
+  try {
+    return JSON.parse(body);
+  } catch {
+    if (!response.ok) {
+      return { message: `The request failed with status ${response.status}.` };
+    }
+    throw new Error('The server returned an invalid response. Please try again.');
+  }
+};
+
 // The 5 fixed Eastern Province divisions/branches the Customer Directory can be filtered by.
 const DIRECTORY_DIVISIONS = ['Ampara', 'Batticaloa', 'Trincomalee', 'Valaichenai', 'Kalmunai'];
 
@@ -870,17 +884,26 @@ const CustomerDetails = () => {
         })
       });
 
-      const data = await res.json();
+      const data = await readResponseData(res);
 
       if (!res.ok) {
-        throw new Error(data.message || 'Failed to update customer details.');
+        throw new Error(data?.message || 'Failed to update customer details.');
       }
 
-      if (data.status === 'PENDING') {
+      if (data?.status === 'PENDING') {
         const pendingMsg = 'Edits submitted successfully and are pending administrator approval.';
         setEditMessage(`Success: ${pendingMsg}`);
         showToast(pendingMsg, 'warning');
         setIsEditing(false);
+      } else if (!data) {
+        const refreshedResponse = await authFetch(`/api/officer/customers/${selectedCustomer.accountNo}`);
+        const refreshedCustomer = await readResponseData(refreshedResponse);
+        if (!refreshedResponse.ok || !refreshedCustomer) {
+          throw new Error('The update response was empty and the customer could not be reloaded. Please refresh the page to verify the change.');
+        }
+        setSelectedCustomer(refreshedCustomer);
+        setIsEditing(false);
+        showToast('Customer details updated successfully.', 'success');
       } else {
         setSelectedCustomer(data);
         setIsEditing(false);
@@ -1088,9 +1111,15 @@ const CustomerDetails = () => {
   };
 
   const handleDeleteCustomer = async () => {
+    const accountNo = String(selectedCustomer?.accountNo || '').trim();
+    if (!accountNo) {
+      showToast('Cannot delete this customer because its account number is missing.', 'error');
+      return;
+    }
+
     const confirmed = await showConfirm({
       title: 'Delete Customer Profile?',
-      message: `Are you absolutely sure you want to delete customer ${selectedCustomer.accountNo} (${selectedCustomer.customerName})? This action cannot be undone and will remove their entire history.`,
+      message: `Are you absolutely sure you want to delete customer ${accountNo} (${selectedCustomer.customerName})? This action cannot be undone and will remove their entire history.`,
       confirmText: 'Delete Customer',
       cancelText: 'Cancel',
       type: 'danger'
@@ -1099,15 +1128,15 @@ const CustomerDetails = () => {
 
     try {
       const deletePrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
-      const res = await authFetch(`/api/${deletePrefix}/customers/${selectedCustomer.accountNo}`, {
+      const res = await authFetch(`/api/${deletePrefix}/customers/${encodeURIComponent(accountNo)}`, {
         method: 'DELETE'
       });
-      const data = await res.json();
+      const data = await readResponseData(res);
       if (!res.ok) {
-        throw new Error(data.message || 'Failed to delete customer.');
+        throw new Error(data?.message || 'Failed to delete customer.');
       }
       
-      if (data.status === 'PENDING') {
+      if (data?.status === 'PENDING') {
         showToast('Customer deletion request submitted for Admin approval.', 'warning');
       } else {
         showToast('Customer deleted successfully.', 'success');

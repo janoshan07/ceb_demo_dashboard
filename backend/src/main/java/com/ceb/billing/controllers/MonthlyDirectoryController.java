@@ -1,6 +1,7 @@
 package com.ceb.billing.controllers;
 
 import com.ceb.billing.services.MonthlyDirectoryService;
+import com.ceb.billing.security.OfficerStepUp;
 import com.ceb.billing.entities.MonthlyDirectorySnapshot;
 import com.ceb.billing.entities.ApprovalRequest;
 import com.ceb.billing.repositories.ApprovalRequestRepository;
@@ -120,6 +121,7 @@ public class MonthlyDirectoryController {
     /** Renames a dataset. Updates ONLY the dataset name — customer records are untouched. */
     @PutMapping({"/admin/monthly-directory/{id}/rename", "/officer/monthly-directory/{id}/rename"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MONTHLY_DIRECTORY_RENAME", recordId = "id")
     public ResponseEntity<?> rename(@PathVariable Long id,
                                     @RequestParam("datasetName") String datasetName) {
         try {
@@ -138,6 +140,7 @@ public class MonthlyDirectoryController {
      */
     @PutMapping({"/admin/monthly-directory/{id}/record", "/officer/monthly-directory/{id}/record"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MONTHLY_DIRECTORY_RECORD_UPDATE", recordId = "id")
     public ResponseEntity<?> updateRecord(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
@@ -176,6 +179,7 @@ public class MonthlyDirectoryController {
     /** Permanently deletes one archived month. */
     @DeleteMapping({"/admin/monthly-directory/{id}", "/officer/monthly-directory/{id}"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MONTHLY_DIRECTORY_DELETE_REQUEST", recordId = "id")
     public ResponseEntity<?> delete(@PathVariable Long id) {
         try {
             boolean isAdmin = SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()

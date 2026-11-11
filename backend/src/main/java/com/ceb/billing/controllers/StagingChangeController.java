@@ -5,6 +5,7 @@ import com.ceb.billing.entities.StagingChangeLog;
 import com.ceb.billing.models.MessageResponse;
 import com.ceb.billing.repositories.BillingUploadStagingRepository;
 import com.ceb.billing.repositories.StagingChangeLogRepository;
+import com.ceb.billing.security.OfficerStepUp;
 import com.ceb.billing.services.AuditLogService;
 import com.ceb.billing.services.ExcelValidationService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -43,6 +44,7 @@ public class StagingChangeController {
 
     @PostMapping("/officer/staging/batch/{batchId}/row/{stagingId}/propose-edit")
     @PreAuthorize("hasRole('OFFICER')")
+    @OfficerStepUp(action = "STAGING_EDIT_PROPOSAL", recordId = "stagingId")
     public ResponseEntity<?> proposeEdit(
             @PathVariable Long batchId,
             @PathVariable Long stagingId,
@@ -174,6 +176,7 @@ public class StagingChangeController {
 
     @PostMapping("/officer/staging/batch/{batchId}/row/{stagingId}/propose-delete")
     @PreAuthorize("hasRole('OFFICER')")
+    @OfficerStepUp(action = "STAGING_DELETE_PROPOSAL", recordId = "stagingId")
     public ResponseEntity<?> proposeDelete(
             @PathVariable Long batchId,
             @PathVariable Long stagingId) {

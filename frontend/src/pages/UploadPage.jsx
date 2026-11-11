@@ -220,15 +220,15 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
         onClick={() => !disabled && inputRef.current?.click()}
         onDrop={handleDrop} onDragOver={handleDragOver} onDragLeave={handleDragLeave}
         style={{
-          border: `2px dashed ${dragging ? '#818cf8' : file ? '#10b981' : 'rgba(99, 102, 241, 0.3)'}`,
+          border: `2px dashed ${dragging ? '#2563EB' : file ? '#10b981' : '#CBD5E1'}`,
           borderRadius: 16, padding: '3.2rem 2rem', textAlign: 'center',
           cursor: disabled ? 'not-allowed' : 'pointer',
           background: dragging
-            ? 'rgba(99,102,241,0.08)'
+            ? '#EFF6FF'
             : file
               ? 'rgba(16,185,129,0.04)'
-              : 'radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.06) 0%, rgba(10, 16, 30, 0.7) 100%)',
-          boxShadow: dragging ? '0 0 25px rgba(99,102,241,0.25)' : 'none',
+              : '#FFFFFF',
+          boxShadow: dragging ? '0 0 20px rgba(37,99,235,0.1)' : '0 1px 4px rgba(0,0,0,0.04)',
           transition: 'all 0.25s ease', opacity: disabled ? 0.5 : 1
         }}
       >
@@ -239,8 +239,8 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             <div style={{ width: 58, height: 58, borderRadius: '50%', background: 'rgba(16,185,129,0.15)', boxShadow: '0 0 20px rgba(16,185,129,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <FileSpreadsheet size={30} color="#10b981" />
             </div>
-            <div style={{ fontWeight: 700, color: 'white', fontSize: '1.05rem' }}>{file.name}</div>
-            <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>{(file.size / 1024).toFixed(1)} KB · Click to change file</div>
+            <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '1.05rem' }}>{file.name}</div>
+            <div style={{ fontSize: '0.82rem', color: '#475569' }}>{(file.size / 1024).toFixed(1)} KB · Click to change file</div>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
@@ -253,14 +253,14 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             }}>
               <CloudUpload size={28} color="white" />
             </div>
-            <div style={{ fontWeight: 700, color: 'white', fontSize: '1.15rem', letterSpacing: '-0.3px' }}>
+            <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '1.15rem', letterSpacing: '-0.3px' }}>
               Drag & drop your Excel file here
             </div>
-            <div style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-              or click to <span style={{ color: '#818cf8', fontWeight: 600, textDecoration: 'underline' }}>browse</span>
+            <div style={{ fontSize: '0.88rem', color: '#64748B' }}>
+              or click to <span style={{ color: '#2563EB', fontWeight: 600, textDecoration: 'underline' }}>browse</span>
             </div>
             <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 500 }}>
-              Supports <strong style={{ color: '#cbd5e1' }}>.xlsx / .xls</strong>
+              Supports <strong style={{ color: '#475569' }}>.xlsx / .xls</strong>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.5rem', fontSize: '0.76rem', color: '#10b981', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '0.35rem 0.85rem', borderRadius: 20 }}>
@@ -278,8 +278,8 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             <FileSpreadsheet size={20} color="var(--primary)" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{requiredColumns} Required Columns</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Must be included</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>{requiredColumns} Required Columns</div>
+            <div style={{ fontSize: '0.74rem', color: '#64748B' }}>Must be included</div>
           </div>
         </div>
 
@@ -288,8 +288,8 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             <ShieldCheck size={20} color="#10b981" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Unique 10-digit Account No</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>No duplicates allowed</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>Unique 10-digit Account No</div>
+            <div style={{ fontSize: '0.74rem', color: '#64748B' }}>No duplicates allowed</div>
           </div>
         </div>
 
@@ -298,8 +298,8 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             <FileText size={20} color="#8b5cf6" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Excel Format Only</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>.xlsx or .xls files</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>Excel Format Only</div>
+            <div style={{ fontSize: '0.74rem', color: '#64748B' }}>.xlsx or .xls files</div>
           </div>
         </div>
 
@@ -308,8 +308,8 @@ const FileDropZone = ({ onFileSelected, file, hint, accept = '.xlsx,.xls', disab
             <Database size={20} color="#f59e0b" />
           </div>
           <div>
-            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Maximum File Size</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>50 MB per file</div>
+            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>Maximum File Size</div>
+            <div style={{ fontSize: '0.74rem', color: '#64748B' }}>50 MB per file</div>
           </div>
         </div>
       </div>
@@ -402,7 +402,7 @@ const StatusBadge = ({ status }) => {
     MULTIPLE_PAYMENT: { bg: 'rgba(99,102,241,0.15)', color: '#818cf8', label: 'Multiple Payment' },
     DUPLICATE: { bg: 'rgba(236,72,153,0.15)', color: '#ec4899', label: 'Duplicate Record' },
     DUPLICATE_RECORD: { bg: 'rgba(236,72,153,0.15)', color: '#ec4899', label: 'Duplicate Record' },
-  }[status] || { bg: 'rgba(255,255,255,0.08)', color: 'var(--text-muted)', label: status };
+  }[status] || { bg: '#F1F5F9', color: '#64748B', label: status };
   return (
     <span style={{ display: 'inline-block', padding: '0.15rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, background: cfg.bg, color: cfg.color }}>
       {cfg.label}
@@ -457,9 +457,9 @@ const SearchBar = ({
         display: 'flex',
         alignItems: 'center',
         background: '#FFFFFF',
-        border: isFocused ? '1px solid var(--primary)' : '1px solid var(--border)',
+        border: isFocused ? '1.5px solid var(--primary)' : '1px solid var(--border)',
         borderRadius: '10px',
-        padding: '0.6rem 1rem',
+        padding: '0 1rem',
         height: '42px',
         boxSizing: 'border-box',
         flex: 1,
@@ -473,7 +473,7 @@ const SearchBar = ({
         <Search 
           size={16} 
           color={isFocused ? 'var(--primary)' : 'var(--text-muted)'} 
-          style={{ marginRight: '0.75rem', transition: 'color 0.2s' }} 
+          style={{ marginRight: '0.75rem', transition: 'color 0.2s', flexShrink: 0 }}
         />
         <input
           type="text"
@@ -486,15 +486,16 @@ const SearchBar = ({
           style={{
             background: 'transparent',
             border: 'none',
-            color: 'white',
-            fontSize: '0.82rem',
+            boxShadow: 'none',
+            color: '#0F172A',
+            fontSize: '0.85rem',
             outline: 'none',
             width: '100%',
             height: '100%',
             padding: 0,
             paddingRight: (localVal || count > 0) ? '6.5rem' : '0',
             fontFamily: 'inherit',
-            transition: 'all 0.3s'
+            lineHeight: 'normal'
           }}
         />
         
@@ -635,15 +636,15 @@ export const TablePagination = ({
       borderTop: '1px solid var(--border)',
       borderRadius: '0 0 12px 12px',
       fontSize: '0.8rem',
-      color: 'var(--text-secondary)',
+      color: '#475569',
       marginTop: '-1px'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         <span>
-          Showing <strong style={{ color: 'var(--text-primary)' }}>{totalItems > 0 ? `${startItem}–${endItem}` : 0}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{totalItems}</strong> entries
+          Showing <strong style={{ color: '#0F172A' }}>{totalItems > 0 ? `${startItem}–${endItem}` : 0}</strong> of <strong style={{ color: '#0F172A' }}>{totalItems}</strong> entries
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginLeft: '0.5rem' }}>
-          <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Per page:</span>
+          <span style={{ fontSize: '0.74rem', color: '#64748B' }}>Per page:</span>
           <select
             value={pageSize}
             onChange={(e) => {
@@ -655,7 +656,7 @@ export const TablePagination = ({
               background: '#F8FAFC',
               border: '1px solid var(--border)',
               borderRadius: '6px',
-              color: 'var(--text-primary)',
+              color: '#0F172A',
               padding: '0.25rem 0.5rem',
               fontSize: '0.74rem',
               cursor: 'pointer',
@@ -691,8 +692,8 @@ export const TablePagination = ({
           Previous
         </button>
 
-        <span style={{ padding: '0 0.5rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-          Page <strong style={{ color: 'var(--text-primary)' }}>{safePage}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{totalPages}</strong>
+        <span style={{ padding: '0 0.5rem', fontSize: '0.75rem', color: '#475569' }}>
+          Page <strong style={{ color: '#0F172A' }}>{safePage}</strong> of <strong style={{ color: '#0F172A' }}>{totalPages}</strong>
         </span>
 
         <button
@@ -721,7 +722,7 @@ export const TablePagination = ({
 // ═══════════════════════════════════════════════════════════════════════════
 //  PREVIEW TABLE — Master Data
 // ═══════════════════════════════════════════════════════════════════════════
-const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => {
+const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDuplicate }) => {
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState(new Set());
   const [activeFilter, setActiveFilter] = useState('ALL');
@@ -756,9 +757,9 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
     return true;
   });
 
-  const errorRows = displayed.filter(r => r.status === 'ERROR');
-  const isAllSelected = errorRows.length > 0 && errorRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
-  const isSomeSelected = errorRows.length > 0 && errorRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
+  const errorOrDuplicateRows = displayed.filter(r => r.status === 'ERROR' || r.status === 'DUPLICATE');
+  const isAllSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.every(r => selectedKeys.has(r.rowNum || r.accountNo));
+  const isSomeSelected = errorOrDuplicateRows.length > 0 && errorOrDuplicateRows.some(r => selectedKeys.has(r.rowNum || r.accountNo)) && !isAllSelected;
 
   const renderCell = (val, prefix = '') => {
     if (val === undefined || val === null || String(val).trim() === '') {
@@ -780,13 +781,13 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
   React.useEffect(() => {
     setSelectedKeys(prev => {
       const next = new Set();
-      const currentValidKeys = new Set(errorRows.map(r => r.rowNum || r.accountNo));
+      const currentValidKeys = new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo));
       prev.forEach(k => {
         if (currentValidKeys.has(k)) next.add(k);
       });
       return next;
     });
-  }, [rows, filterErrors, searchText]);
+  }, [rows, activeFilter, filterErrors, searchText]);
 
   function renderFilterTabs() {
     return (
@@ -848,9 +849,9 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
       />
       {showFilters && renderFilterTabs()}
       {!displayed.length ? (
-        <div style={{ textAlign: 'center', padding: '3.5rem', background: '#FFFFFF', borderRadius: 12, border: '1px solid var(--border)', color: 'var(--text-secondary)', boxShadow: 'var(--shadow-sm)' }}>
+        <div style={{ textAlign: 'center', padding: '3.5rem', background: '#FFFFFF', borderRadius: 12, border: '1px solid var(--border)', color: '#475569', boxShadow: 'var(--shadow-sm)' }}>
           <CheckCircle size={44} color="#10b981" style={{ marginBottom: '0.75rem' }} />
-          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.95rem' }}>No visible records found.</div>
+          <div style={{ fontWeight: 600, color: '#0F172A', fontSize: '0.95rem' }}>No visible records found.</div>
         </div>
       ) : (
         <>
@@ -868,7 +869,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#f87171', fontSize: '0.85rem', fontWeight: 600 }}>
             <Trash2 size={16} />
-            Selected {selectedKeys.size} error {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
+            Selected {selectedKeys.size} {selectedKeys.size === 1 ? 'record' : 'records'} for deletion
           </div>
           <button
             onClick={() => {
@@ -908,7 +909,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                   }}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedKeys(new Set(errorRows.map(r => r.rowNum || r.accountNo)));
+                      setSelectedKeys(new Set(errorOrDuplicateRows.map(r => r.rowNum || r.accountNo)));
                     } else {
                       setSelectedKeys(new Set());
                     }
@@ -921,7 +922,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code',
                 'Bank Account No', 'Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Status', 'Actions'
               ].map(h => (
-                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -932,10 +933,10 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
               <React.Fragment key={rowIndex}>
                 <tr
                   onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                  style={{ borderBottom: '1px solid #E2E8F0', cursor: 'pointer', background: expandedRow === rowIndex ? '#EFF6FF' : rowIndex % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
-                    {row.status === 'ERROR' ? (
+                    {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
                       <input
                         type="checkbox"
                         checked={selectedKeys.has(row.rowNum || row.accountNo)}
@@ -955,7 +956,7 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                       />
                     ) : null}
                   </td>
-                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', color: '#64748B' }}>{row.rowNum}</td>
                   <td style={{
                     padding: '0.6rem 0.85rem',
                     fontFamily: 'monospace',
@@ -987,21 +988,27 @@ const MasterDataTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows }) => 
                       <button onClick={() => onCorrectRow(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
                         Correct
                       </button>
-                      {row.status === 'ERROR' && onDeleteRows && (
-                        <button onClick={() => onDeleteRows([row])} title="Delete this error record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                      {row.status === 'DUPLICATE' && onKeepDuplicate && (
+                        <button onClick={() => onKeepDuplicate(row)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>
+                          Keep
+                        </button>
+                      )}
+                      {(row.status === 'ERROR' || row.status === 'DUPLICATE') && onDeleteRows && (
+                        <button onClick={() => onDeleteRows([row])} title="Delete this record" style={{ padding: '0.25rem 0.4rem', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444', borderRadius: 4, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
                           <Trash2 size={12} /> Delete
                         </button>
                       )}
                     </div>
                   </td>
                 </tr>
-                {expandedRow === rowIndex && row.errors?.length > 0 && (
+                {expandedRow === rowIndex && (row.status === 'DUPLICATE' || row.errors?.length > 0) && (
                   <tr style={{ background: 'rgba(239,68,68,0.04)' }}>
                     <td colSpan={19} style={{ padding: '0.75rem 1.5rem' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
                         <AlertTriangle size={15} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
                         <ul style={{ margin: 0, paddingLeft: '1rem', color: '#ef4444', fontSize: '0.78rem', lineHeight: 1.7 }}>
-                          {row.errors.map((e, ei) => <li key={ei}>{e}</li>)}
+                          {row.status === 'DUPLICATE' && <li>{row.duplicateReason || 'Duplicate Account Number found'}</li>}
+                          {row.errors?.map((e, ei) => <li key={ei}>{e}</li>)}
                         </ul>
                       </div>
                     </td>
@@ -1093,7 +1100,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
     return (
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {[
-          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'ALL', label: 'All Records', count: allCount, color: '#475569' },
           { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
           { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
           { key: 'WARNING', label: 'Warnings', count: warningCount, color: '#f59e0b' },
@@ -1145,7 +1152,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
       />
       {showFilters && renderFilterTabs()}
       {!displayed.length ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
           <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
           <div style={{ fontWeight: 600 }}>No visible records found.</div>
         </div>
@@ -1196,7 +1203,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
       <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
                 <input
                   type="checkbox"
@@ -1215,7 +1222,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
                 />
               </th>
               {['Row', 'Account No', 'Prv. Rdg. Date', 'Crnt. Rdg. Date', 'Status', 'Actions'].map(h => (
-                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -1226,7 +1233,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
               <React.Fragment key={rowIndex}>
                 <tr
                   onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
-                  style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                  style={{ borderBottom: '1px solid #E2E8F0', cursor: 'pointer', background: expandedRow === rowIndex ? '#EFF6FF' : rowIndex % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}
                 >
                   <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                     {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
@@ -1249,7 +1256,7 @@ const CebAssistTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeep
                       />
                     ) : null}
                   </td>
-                  <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                  <td style={{ padding: '0.6rem 0.85rem', color: '#64748B' }}>{row.rowNum}</td>
                   <td style={{
                     padding: '0.6rem 0.85rem',
                     fontFamily: 'monospace',
@@ -1392,7 +1399,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     return (
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {[
-          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'ALL', label: 'All Records', count: allCount, color: '#475569' },
           { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
           { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentCount, color: '#818cf8' },
           { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
@@ -1445,7 +1452,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       />
       {showFilters && renderFilterTabs()}
       {!displayed.length ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
           <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
           <div style={{ fontWeight: 600 }}>No visible records found.</div>
         </div>
@@ -1496,7 +1503,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
                 <input
                   type="checkbox"
@@ -1521,7 +1528,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                 'Outstanding Balance',
                 'Status', 'Actions'
               ].map(h => (
-                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -1532,7 +1539,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                 <React.Fragment key={rowIndex}>
                   <tr
                     onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
-                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                    style={{ borderBottom: '1px solid #E2E8F0', cursor: 'pointer', background: expandedRow === rowIndex ? '#EFF6FF' : rowIndex % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
@@ -1555,7 +1562,7 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                         />
                       ) : null}
                     </td>
-                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: '#64748B' }}>{row.rowNum}</td>
                     <td style={{
                       padding: '0.6rem 0.85rem',
                       fontFamily: 'monospace',
@@ -1616,9 +1623,9 @@ const NgenTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                     </td>
                   </tr>
                   {expandedRow === rowIndex && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
-                    <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
+                    <tr style={{ background: '#F8FAFC' }}>
                       <td colSpan={17} style={{ padding: '1rem 1.5rem' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.78rem', color: '#475569' }}>
                           {row.status === 'DUPLICATE' && (
                             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem' }}>
                               <AlertTriangle size={13} color="#ec4899" style={{ marginTop: 2, flexShrink: 0 }} />
@@ -1745,7 +1752,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
     return (
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
         {[
-          { key: 'ALL', label: 'All Records', count: allCount, color: 'var(--text-secondary)' },
+          { key: 'ALL', label: 'All Records', count: allCount, color: '#475569' },
           { key: 'VALID', label: 'Valid Records', count: validCount, color: '#10b981' },
           { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentCount, color: '#818cf8' },
           { key: 'ERROR', label: 'Errors', count: errorCount, color: '#ef4444' },
@@ -1798,7 +1805,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       />
       {showFilters && renderFilterTabs()}
       {!displayed.length ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
           <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
           <div style={{ fontWeight: 600 }}>No visible records found.</div>
         </div>
@@ -1849,7 +1856,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
       <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
           <thead>
-            <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+            <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
               <th style={{ width: '40px', padding: '0.65rem 0.85rem', textAlign: 'center' }}>
                 <input
                   type="checkbox"
@@ -1870,7 +1877,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                 'Energy Purchase', 'Bill Set Off',
                 'Retention Money', 'Payment', 'Status', 'Actions'
               ].map(h => (
-                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -1884,7 +1891,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                 <React.Fragment key={rowIndex}>
                   <tr
                     onClick={() => setExpandedRow(expandedRow === rowIndex ? null : rowIndex)}
-                    style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: expandedRow === rowIndex ? 'rgba(99,102,241,0.06)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}
+                    style={{ borderBottom: '1px solid #E2E8F0', cursor: 'pointer', background: expandedRow === rowIndex ? '#EFF6FF' : rowIndex % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}
                   >
                     <td style={{ textAlign: 'center', padding: '0.6rem 0.85rem' }} onClick={e => e.stopPropagation()}>
                       {(row.status === 'ERROR' || row.status === 'DUPLICATE') ? (
@@ -1904,7 +1911,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                         />
                       ) : null}
                     </td>
-                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{row.rowNum}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: '#64748B' }}>{row.rowNum}</td>
 
                     <td style={{
                       padding: '0.6rem 0.85rem',
@@ -1957,7 +1964,7 @@ const NpayTable = ({ rows, filterErrors, onCorrectRow, onDeleteRows, onKeepDupli
                     </td>
                   </tr>
                   {expandedRow === rowIndex && (row.status === 'DUPLICATE' || row.status === 'MULTIPLE_PAYMENT' || row.errors?.length > 0 || row.warnings?.length > 0) && (
-                    <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
+                    <tr style={{ background: '#F8FAFC' }}>
                       <td colSpan={11} style={{ padding: '1rem 1.5rem' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                           {row.status === 'DUPLICATE' && (
@@ -2023,8 +2030,8 @@ const SessionBanner = ({ session, onDiscard }) => (
         <Layers size={18} color="#2563EB" />
       </div>
       <div>
-        <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.92rem' }}>Active Import Session</div>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+        <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.92rem' }}>Active Import Session</div>
+        <div style={{ fontSize: '0.75rem', color: '#475569' }}>
           {session.masterCustomerCount} customers imported · Stage: <strong style={{ color: '#1D4ED8' }}>
             {session.stage === 'MASTER_APPROVED' ? 'Awaiting CEB Assist' : session.stage === 'CEB_APPROVED' ? 'Awaiting NGEN' : session.stage}
           </strong>
@@ -2985,16 +2992,35 @@ const UploadPage = () => {
 
     const count = rowsToDelete.length;
     const isSingle = count === 1;
+    const firstRow = rowsToDelete[0];
+    const isDupOnly = rowsToDelete.every(r => r.status === 'DUPLICATE');
     const rowLabel = isSingle
-      ? (rowsToDelete[0].accountNo ? `Account No: ${rowsToDelete[0].accountNo}` : `Row #${rowsToDelete[0].rowNum}`)
+      ? (firstRow.accountNo ? `Account No: ${firstRow.accountNo}` : `Row #${firstRow.rowNum}`)
       : `${count} records`;
 
+    let issueType = 'record';
+    if (isDupOnly) {
+      issueType = isSingle ? 'duplicate record' : 'duplicate records';
+    } else if (rowsToDelete.every(r => r.status === 'ERROR')) {
+      issueType = isSingle ? 'error record' : 'error records';
+    } else {
+      issueType = isSingle ? 'record' : 'records';
+    }
+
+    const rowDetails = isSingle
+      ? (firstRow.status === 'DUPLICATE'
+          ? (firstRow.duplicateReason || 'Duplicate Account Number found')
+          : (firstRow.errors && firstRow.errors.length > 0 ? firstRow.errors.join(', ') : ''))
+      : null;
+
     const messageText = isSingle
-      ? `Are you sure you want to remove this error record from the current batch?\n\n${rowLabel}\nErrors: ${(rowsToDelete[0].errors || []).join(', ')}\n\nThis record will be excluded from the import. This action cannot be undone.`
-      : `Are you sure you want to remove the ${count} selected error records from the current batch?\n\nThese records will be excluded from the import. This action cannot be undone.`;
+      ? `Are you sure you want to remove this ${issueType} from the current batch?\n\n${rowLabel}${rowDetails ? `\nReason: ${rowDetails}` : ''}\n\nThis record will be excluded from the import. This action cannot be undone.`
+      : `Are you sure you want to remove the ${count} selected ${issueType} from the current batch?\n\nThese records will be excluded from the import. This action cannot be undone.`;
 
     const confirmed = await showConfirm({
-      title: isSingle ? 'Delete Error Record?' : 'Delete Multiple Error Records?',
+      title: isSingle
+        ? (firstRow.status === 'DUPLICATE' ? 'Delete Duplicate Record?' : 'Delete Error Record?')
+        : `Delete ${count} Selected Records?`,
       message: messageText,
       confirmText: isSingle ? 'Delete Record' : `Delete ${count} Records`,
       cancelText: 'Cancel',
@@ -4270,57 +4296,81 @@ const UploadPage = () => {
 
     return (
       <div style={{ marginTop: '1.25rem' }}>
+        {/* Toggle header */}
         <button
           onClick={() => setShowDeletedLog(!showDeletedLog)}
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '0.5rem',
-            background: 'rgba(239,68,68,0.06)',
-            border: '1px solid rgba(239,68,68,0.18)',
-            borderRadius: 10,
+            background: showDeletedLog ? '#FEF2F2' : '#FFFFFF',
+            border: '1px solid #FECACA',
+            borderRadius: showDeletedLog ? '10px 10px 0 0' : 10,
             padding: '0.7rem 1.2rem',
             cursor: 'pointer',
-            color: '#f87171',
-            fontWeight: 600,
+            color: '#DC2626',
+            fontWeight: 700,
             fontSize: '0.84rem',
             width: '100%',
             justifyContent: 'space-between',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
             transition: 'all 0.2s ease'
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Trash2 size={15} />
+            <Trash2 size={15} color="#DC2626" />
             Deleted / Rejected Records ({list.length})
           </span>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{showDeletedLog ? '▲ Hide' : '▼ Show'}</span>
+          <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
+            {showDeletedLog ? '▲ Hide' : '▼ Show'}
+          </span>
         </button>
+
+        {/* Expandable table */}
         {showDeletedLog && (
-          <div style={{ border: '1px solid rgba(239,68,68,0.12)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', background: 'rgba(20,20,25,0.4)', backdropFilter: 'blur(10px)' }}>
+          <div style={{
+            border: '1px solid #FECACA',
+            borderTop: 'none',
+            borderRadius: '0 0 10px 10px',
+            overflow: 'hidden',
+            background: '#FFFFFF',
+            boxShadow: '0 2px 8px rgba(220,38,38,0.06)'
+          }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
               <thead>
-                <tr style={{ background: 'rgba(239,68,68,0.05)', borderBottom: '1px solid rgba(239,68,68,0.1)' }}>
+                <tr style={{ background: '#FEF2F2', borderBottom: '1px solid #FECACA' }}>
                   {['Row', 'Account No', 'Customer Name', 'Rejection Reason', 'Date / Time', 'Actions'].map(h => (
-                    <th key={h} style={{ padding: '0.65rem 0.85rem', textAlign: 'left', fontWeight: 600, color: '#f87171', fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                    <th key={h} style={{
+                      padding: '0.65rem 0.85rem',
+                      textAlign: 'left',
+                      fontWeight: 700,
+                      color: '#B91C1C',
+                      fontSize: '0.72rem',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {list.map((d, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)', transition: 'background 0.15s ease' }}>
-                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-muted)' }}>{d.rowNum}</td>
-                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, color: 'white' }}>
+                  <tr key={i} style={{
+                    borderBottom: '1px solid #FEE2E2',
+                    background: i % 2 === 0 ? '#FFFFFF' : '#FFF5F5',
+                    transition: 'background 0.15s ease'
+                  }}>
+                    <td style={{ padding: '0.6rem 0.85rem', color: '#64748B', fontWeight: 600 }}>{d.rowNum}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#0F172A' }}>
                       {d.accountNo && String(d.accountNo).trim() !== '' && d.accountNo !== '—'
                         ? d.accountNo
-                        : <span style={{ color: '#ef4444', fontStyle: 'italic', fontWeight: 700, fontSize: '0.73rem', background: 'rgba(239,68,68,0.1)', padding: '0.15rem 0.45rem', borderRadius: 4 }}>Empty</span>
+                        : <span style={{ color: '#DC2626', fontStyle: 'italic', fontWeight: 700, fontSize: '0.73rem', background: '#FEE2E2', padding: '0.15rem 0.45rem', borderRadius: 4 }}>Empty</span>
                       }
                     </td>
-                    <td style={{ padding: '0.6rem 0.85rem', color: 'var(--text-secondary)' }}>{d.customerName || '—'}</td>
-                    <td style={{ padding: '0.6rem 0.85rem', color: '#f87171', fontSize: '0.74rem', fontWeight: 500 }}>
+                    <td style={{ padding: '0.6rem 0.85rem', color: '#334155' }}>{d.customerName || '—'}</td>
+                    <td style={{ padding: '0.6rem 0.85rem', color: '#DC2626', fontSize: '0.74rem', fontWeight: 500 }}>
                       {d.errors && d.errors.length > 0 ? d.errors.join(', ') : 'Deleted by user'}
                     </td>
-                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                    <td style={{ padding: '0.6rem 0.85rem', fontFamily: 'monospace', color: '#64748B', fontSize: '0.72rem' }}>
                       {new Date(d.deletedAt).toLocaleString()}
                     </td>
                     <td style={{ padding: '0.6rem 0.85rem' }}>
@@ -4328,21 +4378,51 @@ const UploadPage = () => {
                         <button
                           onClick={() => handleRestoreRow(d)}
                           title="Restore this record to the main list"
-                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)', color: '#059669', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                          style={{
+                            padding: '0.3rem 0.65rem',
+                            background: '#DCFCE7',
+                            border: '1px solid #86EFAC',
+                            color: '#15803D',
+                            borderRadius: 6,
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            transition: 'all 0.15s'
+                          }}
                         >
                           Restore
                         </button>
                         <button
                           onClick={() => handleCorrectRow(d, true)}
                           title="Edit and correct this record"
-                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)', color: '#a5b4fc', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                          style={{
+                            padding: '0.3rem 0.65rem',
+                            background: '#EFF6FF',
+                            border: '1px solid #BFDBFE',
+                            color: '#2563EB',
+                            borderRadius: 6,
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            transition: 'all 0.15s'
+                          }}
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handlePermanentDeleteRow(d)}
                           title="Permanently remove this record"
-                          style={{ padding: '0.3rem 0.6rem', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171', borderRadius: 6, fontSize: '0.7rem', cursor: 'pointer', fontWeight: 600, transition: 'all 0.15s' }}
+                          style={{
+                            padding: '0.3rem 0.65rem',
+                            background: '#FEE2E2',
+                            border: '1px solid #FECACA',
+                            color: '#DC2626',
+                            borderRadius: 6,
+                            fontSize: '0.7rem',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            transition: 'all 0.15s'
+                          }}
                         >
                           Delete
                         </button>
@@ -4368,8 +4448,8 @@ const UploadPage = () => {
               <Info size={18} color="var(--primary)" />
             </div>
             <div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>Step 1 — Master Data Upload</div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>Step 1 — Master Data Upload</div>
+              <div style={{ fontSize: '0.82rem', color: '#475569', marginTop: '0.2rem' }}>
                 Upload the customer master data Excel sheet. Required columns:
               </div>
 
@@ -4434,7 +4514,7 @@ const UploadPage = () => {
             )}
             <button className="btn" onClick={handleMasterApprove} disabled={approving || (preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0}
               style={{
-                background: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                background: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
                 color: ((preview.duplicateCount || 0) > 0 || (preview.globalErrors?.length || 0) > 0) ? 'var(--text-secondary)' : 'white',
                 fontWeight: 600,
                 padding: '0.6rem 1.75rem',
@@ -4455,14 +4535,6 @@ const UploadPage = () => {
       {/* Preview section */}
       {preview && (
         <div style={{ marginTop: '1.5rem' }}>
-          {/* Stat Cards Grid matching Image 2 style */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-            <StatCard label="Total Rows" value={preview.totalRows} color="#818cf8" icon={<FileText size={20} />} subtitle="Master data records" />
-            <StatCard label="Valid Records" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={20} />} subtitle="Passed schema check" />
-            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={20} />} subtitle="Account No conflicts" />
-            <StatCard label="Pending Errors" value={preview.errorCount || 0} color={(preview.errorCount || 0) > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={20} />} subtitle="Requires correction" />
-          </div>
-
           {preview.globalErrors?.length > 0 && (
             <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 10, padding: '1rem', marginBottom: '1rem' }}>
               <div style={{ color: '#ef4444', fontWeight: 600, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}><XCircle size={15} /> Schema Errors</div>
@@ -4489,8 +4561,8 @@ const UploadPage = () => {
       {session && (
         <div style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
           <CheckCircle size={17} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>Step 1 Complete — {session.masterCustomerCount} customers imported.</strong>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
+            <strong style={{ color: '#0F172A' }}>Step 1 Complete — {session.masterCustomerCount} customers imported.</strong>
             <br />
             Now upload the <strong style={{ color: '#10b981' }}>CEB Assist Sheet</strong>. Required columns: <span style={{ color: '#10b981' }}>Account No, Prv. Rdg. Date, Crnt. Rdg. Date</span>
           </div>
@@ -4500,8 +4572,8 @@ const UploadPage = () => {
       <div style={{ background: 'rgba(16,185,129,0.04)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
           <Info size={16} color="#818cf8" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>CEB Assist Sheet</strong>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
+            <strong style={{ color: '#0F172A' }}>CEB Assist Sheet</strong>
             <br />
             This sheet adds <strong>Previous Reading Date</strong> and <strong>Current Reading Date</strong> to each customer record, matched by Account No.
           </div>
@@ -4527,7 +4599,7 @@ const UploadPage = () => {
             )}
             <button className="btn" onClick={handleCebApprove} disabled={approving || (preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0}
               style={{
-                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                background: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
                 color: ((preview.errorCount || 0) > 0 || (preview.duplicateCount || 0) > 0) ? 'var(--text-secondary)' : 'white',
                 fontWeight: 600,
                 padding: '0.6rem 1.75rem',
@@ -4547,12 +4619,6 @@ const UploadPage = () => {
 
       {preview && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Valid" value={preview.validCount ?? (preview.totalRows - preview.errorCount)} color="#10b981" icon={<CheckCircle size={18} />} />
-            <StatCard label="Duplicates" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#f59e0b' : '#10b981'} icon={<AlertTriangle size={18} />} />
-            <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Row Preview</div>
           </div>
@@ -4570,8 +4636,8 @@ const UploadPage = () => {
       {session && (
         <div style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
           <CheckCircle size={17} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>Steps 1 &amp; 2 Complete</strong> — {session.masterCustomerCount} customers imported, {session.cebAssistCount ?? '?'} reading dates merged.
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
+            <strong style={{ color: '#0F172A' }}>Steps 1 &amp; 2 Complete</strong> — {session.masterCustomerCount} customers imported, {session.cebAssistCount ?? '?'} reading dates merged.
             <br />
             Now upload the <strong style={{ color: '#f59e0b' }}>NGEN Sheet</strong> to complete the import.
           </div>
@@ -4581,8 +4647,8 @@ const UploadPage = () => {
       <div style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
           <Info size={16} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>NGEN Sheet</strong>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
+            <strong style={{ color: '#0F172A' }}>NGEN Sheet</strong>
             <br />
             Required columns (11): <span style={{ color: '#f59e0b' }}>Account No, Net Type, kWh Import, kWh Export, kWh Unit Sales, Unit Rate, Retention Money, Bill Outstanding Set Off, kWh Sales Amount, Payment Settled, Outstanding Balance</span>
             <br />
@@ -4637,16 +4703,6 @@ const UploadPage = () => {
 
       {preview && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Valid" value={preview.validCount ?? preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
-            {(preview.multiplePaymentCount || 0) > 0 && (
-              <StatCard label="Multiple Payments" value={preview.multiplePaymentCount || 0} color="#818cf8" icon={<FileText size={18} />} />
-            )}
-            <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-            <StatCard label="Duplicate Records" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#ec4899' : '#10b981'} icon={<AlertTriangle size={18} />} />
-            <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>NGEN Preview</div>
           </div>
@@ -4664,8 +4720,8 @@ const UploadPage = () => {
       {session && (
         <div style={{ background: 'rgba(16,185,129,0.07)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
           <CheckCircle size={17} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-            <strong style={{ color: 'white' }}>Steps 1, 2 &amp; 3 Complete</strong> — {session.masterCustomerCount} customers profile, {session.cebAssistCount ?? '?'} reading dates merged, {session.ngenCount ?? '?'} NGEN billing details merged.
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
+            <strong style={{ color: '#0F172A' }}>Steps 1, 2 &amp; 3 Complete</strong> — {session.masterCustomerCount} customers profile, {session.cebAssistCount ?? '?'} reading dates merged, {session.ngenCount ?? '?'} NGEN billing details merged.
             <br />
             Now upload the final <strong style={{ color: '#f59e0b' }}>NPAY Sheet</strong> to complete the multi-file import.
           </div>
@@ -4675,7 +4731,7 @@ const UploadPage = () => {
       <div style={{ background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'flex-start' }}>
           <Info size={16} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
             <strong style={{ color: 'white' }}>NPAY Sheet Upload</strong>
             <br />
             Required columns: <span style={{ color: '#f59e0b' }}>Account No, Net Type, Name, Energy Purchase, Bill Set Off, Retention Money, Payment</span>.
@@ -4724,16 +4780,6 @@ const UploadPage = () => {
 
       {preview && (
         <div style={{ marginTop: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-            <StatCard label="Total Rows" value={preview.totalRows} color="white" icon={<FileText size={18} />} />
-            <StatCard label="Valid" value={preview.validCount ?? preview.matchedCount} color="#10b981" icon={<CheckCircle size={18} />} />
-            {(preview.multiplePaymentCount || 0) > 0 && (
-              <StatCard label="Multiple Payments" value={preview.multiplePaymentCount || 0} color="#818cf8" icon={<FileText size={18} />} />
-            )}
-            <StatCard label="Warnings" value={preview.warningCount} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-            <StatCard label="Duplicate Records" value={preview.duplicateCount || 0} color={(preview.duplicateCount || 0) > 0 ? '#ec4899' : '#10b981'} icon={<AlertTriangle size={18} />} />
-            <StatCard label="Errors" value={preview.errorCount} color={preview.errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
-          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
             <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>Row Preview</div>
           </div>
@@ -4749,13 +4795,13 @@ const UploadPage = () => {
   // ── Step 5: Main Dataset ──────────────────────────────────────────────
   const renderStep5 = () => {
     if (mainDatasetLoading) {
-      return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><Loader size={28} className="animate-spin" /><div style={{ marginTop: '0.75rem' }}>Generating Main Dataset...</div></div>;
+      return <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}><Loader size={28} className="animate-spin" /><div style={{ marginTop: '0.75rem' }}>Generating Main Dataset...</div></div>;
     }
     if (!mainDataset) {
       return (
         <div style={{ textAlign: 'center', padding: '3rem' }}>
           <Layers size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#6366f1' }} />
-          <div style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Main Dataset has not been generated yet.</div>
+          <div style={{ color: '#475569', marginBottom: '1rem' }}>Main Dataset has not been generated yet.</div>
           <button onClick={() => loadMainDataset()} style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.5rem', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
             <RefreshCw size={15} /> Generate Main Dataset
           </button>
@@ -4809,7 +4855,7 @@ const UploadPage = () => {
       return true;
     });
     const fmtLKR = (v) => (v == null ? '—' : `LKR ${Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
-    const srcTag = (label) => <span style={{ fontSize: '0.56rem', color: 'var(--text-muted)', marginLeft: 4, letterSpacing: '0.02em' }}>{label}</span>;
+    const srcTag = (label) => <span style={{ fontSize: '0.56rem', color: '#64748B', marginLeft: 4, letterSpacing: '0.02em' }}>{label}</span>;
     const mismatchBadge = <span style={{ fontSize: '0.56rem', fontWeight: 700, color: '#f59e0b', background: 'rgba(245,158,11,0.15)', padding: '0 4px', borderRadius: 4, alignSelf: 'flex-start', marginTop: 2 }}>MISMATCH</span>;
     const renderMergedNum = (m) => {
       if (!m || m.source === 'NONE') return <span style={{ color: '#ef4444', fontStyle: 'italic', fontSize: '0.72rem' }}>Missing</span>;
@@ -4865,7 +4911,7 @@ const UploadPage = () => {
       { key: 'retentionMoney', label: 'Retention', raw: r => dupNorm(dupMergedRaw(r.mergedRetentionMoney)), render: r => renderMergedNum(r.mergedRetentionMoney) },
       { key: 'payment', label: 'Payment', raw: r => dupNorm(dupMergedRaw(r.mergedPayment)), render: r => renderMergedNum(r.mergedPayment) },
     ];
-    const dupTh = { padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' };
+    const dupTh = { padding: '0.5rem 0.65rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.66rem', textTransform: 'uppercase', whiteSpace: 'nowrap' };
     const dupThDiff = { ...dupTh, color: '#f59e0b' };
     const dupBtn = (bg, bd, col) => ({ padding: '0.22rem 0.5rem', background: bg, border: `1px solid ${bd}`, color: col, borderRadius: 5, fontSize: '0.68rem', cursor: mainRevalidating ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.25rem', opacity: mainRevalidating ? 0.6 : 1 });
     const renderDuplicateDetails = (primaryRow, members) => {
@@ -4879,13 +4925,13 @@ const UploadPage = () => {
           </div>
           {allIdentical ? (
             <>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
+              <div style={{ fontSize: '0.75rem', color: '#475569', display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
                 <Info size={13} color="#ec4899" /> All {members.length} duplicate records are identical (aside from repeated monthly/payment entries). One summarized record is kept in the Main Dataset.
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '0.6rem' }}>
                 {dupFieldDefs.map(f => (
                   <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                    <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
+                    <span style={{ fontSize: '0.6rem', color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{f.label}</span>
                     <span style={{ fontSize: '0.78rem' }}>{f.render(members[0])}</span>
                   </div>
                 ))}
@@ -4900,14 +4946,14 @@ const UploadPage = () => {
           ) : (
             <>
               {identical.length > 0 && (
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                  <strong style={{ color: 'var(--text-secondary)' }}>Identical across all records (hidden):</strong> {identical.map(f => f.label).join(', ')}
+                <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
+                  <strong style={{ color: '#475569' }}>Identical across all records (hidden):</strong> {identical.map(f => f.label).join(', ')}
                 </div>
               )}
               <div style={{ overflowX: 'auto', borderRadius: 10, border: '1px solid rgba(255,255,255,0.06)' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.76rem' }}>
                   <thead>
-                    <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                    <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                       <th style={dupTh}>Record</th>
                       {differing.map(f => (<th key={f.key} style={dupThDiff}>{f.label}</th>))}
                       <th style={dupTh}>Actions</th>
@@ -4915,8 +4961,8 @@ const UploadPage = () => {
                   </thead>
                   <tbody>
                     {members.map((m, mi) => (
-                      <tr key={m.rowNum ?? mi} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: mi % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                        <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{mi + 1}{m.sourceFile ? ` · ${m.sourceFile}` : ''}</td>
+                      <tr key={m.rowNum ?? mi} style={{ borderBottom: '1px solid #E2E8F0', background: mi % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
+                        <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap', color: '#64748B', fontFamily: 'monospace' }}>#{mi + 1}{m.sourceFile ? ` · ${m.sourceFile}` : ''}</td>
                         {differing.map(f => (<td key={f.key} style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap' }}>{f.render(m)}</td>))}
                         <td style={{ padding: '0.45rem 0.65rem', whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'flex', gap: '0.35rem' }}>
@@ -4948,7 +4994,7 @@ const UploadPage = () => {
       <div>
         <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
           <Layers size={17} color="#6366f1" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
             <strong style={{ color: 'white' }}>Step 5 — Main Dataset (Merged CEB Assist + NGEN + NPAY)</strong>
             <br />
             All three files have been merged by Account Number. Cross-file validations have been applied.
@@ -4958,7 +5004,7 @@ const UploadPage = () => {
 
         {/* Action buttons (top — matches the layout used in Steps 1–4) */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <button onClick={() => loadMainDataset()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+          <button onClick={() => loadMainDataset()} style={{ background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
             <RefreshCw size={14} /> Refresh
           </button>
           <button onClick={handleMainRevalidate} disabled={mainRevalidating}
@@ -4967,7 +5013,7 @@ const UploadPage = () => {
           </button>
           <button onClick={handleApproveMainDataset} disabled={approving || hasErrors}
             style={{
-              background: hasErrors ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+              background: hasErrors ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
               color: hasErrors ? 'var(--text-muted)' : 'white',
               fontWeight: 600, padding: '0.6rem 1.75rem', borderRadius: 10, border: 'none',
               cursor: hasErrors ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem',
@@ -4977,18 +5023,8 @@ const UploadPage = () => {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <StatCard label="Total Records" value={mainRecordCount} color="white" icon={<FileText size={18} />} />
-          <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
-          <StatCard label="Multiple Payments" value={multiplePaymentRecordCount} color="#818cf8" icon={<Layers size={18} />} />
-          <StatCard label="Warnings" value={warningCount || 0} color="#f59e0b" icon={<AlertTriangle size={18} />} />
-          <StatCard label="Duplicate Records" value={duplicateRecordCount || 0} color="#ec4899" icon={<Layers size={18} />} />
-          <StatCard label="Errors" value={errorCount} color={errorCount > 0 ? '#ef4444' : '#10b981'} icon={<XCircle size={18} />} />
-          <StatCard label="Rejected" value={rejectedCount || 0} color={(rejectedCount || 0) > 0 ? '#f43f5e' : '#10b981'} icon={<XCircle size={18} />} />
-        </div>
-
         {(rejectedCount || 0) > 0 && (
-          <div style={{ background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, padding: '0.7rem 1rem', marginBottom: '1rem', display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+          <div style={{ background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, padding: '0.7rem 1rem', marginBottom: '1rem', display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.78rem', color: '#475569' }}>
             <XCircle size={15} color="#f43f5e" style={{ marginTop: 1, flexShrink: 0 }} />
             <div><strong style={{ color: '#f43f5e' }}>{rejectedCount} incomplete record(s) auto-removed.</strong> Account Numbers missing an entire CEB Assist, NGEN or NPAY record are moved to the <strong>Rejected</strong> list and excluded from the Main Dataset. They are shown here for review only and are not imported. Duplicate records are not affected.</div>
           </div>
@@ -5007,7 +5043,7 @@ const UploadPage = () => {
         {showMainFilters && (
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             {[
-              { key: 'ALL', label: 'All Records', count: mainRecordCount || 0, color: 'var(--text-secondary)' },
+              { key: 'ALL', label: 'All Records', count: mainRecordCount || 0, color: '#475569' },
               { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
               { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentRecordCount, color: '#818cf8' },
               { key: 'ERROR', label: 'Errors', count: errorCount || 0, color: '#ef4444' },
@@ -5042,7 +5078,7 @@ const UploadPage = () => {
 
           if (filteredRows.length === 0) {
             return (
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
                 <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
                 <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
               </div>
@@ -5053,9 +5089,9 @@ const UploadPage = () => {
             <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                  <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                     {['#', 'Account No', 'Name', 'Prev Reading', 'Curr Reading', 'Net Type', 'kWh Import', 'kWh Export', 'kWh Sales', 'Unit Rate', 'Energy Purchase', 'Bill Set Off', 'Retention Money', 'Payment', 'Status', 'Actions'].map(h => (
-                      <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -5069,8 +5105,8 @@ const UploadPage = () => {
                     return (
                       <React.Fragment key={rowKey}>
                         <tr onClick={() => setMainExpandedRow(expanded ? null : rowKey)}
-                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isMultiplePayment ? '3px solid #818cf8' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                          <td style={{ padding: '0.5rem 0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{rowIndex + 1}</td>
+                          style={{ borderBottom: '1px solid #E2E8F0', cursor: 'pointer', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.isDuplicateEntry ? '3px solid #ec4899' : row.isMultiplePayment ? '3px solid #818cf8' : row.isDuplicatePrimary ? '3px solid rgba(236,72,153,0.5)' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.isDuplicateEntry ? 'rgba(236,72,153,0.05)' : rowIndex % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
+                          <td style={{ padding: '0.5rem 0.75rem', color: '#64748B', fontFamily: 'monospace' }}>{rowIndex + 1}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {row.accountNo || '—'}
                           {row.sourceFile && (
@@ -5153,7 +5189,7 @@ const UploadPage = () => {
                               )}
                               {row.warnings?.length > 0 && (
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                                  <strong style={{ color: 'var(--text-secondary)' }}>All warnings:</strong>
+                                  <strong style={{ color: '#475569' }}>All warnings:</strong>
                                   {row.warnings.map((w, wi) => (
                                     <div key={wi} style={{ color: '#f59e0b', display: 'flex', gap: '0.3rem', alignItems: 'flex-start' }}>
                                       <AlertTriangle size={11} style={{ flexShrink: 0, marginTop: 2 }} /> {w}
@@ -5188,9 +5224,9 @@ const UploadPage = () => {
           const setF = (k, v) => setEditingMainFields(prev => ({ ...prev, [k]: v }));
           const fieldInput = (label, key, type = 'text') => (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <label style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</label>
+              <label style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.02em' }}>{label}</label>
               <input type={type} value={ef[key] ?? ''} onChange={e => setF(key, e.target.value)}
-                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)', borderRadius: 7, padding: '0.45rem 0.6rem', color: 'white', fontSize: '0.8rem', fontFamily: type === 'number' ? 'monospace' : 'inherit' }} />
+                style={{ background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: 7, padding: '0.45rem 0.6rem', color: '#0F172A', fontSize: '0.8rem', fontFamily: type === 'number' ? 'monospace' : 'inherit' }} />
             </div>
           );
           const groupHeader = (label, color) => (
@@ -5200,19 +5236,19 @@ const UploadPage = () => {
             <div onClick={() => setEditingMainRow(null)}
               style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '1.5rem' }}>
               <div onClick={e => e.stopPropagation()}
-                style={{ background: 'var(--card-bg, #1a1c23)', border: '1px solid var(--border-color)', borderRadius: 14, width: 'min(760px, 100%)', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.5)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.1rem 1.4rem', borderBottom: '1px solid var(--border-color)', position: 'sticky', top: 0, background: 'var(--card-bg, #1a1c23)', zIndex: 1 }}>
+                style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: 14, width: 'min(760px, 100%)', maxHeight: '88vh', overflowY: 'auto', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '1.1rem 1.4rem', borderBottom: '1px solid #E2E8F0', position: 'sticky', top: 0, background: '#F8FAFC', zIndex: 1 }}>
                   <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Pencil size={15} color="#818cf8" /> Edit Merged Record</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem', fontFamily: 'monospace' }}>Account No: {editingMainRow.accountNo || '—'}</div>
+                    <div style={{ fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#0F172A' }}><Pencil size={15} color="#2563EB" /> Edit Merged Record</div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '0.2rem', fontFamily: 'monospace' }}>Account No: {editingMainRow.accountNo || '—'}</div>
                   </div>
                   <button onClick={() => setEditingMainRow(null)} title="Cancel"
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 8, padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                    style={{ background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 8, padding: '0.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                     <X size={16} />
                   </button>
                 </div>
-                <div style={{ padding: '1.25rem 1.4rem', fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                  Edit values below to reconcile mismatches or fill missing data. Underlying CEB Assist, NGEN and NPAY source records are <strong style={{ color: 'var(--text-secondary)' }}>not modified</strong> — changes only apply to this merged row.
+                <div style={{ padding: '1.25rem 1.4rem', fontSize: '0.75rem', color: '#64748B', lineHeight: 1.6 }}>
+                  Edit values below to reconcile mismatches or fill missing data. Underlying CEB Assist, NGEN and NPAY source records are <strong style={{ color: '#475569' }}>not modified</strong> — changes only apply to this merged row.
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.9rem', padding: '0 1.4rem 1.25rem' }}>
                   {groupHeader('CEB Assist', '#10b981')}
@@ -5238,9 +5274,9 @@ const UploadPage = () => {
                   {fieldInput('Retention Money', 'npayRetentionMoney', 'number')}
                   {fieldInput('Payment', 'npayPayment', 'number')}
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1.1rem 1.4rem', borderTop: '1px solid var(--border-color)', position: 'sticky', bottom: 0, background: 'var(--card-bg, #1a1c23)' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', padding: '1.1rem 1.4rem', borderTop: '1px solid #E2E8F0', position: 'sticky', bottom: 0, background: '#F8FAFC' }}>
                   <button onClick={() => setEditingMainRow(null)}
-                    style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+                    style={{ background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
                     Cancel
                   </button>
                   <button onClick={handleSaveMainCorrection} disabled={mainRevalidating}
@@ -5259,13 +5295,13 @@ const UploadPage = () => {
   // ── Step 6: Master Data Comparison ──────────────────────────────────────
   const renderStep6 = () => {
     if (masterComparisonLoading) {
-      return <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><Loader size={28} className="animate-spin" /><div style={{ marginTop: '0.75rem' }}>Comparing with Master Data...</div></div>;
+      return <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}><Loader size={28} className="animate-spin" /><div style={{ marginTop: '0.75rem' }}>Comparing with Master Data...</div></div>;
     }
     if (!masterComparison) {
       return (
         <div style={{ textAlign: 'center', padding: '3rem' }}>
           <User size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#6366f1' }} />
-          <div style={{ color: 'var(--text-secondary)', marginBottom: '1rem' }}>Master Data comparison has not been run yet.</div>
+          <div style={{ color: '#475569', marginBottom: '1rem' }}>Master Data comparison has not been run yet.</div>
           <button onClick={() => loadMasterComparison()} style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: 'white', fontWeight: 600, padding: '0.6rem 1.5rem', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
             <RefreshCw size={15} /> Run Master Data Comparison
           </button>
@@ -5347,7 +5383,7 @@ const UploadPage = () => {
       <div>
         <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
           <CheckCircle size={17} color="#10b981" style={{ marginTop: 2, flexShrink: 0 }} />
-          <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
             <strong style={{ color: 'white' }}>Step 6 — Master Data Comparison (Final Enrichment)</strong>
             <br />
             Main Dataset records have been compared with approved Master Data by Account Number.
@@ -5357,7 +5393,7 @@ const UploadPage = () => {
 
         {/* Action buttons (top — matches the layout used in Steps 1–4) */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginBottom: '1.25rem' }}>
-          <button onClick={() => loadMasterComparison()} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
+          <button onClick={() => loadMasterComparison()} style={{ background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 10, padding: '0.55rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem' }}>
             <RefreshCw size={14} /> Refresh
           </button>
           <button onClick={handleApproveMasterComparison} disabled={approving}
@@ -5370,19 +5406,6 @@ const UploadPage = () => {
             }}>
             {approving ? <><Loader size={15} className="animate-spin" /> Finalizing...</> : <><CheckCircle size={15} /> Approve & Finalize Import</>}
           </button>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem', marginBottom: '1.5rem' }}>
-          <StatCard label="Total Records" value={totalRecords} color="#818cf8" icon={<FileText size={18} />} />
-          <StatCard label="Valid" value={validCount} color="#10b981" icon={<CheckCircle size={18} />} />
-          <StatCard label="Multiple Payments" value={multiplePaymentCount || 0} color="#818cf8" icon={<Layers size={18} />} />
-          <StatCard label="Outstanding Customers" value={noBillingDataCount || 0} color="#38bdf8" icon={<Clock size={18} />} />
-          <StatCard label="Duplicate Records" value={actualDupCount || 0} color="#ec4899" icon={<Layers size={18} />} />
-          <StatCard label="Name Mismatch" value={nameMismatchCount || 0} color={nameMismatchCount > 0 ? '#fb7185' : '#10b981'} icon={<User size={18} />} />
-          <StatCard label="Unit Rate Mismatch" value={unitRateMismatchCount || 0} color={unitRateMismatchCount > 0 ? '#fbbf24' : '#10b981'} icon={<AlertTriangle size={18} />} />
-          <StatCard label="Net Type Mismatch" value={netTypeMismatchCount || 0} color={netTypeMismatchCount > 0 ? '#a78bfa' : '#10b981'} icon={<Zap size={18} />} />
-          <StatCard label="Agreement Expired" value={agreementExpiredCount || 0} color={agreementExpiredCount > 0 ? '#ef4444' : '#10b981'} icon={<Clock size={18} />} />
-          <StatCard label="Expiring Soon" value={agreementExpiringCount || 0} color={agreementExpiringCount > 0 ? '#f97316' : '#10b981'} icon={<Clock size={18} />} />
         </div>
 
         <SearchBar
@@ -5398,7 +5421,7 @@ const UploadPage = () => {
         {showComparisonFilters && (
           <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
             {[
-              { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: 'var(--text-secondary)' },
+              { key: 'ALL', label: 'All Records', count: totalRecords || 0, color: '#475569' },
               { key: 'VALID', label: 'Valid', count: validCount || 0, color: '#10b981' },
               { key: 'MULTIPLE_PAYMENT', label: 'Multiple Payments', count: multiplePaymentCount || 0, color: '#818cf8' },
               { key: 'NO_BILLING_DATA', label: 'Outstanding Customers', count: noBillingDataCount || 0, color: '#38bdf8' },
@@ -5439,7 +5462,7 @@ const UploadPage = () => {
               <div>
                 <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
                   <User size={17} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
                     <strong style={{ color: 'white' }}>Name Mismatch Review</strong>
                     <br />
                     These records matched on Account Number but the NPAY name differs from the Master Data name.
@@ -5449,7 +5472,7 @@ const UploadPage = () => {
                 </div>
 
                 {nameMismatchRows.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
                     <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
                     <div style={{ fontWeight: 600 }}>No name mismatches to review.</div>
                     <div style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>All name comparisons are matched or have been approved.</div>
@@ -5457,13 +5480,13 @@ const UploadPage = () => {
                 ) : (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#475569' }}>
                         {nameMismatchSelected.length} of {nameMismatchRows.length} selected
                       </div>
                       <button type="button" onClick={() => handleApproveNames(nameMismatchSelected)}
                         disabled={nameApproving || nameMismatchSelected.length === 0}
                         style={{
-                          background: nameMismatchSelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                          background: nameMismatchSelected.length === 0 ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
                           color: nameMismatchSelected.length === 0 ? 'var(--text-muted)' : 'white',
                           fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: 10, border: 'none',
                           cursor: (nameApproving || nameMismatchSelected.length === 0) ? 'not-allowed' : 'pointer',
@@ -5476,12 +5499,12 @@ const UploadPage = () => {
                     <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
                             </th>
                             {['Ref No', 'Account No', 'NPAY Name', 'Master Data Name', 'Comparison Status', 'Action'].map(h => (
-                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -5492,7 +5515,7 @@ const UploadPage = () => {
                             const isEditing = editingMismatch && editingMismatch.field === 'name' && String(editingMismatch.accountNo) === acc;
                             return (
                                isEditing ? (
-                                 <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(99,102,241,0.03)' }}>
+                                 <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid #E2E8F0', background: 'rgba(99,102,241,0.03)' }}>
                                    <td colSpan={7} style={{ padding: '1rem', background: 'rgba(15, 23, 42, 0.2)' }}>
                                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
                                        <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#818cf8', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -5503,7 +5526,7 @@ const UploadPage = () => {
                                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem' }}>
                                          {/* Master Name Field */}
                                          <div>
-                                           <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', fontWeight: 600 }}>Master Name:</label>
+                                           <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: '0.35rem', fontWeight: 600 }}>Master Name:</label>
                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                              <input
                                                type="text"
@@ -5514,7 +5537,7 @@ const UploadPage = () => {
                                                  flex: 1,
                                                  padding: '0.4rem 0.65rem',
                                                  borderRadius: 8,
-                                                 border: `1px solid ${editMasterActive ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}`,
+                                                 border: `1px solid ${editMasterActive ? 'var(--primary)' : '#F1F5F9'}`,
                                                  background: editMasterActive ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.03)',
                                                  color: editMasterActive ? 'white' : 'var(--text-secondary)',
                                                  fontSize: '0.8rem',
@@ -5549,7 +5572,7 @@ const UploadPage = () => {
                                          
                                          {/* Uploaded / Source Name Field */}
                                          <div>
-                                           <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-secondary)', marginBottom: '0.35rem', fontWeight: 600 }}>Uploaded Name:</label>
+                                           <label style={{ display: 'block', fontSize: '0.72rem', color: '#475569', marginBottom: '0.35rem', fontWeight: 600 }}>Uploaded Name:</label>
                                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                              <input
                                                type="text"
@@ -5560,7 +5583,7 @@ const UploadPage = () => {
                                                  flex: 1,
                                                  padding: '0.4rem 0.65rem',
                                                  borderRadius: 8,
-                                                 border: `1px solid ${editUploadedActive ? 'var(--primary)' : 'rgba(255,255,255,0.08)'}`,
+                                                 border: `1px solid ${editUploadedActive ? 'var(--primary)' : '#F1F5F9'}`,
                                                  background: editUploadedActive ? 'rgba(15, 23, 42, 0.6)' : 'rgba(255, 255, 255, 0.03)',
                                                  color: editUploadedActive ? 'white' : 'var(--text-secondary)',
                                                  fontSize: '0.8rem',
@@ -5633,7 +5656,7 @@ const UploadPage = () => {
                                              fontWeight: 700,
                                              background: 'rgba(255, 255, 255, 0.05)',
                                              border: '1px solid var(--border-color)',
-                                             color: 'var(--text-secondary)'
+                                             color: '#475569'
                                            }}
                                          >
                                            <span>Cancel</span>
@@ -5643,7 +5666,7 @@ const UploadPage = () => {
                                    </td>
                                  </tr>
                                ) : (
-                                 <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                                 <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid #E2E8F0', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
                                    <td style={{ padding: '0.5rem 0.75rem' }}>
                                      <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
                                    </td>
@@ -5694,7 +5717,7 @@ const UploadPage = () => {
               <div>
                 <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
                   <AlertTriangle size={17} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
                     <strong style={{ color: 'white' }}>Unit Rate Mismatch Review</strong>
                     <br />
                     These records matched on Account Number but the approved Master Data Unit Rate differs
@@ -5705,7 +5728,7 @@ const UploadPage = () => {
                 </div>
 
                 {unitRateMismatchRows.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
                     <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
                     <div style={{ fontWeight: 600 }}>No unit rate mismatches to review.</div>
                     <div style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>All Unit Rate comparisons are matched or have been approved.</div>
@@ -5713,13 +5736,13 @@ const UploadPage = () => {
                 ) : (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#475569' }}>
                         {unitRateMismatchSelected.length} of {unitRateMismatchRows.length} selected
                       </div>
                       <button type="button" onClick={() => handleApproveUnitRates(unitRateMismatchSelected)}
                         disabled={unitRateApproving || unitRateMismatchSelected.length === 0}
                         style={{
-                          background: unitRateMismatchSelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                          background: unitRateMismatchSelected.length === 0 ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
                           color: unitRateMismatchSelected.length === 0 ? 'var(--text-muted)' : 'white',
                           fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: 10, border: 'none',
                           cursor: (unitRateApproving || unitRateMismatchSelected.length === 0) ? 'not-allowed' : 'pointer',
@@ -5732,12 +5755,12 @@ const UploadPage = () => {
                     <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
                             </th>
                             {['Ref No', 'Account No', 'Master Data Unit Rate', 'Main Data Set (NGEN) Unit Rate', 'Comparison Status', 'Action'].map(h => (
-                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -5748,7 +5771,7 @@ const UploadPage = () => {
                             const isEditingThisRow = editingMismatch && editingMismatch.field === 'unitRate' && String(editingMismatch.accountNo) === acc;
 
                             return (
-                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid #E2E8F0', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
                                   <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
                                 </td>
@@ -5758,14 +5781,14 @@ const UploadPage = () => {
                                   {isEditingThisRow ? (
                                     <input type="number" step="any" value={editMasterRateValue} placeholder="Master Rate" onChange={e => setEditMasterRateValue(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') handleEditBothUnitRates(acc, editMasterRateValue, editMainRateValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMasterRateValue(''); setEditMainRateValue(''); } }}
-                                      style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                                      style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: '#F1F5F9', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
                                   ) : (row.masterUnitRate ?? '—')}
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace' }}>
                                   {isEditingThisRow ? (
                                     <input type="number" step="any" value={editMainRateValue} placeholder="Main Rate" onChange={e => setEditMainRateValue(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') handleEditBothUnitRates(acc, editMasterRateValue, editMainRateValue); if (e.key === 'Escape') { setEditingMismatch(null); setEditMasterRateValue(''); setEditMainRateValue(''); } }}
-                                      style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                                      style={{ width: '120px', padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(16,185,129,0.5)', background: '#F1F5F9', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
                                   ) : (row.mainUnitRate ?? '—')}
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
@@ -5779,7 +5802,7 @@ const UploadPage = () => {
                                         {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
                                       </button>
                                       <button type="button" onClick={() => { setEditingMismatch(null); setEditMasterRateValue(''); setEditMainRateValue(''); }} disabled={editMismatchSaving}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569' }}>
                                         Cancel
                                       </button>
                                     </div>
@@ -5817,7 +5840,7 @@ const UploadPage = () => {
               <div>
                 <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
                   <AlertTriangle size={17} color="#f59e0b" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
                     <strong style={{ color: 'white' }}>Net Type Mismatch Review</strong>
                     <br />
                     These records matched on Account Number but the Master Data Net Type differs from the
@@ -5829,7 +5852,7 @@ const UploadPage = () => {
                 </div>
 
                 {netTypeMismatchRows.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
                     <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
                     <div style={{ fontWeight: 600 }}>No net type mismatches to review.</div>
                     <div style={{ fontSize: '0.8rem', marginTop: '0.35rem' }}>All Net Type comparisons are matched or have been approved.</div>
@@ -5837,13 +5860,13 @@ const UploadPage = () => {
                 ) : (
                   <>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontSize: '0.8rem', color: '#475569' }}>
                         {netTypeMismatchSelected.length} of {netTypeMismatchRows.length} selected
                       </div>
                       <button type="button" onClick={() => handleApproveNetTypes(netTypeMismatchSelected)}
                         disabled={netTypeApproving || netTypeMismatchSelected.length === 0}
                         style={{
-                          background: netTypeMismatchSelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                          background: netTypeMismatchSelected.length === 0 ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
                           color: netTypeMismatchSelected.length === 0 ? 'var(--text-muted)' : 'white',
                           fontWeight: 600, padding: '0.55rem 1.25rem', borderRadius: 10, border: 'none',
                           cursor: (netTypeApproving || netTypeMismatchSelected.length === 0) ? 'not-allowed' : 'pointer',
@@ -5856,12 +5879,12 @@ const UploadPage = () => {
                     <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
                             </th>
                             {['Ref No', 'Account No', 'Master Data Net Type', 'Main Data Set Net Type', 'Comparison Status', 'Action'].map(h => (
-                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                              <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -5871,7 +5894,7 @@ const UploadPage = () => {
                             const checked = netTypeMismatchSelected.includes(acc);
                             const isEditing = editingMismatch && editingMismatch.field === 'netType' && String(editingMismatch.accountNo) === acc;
                             return (
-                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                              <tr key={row.rowNum ?? acc ?? i} style={{ borderBottom: '1px solid #E2E8F0', background: checked ? 'rgba(16,185,129,0.06)' : i % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
                                   <input type="checkbox" checked={checked} onChange={() => toggleOne(acc)} style={{ cursor: 'pointer', width: 15, height: 15 }} />
                                 </td>
@@ -5904,7 +5927,7 @@ const UploadPage = () => {
                                         {editMismatchSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
                                       </button>
                                       <button type="button" onClick={() => { setEditingMismatch(null); setEditMismatchValue(''); }} disabled={editMismatchSaving}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569' }}>
                                         Cancel
                                       </button>
                                     </div>
@@ -5949,7 +5972,7 @@ const UploadPage = () => {
               EXPIRED: { label: 'Expired', color: '#ef4444', bg: 'rgba(239,68,68,0.15)', rowBg: 'rgba(239,68,68,0.07)' },
               EXPIRING_SOON: { label: 'Expiring Soon', color: '#f97316', bg: 'rgba(249,115,22,0.15)', rowBg: 'rgba(249,115,22,0.07)' },
               ACTIVE: { label: 'Active', color: '#10b981', bg: 'rgba(16,185,129,0.15)', rowBg: 'rgba(16,185,129,0.04)' },
-              UNKNOWN: { label: 'No Agreement Date', color: 'var(--text-muted)', bg: 'rgba(255,255,255,0.08)', rowBg: 'transparent' }
+              UNKNOWN: { label: 'No Agreement Date', color: '#64748B', bg: '#F1F5F9', rowBg: 'transparent' }
             };
             const fmtDate = (d) => d ? d.toISOString().slice(0, 10) : '—';
             const list = agreementRows.filter(r => {
@@ -5997,7 +6020,7 @@ const UploadPage = () => {
               { key: 'status', label: 'Status' },
             ];
             const subFilters = [
-              { key: 'ALL', label: 'All', count: agreementRows.length, color: 'var(--text-secondary)' },
+              { key: 'ALL', label: 'All', count: agreementRows.length, color: '#475569' },
               { key: 'EXPIRED', label: 'Expired', count: agreementExpiredCount, color: '#ef4444' },
               { key: 'EXPIRING_SOON', label: 'Expiring Soon', count: agreementExpiringCount, color: '#f97316' },
               { key: 'ACTIVE', label: 'Active', count: agreementActiveCount, color: '#10b981' },
@@ -6006,7 +6029,7 @@ const UploadPage = () => {
               <div>
                 <div style={{ background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '1rem 1.25rem', marginBottom: '1.25rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
                   <Clock size={17} color="#ef4444" style={{ marginTop: 2, flexShrink: 0 }} />
-                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <div style={{ fontSize: '0.82rem', color: '#475569', lineHeight: 1.7 }}>
                     <strong style={{ color: 'white' }}>Agreement Expiry Review</strong>
                     <br />
                     Agreement Expiry = Agreement Date + 7 years, compared against the uploaded billing month
@@ -6024,7 +6047,7 @@ const UploadPage = () => {
                     <button key={f.key} type="button" onClick={() => setAgreementExpiryFilter(f.key)}
                       style={{
                         padding: '0.4rem 0.85rem', borderRadius: 8,
-                        background: agreementExpiryFilter === f.key ? 'rgba(255,255,255,0.08)' : 'transparent',
+                        background: agreementExpiryFilter === f.key ? '#F1F5F9' : 'transparent',
                         border: agreementExpiryFilter === f.key ? '1px solid rgba(255,255,255,0.15)' : '1px solid transparent',
                         color: agreementExpiryFilter === f.key ? 'white' : 'var(--text-secondary)',
                         cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600,
@@ -6032,7 +6055,7 @@ const UploadPage = () => {
                       }}>
                       <span>{f.label}</span>
                       <span style={{
-                        background: agreementExpiryFilter === f.key ? f.color : 'rgba(255,255,255,0.08)',
+                        background: agreementExpiryFilter === f.key ? f.color : '#F1F5F9',
                         color: agreementExpiryFilter === f.key ? 'black' : f.color,
                         padding: '0.05rem 0.35rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700
                       }}>{f.count}</span>
@@ -6041,7 +6064,7 @@ const UploadPage = () => {
                 </div>
 
                 {sorted.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+                  <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
                     <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
                     <div style={{ fontWeight: 600 }}>No agreement records found for this filter.</div>
                   </div>
@@ -6051,10 +6074,10 @@ const UploadPage = () => {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
                         <button type="button" onClick={toggleAll}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.4rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600, background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569' }}>
                           <Check size={13} /> {allSelected ? 'Clear Selection' : 'Select All'}
                         </button>
-                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        <div style={{ fontSize: '0.8rem', color: '#475569' }}>
                           {agreementExpirySelected.length} of {selectableAccts.length} selected
                         </div>
                       </div>
@@ -6064,26 +6087,26 @@ const UploadPage = () => {
                             <input type="number" step="any" min="0" value={bulkRateValue} autoFocus placeholder="New Unit Rate"
                               onChange={e => setBulkRateValue(e.target.value)}
                               onKeyDown={e => { if (e.key === 'Enter') handleBulkAgreementRateEdit(sorted); if (e.key === 'Escape') { setBulkRateEditOpen(false); setBulkRateValue(''); } }}
-                              style={{ width: 130, padding: '0.45rem 0.6rem', borderRadius: 8, border: '1px solid rgba(59,130,246,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                              style={{ width: 130, padding: '0.45rem 0.6rem', borderRadius: 8, border: '1px solid rgba(59,130,246,0.5)', background: '#F1F5F9', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
                             <button type="button" onClick={() => handleBulkAgreementRateEdit(sorted)} disabled={agreementRateSaving}
                               style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.45rem 0.85rem', borderRadius: 8, cursor: agreementRateSaving ? 'not-allowed' : 'pointer', fontSize: '0.76rem', fontWeight: 700, background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', opacity: agreementRateSaving ? 0.6 : 1 }}>
                               {agreementRateSaving ? <Loader size={13} className="animate-spin" /> : <Save size={13} />} Apply to Selected ({agreementExpirySelected.length})
                             </button>
                             <button type="button" onClick={() => { setBulkRateEditOpen(false); setBulkRateValue(''); }} disabled={agreementRateSaving}
-                              style={{ padding: '0.45rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                              style={{ padding: '0.45rem 0.85rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.76rem', fontWeight: 600, background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569' }}>
                               Cancel
                             </button>
                           </div>
                         ) : (
                           <button type="button" onClick={() => setBulkRateEditOpen(true)} disabled={agreementExpirySelected.length === 0}
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.95rem', borderRadius: 8, cursor: agreementExpirySelected.length === 0 ? 'not-allowed' : 'pointer', fontSize: '0.78rem', fontWeight: 600, background: agreementExpirySelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: agreementExpirySelected.length === 0 ? 'var(--text-muted)' : '#3b82f6', opacity: agreementExpirySelected.length === 0 ? 0.6 : 1 }}>
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.45rem 0.95rem', borderRadius: 8, cursor: agreementExpirySelected.length === 0 ? 'not-allowed' : 'pointer', fontSize: '0.78rem', fontWeight: 600, background: agreementExpirySelected.length === 0 ? '#F1F5F9' : 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: agreementExpirySelected.length === 0 ? 'var(--text-muted)' : '#3b82f6', opacity: agreementExpirySelected.length === 0 ? 0.6 : 1 }}>
                             <Pencil size={13} /> Bulk Edit Unit Rate
                           </button>
                         )}
                         <button type="button" onClick={() => handleApproveAgreements(agreementExpirySelected)}
                           disabled={agreementExpirySelected.length === 0}
                           style={{
-                            background: agreementExpirySelected.length === 0 ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg,#10b981,#059669)',
+                            background: agreementExpirySelected.length === 0 ? '#F1F5F9' : 'linear-gradient(135deg,#10b981,#059669)',
                             color: agreementExpirySelected.length === 0 ? 'var(--text-muted)' : 'white',
                             fontWeight: 600, padding: '0.5rem 1.15rem', borderRadius: 10, border: 'none',
                             cursor: agreementExpirySelected.length === 0 ? 'not-allowed' : 'pointer',
@@ -6098,7 +6121,7 @@ const UploadPage = () => {
                     <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1rem' }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                         <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                             <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', width: 40 }}>
                               <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select All" style={{ cursor: 'pointer', width: 15, height: 15 }} />
                             </th>
@@ -6108,7 +6131,7 @@ const UploadPage = () => {
                                 {col.label} {agreementExpirySort.key === col.key ? (agreementExpirySort.dir === 'asc' ? '▲' : '▼') : <span style={{ opacity: 0.35 }}>⇅</span>}
                               </th>
                             ))}
-                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Action</th>
+                            <th style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -6120,7 +6143,7 @@ const UploadPage = () => {
                             const isEditing = editingAgreementRate === acc && acc !== '';
                             return (
                               <tr key={row.rowNum ?? acc ?? i}
-                                style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', borderLeft: `3px solid ${row.agreementStatus === 'UNKNOWN' ? 'transparent' : meta.color}`, background: checked ? 'rgba(255,255,255,0.05)' : meta.rowBg }}>
+                                style={{ borderBottom: '1px solid #E2E8F0', borderLeft: `3px solid ${row.agreementStatus === 'UNKNOWN' ? 'transparent' : meta.color}`, background: checked ? '#F1F5F9' : meta.rowBg }}>
                                 <td style={{ padding: '0.5rem 0.75rem' }}>
                                   <input type="checkbox" checked={checked} disabled={acc === ''} onChange={() => toggleOne(acc)} style={{ cursor: acc === '' ? 'not-allowed' : 'pointer', width: 15, height: 15 }} />
                                 </td>
@@ -6133,7 +6156,7 @@ const UploadPage = () => {
                                   {isEditing ? (
                                     <input type="number" step="any" min="0" value={agreementRateValue} autoFocus onChange={e => setAgreementRateValue(e.target.value)}
                                       onKeyDown={e => { if (e.key === 'Enter') handleSaveAgreementRateInline(row); if (e.key === 'Escape') { setEditingAgreementRate(null); setAgreementRateValue(''); } }}
-                                      style={{ width: 110, padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(59,130,246,0.5)', background: 'rgba(255,255,255,0.05)', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
+                                      style={{ width: 110, padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid rgba(59,130,246,0.5)', background: '#F1F5F9', color: 'white', fontSize: '0.78rem', fontFamily: 'monospace' }} />
                                   ) : (row.currentUnitRate ?? '—')}
                                 </td>
                                 <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>
@@ -6152,7 +6175,7 @@ const UploadPage = () => {
                                         {agreementRateSaving ? <Loader size={12} className="animate-spin" /> : <Save size={12} />} Save
                                       </button>
                                       <button type="button" onClick={() => { setEditingAgreementRate(null); setAgreementRateValue(''); }} disabled={agreementRateSaving}
-                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', padding: '0.3rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.72rem', fontWeight: 700, background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569' }}>
                                         Cancel
                                       </button>
                                     </div>
@@ -6188,12 +6211,12 @@ const UploadPage = () => {
                     <span style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <Clock size={15} /> Unit Rate Edit Audit Log ({agreementRateAudit.length})
                     </span>
-                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{showAgreementAudit ? '▲ Hide' : '▼ Show'}</span>
+                    <span style={{ fontSize: '0.78rem', color: '#64748B' }}>{showAgreementAudit ? '▲ Hide' : '▼ Show'}</span>
                   </button>
                   {showAgreementAudit && (
                     <div style={{ border: '1px solid rgba(59,130,246,0.12)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', background: 'rgba(20,20,25,0.4)' }}>
                       {agreementRateAudit.length === 0 ? (
-                        <div style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>No Unit Rate edits recorded in this session yet.</div>
+                        <div style={{ padding: '1.25rem', textAlign: 'center', color: '#64748B', fontSize: '0.8rem' }}>No Unit Rate edits recorded in this session yet.</div>
                       ) : (
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.78rem' }}>
                           <thead>
@@ -6205,14 +6228,14 @@ const UploadPage = () => {
                           </thead>
                           <tbody>
                             {agreementRateAudit.map((entry, i) => (
-                              <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)' }}>
+                              <tr key={i} style={{ borderBottom: '1px solid #E2E8F0', background: i % 2 === 0 ? '#FFFFFF' : '#F8FAFC' }}>
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>{entry.refNo}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{entry.accountNo}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>{entry.customerName}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#f87171' }}>{entry.oldValue ?? '—'}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#059669', fontWeight: 700 }}>{entry.newValue}</td>
                                 <td style={{ padding: '0.55rem 0.85rem', whiteSpace: 'nowrap' }}>{entry.editedBy}</td>
-                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{new Date(entry.editedAt).toLocaleString()}</td>
+                                <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', color: '#64748B', fontSize: '0.72rem', whiteSpace: 'nowrap' }}>{new Date(entry.editedAt).toLocaleString()}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -6231,7 +6254,7 @@ const UploadPage = () => {
 
           if (filteredRows.length === 0) {
             return (
-              <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#475569' }}>
                 <CheckCircle size={40} color="#10b981" style={{ marginBottom: '0.75rem' }} />
                 <div style={{ fontWeight: 600 }}>No visible records found for this filter.</div>
               </div>
@@ -6242,9 +6265,9 @@ const UploadPage = () => {
             <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
                 <thead>
-                  <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                  <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                     {['Ref No', 'Account No', 'Customer Name', 'Address', 'Cost Code', 'Mobile Number', 'Panel Capacity', 'Agreement Date', 'Bank Code', 'Branch Code', 'Bank Account No', 'Net Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Previous Reading Date', 'Current Reading Date', 'kWh Import', 'kWh Export', 'kWh Unit Sales', 'kWh Sales Amount', 'Bill Outstanding Set Off', 'Retention Money', 'Payment Settled', 'Outstanding Balance', 'Master Match', 'Net Type Check', 'Name Check', 'Unit Rate Check', 'Status', 'Issues'].map(h => (
-                      <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '0.6rem 0.75rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.7rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -6261,7 +6284,7 @@ const UploadPage = () => {
                     return (
                       <React.Fragment key={rowKey}>
                         <tr onClick={() => hasDetail && setComparisonExpandedRow(expanded ? null : rowKey)}
-                          style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : isMulti ? '3px solid #818cf8' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : isMulti ? 'rgba(129,140,248,0.03)' : rowIndex % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
+                          style={{ borderBottom: '1px solid #E2E8F0', cursor: hasDetail ? 'pointer' : 'default', borderLeft: row.status === 'REJECTED' ? '3px solid #f43f5e' : row.status === 'ERROR' ? '3px solid #ef4444' : isMulti ? '3px solid #818cf8' : '3px solid transparent', background: expanded ? 'rgba(99,102,241,0.06)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.05)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.07)' : isMulti ? 'rgba(129,140,248,0.03)' : rowIndex % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
                           <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.refNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{row.accountNo || '—'}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.customerName || '—'}</td>
@@ -6311,7 +6334,7 @@ const UploadPage = () => {
                         <td style={{ padding: '0.5rem 0.75rem' }}>
                           <span style={{
                             padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,
-                            background: isMulti ? 'rgba(99,102,241,0.15)' : isDuplicate ? 'rgba(236,72,153,0.15)' : row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : 'rgba(255,255,255,0.08)',
+                            background: isMulti ? 'rgba(99,102,241,0.15)' : isDuplicate ? 'rgba(236,72,153,0.15)' : row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'WARNING' ? 'rgba(245,158,11,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : '#F1F5F9',
                             color: isMulti ? '#818cf8' : isDuplicate ? '#ec4899' : row.status === 'VALID' ? '#10b981' : row.status === 'ERROR' ? '#ef4444' : row.status === 'WARNING' ? '#f59e0b' : row.status === 'REJECTED' ? '#f43f5e' : 'var(--text-muted)'
                           }}>{isMulti ? 'Multiple Payment' : isDuplicate ? 'Duplicate Record' : row.status}</span>
                         </td>
@@ -6336,7 +6359,7 @@ const UploadPage = () => {
                         <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
                           <td colSpan={31} style={{ padding: '0.75rem 1.25rem' }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.75rem' }}>
-                              <div style={{ fontWeight: 700, color: 'var(--text-secondary)', fontSize: '0.72rem' }}>
+                              <div style={{ fontWeight: 700, color: '#475569', fontSize: '0.72rem' }}>
                                 {row.refNo && row.refNo !== '—' ? `Ref No ${row.refNo}` : `Account No ${row.accountNo || '—'}`} — validation details
                               </div>
                               {errorCount > 0 && (
@@ -6420,7 +6443,7 @@ const UploadPage = () => {
             gap: '0.4rem',
             background: 'transparent',
             border: 'none',
-            color: 'var(--text-secondary)',
+            color: '#475569',
             cursor: 'pointer',
             marginBottom: '1rem',
             fontSize: '0.88rem',
@@ -6435,14 +6458,14 @@ const UploadPage = () => {
             <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
               Review Staging Batch: {selectedReviewBatch.filename}
             </h2>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+            <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.25rem' }}>
               Batch ID: #{selectedReviewBatch.id} · Uploaded By: {selectedReviewBatch.uploadedBy} · Status: <span style={{ color: '#ef4444', fontWeight: 600 }}>{selectedReviewBatch.status}</span>
             </div>
           </div>
           <button
             onClick={() => handleSelectReviewBatch(selectedReviewBatch)}
             style={{
-              background: 'rgba(255,255,255,0.06)',
+              background: '#F1F5F9',
               border: '1px solid var(--border-color)',
               borderRadius: 8,
               padding: '0.45rem 1rem',
@@ -6450,7 +6473,7 @@ const UploadPage = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '0.4rem',
-              color: 'var(--text-secondary)',
+              color: '#475569',
               fontSize: '0.82rem'
             }}
           >
@@ -6459,7 +6482,7 @@ const UploadPage = () => {
         </div>
 
         {reviewLoading ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}>
             <Loader size={24} className="animate-spin" />
           </div>
         ) : reviewError ? (
@@ -6467,27 +6490,27 @@ const UploadPage = () => {
             {reviewError}
           </div>
         ) : reviewStagingRows.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}>
             No staging rows found for this batch.
           </div>
         ) : (
           <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)', maxWidth: '100%' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
               <thead>
-                <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                   {isCustomerBatch ? (
                     [
                       'Row', 'Account No', 'Customer Name', 'Address', 'Ref. No.', 'Cost Code',
                       'Mobile', 'Capacity', 'Agreement Date', 'Bank', 'Branch',
                       'Bank Account', 'Solar Type', 'Unit Rate', 'Fix/Variable', 'L-Code', 'Status', 'Errors', 'Actions'
                     ].map(h => (
-                      <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                     ))
                   ) : (
                     [
                       'Row', 'Account No', 'Customer Name', 'From Date', 'To Date', 'Import Units', 'Export Units', 'Unit Cost', 'Status', 'Errors', 'Actions'
                     ].map(h => (
-                      <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
+                      <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{h}</th>
                     ))
                   )}
                 </tr>
@@ -6499,8 +6522,8 @@ const UploadPage = () => {
                   const hasErrors = row.errors && row.errors.length > 0;
 
                   return (
-                    <tr key={row.stagingId || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                      <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)' }}>{row.index}</td>
+                    <tr key={row.stagingId || i} style={{ borderBottom: '1px solid #E2E8F0', background: i % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
+                      <td style={{ padding: '0.6rem 0.9rem', color: '#64748B' }}>{row.index}</td>
                       <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>{renderCell(row.accountNo)}</td>
                       <td style={{ padding: '0.6rem 0.9rem', whiteSpace: 'nowrap' }}>{renderCell(row.customerName)}</td>
 
@@ -6618,16 +6641,16 @@ const UploadPage = () => {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h2 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Excel Import Batches</h2>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>Manage and rollback uploaded data at the batch level</div>
+          <div style={{ fontSize: '0.8rem', color: '#475569', marginTop: '0.25rem' }}>Manage and rollback uploaded data at the batch level</div>
         </div>
-        <button onClick={fetchHistory} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.45rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+        <button onClick={fetchHistory} style={{ background: '#F1F5F9', border: '1px solid var(--border-color)', borderRadius: 8, padding: '0.45rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#475569', fontSize: '0.82rem' }}>
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
       {historyLoading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}><Loader size={24} className="animate-spin" /></div>
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}><Loader size={24} className="animate-spin" /></div>
       ) : uploadHistory.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+        <div style={{ textAlign: 'center', padding: '3rem', color: '#64748B' }}>
           <FileSpreadsheet size={40} style={{ marginBottom: '0.75rem', opacity: 0.4 }} />
           <div>No upload history found.</div>
         </div>
@@ -6635,18 +6658,18 @@ const UploadPage = () => {
         <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border-color)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.83rem' }}>
             <thead>
-              <tr style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--border-color)' }}>
+              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid var(--border-color)' }}>
                 {['ID', 'Filename', 'Uploaded By', 'Records', 'Billing', 'Customers', 'Status', 'Date', 'Actions'].map(h => (
-                  <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.72rem', textTransform: 'uppercase' }}>{h}</th>
+                  <th key={h} style={{ padding: '0.7rem 0.9rem', textAlign: 'left', fontWeight: 600, color: '#475569', fontSize: '0.72rem', textTransform: 'uppercase' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {uploadHistory.map((h, i) => (
-                <tr key={h.id || i} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)', background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.015)' }}>
-                  <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>#{h.id}</td>
+                <tr key={h.id || i} style={{ borderBottom: '1px solid #E2E8F0', background: i % 2 === 0 ? 'transparent' : '#F8FAFC' }}>
+                  <td style={{ padding: '0.6rem 0.9rem', color: '#64748B', fontFamily: 'monospace' }}>#{h.id}</td>
                   <td style={{ padding: '0.6rem 0.9rem', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: 600 }}>{h.filename || '—'}</td>
-                  <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-secondary)' }}>{h.uploadedBy || '—'}</td>
+                  <td style={{ padding: '0.6rem 0.9rem', color: '#475569' }}>{h.uploadedBy || '—'}</td>
                   <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace' }}>{h.rowsProcessed ?? '—'}</td>
                   <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', color: '#6366f1' }}>{h.billingInserted ?? '—'}</td>
                   <td style={{ padding: '0.6rem 0.9rem', fontFamily: 'monospace', color: '#10b981' }}>{h.newCustomers ?? '—'}</td>
@@ -6657,12 +6680,12 @@ const UploadPage = () => {
                       color: h.status === 'SUCCESS' || h.status === 'COMPLETED' ? '#10b981' : h.status === 'FAILED' ? '#ef4444' : '#f59e0b'
                     }}>{h.status}</span>
                   </td>
-                  <td style={{ padding: '0.6rem 0.9rem', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                  <td style={{ padding: '0.6rem 0.9rem', color: '#64748B', fontSize: '0.78rem' }}>
                     {h.uploadTime ? new Date(h.uploadTime).toLocaleString() : '—'}
                   </td>
                   <td style={{ padding: '0.6rem 0.9rem' }}>
                     <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button onClick={() => setBatchDetails(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Details</button>
+                      <button onClick={() => setBatchDetails(h)} style={{ padding: '0.25rem 0.5rem', background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Details</button>
                       <button onClick={() => handleEditBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.2)', color: '#818cf8', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Rename</button>
                       {h.status === 'PENDING_APPROVAL' && (
                         <button onClick={() => handleSelectReviewBatch(h)} style={{ padding: '0.25rem 0.5rem', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981', borderRadius: 5, fontSize: '0.72rem', cursor: 'pointer' }}>Review</button>
@@ -6685,43 +6708,43 @@ const UploadPage = () => {
           <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '500px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Batch Details</h3>
-              <button onClick={() => setBatchDetails(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+              <button onClick={() => setBatchDetails(null)} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', fontSize: '0.88rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Batch ID</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Batch ID</span>
                 <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>#{batchDetails.id}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Uploaded File</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Uploaded File</span>
                 <span style={{ fontWeight: 600, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{batchDetails.filename}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Uploaded By</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Uploaded By</span>
                 <span>{batchDetails.uploadedBy}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Upload Date/Time</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Upload Date/Time</span>
                 <span>{batchDetails.uploadTime ? new Date(batchDetails.uploadTime).toLocaleString() : '—'}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Total Rows Processed</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Total Rows Processed</span>
                 <span style={{ fontFamily: 'monospace' }}>{batchDetails.rowsProcessed}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Billing Records Inserted</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Billing Records Inserted</span>
                 <span style={{ fontFamily: 'monospace', color: '#6366f1', fontWeight: 600 }}>{batchDetails.billingInserted}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>New Customers Created</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>New Customers Created</span>
                 <span style={{ fontFamily: 'monospace', color: '#10b981', fontWeight: 600 }}>{batchDetails.newCustomers}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.04)', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Errors Flagged</span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #E2E8F0', paddingBottom: '0.5rem' }}>
+                <span style={{ color: '#475569' }}>Errors Flagged</span>
                 <span style={{ fontFamily: 'monospace', color: batchDetails.errorsCount > 0 ? '#ef4444' : 'var(--text-secondary)' }}>{batchDetails.errorsCount}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '0.5rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Import Status</span>
+                <span style={{ color: '#475569' }}>Import Status</span>
                 <span style={{
                   padding: '0.15rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700,
                   background: batchDetails.status === 'SUCCESS' || batchDetails.status === 'COMPLETED' ? 'rgba(16,185,129,0.15)' : (batchDetails.status === 'FAILED' || batchDetails.status === 'REJECTED') ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)',
@@ -6731,11 +6754,11 @@ const UploadPage = () => {
               {batchDetails.rejectionReason && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
                   <span style={{ color: '#ef4444', fontWeight: 600, fontSize: '0.78rem' }}>Rejection Reason</span>
-                  <span style={{ color: 'var(--text-secondary)', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, padding: '0.6rem 0.8rem', fontSize: '0.82rem', lineHeight: 1.4 }}>{batchDetails.rejectionReason}</span>
+                  <span style={{ color: '#475569', background: 'rgba(239,68,68,0.05)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 8, padding: '0.6rem 0.8rem', fontSize: '0.82rem', lineHeight: 1.4 }}>{batchDetails.rejectionReason}</span>
                 </div>
               )}
             </div>
-            <button onClick={() => setBatchDetails(null)} style={{ width: '100%', marginTop: '1.5rem', padding: '0.65rem', background: 'rgba(255,255,255,0.06)', border: '1px solid var(--border-color)', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Close Details</button>
+            <button onClick={() => setBatchDetails(null)} style={{ width: '100%', marginTop: '1.5rem', padding: '0.65rem', background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#475569', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Close Details</button>
           </div>
         </div>
       )}
@@ -6746,14 +6769,14 @@ const UploadPage = () => {
           <form onSubmit={handleSaveBatchRename} style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '450px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Rename Import Batch</h3>
-              <button type="button" onClick={() => setEditingBatch(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+              <button type="button" onClick={() => setEditingBatch(null)} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={18} /></button>
             </div>
             <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 500 }}>Batch Name (Filename)</label>
-              <input type="text" value={editBatchName} onChange={e => setEditBatchName(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.88rem' }} required placeholder="Enter new filename..." />
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', marginBottom: '0.5rem', fontWeight: 500 }}>Batch Name (Filename)</label>
+              <input type="text" value={editBatchName} onChange={e => setEditBatchName(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.85rem', borderRadius: 10, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.88rem' }} required placeholder="Enter new filename..." />
             </div>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" onClick={() => setEditingBatch(null)} style={{ flex: 1, padding: '0.65rem', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button type="button" onClick={() => setEditingBatch(null)} style={{ flex: 1, padding: '0.65rem', background: 'transparent', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
               <button type="submit" style={{ flex: 1, padding: '0.65rem', background: 'var(--primary)', border: 'none', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Save Changes</button>
             </div>
           </form>
@@ -6783,27 +6806,27 @@ const UploadPage = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
           <button onClick={() => navigate('/monthly-directory')} title="Back to Monthly Directory" style={{
             padding: '0.45rem 0.95rem', borderRadius: 10, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer',
-            background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-color)',
+            background: '#F8FAFC', border: '1px solid var(--border-color)',
             color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: '0.4rem'
           }}>
             <ArrowLeft size={13} /> Directory
           </button>
 
           {/* Theme toggle */}
-          <button title="Toggle Theme" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#cbd5e1' }}>
+          <button title="Toggle Theme" style={{ background: '#F1F5F9', border: '1px solid rgba(255,255,255,0.1)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#cbd5e1' }}>
             <Sun size={17} />
           </button>
 
           {/* Notification Bell */}
           <div style={{ position: 'relative' }}>
-            <button title="Notifications" style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#cbd5e1' }}>
+            <button title="Notifications" style={{ background: '#F1F5F9', border: '1px solid rgba(255,255,255,0.1)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#cbd5e1' }}>
               <Bell size={17} />
             </button>
             <span style={{ position: 'absolute', top: -3, right: -3, width: 18, height: 18, borderRadius: '50%', background: '#6366f1', color: 'white', fontSize: '0.68rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>3</span>
           </div>
 
           {/* User Avatar Badge */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', padding: '0.3rem 0.75rem', borderRadius: 30 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', background: '#F8FAFC', border: '1px solid rgba(255,255,255,0.08)', padding: '0.3rem 0.75rem', borderRadius: 30 }}>
             <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: 'white', fontSize: '0.78rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               AD
             </div>
@@ -6881,15 +6904,15 @@ const UploadPage = () => {
           {wizardStep === 6 && renderStep6()}
 
           {/* Wizard Bottom Footer Bar matching Image 2 */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 500 }}>
-              Step {wizardStep} of 6 — <strong style={{ color: 'white' }}>{WIZARD_STEPS[wizardStep - 1].label}</strong>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '2.5rem', paddingTop: '1.5rem', borderTop: '1px solid #E2E8F0' }}>
+            <div style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 500 }}>
+              Step {wizardStep} of 6 — <strong style={{ color: '#0F172A' }}>{WIZARD_STEPS[wizardStep - 1].label}</strong>
             </div>
 
             <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'center' }}>
               {wizardStep > 1 && isStepAccessible(wizardStep - 1) && (
                 <button onClick={() => setWizardStep(wizardStep - 1)}
-                  style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.15)', color: '#cbd5e1', borderRadius: 12, padding: '0.6rem 1.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                  style={{ background: '#F1F5F9', border: '1px solid #E2E8F0', color: '#475569', borderRadius: 12, padding: '0.6rem 1.4rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}>
                   ← Back
                 </button>
               )}
@@ -6916,18 +6939,18 @@ const UploadPage = () => {
           <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '520px', padding: '2rem', boxShadow: 'var(--shadow)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Archive size={20} color="#10b981" /> Save Monthly Customer Directory</h3>
-              <button type="button" onClick={() => { if (!savingDirectory) setShowDirectoryNaming(false); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+              <button type="button" onClick={() => { if (!savingDirectory) setShowDirectoryNaming(false); }} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={18} /></button>
             </div>
-            <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            <p style={{ margin: '0 0 1.25rem 0', fontSize: '0.82rem', color: '#475569', lineHeight: 1.6 }}>
               The approved dataset for <strong style={{ color: 'white' }}>{directoryBillingMonth}</strong>{billingContext.division && <> — <strong style={{ color: 'white' }}>{billingContext.division} Division</strong></>} will be archived permanently as a separate monthly snapshot. Enter or edit a name below.
             </p>
             <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.5rem', fontWeight: 600 }}>Dataset Name</label>
-              <input type="text" autoFocus value={directoryName} onChange={e => setDirectoryName(e.target.value)} placeholder={`${directoryBillingMonth} Billing`} style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: 10, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.9rem' }} />
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>Leave blank to use the default: <strong>{directoryBillingMonth} Billing</strong></div>
+              <label style={{ display: 'block', fontSize: '0.8rem', color: '#475569', marginBottom: '0.5rem', fontWeight: 600 }}>Dataset Name</label>
+              <input type="text" autoFocus value={directoryName} onChange={e => setDirectoryName(e.target.value)} placeholder={`${directoryBillingMonth} Billing`} style={{ width: '100%', padding: '0.7rem 0.9rem', borderRadius: 10, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.9rem' }} />
+              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '0.4rem' }}>Leave blank to use the default: <strong>{directoryBillingMonth} Billing</strong></div>
             </div>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button type="button" disabled={savingDirectory} onClick={() => setShowDirectoryNaming(false)} style={{ flex: 1, padding: '0.7rem', background: 'transparent', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: savingDirectory ? 'not-allowed' : 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button type="button" disabled={savingDirectory} onClick={() => setShowDirectoryNaming(false)} style={{ flex: 1, padding: '0.7rem', background: 'transparent', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 10, cursor: savingDirectory ? 'not-allowed' : 'pointer', fontWeight: 600 }}>Cancel</button>
               <button type="button" disabled={savingDirectory} onClick={handleConfirmSaveDirectory} style={{ flex: 2, padding: '0.7rem', background: 'linear-gradient(135deg,#10b981,#059669)', border: 'none', color: 'white', borderRadius: 10, cursor: savingDirectory ? 'not-allowed' : 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', opacity: savingDirectory ? 0.7 : 1 }}>
                 {savingDirectory ? <><Loader size={15} className="animate-spin" /> Saving & Finalizing...</> : <><Save size={15} /> Save & Finalize Import</>}
               </button>
@@ -6942,130 +6965,130 @@ const UploadPage = () => {
           <div style={{ background: '#FFFFFF', border: '1px solid var(--border-color)', borderRadius: 16, width: '100%', maxWidth: '650px', padding: '2rem', boxShadow: 'var(--shadow)', maxHeight: '90vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700 }}>Correct Row #{correctingRow.rowNum || correctingRow.accountNo}</h3>
-              <button onClick={() => setCorrectingRow(null)} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}><X size={18} /></button>
+              <button onClick={() => setCorrectingRow(null)} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer' }}><X size={18} /></button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginBottom: '1.75rem' }}>
               {wizardStep === 1 && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', maxHeight: '55vh', overflowY: 'auto', paddingRight: '0.25rem' }}>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
                     <input
                       type="text"
                       value={correctingFields.accountNo || ''}
                       onChange={e => { clearFieldHighlight('accountNo'); setCorrectingFields(p => ({ ...p, accountNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('accountNo')}
-                      style={getFieldInputStyle('accountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('accountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Name</label>
                     <input
                       type="text"
                       value={correctingFields.customerName || ''}
                       onChange={e => { clearFieldHighlight('customerName'); setCorrectingFields(p => ({ ...p, customerName: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('customerName')}
-                      style={getFieldInputStyle('customerName', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('customerName', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Address</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Customer Address</label>
                     <input
                       type="text"
                       value={correctingFields.customerAddress || ''}
                       onChange={e => { clearFieldHighlight('customerAddress'); setCorrectingFields(p => ({ ...p, customerAddress: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('customerAddress')}
-                      style={getFieldInputStyle('customerAddress', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('customerAddress', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Ref. No.</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Ref. No.</label>
                     <input
                       type="text"
                       value={correctingFields.refNo || ''}
                       onChange={e => { clearFieldHighlight('refNo'); setCorrectingFields(p => ({ ...p, refNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('refNo')}
-                      style={getFieldInputStyle('refNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('refNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Cost Code</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Cost Code</label>
                     <input
                       type="text"
                       value={correctingFields.costCode || ''}
                       onChange={e => { clearFieldHighlight('costCode'); setCorrectingFields(p => ({ ...p, costCode: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('costCode')}
-                      style={getFieldInputStyle('costCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('costCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Mobile Number</label>
                     <input
                       type="text"
                       value={correctingFields.mobileNo || ''}
                       onChange={e => { clearFieldHighlight('mobileNo'); setCorrectingFields(p => ({ ...p, mobileNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('mobileNo')}
-                      style={getFieldInputStyle('mobileNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('mobileNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Panel Capacity (kW)</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Panel Capacity (kW)</label>
                     <input
                       type="number"
                       step="0.01"
                       value={correctingFields.panelCapacity !== undefined && correctingFields.panelCapacity !== null ? correctingFields.panelCapacity : ''}
                       onChange={e => { clearFieldHighlight('panelCapacity'); setCorrectingFields(p => ({ ...p, panelCapacity: e.target.value === '' ? '' : parseFloat(e.target.value) })); }}
                       onFocus={() => clearFieldHighlight('panelCapacity')}
-                      style={getFieldInputStyle('panelCapacity', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('panelCapacity', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Agreement Date (YYYY-MM-DD)</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Agreement Date (YYYY-MM-DD)</label>
                     <input
                       type="date"
                       value={correctingFields.agreementDate || ''}
                       onChange={e => { clearFieldHighlight('agreementDate'); setCorrectingFields(p => ({ ...p, agreementDate: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('agreementDate')}
-                      style={getFieldInputStyle('agreementDate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('agreementDate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Code</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Code</label>
                     <input
                       type="text"
                       value={correctingFields.bankCode || ''}
                       onChange={e => { clearFieldHighlight('bankCode'); setCorrectingFields(p => ({ ...p, bankCode: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('bankCode')}
-                      style={getFieldInputStyle('bankCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('bankCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Branch Code</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Branch Code</label>
                     <input
                       type="text"
                       value={correctingFields.branchCode || ''}
                       onChange={e => { clearFieldHighlight('branchCode'); setCorrectingFields(p => ({ ...p, branchCode: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('branchCode')}
-                      style={getFieldInputStyle('branchCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('branchCode', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Account No</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Bank Account No</label>
                     <input
                       type="text"
                       value={correctingFields.bankAccountNo || ''}
                       onChange={e => { clearFieldHighlight('bankAccountNo'); setCorrectingFields(p => ({ ...p, bankAccountNo: e.target.value })); }}
                       onFocus={() => clearFieldHighlight('bankAccountNo')}
-                      style={getFieldInputStyle('bankAccountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('bankAccountNo', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Solar Type</label>
                     <select
                       value={normalizeSolarTypeOption(correctingFields.solarType) || ''}
                       onChange={e => { clearFieldHighlight('solarType'); setCorrectingFields(p => { const next = { ...p, solarType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }}
                       onFocus={() => clearFieldHighlight('solarType')}
-                      style={getFieldInputStyle('solarType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(15, 23, 42, 0.95)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', appearance: 'auto' })}
+                      style={getFieldInputStyle('solarType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem', appearance: 'auto' })}
                     >
                       <option value="">Select Solar Type</option>
                       <option value="Net Metering">Net Metering</option>
@@ -7075,23 +7098,23 @@ const UploadPage = () => {
                     </select>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
                     <input
                       type="number"
                       step="0.001"
                       value={correctingFields.unitRate !== undefined && correctingFields.unitRate !== null ? correctingFields.unitRate : ''}
                       onChange={e => { clearFieldHighlight('unitRate'); setCorrectingFields(p => ({ ...p, unitRate: e.target.value === '' ? '' : parseFloat(e.target.value) })); }}
                       onFocus={() => clearFieldHighlight('unitRate')}
-                      style={getFieldInputStyle('unitRate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' })}
+                      style={getFieldInputStyle('unitRate', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' })}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Fix/Variable</label>
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Fix/Variable</label>
                     <select
                       value={normalizeTariffType(correctingFields.tariffType) || ''}
                       onChange={e => { clearFieldHighlight('tariffType'); setCorrectingFields(p => { const next = { ...p, tariffType: e.target.value }; next.billingMode = deriveLCode(next.solarType || '', next.tariffType || ''); return next; }); }}
                       onFocus={() => clearFieldHighlight('tariffType')}
-                      style={getFieldInputStyle('tariffType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(15, 23, 42, 0.95)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem', appearance: 'auto' })}
+                      style={getFieldInputStyle('tariffType', { width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem', appearance: 'auto' })}
                     >
                       <option value="">Select Fix/Variable</option>
                       <option value="Fix">Fix</option>
@@ -7099,8 +7122,8 @@ const UploadPage = () => {
                     </select>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>L-Code</label>
-                    <input type="text" value={correctingFields.billingMode || ''} disabled readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'not-allowed' }} />
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>L-Code</label>
+                    <input type="text" value={correctingFields.billingMode || ''} disabled readOnly style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#64748B', fontSize: '0.85rem', cursor: 'not-allowed' }} />
                   </div>
                 </div>
               )}
@@ -7108,17 +7131,17 @@ const UploadPage = () => {
               {wizardStep === 2 && (
                 <>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                    <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                    <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Previous Reading Date</label>
-                      <input type="date" value={correctingFields.prevReadingDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, prevReadingDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Previous Reading Date</label>
+                      <input type="date" value={correctingFields.prevReadingDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, prevReadingDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Current Reading Date</label>
-                      <input type="date" value={correctingFields.currReadingDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, currReadingDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Current Reading Date</label>
+                      <input type="date" value={correctingFields.currReadingDate || ''} onChange={e => setCorrectingFields(p => ({ ...p, currReadingDate: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                   </div>
                 </>
@@ -7128,27 +7151,27 @@ const UploadPage = () => {
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
-                      <input type="number" step="0.01" value={correctingFields.unitRate || correctingFields.effectiveUnitRate || ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value, effectiveUnitRate: parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Unit Rate (LKR)</label>
+                      <input type="number" step="0.01" value={correctingFields.unitRate || correctingFields.effectiveUnitRate || ''} onChange={e => setCorrectingFields(p => ({ ...p, unitRate: e.target.value, effectiveUnitRate: parseFloat(e.target.value) }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>kWh Import</label>
-                      <input type="number" step="1" value={correctingFields.kwhImport ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, kwhImport: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>kWh Import</label>
+                      <input type="number" step="1" value={correctingFields.kwhImport ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, kwhImport: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>kWh Export</label>
-                      <input type="number" step="1" value={correctingFields.kwhExport ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, kwhExport: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>kWh Export</label>
+                      <input type="number" step="1" value={correctingFields.kwhExport ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, kwhExport: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Outstanding Set Off (Charges)</label>
-                    <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Outstanding Set Off (Charges)</label>
+                    <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                   </div>
                 </>
               )}
@@ -7157,44 +7180,44 @@ const UploadPage = () => {
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
-                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Account No</label>
+                      <input type="text" value={correctingFields.accountNo || ''} onChange={e => setCorrectingFields(p => ({ ...p, accountNo: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Name (NPAY Name)</label>
-                      <input type="text" value={correctingFields.npayName || ''} onChange={e => setCorrectingFields(p => ({ ...p, npayName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Net Type (NPAY Net Type)</label>
-                      <input type="text" value={correctingFields.npayNetType || ''} onChange={e => setCorrectingFields(p => ({ ...p, npayNetType: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
-                    </div>
-                    <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Energy Purchase</label>
-                      <input type="number" step="0.01" value={correctingFields.energyPurchase ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, energyPurchase: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Name (NPAY Name)</label>
+                      <input type="text" value={correctingFields.npayName || ''} onChange={e => setCorrectingFields(p => ({ ...p, npayName: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Set Off</label>
-                      <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Net Type (NPAY Net Type)</label>
+                      <input type="text" value={correctingFields.npayNetType || ''} onChange={e => setCorrectingFields(p => ({ ...p, npayNetType: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Retention Money</label>
-                      <input type="number" step="0.01" value={correctingFields.retentionMoney ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, retentionMoney: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Energy Purchase</label>
+                      <input type="number" step="0.01" value={correctingFields.energyPurchase ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, energyPurchase: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Bill Set Off</label>
+                      <input type="number" step="0.01" value={correctingFields.billSetOff ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, billSetOff: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Retention Money</label>
+                      <input type="number" step="0.01" value={correctingFields.retentionMoney ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, retentionMoney: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                     </div>
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.4rem', fontWeight: 600 }}>Payment</label>
-                    <input type="number" step="0.01" value={correctingFields.payment ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, payment: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', color: 'white', fontSize: '0.85rem' }} />
+                    <label style={{ display: 'block', fontSize: '0.78rem', color: '#475569', marginBottom: '0.4rem', fontWeight: 600 }}>Payment</label>
+                    <input type="number" step="0.01" value={correctingFields.payment ?? ''} onChange={e => setCorrectingFields(p => ({ ...p, payment: e.target.value }))} style={{ width: '100%', padding: '0.6rem 0.8rem', borderRadius: 8, background: '#FFFFFF', border: '1px solid #CBD5E1', color: '#0F172A', fontSize: '0.85rem' }} />
                   </div>
                 </>
               )}
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
-              <button onClick={() => setCorrectingRow(null)} style={{ flex: 1, padding: '0.65rem', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: 'var(--text-secondary)', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
+              <button onClick={() => setCorrectingRow(null)} style={{ flex: 1, padding: '0.65rem', background: '#F1F5F9', border: '1px solid var(--border-color)', color: '#475569', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Cancel</button>
               <button onClick={handleSaveCorrection} style={{ flex: 1, padding: '0.65rem', background: 'var(--primary)', border: 'none', color: 'white', borderRadius: 10, cursor: 'pointer', fontWeight: 600 }}>Save Edits</button>
             </div>
           </div>
@@ -7254,10 +7277,10 @@ const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) =
     <div className="modal-overlay">
       <div className="modal-container" style={{ maxWidth: '650px', width: '90%', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
-          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 600, color: '#0F172A' }}>
             Propose Row Correction (Row #{row.rowNum || row.index})
           </h3>
-          <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
+          <button type="button" onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#475569', cursor: 'pointer', fontSize: '1.2rem' }}>×</button>
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
@@ -7272,7 +7295,7 @@ const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) =
                 const message = typeof err === 'string' ? err : (err.errorMessage || err.message || '');
                 const field = typeof err === 'string' ? '' : (err.field ? `[${err.field}] ` : '');
                 return (
-                  <div key={idx} style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginLeft: '0.75rem' }}>
+                  <div key={idx} style={{ fontSize: '0.78rem', color: '#475569', marginLeft: '0.75rem' }}>
                     • {field}{message}
                   </div>
                 );
@@ -7290,7 +7313,7 @@ const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) =
                     className="login-form-input"
                     value={fields.accountNo || ''}
                     readOnly
-                    style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                    style={{ background: '#F1F5F9', cursor: 'not-allowed', color: '#64748B' }}
                   />
                 </div>
                 <div className="form-group">
@@ -7374,7 +7397,7 @@ const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) =
                     className="login-form-input"
                     value={fields.accountNo || ''}
                     readOnly
-                    style={{ background: 'rgba(255,255,255,0.05)', cursor: 'not-allowed', color: 'var(--text-muted)' }}
+                    style={{ background: '#F1F5F9', cursor: 'not-allowed', color: '#64748B' }}
                   />
                 </div>
                 <div className="form-group">
@@ -7505,7 +7528,7 @@ const ProposeEditStagingRowModal = ({ isOpen, onClose, row, onSave, loading }) =
                     value={fields.billingMode || ''}
                     disabled
                     readOnly
-                    style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)', cursor: 'not-allowed' }}
+                    style={{ background: '#F1F5F9', color: '#64748B', cursor: 'not-allowed' }}
                   />
                 </div>
               </>

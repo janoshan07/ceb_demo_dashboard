@@ -3,6 +3,7 @@ package com.ceb.billing.controllers;
 import com.ceb.billing.entities.PaymentBatch;
 import com.ceb.billing.models.MessageResponse;
 import com.ceb.billing.services.PaymentControlService;
+import com.ceb.billing.security.OfficerStepUp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -126,6 +127,7 @@ public class PaymentControlController {
      */
     @PostMapping("/customers/{accountNo}/correct")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "PAYMENT_RECORD_CORRECTION", recordId = "accountNo")
     public ResponseEntity<?> correctCustomer(
             @PathVariable String accountNo,
             @RequestParam(value = "billingPeriod", required = false) String billingPeriod,
@@ -147,6 +149,7 @@ public class PaymentControlController {
      */
     @PostMapping("/customers/{accountNo}/toggle-hold")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "PAYMENT_HOLD_UPDATE", recordId = "accountNo")
     public ResponseEntity<?> toggleHold(
             @PathVariable String accountNo,
             @RequestParam(value = "billingPeriod", required = false) String billingPeriod,
@@ -171,6 +174,7 @@ public class PaymentControlController {
      */
     @PostMapping("/customers/{accountNo}/release-all")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "CUSTOMER_PAYMENT_RELEASE", recordId = "accountNo")
     public ResponseEntity<?> releaseAllCustomerPayments(@PathVariable String accountNo) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
@@ -266,6 +270,7 @@ public class PaymentControlController {
      */
     @PostMapping("/batches/{batchId}/transition")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "PAYMENT_BATCH_TRANSITION", recordId = "batchId")
     public ResponseEntity<?> transitionBatch(
             @PathVariable Long batchId,
             @RequestBody Map<String, Object> payload) {

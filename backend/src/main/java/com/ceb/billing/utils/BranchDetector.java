@@ -20,6 +20,24 @@ public class BranchDetector {
         "Trincomalee", "34"
     );
 
+    /** Official CEB Cost Code to Division mapping */
+    public static final Map<String, String> COST_CODE_TO_DIVISION = Map.of(
+        "461", "Trincomalee",
+        "462", "Batticaloa",
+        "463", "Ampara",
+        "464", "Kalmunai",
+        "465", "Valaichenai"
+    );
+
+    public static String divisionFromCostCode(String costCode) {
+        if (costCode == null) return "";
+        String clean = costCode.trim();
+        if (COST_CODE_TO_DIVISION.containsKey(clean)) {
+            return COST_CODE_TO_DIVISION.get(clean);
+        }
+        return "";
+    }
+
     public static String detectBranch(String accountNo) {
         if (accountNo == null) {
             return null;

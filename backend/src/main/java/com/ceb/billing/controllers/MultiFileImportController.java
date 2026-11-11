@@ -1,6 +1,7 @@
 package com.ceb.billing.controllers;
 
 import com.ceb.billing.services.MultiFileImportService;
+import com.ceb.billing.security.OfficerStepUp;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -46,6 +47,7 @@ public class MultiFileImportController {
     /** Discards/resets the current session so the user can start fresh. */
     @DeleteMapping("/officer/import/session/{sessionId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    @OfficerStepUp(action = "IMPORT_SESSION_DELETE", recordId = "sessionId")
     public ResponseEntity<?> discardSession(@PathVariable Long sessionId) {
         String username = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
@@ -91,6 +93,7 @@ public class MultiFileImportController {
      */
     @PostMapping({"/admin/import/master-data/approve", "/officer/import/master-data/approve"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MASTER_DATA_APPROVE", recordId = "literal:MASTER_DATA_IMPORT")
     public ResponseEntity<?> approveMasterData(
             @RequestParam(value = "file", required = false) MultipartFile file,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson,
@@ -148,6 +151,7 @@ public class MultiFileImportController {
 
     @PostMapping({"/admin/import/ceb-assist/{sessionId}/approve", "/officer/import/ceb-assist/{sessionId}/approve"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "CEB_ASSIST_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveCebAssist(
             @PathVariable Long sessionId,
             @RequestParam(value = "file", required = false) MultipartFile file,
@@ -202,6 +206,7 @@ public class MultiFileImportController {
 
     @PostMapping({"/admin/import/ngen/{sessionId}/approve", "/officer/import/ngen/{sessionId}/approve"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "NGEN_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveNgen(
             @PathVariable Long sessionId,
             @RequestParam(value = "file", required = false) MultipartFile file,
@@ -259,6 +264,7 @@ public class MultiFileImportController {
 
     @PostMapping({"/admin/import/npay/{sessionId}/approve", "/officer/import/npay/{sessionId}/approve"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "NPAY_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveNpay(
             @PathVariable Long sessionId,
             @RequestParam(value = "file", required = false) MultipartFile file,
@@ -307,6 +313,7 @@ public class MultiFileImportController {
 
     @PostMapping({"/admin/import/{sessionId}/approve-main-dataset", "/officer/import/{sessionId}/approve-main-dataset"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MAIN_DATASET_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveMainDataset(
             @PathVariable Long sessionId,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
@@ -327,6 +334,7 @@ public class MultiFileImportController {
 
     @PostMapping({"/admin/import/{sessionId}/revalidate-main-dataset", "/officer/import/{sessionId}/revalidate-main-dataset"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MAIN_DATASET_REVALIDATE", recordId = "sessionId")
     public ResponseEntity<?> revalidateMainDataset(
             @PathVariable Long sessionId,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
@@ -367,6 +375,7 @@ public class MultiFileImportController {
      */
     @PostMapping({"/admin/import/{sessionId}/approve-master-comparison", "/officer/import/{sessionId}/approve-master-comparison"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "MASTER_COMPARISON_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveMasterComparison(
             @PathVariable Long sessionId,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
@@ -391,6 +400,7 @@ public class MultiFileImportController {
      */
     @PostMapping({"/admin/import/{sessionId}/approve-name-mismatch", "/officer/import/{sessionId}/approve-name-mismatch"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "NAME_MISMATCH_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveNameMismatch(
             @PathVariable Long sessionId,
             @RequestParam(value = "accountNosJson", required = false, defaultValue = "[]") String accountNosJson) {
@@ -413,6 +423,7 @@ public class MultiFileImportController {
      */
     @PostMapping({"/admin/import/{sessionId}/approve-unit-rate-mismatch", "/officer/import/{sessionId}/approve-unit-rate-mismatch"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "UNIT_RATE_MISMATCH_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveUnitRateMismatch(
             @PathVariable Long sessionId,
             @RequestParam(value = "accountNosJson", required = false, defaultValue = "[]") String accountNosJson) {
@@ -435,6 +446,7 @@ public class MultiFileImportController {
      */
     @PostMapping({"/admin/import/{sessionId}/approve-net-type-mismatch", "/officer/import/{sessionId}/approve-net-type-mismatch"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "NET_TYPE_MISMATCH_APPROVE", recordId = "sessionId")
     public ResponseEntity<?> approveNetTypeMismatch(
             @PathVariable Long sessionId,
             @RequestParam(value = "accountNosJson", required = false, defaultValue = "[]") String accountNosJson) {
@@ -457,6 +469,7 @@ public class MultiFileImportController {
      */
     @PostMapping({"/admin/import/{sessionId}/edit-mismatch-field", "/officer/import/{sessionId}/edit-mismatch-field"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "IMPORT_MISMATCH_FIELD_UPDATE", recordId = "sessionId")
     public ResponseEntity<?> editMismatchField(
             @PathVariable Long sessionId,
             @RequestParam("accountNo") String accountNo,
@@ -474,6 +487,7 @@ public class MultiFileImportController {
 
     @PostMapping({"/admin/import/{sessionId}/finalize", "/officer/import/{sessionId}/finalize"})
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "IMPORT_SESSION_FINALIZE", recordId = "sessionId")
     public ResponseEntity<?> finalizeImport(
             @PathVariable Long sessionId,
             @RequestParam(value = "correctionsJson", required = false, defaultValue = "{}") String correctionsJson) {
@@ -495,4 +509,3 @@ public class MultiFileImportController {
         }
     }
 }
-

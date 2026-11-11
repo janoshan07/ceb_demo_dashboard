@@ -22,4 +22,13 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     @Transactional
     void deleteByAccountNoAndAlertTypeAndStatus(String accountNo, String alertType, String status);
+
+    @Transactional
+    @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true)
+    @org.springframework.data.jpa.repository.Query("DELETE FROM Alert a WHERE a.accountNo IN :accountNos AND a.status = :status AND a.alertType IN :alertTypes")
+    void deleteByAccountNoInAndAlertTypeInAndStatus(
+        @org.springframework.data.repository.query.Param("accountNos") java.util.Collection<String> accountNos,
+        @org.springframework.data.repository.query.Param("alertTypes") java.util.Collection<String> alertTypes,
+        @org.springframework.data.repository.query.Param("status") String status
+    );
 }

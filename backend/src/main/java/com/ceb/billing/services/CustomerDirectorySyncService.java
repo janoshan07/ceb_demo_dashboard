@@ -48,6 +48,9 @@ public class CustomerDirectorySyncService {
     @Autowired(required = false)
     private CustomerHashIndexService customerHashIndexService;
 
+    @Autowired(required = false)
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
     /**
      * High-speed sync of every record in an approved snapshot into the Customer Directory
      * using in-memory Hash Maps and batch persistence.
@@ -114,7 +117,7 @@ public class CustomerDirectorySyncService {
         }
 
         // 3. Process records with O(1) lookups
-        List<Customer> toSave = new ArrayList<>(records.size());
+        Map<String, Customer> toSave = new LinkedHashMap<>();
         int synced = 0;
 
         for (Map<String, Object> record : records) {
@@ -131,13 +134,16 @@ public class CustomerDirectorySyncService {
 
                 Customer c = customerHash.get(accountNo);
                 if (c == null) {
+                    c = toSave.get(accountNo);
+                }
+                if (c == null) {
                     c = new Customer();
                     c.setAccountNo(accountNo);
                     customerHash.put(accountNo, c);
                 }
 
                 populateCustomerFields(c, record, division, netTypeHash, costCodeHash, expenseCodeHash);
-                toSave.add(c);
+                toSave.put(accountNo, c);
                 synced++;
             } catch (Exception e) {
                 log.warning("CustomerDirectorySync: failed to sync record: " + e.getMessage());
@@ -146,15 +152,18 @@ public class CustomerDirectorySyncService {
 
         // 4. Single Batch Save
         if (!toSave.isEmpty()) {
-            customerRepository.saveAll(toSave);
+            customerRepository.saveAll(Objects.requireNonNull(toSave.values()));
         }
 
         log.info("CustomerDirectorySync: synced " + synced + " customer(s) from snapshot " + snap.getId()
                 + " (division=" + division + ") in high-performance batch mode.");
 
-        // 5. In-Memory Hash Index Warmup / Rebuild
+        // 5. In-Memory Hash Index Warmup / Rebuild & Event Publishing
         if (customerHashIndexService != null && synced > 0) {
             customerHashIndexService.rebuildIndex();
+        }
+        if (eventPublisher != null && synced > 0) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
         return synced;
     }
@@ -172,9 +181,12 @@ public class CustomerDirectorySyncService {
         }
 
         populateCustomerFields(c, record, division, null, null, null);
-        customerRepository.save(c);
+        customerRepository.save(Objects.requireNonNull(c));
         if (customerHashIndexService != null) {
             customerHashIndexService.putOrUpdate(c);
+        }
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
         return true;
     }
@@ -202,7 +214,7 @@ public class CustomerDirectorySyncService {
             String cleanSt = solarType.trim().toLowerCase();
             if (netTypeHash != null && netTypeHash.containsKey(cleanSt)) {
                 c.setNetType(netTypeHash.get(cleanSt));
-            } else {
+            } else if (netTypeRepository != null) {
                 netTypeRepository.findByName(solarType.trim()).ifPresent(c::setNetType);
             }
         }
@@ -222,7 +234,7 @@ public class CustomerDirectorySyncService {
             final String ccLower = ccTrim.toLowerCase();
             if (costCodeHash != null && costCodeHash.containsKey(ccLower)) {
                 c.setCostCode(costCodeHash.get(ccLower));
-            } else {
+            } else if (costCodeRepository != null) {
                 costCodeRepository.findByCostCode(ccTrim).ifPresentOrElse(c::setCostCode, () -> {
                     try {
                         costCodeRepository.findById(Long.parseLong(ccTrim)).ifPresent(c::setCostCode);
@@ -240,7 +252,7 @@ public class CustomerDirectorySyncService {
             final String cleanEcLower = cleanEc.toLowerCase();
             if (expenseCodeHash != null && expenseCodeHash.containsKey(cleanEcLower)) {
                 c.setExpenseCode(expenseCodeHash.get(cleanEcLower));
-            } else {
+            } else if (expenseCodeRepository != null) {
                 expenseCodeRepository.findByExpCode(cleanEc).ifPresentOrElse(c::setExpenseCode, () -> {
                     try {
                         expenseCodeRepository.findById(Long.parseLong(cleanEc)).ifPresent(c::setExpenseCode);
@@ -254,12 +266,42 @@ public class CustomerDirectorySyncService {
             }
         }
 
-        String divTag = division;
-        if (divTag == null || divTag.trim().isEmpty()) {
-            divTag = str(record, "division", "location");
+        // Determine authoritative division: Priority 1: Snapshot division -> Priority 2: record division -> Priority 3: Cost Code -> Priority 4: BranchDetector
+        String authoritativeDiv = "";
+        if (division != null && !division.trim().isEmpty()) {
+            authoritativeDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(division.trim());
         }
-        if (divTag != null && !divTag.trim().isEmpty()) {
-            c.setDivision(divTag.trim());
+        if (authoritativeDiv.isEmpty()) {
+            String recDiv = str(record, "snapshotDivision", "division", "location");
+            if (recDiv != null && !recDiv.trim().isEmpty()) {
+                authoritativeDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(recDiv.trim());
+            }
+        }
+        if (authoritativeDiv.isEmpty()) {
+            String cc = str(record, "costCode", "masterCostCode");
+            if (cc != null && !cc.trim().isEmpty()) {
+                authoritativeDiv = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(cc);
+            } else if (c.getCostCode() != null) {
+                authoritativeDiv = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(c.getCostCode().getCostCode());
+            }
+        }
+        if (authoritativeDiv.isEmpty()) {
+            String branch = str(record, "branchCode", "masterBranchCode");
+            if (branch != null) {
+                authoritativeDiv = com.ceb.billing.utils.BranchDetector.canonicalDivision(branch);
+            }
+        }
+        if (authoritativeDiv.isEmpty()) {
+            String detectedArea = com.ceb.billing.utils.BranchDetector.detectBranch(accountNo);
+            if (detectedArea != null && !detectedArea.isEmpty()) {
+                authoritativeDiv = detectedArea;
+            }
+        }
+        if (!authoritativeDiv.isEmpty()) {
+            c.setDivision(authoritativeDiv);
+            if (isBlank(c.getBranchCode())) {
+                c.setBranchCode(authoritativeDiv);
+            }
         }
 
         String status = str(record, "status");
@@ -271,7 +313,20 @@ public class CustomerDirectorySyncService {
         c.setValidationErrors(joinIssues(record));
 
         try {
-            c.setDirectoryJson(objectMapper.writeValueAsString(record));
+            Map<String, Object> mergedDir = new LinkedHashMap<>();
+            if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
+                try {
+                    Map<String, Object> prev = objectMapper.readValue(c.getDirectoryJson(),
+                            new TypeReference<Map<String, Object>>() {});
+                    if (prev != null) mergedDir.putAll(prev);
+                } catch (Exception ignored) {}
+            }
+            mergedDir.putAll(record);
+            if (c.getDivision() != null) {
+                mergedDir.put("division", c.getDivision());
+                mergedDir.put("snapshotDivision", c.getDivision());
+            }
+            c.setDirectoryJson(objectMapper.writeValueAsString(mergedDir));
         } catch (Exception e) {
             log.warning("CustomerDirectorySync: could not serialise directory record for " + accountNo);
         }
@@ -320,7 +375,6 @@ public class CustomerDirectorySyncService {
         if (val != null) setter.accept(val);
     }
 
-    @SuppressWarnings("unchecked")
     private String joinIssues(Map<String, Object> record) {
         List<String> issues = new ArrayList<>();
         Object errs = record.get("errors");

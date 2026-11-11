@@ -65,6 +65,10 @@ const Login = () => {
               autoPlay
               muted
               playsInline
+              controls={false}
+              controlsList="nodownload nofullscreen noremoteplayback"
+              disablePictureInPicture
+              disableRemotePlayback
               preload="auto"
               aria-hidden="true"
               onEnded={() => setIntroVisible(false)}
@@ -133,8 +137,12 @@ const Login = () => {
               transition={{ duration: shouldReduceMotion ? 0.1 : 0.45, delay: shouldReduceMotion ? 0 : 0.12 }}
             >
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-800">Your account</p>
-              <h2 className="auth-login-title text-[1.8rem] font-semibold tracking-[-0.04em] text-slate-900 sm:text-[2rem]">Welcome back</h2>
-              <p className="auth-login-subtitle text-sm leading-6 text-slate-500">Sign in to continue to your dashboard.</p>
+              <h2 className="auth-login-title text-[1.8rem] font-semibold tracking-[-0.04em] text-slate-900 sm:text-[2rem]">
+                Welcome back
+              </h2>
+              <p className="auth-login-subtitle text-sm leading-6 text-slate-500">
+                Sign in to continue to your dashboard.
+              </p>
             </motion.div>
 
             <AnimatePresence initial={false}>
@@ -240,6 +248,7 @@ const Login = () => {
                   </>
                 )}
               </motion.button>
+
             </form>
 
             <div className="auth-legal border-t border-slate-100 text-center">

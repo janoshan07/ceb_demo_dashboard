@@ -3,6 +3,7 @@ package com.ceb.billing.controllers;
 import com.ceb.billing.entities.Alert;
 import com.ceb.billing.repositories.AlertRepository;
 import com.ceb.billing.services.AlertService;
+import com.ceb.billing.security.OfficerStepUp;
 import com.ceb.billing.services.AuditLogService;
 import com.ceb.billing.config.UserDetailsImpl;
 import org.springframework.lang.NonNull;
@@ -50,6 +51,7 @@ public class AlertController {
 
     @PostMapping("/{alertId}/resolve")
     @PreAuthorize("hasRole('ADMIN') or hasRole('OFFICER')")
+    @OfficerStepUp(action = "ALERT_RESOLVE", recordId = "alertId")
     public ResponseEntity<?> resolveAlert(@PathVariable @NonNull Long alertId) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         UserDetailsImpl userDetails = (UserDetailsImpl) auth.getPrincipal();

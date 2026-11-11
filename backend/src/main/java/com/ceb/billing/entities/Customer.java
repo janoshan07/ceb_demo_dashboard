@@ -101,9 +101,27 @@ public class Customer {
     }
 
     private void autoDeriveBranch() {
-        String detected = com.ceb.billing.utils.BranchDetector.detectBranch(this.accountNo);
-        if (detected != null) {
-            this.branchCode = detected;
+        if (this.costCode != null && (this.division == null || this.division.trim().isEmpty())) {
+            String fromCc = com.ceb.billing.utils.BranchDetector.divisionFromCostCode(this.costCode.getCostCode());
+            if (!fromCc.isEmpty()) {
+                this.division = fromCc;
+            }
+        }
+        if (this.division == null || this.division.trim().isEmpty()) {
+            String detected = com.ceb.billing.utils.BranchDetector.detectBranch(this.accountNo);
+            if (detected != null && !detected.isEmpty()) {
+                this.division = detected;
+            }
+        }
+        if (this.branchCode == null || this.branchCode.trim().isEmpty()) {
+            if (this.division != null && !this.division.trim().isEmpty()) {
+                this.branchCode = this.division;
+            } else {
+                String detected = com.ceb.billing.utils.BranchDetector.detectBranch(this.accountNo);
+                if (detected != null) {
+                    this.branchCode = detected;
+                }
+            }
         }
     }
 

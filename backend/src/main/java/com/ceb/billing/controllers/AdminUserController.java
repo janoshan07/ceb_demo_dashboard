@@ -45,6 +45,9 @@ public class AdminUserController {
     @Autowired
     private AuditLogRepository auditLogRepository;
 
+    @Autowired(required = false)
+    private com.ceb.billing.services.AuditLogHashService auditLogHashService;
+
     @Autowired
     private UploadHistoryRepository uploadHistoryRepository;
 
@@ -170,6 +173,9 @@ public class AdminUserController {
 
     @GetMapping("/audit-logs")
     public ResponseEntity<List<AuditLog>> getAuditLogs() {
+        if (auditLogHashService != null) {
+            return ResponseEntity.ok(auditLogHashService.getAuditLogs());
+        }
         List<AuditLog> logs = auditLogRepository.findAllByOrderByTimestampDesc();
         return ResponseEntity.ok(logs);
     }

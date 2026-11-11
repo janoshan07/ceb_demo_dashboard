@@ -1,6 +1,18 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useContext, useCallback, useRef } from 'react';
+import AdminPasswordDialog from '../components/AdminPasswordDialog';
 
 const AuthContext = createContext(null);
+
+const withJsonErrorBody = (response, message) => {
+  const headers = new Headers(response.headers);
+  headers.set('Content-Type', 'application/json');
+  headers.delete('Content-Length');
+  return new Response(JSON.stringify({ message }), {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -9,6 +21,25 @@ export const AuthProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [adminPasswordPrompt, setAdminPasswordPrompt] = useState(null);
+  const adminPasswordResolver = useRef(null);
+  const adminPasswordPromptQueue = useRef(Promise.resolve());
+
+  const requestAdminPassword = useCallback((message = '') => {
+    const prompt = adminPasswordPromptQueue.current.then(() => new Promise(resolve => {
+      adminPasswordResolver.current = resolve;
+      setAdminPasswordPrompt({ message });
+    }));
+    adminPasswordPromptQueue.current = prompt.then(() => undefined);
+    return prompt;
+  }, []);
+
+  const resolveAdminPasswordPrompt = (password) => {
+    const resolve = adminPasswordResolver.current;
+    adminPasswordResolver.current = null;
+    setAdminPasswordPrompt(null);
+    resolve?.(password);
+  };
 
   const login = async (username, password) => {
     setLoading(true);
@@ -20,7 +51,7 @@ export const AuthProvider = ({ children }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-    } catch (e) {
+    } catch {
       // Ignore network errors here; server will handle it
     }
 
@@ -37,21 +68,6 @@ export const AuthProvider = ({ children }) => {
         throw new Error(data.message || 'Authentication failed. Please verify your credentials.');
       }
 
-      setLoading(false);
-
-      // Handle 2FA OTP requirement
-      if (data.otpRequired) {
-        return {
-          otpRequired: true,
-          otpSessionId: data.otpSessionId,
-          maskedPhone: data.maskedPhone,
-          expiresInSeconds: data.expiresInSeconds || 300,
-          resendCooldownSeconds: data.resendCooldownSeconds || 60,
-          message: data.message
-        };
-      }
-
-      // Direct login with JWT token
       const userDetails = {
         username: data.username,
         role: data.role,
@@ -60,75 +76,12 @@ export const AuthProvider = ({ children }) => {
 
       setUser(userDetails);
       sessionStorage.setItem('ceb_user', JSON.stringify(userDetails));
+      setLoading(false);
       return { success: true, user: userDetails };
     } catch (err) {
       setError(err.message || 'Connection error. Make sure backend is running.');
       setLoading(false);
       return { error: err.message || 'Connection error. Make sure backend is running.' };
-    }
-  };
-
-  const verifyOtp = async (otpSessionId, otp) => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('http://localhost:8080/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otpSessionId, otp })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Invalid or expired verification code');
-      }
-
-      const userDetails = {
-        username: data.username,
-        role: data.role,
-        token: data.token
-      };
-
-      setUser(userDetails);
-      sessionStorage.setItem('ceb_user', JSON.stringify(userDetails));
-      setLoading(false);
-      return { success: true, user: userDetails };
-    } catch (err) {
-      const msg = err.message || 'OTP verification failed';
-      setError(msg);
-      setLoading(false);
-      return { error: msg };
-    }
-  };
-
-  const resendOtp = async (otpSessionId) => {
-    setError(null);
-    try {
-      const response = await fetch('http://localhost:8080/api/auth/resend-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ otpSessionId })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to resend verification code');
-      }
-
-      return {
-        success: true,
-        otpSessionId: data.otpSessionId,
-        maskedPhone: data.maskedPhone,
-        expiresInSeconds: data.expiresInSeconds || 300,
-        resendCooldownSeconds: data.resendCooldownSeconds || 60,
-        message: data.message
-      };
-    } catch (err) {
-      const msg = err.message || 'Failed to resend code';
-      return { error: msg };
     }
   };
 
@@ -150,24 +103,95 @@ export const AuthProvider = ({ children }) => {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const response = await fetch(`http://localhost:8080${url}`, {
-      ...options,
-      headers
-    });
+    const send = (adminPassword) => {
+      const requestHeaders = { ...headers };
+      if (adminPassword) requestHeaders['X-Admin-Password'] = adminPassword;
+      return fetch(`http://localhost:8080${url}`, {
+        ...options,
+        headers: requestHeaders
+      });
+    };
+
+    let response = await send();
 
     if (response.status === 401) {
       logout();
       throw new Error('Your session has expired. Please login again.');
     }
 
+    if (user?.role === 'OFFICER' && response.status === 428) {
+      let adminPassword = await requestAdminPassword();
+      let cancelled = adminPassword === null;
+      while (adminPassword !== null) {
+        response = await send(adminPassword);
+        adminPassword = null;
+
+        if (response.status === 403) {
+          const responseText = await response.clone().text();
+          let responseData = null;
+          if (responseText.trim()) {
+            try {
+              responseData = JSON.parse(responseText);
+            } catch {
+              responseData = null;
+            }
+          }
+
+          if (responseData?.code === 'ADMIN_PASSWORD_INVALID' || !responseText.trim()) {
+            adminPassword = await requestAdminPassword(
+              responseData?.message || 'Admin password verification failed. Check the password and try again.'
+            );
+            cancelled = adminPassword === null;
+          }
+        }
+      }
+
+      if (cancelled) {
+        return new Response(JSON.stringify({ code: 'ADMIN_PASSWORD_CANCELLED', message: 'Action cancelled.' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    if (!response.ok && !response.bodyUsed) {
+      const responseText = await response.clone().text();
+      let isJson = false;
+      if (responseText.trim()) {
+        try {
+          JSON.parse(responseText);
+          isJson = true;
+        } catch {
+          isJson = false;
+        }
+      }
+
+      if (!isJson) {
+        return withJsonErrorBody(
+          response,
+          response.status === 403 && !responseText.trim()
+            ? 'Access denied. The operation was not completed; verify the Admin password and your account permissions.'
+            : `The request failed with status ${response.status}.`
+        );
+      }
+    }
+
     return response;
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, verifyOtp, resendOtp, logout, authFetch, loading, error, setError }}>
+    <AuthContext.Provider value={{ user, login, logout, authFetch, loading, error, setError }}>
       {children}
+      {adminPasswordPrompt && (
+        <AdminPasswordDialog
+          error={adminPasswordPrompt.message}
+          onSubmit={resolveAdminPasswordPrompt}
+          onCancel={() => resolveAdminPasswordPrompt(null)}
+        />
+      )}
     </AuthContext.Provider>
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

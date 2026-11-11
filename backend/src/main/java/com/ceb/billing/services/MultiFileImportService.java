@@ -770,8 +770,11 @@ public class MultiFileImportService {
                 "kwhimport", "importkwh", "kwhin", "imports", "import", "importunits", "importunit"));
         NGEN_COLUMN_ALIASES.put("kwhExport", Arrays.asList(
                 "kwhexport", "exportkwh", "kwhout", "exports", "export", "exportunits", "exportunit"));
+        NGEN_COLUMN_ALIASES.put("kwhSalesAmount", Arrays.asList(
+                "kwhsalesamount", "salesamount", "kwhsales", "kwsales", "totalamount", "netamount", "billamount",
+                "energypurchase", "energypurches", "amount", "total", "sales"));
         NGEN_COLUMN_ALIASES.put("kwhUnitSales", Arrays.asList(
-                "kwhunitsales", "kwhunitssales", "kwhsalesunits", "unitsales", "kwhsales", "salesunits", "netunits", "sales"));
+                "kwhunitsales", "kwhunitssales", "kwhsalesunits", "unitsales", "salesunits", "netunits", "units", "exportunits"));
         NGEN_COLUMN_ALIASES.put("ngenUnitRate", Arrays.asList(
                 "unitrate", "unitcost", "perunit", "tariff", "rate", "price", "unitrate/lkr", "unitratelkr",
                 "unitcostlkr", "unitraters", "unitcostrs", "unitratekwh", "unitrateperkwh", "tariffrate",
@@ -779,8 +782,6 @@ public class MultiFileImportService {
                 "rates", "lkr/unit", "lkr/kwh", "unitrate(lkr)", "unitrate(rs)", "unitcost(lkr)"));
         NGEN_COLUMN_ALIASES.put("retentionMoney", Arrays.asList(
                 "retentionmoney", "retnmoney", "retmoney", "retention", "retn"));
-        NGEN_COLUMN_ALIASES.put("kwhSalesAmount", Arrays.asList(
-                "kwhsalesamount", "salesamount", "totalamount", "netamount", "billamount", "amount", "total"));
         NGEN_COLUMN_ALIASES.put("billSetOff", Arrays.asList(
                 "billoutstandingsetoff", "billoutstdsetoff", "billoutsetoff", "billsetoff", "billoutstanding",
                 "billoutstd", "outstandingsetoff", "setoff", "outstanding"));
@@ -909,6 +910,26 @@ public class MultiFileImportService {
 
                 String cleanAcc = accountNo != null ? accountNo.trim() : "";
 
+                // Fallback: If kwhSalesAmount is missing or zero but kwhUnitSales holds the monetary amount
+                if ((kwhSalesAmount == null || kwhSalesAmount == 0.0) && kwhUnitSales != null && kwhUnitSales > 0) {
+                    if ((kwhExport != null && kwhUnitSales > kwhExport)
+                            || (paymentSettled != null && Math.abs(kwhUnitSales - paymentSettled) <= 0.05)) {
+                        kwhSalesAmount = kwhUnitSales;
+                        kwhUnitSales = null;
+                    }
+                }
+
+                // Fallback: If kwhUnitSales is missing, determine unit sales from export/import or salesAmount/unitRate
+                if (kwhUnitSales == null) {
+                    if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                        kwhUnitSales = kwhExport - kwhImport;
+                    } else if (kwhExport != null && kwhExport > 0) {
+                        kwhUnitSales = kwhExport;
+                    } else if (kwhSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                        kwhUnitSales = Math.round((kwhSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                    }
+                }
+
                 // 1. Fallback: Calculate Unit Rate from Sales Amount / Unit Sales if missing or invalid
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
                     ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
@@ -942,6 +963,13 @@ public class MultiFileImportService {
                             break;
                         }
                     }
+                }
+
+                if (kwhUnitSales == null && kwhSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                    kwhUnitSales = Math.round((kwhSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                }
+                if (kwhSalesAmount == null && kwhUnitSales != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                    kwhSalesAmount = Math.round(kwhUnitSales * ngenUnitRate * 100.0) / 100.0;
                 }
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
@@ -1128,12 +1156,38 @@ public class MultiFileImportService {
                 }
                 accountNo = accountNo.trim();
 
+                // If kwhSalesAmount is missing or zero but kwhUnitSales holds monetary value
+                if ((kwhSalesAmount == null || kwhSalesAmount == 0.0) && kwhUnitSales != null && kwhUnitSales > 0) {
+                    if ((kwhExport != null && kwhUnitSales > kwhExport)
+                            || (paymentSettled != null && Math.abs(kwhUnitSales - paymentSettled) <= 0.05)) {
+                        kwhSalesAmount = kwhUnitSales;
+                        kwhUnitSales = null;
+                    }
+                }
+
+                if (kwhUnitSales == null) {
+                    if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                        kwhUnitSales = kwhExport - kwhImport;
+                    } else if (kwhExport != null && kwhExport > 0) {
+                        kwhUnitSales = kwhExport;
+                    } else if (kwhSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                        kwhUnitSales = Math.round((kwhSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                    }
+                }
+
                 // Unit Rate fallbacks
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
                     ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
                 }
                 if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && !accountNo.isEmpty()) {
                     ngenUnitRate = masterRateMap.get(accountNo);
+                }
+
+                if (kwhUnitSales == null && kwhSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                    kwhUnitSales = Math.round((kwhSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                }
+                if (kwhSalesAmount == null && kwhUnitSales != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                    kwhSalesAmount = Math.round(kwhUnitSales * ngenUnitRate * 100.0) / 100.0;
                 }
 
                 Map<String, Object> rowData = new LinkedHashMap<>();
@@ -1233,6 +1287,25 @@ public class MultiFileImportService {
                     }
                     accountNo = accountNo.trim();
 
+                    // If kwhSalesAmount is missing or zero but kwhUnitSales holds monetary value
+                    if ((kwhSalesAmount == null || kwhSalesAmount == 0.0) && kwhUnitSales != null && kwhUnitSales > 0) {
+                        if ((kwhExport != null && kwhUnitSales > kwhExport)
+                                || (paymentSettled != null && Math.abs(kwhUnitSales - paymentSettled) <= 0.05)) {
+                            kwhSalesAmount = kwhUnitSales;
+                            kwhUnitSales = null;
+                        }
+                    }
+
+                    if (kwhUnitSales == null) {
+                        if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                            kwhUnitSales = kwhExport - kwhImport;
+                        } else if (kwhExport != null && kwhExport > 0) {
+                            kwhUnitSales = kwhExport;
+                        } else if (kwhSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                            kwhUnitSales = Math.round((kwhSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                        }
+                    }
+
                     // 1. Fallback: Calculate Unit Rate from Sales Amount / Unit Sales if missing or invalid
                     if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && kwhSalesAmount != null && kwhSalesAmount > 0 && kwhUnitSales != null && kwhUnitSales > 0) {
                         ngenUnitRate = Math.round((kwhSalesAmount / kwhUnitSales) * 100.0) / 100.0;
@@ -1266,6 +1339,13 @@ public class MultiFileImportService {
                                 break;
                             }
                         }
+                    }
+
+                    if (kwhUnitSales == null && kwhSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                        kwhUnitSales = Math.round((kwhSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                    }
+                    if (kwhSalesAmount == null && kwhUnitSales != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                        kwhSalesAmount = Math.round(kwhUnitSales * ngenUnitRate * 100.0) / 100.0;
                     }
 
                     // Store Excel values exactly as read. Field names preserved for Step 5 (Main Data Set).
@@ -3128,6 +3208,40 @@ public class MultiFileImportService {
                 Double npayRetentionMoney = numOrNull(npay, "retentionMoney");
                 Double npayPayment = numOrNull(npay, "payment");
 
+                // Recover NGEN salesAmount if it was mistakenly placed into kwhSales (due to NGEN column labeled "kWh Sales")
+                if ((ngenSalesAmount == null || ngenSalesAmount == 0.0) && kwhSales != null && kwhSales > 0) {
+                    if ((npayEnergyPurchase != null && Math.abs(kwhSales - npayEnergyPurchase) <= 0.05)
+                            || (kwhExport != null && kwhSales > kwhExport)) {
+                        ngenSalesAmount = kwhSales;
+                        if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                            kwhSales = kwhExport - kwhImport;
+                        } else if (kwhExport != null && kwhExport > 0) {
+                            kwhSales = kwhExport;
+                        } else if (ngenUnitRate != null && ngenUnitRate > 0) {
+                            kwhSales = Math.round((ngenSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                        }
+                    }
+                }
+
+                if (kwhSales == null) {
+                    if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                        kwhSales = kwhExport - kwhImport;
+                    } else if (kwhExport != null && kwhExport > 0) {
+                        kwhSales = kwhExport;
+                    } else if (ngenSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                        kwhSales = Math.round((ngenSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                    }
+                }
+
+                if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && ngenSalesAmount != null && ngenSalesAmount > 0 && kwhSales != null && kwhSales > 0) {
+                    ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
+                }
+
+                row.put("kwhSales", kwhSales);
+                row.put("salesAmount", ngenSalesAmount);
+                row.put("ngenUnitRate", ngenUnitRate);
+                row.put("unitRate", ngenUnitRate);
+
                 row.put("npayNetType", npayNetType);
                 row.put("npayName", npayName);
                 row.put("npayEnergyPurchase", npayEnergyPurchase);
@@ -4508,6 +4622,42 @@ public class MultiFileImportService {
         Double kwhSales = parseDouble(row.get("kwhSales"));
         Double ngenUnitRate = parseDouble(row.get("ngenUnitRate"));
         Double ngenSalesAmount = parseDouble(row.get("salesAmount"));
+
+        Double npayEnergyPurchase = parseDouble(row.get("npayEnergyPurchase"));
+        Double npayBillSetOff = parseDouble(row.get("npayBillSetOff"));
+        Double npayRetentionMoney = parseDouble(row.get("npayRetentionMoney"));
+        Double npayPayment = parseDouble(row.get("npayPayment"));
+        String npayNetType = (String) row.get("npayNetType");
+        String npayName = (String) row.get("npayName");
+
+        // Recover NGEN salesAmount if it was mistakenly placed into kwhSales (due to NGEN column labeled "kWh Sales")
+        if ((ngenSalesAmount == null || ngenSalesAmount == 0.0) && kwhSales != null && kwhSales > 0) {
+            if ((npayEnergyPurchase != null && Math.abs(kwhSales - npayEnergyPurchase) <= 0.05)
+                    || (kwhExport != null && kwhSales > kwhExport)) {
+                ngenSalesAmount = kwhSales;
+                if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                    kwhSales = kwhExport - kwhImport;
+                } else if (kwhExport != null && kwhExport > 0) {
+                    kwhSales = kwhExport;
+                } else if (ngenUnitRate != null && ngenUnitRate > 0) {
+                    kwhSales = Math.round((ngenSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+                }
+                row.put("salesAmount", ngenSalesAmount);
+                row.put("kwhSales", kwhSales);
+            }
+        }
+
+        if (kwhSales == null) {
+            if (kwhExport != null && kwhImport != null && kwhExport > kwhImport) {
+                kwhSales = kwhExport - kwhImport;
+            } else if (kwhExport != null && kwhExport > 0) {
+                kwhSales = kwhExport;
+            } else if (ngenSalesAmount != null && ngenUnitRate != null && ngenUnitRate > 0) {
+                kwhSales = Math.round((ngenSalesAmount / ngenUnitRate) * 100.0) / 100.0;
+            }
+            row.put("kwhSales", kwhSales);
+        }
+
         if ((ngenUnitRate == null || ngenUnitRate <= 0.0) && ngenSalesAmount != null && ngenSalesAmount > 0 && kwhSales != null && kwhSales > 0) {
             ngenUnitRate = Math.round((ngenSalesAmount / kwhSales) * 100.0) / 100.0;
         }
@@ -4524,13 +4674,6 @@ public class MultiFileImportService {
         Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
         Double ngenPaymentSettled = parseDouble(row.get("paymentSettled"));
         String ngenNetType = (String) row.get("ngenNetType");
-
-        Double npayEnergyPurchase = parseDouble(row.get("npayEnergyPurchase"));
-        Double npayBillSetOff = parseDouble(row.get("npayBillSetOff"));
-        Double npayRetentionMoney = parseDouble(row.get("npayRetentionMoney"));
-        Double npayPayment = parseDouble(row.get("npayPayment"));
-        String npayNetType = (String) row.get("npayNetType");
-        String npayName = (String) row.get("npayName");
 
         int ngc = row.get("ngenSourceCount") != null ? ((Number) row.get("ngenSourceCount")).intValue() : (hasNgen ? 1 : 0);
         int npc = row.get("npaySourceCount") != null ? ((Number) row.get("npaySourceCount")).intValue() : (hasNpay ? 1 : 0);
@@ -4779,6 +4922,11 @@ public class MultiFileImportService {
             Double ngenBillSetOff = numOrNull(src, "billSetOff");
             Double ngenRetentionMoney = numOrNull(src, "retentionMoney");
             Double ngenSalesAmount = numOrNull(src, "salesAmount");
+            if ((ngenSalesAmount == null || ngenSalesAmount == 0.0) && kwhSales != null && kwhSales > 0) {
+                if (kwhExport != null && kwhSales > kwhExport) {
+                    ngenSalesAmount = kwhSales;
+                }
+            }
             Double ngenPaymentSettled = numOrNull(src, "paymentSettled");
             Double ngenOutstandingBalance = numOrNull(src, "outstandingBalance");
             String ngenNetType = (String) src.get("ngenNetType");
@@ -4861,6 +5009,14 @@ public class MultiFileImportService {
         Double ngenBillSetOff = parseDouble(row.get("ngenBillSetOff"));
         Double ngenRetentionMoney = parseDouble(row.get("ngenRetentionMoney"));
         Double ngenSalesAmount = parseDouble(row.get("salesAmount"));
+        Double kwhSales = parseDouble(row.get("kwhSales"));
+        Double kwhExport = parseDouble(row.get("kwhExport"));
+        if ((ngenSalesAmount == null || ngenSalesAmount == 0.0) && kwhSales != null && kwhSales > 0) {
+            if (kwhExport != null && kwhSales > kwhExport) {
+                ngenSalesAmount = kwhSales;
+                row.put("salesAmount", ngenSalesAmount);
+            }
+        }
         Double ngenPaymentSettled = parseDouble(row.get("paymentSettled"));
         Double ngenUnitRate = parseDouble(row.get("ngenUnitRate"));
         String ngenNetType = (String) row.get("ngenNetType");
@@ -4898,6 +5054,16 @@ public class MultiFileImportService {
      */
     public List<Map<String, Object>> getMainDatasetWithDuplicates(Long sessionId) {
         List<Map<String, Object>> primary = MAIN_DATA_CACHE.getOrDefault(sessionId, new ArrayList<>());
+        for (Map<String, Object> p : primary) {
+            Double sa = parseDouble(p.get("salesAmount"));
+            Double ks = parseDouble(p.get("kwhSales"));
+            Double ep = parseDouble(p.get("npayEnergyPurchase"));
+            Double ex = parseDouble(p.get("kwhExport"));
+            if ((sa == null || sa == 0.0) && ks != null && ks > 0
+                    && ((ep != null && Math.abs(ks - ep) <= 0.05) || (ex != null && ks > ex))) {
+                revalidateMergedRow(p);
+            }
+        }
         List<Map<String, Object>> dups = MAIN_DUP_CACHE.getOrDefault(sessionId, new ArrayList<>());
         List<Map<String, Object>> rejected = MAIN_REJECTED_CACHE.getOrDefault(sessionId, new ArrayList<>());
         if (dups.isEmpty() && rejected.isEmpty()) return new ArrayList<>(primary);

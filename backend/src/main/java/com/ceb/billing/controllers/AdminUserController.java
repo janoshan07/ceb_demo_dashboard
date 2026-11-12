@@ -206,6 +206,8 @@ public class AdminUserController {
         try {
             stagingMigrationService.migrateApprovedBatch(batchId, currentUsername);
             return ResponseEntity.ok(new MessageResponse("Staging batch approved and successfully migrated to main tables."));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(new MessageResponse("Failed to migrate staging batch: " + e.getMessage()));
         }
@@ -219,6 +221,8 @@ public class AdminUserController {
         try {
             stagingMigrationService.rejectBatch(batchId, reason, currentUsername);
             return ResponseEntity.ok(new MessageResponse("Staging batch successfully rejected and staging rows discarded."));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body(new MessageResponse("Failed to reject staging batch: " + e.getMessage()));
         }

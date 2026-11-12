@@ -349,6 +349,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
           const msg = body.message || 'Batch approved and migrated successfully.';
           setActionSuccess(msg);
           showToast(msg, 'success');
+          setPendingBatches(prev => prev.filter(b => b.id !== selectedBatch.id));
           setSelectedBatch(null);
           fetchPendingBatches();
         } catch (err) {
@@ -387,6 +388,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
       const msg = body.message || 'Batch rejected successfully.';
       setActionSuccess(msg);
       showToast(msg, 'success');
+      setPendingBatches(prev => prev.filter(b => b.id !== selectedBatch.id));
       setSelectedBatch(null);
       fetchPendingBatches();
     } catch (err) {
@@ -727,18 +729,18 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button 
                 className="btn btn-primary"
-                style={{ backgroundColor: 'var(--success)' }}
+                style={{ backgroundColor: 'var(--success)', opacity: (actionProcessing || selectedBatch.status === 'APPROVED') ? 0.6 : 1, cursor: (actionProcessing || selectedBatch.status === 'APPROVED') ? 'not-allowed' : 'pointer' }}
                 onClick={handleApproveBatch}
-                disabled={actionProcessing}
+                disabled={actionProcessing || selectedBatch.status === 'APPROVED'}
               >
                 <ThumbsUp size={14} />
-                Approve &amp; Commit
+                {selectedBatch.status === 'APPROVED' ? 'Approved' : 'Approve & Commit'}
               </button>
               <button 
                 className="btn btn-logout"
-                style={{ width: 'auto' }}
+                style={{ width: 'auto', opacity: (actionProcessing || selectedBatch.status === 'APPROVED') ? 0.6 : 1, cursor: (actionProcessing || selectedBatch.status === 'APPROVED') ? 'not-allowed' : 'pointer' }}
                 onClick={handleRejectBatch}
-                disabled={actionProcessing}
+                disabled={actionProcessing || selectedBatch.status === 'APPROVED'}
               >
                 <ThumbsDown size={14} />
                 Reject &amp; Discard
@@ -1395,35 +1397,39 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingBatches.map((batch) => (
-                    <tr key={batch.id}>
-                      <td>{new Date(batch.uploadTime).toLocaleString('en-LK')}</td>
-                      <td style={{ fontWeight: 600 }}>{batch.filename}</td>
-                      <td>{batch.uploadedBy}</td>
-                      <td>
-                        <span className="badge warning">
-                          {batch.status.replaceAll('_', ' ')}
-                        </span>
-                      </td>
-                      <td>{batch.rowsProcessed}</td>
-                      <td style={{ 
-                        color: batch.errorsCount > 0 ? 'var(--danger)' : 'inherit',
-                        fontWeight: batch.errorsCount > 0 ? 600 : 'normal'
-                      }}>
-                        {batch.errorsCount} flag{batch.errorsCount !== 1 ? 's' : ''}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button 
-                          className="btn btn-primary"
-                          style={{ padding: '0.45rem 1rem', fontSize: '0.8rem' }}
-                          onClick={() => handleSelectBatch(batch)}
-                        >
-                          <FileText size={12} />
-                          Review Batch
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {pendingBatches.filter(b => b.status !== 'APPROVED').map((batch) => {
+                    const isApproved = batch.status === 'APPROVED';
+                    return (
+                      <tr key={batch.id}>
+                        <td>{new Date(batch.uploadTime).toLocaleString('en-LK')}</td>
+                        <td style={{ fontWeight: 600 }}>{batch.filename}</td>
+                        <td>{batch.uploadedBy}</td>
+                        <td>
+                          <span className={`badge ${isApproved ? 'success' : batch.status === 'REJECTED' || batch.status === 'FAILED' ? 'danger' : 'warning'}`}>
+                            {batch.status ? batch.status.replaceAll('_', ' ') : 'PENDING APPROVAL'}
+                          </span>
+                        </td>
+                        <td>{batch.rowsProcessed}</td>
+                        <td style={{
+                          color: batch.errorsCount > 0 ? 'var(--danger)' : 'inherit',
+                          fontWeight: batch.errorsCount > 0 ? 600 : 'normal'
+                        }}>
+                          {batch.errorsCount} flag{batch.errorsCount !== 1 ? 's' : ''}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button
+                            className="btn btn-primary"
+                            style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', opacity: isApproved ? 0.6 : 1, cursor: isApproved ? 'not-allowed' : 'pointer' }}
+                            onClick={() => !isApproved && handleSelectBatch(batch)}
+                            disabled={isApproved}
+                          >
+                            <FileText size={12} />
+                            {isApproved ? 'Approved' : 'Review Batch'}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}

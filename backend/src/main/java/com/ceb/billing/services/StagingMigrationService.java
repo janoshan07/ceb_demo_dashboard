@@ -74,6 +74,10 @@ public class StagingMigrationService {
         }
         UploadHistory history = optHistory.get();
 
+        if ("APPROVED".equalsIgnoreCase(history.getStatus())) {
+            throw new IllegalStateException("Batch ID " + batchId + " has already been approved.");
+        }
+
         // Auto-reject any remaining pending proposals on this batch in bulk
         List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");
         for (com.ceb.billing.entities.StagingChangeLog p : pending) {
@@ -438,12 +442,10 @@ public class StagingMigrationService {
 
         // ── Determine final status ────────────────────────────────────────
         String finalStatus;
-        if (successfulRows == 0) {
-            finalStatus = (invalidCount > 0 || duplicateCount > 0 || skippedCount > 0) ? "FAILED" : "SUCCESS";
-        } else if (invalidCount > 0 || duplicateCount > 0 || skippedCount > 0) {
-            finalStatus = "COMPLETED_WITH_ERRORS";
+        if (successfulRows == 0 && (invalidCount > 0 || duplicateCount > 0 || skippedCount > 0)) {
+            finalStatus = "FAILED";
         } else {
-            finalStatus = "SUCCESS";
+            finalStatus = "APPROVED";
         }
 
         history.setStatus(finalStatus);
@@ -561,6 +563,10 @@ public class StagingMigrationService {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
         }
         UploadHistory history = optHistory.get();
+
+        if ("APPROVED".equalsIgnoreCase(history.getStatus())) {
+            throw new IllegalStateException("Batch ID " + batchId + " has already been approved and cannot be rejected.");
+        }
 
         // Auto-reject any remaining pending proposals on this batch
         List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");

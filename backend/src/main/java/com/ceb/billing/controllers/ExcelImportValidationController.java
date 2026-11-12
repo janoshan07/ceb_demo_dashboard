@@ -651,7 +651,12 @@ public class ExcelImportValidationController {
             }
 
             // Migrate staging → live tables
-            stagingMigrationService.migrateApprovedBatch(stagingBatchId, username);
+            String migrationStatus = stagingMigrationService.migrateApprovedBatch(stagingBatchId, username);
+            if (!"APPROVED".equals(migrationStatus)) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "status", migrationStatus,
+                        "message", "Import batch migration did not complete; the batch was not approved."));
+            }
 
             // Update ImportBatch
             batch.setIsApproved(true);

@@ -59,6 +59,7 @@ const Dashboard = () => {
   // Ranking view toggle states (Show Top 5 vs All 10)
   const [showAllExporters, setShowAllExporters] = useState(false);
   const [showAllConsumers, setShowAllConsumers] = useState(false);
+  const [approvalHistory, setApprovalHistory] = useState([]);
 
   const { showToast } = useToast();
 
@@ -85,7 +86,7 @@ const Dashboard = () => {
         }
 
         // Fire all API requests in parallel
-        const [summaryRes, analyticsRes, trendRes, profileRes, predRes, cntRes, alertsRes] = await Promise.all([
+        const [summaryRes, analyticsRes, trendRes, profileRes, predRes, cntRes, alertsRes, approvalRes] = await Promise.all([
           authFetch(summaryUrl).catch(() => null),
           isAdminOrOfficer ? authFetch('/api/admin/dashboard/analytics').catch(() => null) : Promise.resolve(null),
           trendUrl ? authFetch(trendUrl).catch(() => null) : Promise.resolve(null),
@@ -93,7 +94,13 @@ const Dashboard = () => {
           isAdminOrOfficer ? authFetch('/api/admin/dashboard/predictions').catch(() => null) : Promise.resolve(null),
           isAdminOrOfficer ? authFetch('/api/admin/alerts/counters').catch(() => null) : Promise.resolve(null),
           isAdminOrOfficer ? authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null) : Promise.resolve(null),
+          user.role === 'OFFICER' ? authFetch('/api/officer/approvals').catch(() => null) : Promise.resolve(null),
         ]);
+
+        if (approvalRes?.ok) {
+          const requests = await approvalRes.json().catch(() => []);
+          setApprovalHistory(Array.isArray(requests) ? requests : []);
+        }
 
         // 1. Process summary
         if (summaryRes && summaryRes.ok) {
@@ -1207,6 +1214,20 @@ const Dashboard = () => {
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                       {stats.pendingApprovalsCount} file upload batches require administrator review before ledger commit.
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {user.role === 'OFFICER' && approvalHistory.length > 0 && (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.84rem', marginBottom: '0.45rem' }}>My Approval History</div>
+                  <div style={{ display: 'grid', gap: '0.35rem' }}>
+                    {approvalHistory.slice(0, 5).map((request) => (
+                      <div key={request.requestId} style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', fontSize: '0.76rem', padding: '0.4rem 0.55rem', borderRadius: '6px', background: 'rgba(148,163,184,0.08)' }}>
+                        <span>{request.actionType || 'UPDATE'} · {request.accountNo || request.entityType}</span>
+                        <span className={`badge ${request.status === 'APPROVED' ? 'success' : request.status === 'REJECTED' ? 'danger' : request.status === 'FAILED' ? 'danger' : 'warning'}`}>{request.status}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

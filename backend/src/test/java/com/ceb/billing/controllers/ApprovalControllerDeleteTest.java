@@ -24,6 +24,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -77,7 +78,7 @@ class ApprovalControllerDeleteTest {
         snapshot.setId(17L);
         snapshot.setTotalRecords(2);
         snapshot.setFinalDataJson("[{\"accountNo\":\"1234567890\"},{\"accountNo\":\"0987654321\"}]");
-        when(approvalRequestRepository.findById(24L)).thenReturn(Optional.of(request));
+        when(approvalRequestRepository.findByIdForUpdate(24L)).thenReturn(Optional.of(request));
         when(customerRepository.findById("1234567890")).thenReturn(Optional.empty());
         when(monthlyDirectorySnapshotRepository.findAll()).thenReturn(List.of(snapshot));
         when(approvalRequestRepository.save(any(ApprovalRequest.class)))
@@ -89,6 +90,11 @@ class ApprovalControllerDeleteTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("APPROVED", request.getStatus());
+        assertEquals("admin-1", request.getReviewedBy());
+        assertNotNull(request.getReviewedAt());
+        when(approvalRequestRepository.findByIdForUpdate(24L)).thenReturn(Optional.of(request));
+        ResponseEntity<?> duplicateResponse = controller.approveRequest(24L);
+        assertEquals(400, duplicateResponse.getStatusCode().value());
         assertFalse(snapshot.getFinalDataJson().contains("1234567890"));
         assertEquals(1, snapshot.getTotalRecords());
         verify(monthlyDirectorySnapshotRepository).save(snapshot);

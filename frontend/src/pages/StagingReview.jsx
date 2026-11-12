@@ -242,7 +242,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await authFetch('/api/admin/staging/pending');
+      const res = await authFetch('/api/admin/staging/pending', { cache: 'no-store' });
       if (!res.ok) {
         throw new Error('Failed to load pending staging batches.');
       }
@@ -345,13 +345,16 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
           if (!res.ok) {
             throw new Error(body.message || 'Failed to approve batch.');
           }
+          if (body.status !== 'APPROVED') {
+            throw new Error(body.message || 'Batch migration did not complete.');
+          }
           
           const msg = body.message || 'Batch approved and migrated successfully.';
           setActionSuccess(msg);
           showToast(msg, 'success');
           setPendingBatches(prev => prev.filter(b => b.id !== selectedBatch.id));
           setSelectedBatch(null);
-          fetchPendingBatches();
+          await fetchPendingBatches();
         } catch (err) {
           const errMsg = err.message || 'Approval operation failed.';
           setActionError(errMsg);

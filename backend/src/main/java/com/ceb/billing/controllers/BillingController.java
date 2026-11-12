@@ -221,7 +221,6 @@ public class BillingController {
 
     @PutMapping("/api/officer/billing/{billingId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
-    @OfficerStepUp(action = "BILLING_UPDATE_REQUEST", recordId = "billingId")
     public ResponseEntity<?> officerUpdateBillingRecord(@PathVariable long billingId,
             @RequestBody BillingRecord billingDetails) {
         Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
@@ -250,6 +249,8 @@ public class BillingController {
                     oldJson,
                     newJson,
                     "PENDING");
+            request.setDivision(record.getCustomer().getDivision());
+            request.setBillingMonth(record.getFromDate() == null ? null : record.getFromDate().toString().substring(0, 7));
             approvalRequestRepository.save(request);
             auditLogService.log("BILLING_EDIT_REQUEST", "Billing Officer " + userDetails.getUsername()
                     + " submitted billing edit request for bill ID " + billingId);
@@ -362,6 +363,8 @@ public class BillingController {
                     "CREATE",
                     "BILLING"
             );
+            request.setDivision(optCustomer.get().getDivision());
+            request.setBillingMonth(payload.get("fromDate") == null ? null : payload.get("fromDate").toString().substring(0, 7));
             approvalRequestRepository.save(request);
             auditLogService.log("BILLING_CREATE_REQUEST", "Officer " + username + " submitted manual billing creation request for customer " + accountNo);
             
@@ -393,7 +396,6 @@ public class BillingController {
 
     @DeleteMapping("/api/officer/billing/{billingId}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
-    @OfficerStepUp(action = "BILLING_DELETE_REQUEST", recordId = "billingId")
     public ResponseEntity<?> officerDeleteBillingRecord(@PathVariable long billingId) {
         Optional<BillingRecord> optRecord = billingRecordRepository.findById(billingId);
         if (optRecord.isEmpty()) {
@@ -418,6 +420,8 @@ public class BillingController {
                     "DELETE",
                     "BILLING"
             );
+            request.setDivision(record.getCustomer().getDivision());
+            request.setBillingMonth(record.getFromDate() == null ? null : record.getFromDate().toString().substring(0, 7));
             approvalRequestRepository.save(request);
             auditLogService.log("BILLING_DELETE_REQUEST", "Officer " + username + " submitted billing deletion request for bill ID " + billingId);
             

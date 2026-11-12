@@ -67,27 +67,18 @@ public class StagingMigrationService {
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Transactional
-    public void migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
-        Optional<UploadHistory> optHistory = uploadHistoryRepository.findById(Objects.requireNonNull(batchId));
+    public String migrateApprovedBatch(Long batchId, String approvedBy) throws Exception {
+        Optional<UploadHistory> optHistory = uploadHistoryRepository.findByIdForUpdate(Objects.requireNonNull(batchId));
         if (optHistory.isEmpty()) {
             throw new IllegalArgumentException("Upload batch history not found for ID: " + batchId);
         }
         UploadHistory history = optHistory.get();
 
-        if ("APPROVED".equalsIgnoreCase(history.getStatus())) {
-            throw new IllegalStateException("Batch ID " + batchId + " has already been approved.");
-        }
-
-        // Auto-reject any remaining pending proposals on this batch in bulk
-        List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");
-        for (com.ceb.billing.entities.StagingChangeLog p : pending) {
-            p.setStatus("REJECTED");
-            p.setReviewedBy(approvedBy);
-            p.setReviewedAt(java.time.LocalDateTime.now());
-            p.setRejectionReason("Batch approved & finalized.");
-        }
-        if (!pending.isEmpty()) {
-            changeLogRepository.saveAll(pending);
+        String currentStatus = history.getStatus();
+        boolean pendingApproval = "PENDING_APPROVAL".equalsIgnoreCase(currentStatus);
+        boolean adminImport = "STAGED_IMPORT".equalsIgnoreCase(currentStatus);
+        if (!pendingApproval && !adminImport) {
+            throw new IllegalStateException("Batch ID " + batchId + " is no longer pending approval (status: " + history.getStatus() + ").");
         }
 
         List<BillingUploadStaging> stagingRecords = stagingRepository.findByUploadBatchId(batchId);
@@ -455,6 +446,25 @@ public class StagingMigrationService {
         history.setErrorsCount(invalidCount);
         uploadHistoryRepository.save(Objects.requireNonNull(history));
 
+        if ("FAILED".equals(finalStatus)) {
+            // No valid rows were migrated. Keep staged rows available for review and do not
+            // promote the linked directory snapshot to APPROVED.
+            updateDirectorySnapshotStatus(history, "FAILED", approvedBy);
+            return finalStatus;
+        }
+
+        // Auto-reject remaining pending row proposals only after migration is known to succeed.
+        List<com.ceb.billing.entities.StagingChangeLog> pending = changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING");
+        for (com.ceb.billing.entities.StagingChangeLog p : pending) {
+            p.setStatus("REJECTED");
+            p.setReviewedBy(approvedBy);
+            p.setReviewedAt(java.time.LocalDateTime.now());
+            p.setRejectionReason("Batch approved & finalized.");
+        }
+        if (!pending.isEmpty()) {
+            changeLogRepository.saveAll(pending);
+        }
+
         // Delete staging rows for this batch
         stagingRepository.deleteByUploadBatchId(batchId);
 
@@ -483,6 +493,7 @@ public class StagingMigrationService {
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
+        return finalStatus;
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

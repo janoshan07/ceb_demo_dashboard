@@ -119,7 +119,7 @@ class CustomerDeleteStepUpFlowTest {
         verify(approvalRequestRepository).save(requestCaptor.capture());
         ApprovalRequest request = java.util.Objects.requireNonNull(requestCaptor.getValue());
         request.setRequestId(501L);
-        when(approvalRequestRepository.findById(501L)).thenReturn(Optional.of(request));
+        when(approvalRequestRepository.findByIdForUpdate(501L)).thenReturn(Optional.of(request));
 
         ApprovalController approvalController = new ApprovalController();
         ReflectionTestUtils.setField(approvalController, "approvalRequestRepository", approvalRequestRepository);

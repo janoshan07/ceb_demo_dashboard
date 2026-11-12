@@ -75,7 +75,7 @@ public class CustomerMigrationHashingTest {
         Long batchId = 276L;
         UploadHistory history = new UploadHistory("Multi-File Import (Session 276)", "officer", "PENDING_APPROVAL", 1500, 0, 0, 0);
         history.setId(batchId);
-        when(uploadHistoryRepository.findById(batchId)).thenReturn(Optional.of(history));
+        when(uploadHistoryRepository.findByIdForUpdate(batchId)).thenReturn(Optional.of(history));
         when(changeLogRepository.findByUploadBatchIdAndStatus(batchId, "PENDING")).thenReturn(Collections.emptyList());
 
         // Prepare 1,500 staging records across 3 areas:
@@ -118,7 +118,7 @@ public class CustomerMigrationHashingTest {
         when(billingRecordRepository.findBillingKeysByAccountNos(any())).thenReturn(existingDbKeys);
 
         long start = System.currentTimeMillis();
-        stagingMigrationService.migrateApprovedBatch(batchId, "admin");
+        assertEquals("APPROVED", stagingMigrationService.migrateApprovedBatch(batchId, "admin"));
         long duration = System.currentTimeMillis() - start;
 
         System.out.println("Fast migration of 1500 records took: " + duration + "ms");
@@ -129,6 +129,7 @@ public class CustomerMigrationHashingTest {
 
         // Verify deleteByUploadBatchId was called via bulk query
         verify(stagingRepository).deleteByUploadBatchId(batchId);
+        assertEquals("APPROVED", history.getStatus());
 
         // Verify customers to save
         @SuppressWarnings("unchecked")
@@ -155,9 +156,21 @@ public class CustomerMigrationHashingTest {
         // Verify alertService was called with impacted accounts
         verify(alertService).generateAlertsForAccounts(any());
 
-        // A duplicate is skipped and reported as a completed batch with errors.
-        assertEquals("COMPLETED_WITH_ERRORS", history.getStatus());
+        // A partial import with migrated rows is approved and retains its error count.
+        assertEquals("APPROVED", history.getStatus());
         assertEquals(1499, history.getBillingInserted()); // 1500 - 1 duplicate = 1499
         assertTrue(duration < 2000, "Migration should complete under 2 seconds, took: " + duration + "ms");
+    }
+
+    @Test
+    void alreadyApprovedBatchCannotBeMigratedAgain() {
+        Long batchId = 276L;
+        UploadHistory history = new UploadHistory("Multi-File Import (Session 276)", "officer", "APPROVED", 1, 0, 0, 0);
+        history.setId(batchId);
+        when(uploadHistoryRepository.findByIdForUpdate(batchId)).thenReturn(Optional.of(history));
+
+        assertThrows(IllegalStateException.class,
+                () -> stagingMigrationService.migrateApprovedBatch(batchId, "admin"));
+        verify(stagingRepository, never()).findByUploadBatchId(batchId);
     }
 }

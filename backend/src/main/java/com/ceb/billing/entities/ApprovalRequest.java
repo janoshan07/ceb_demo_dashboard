@@ -2,6 +2,7 @@ package com.ceb.billing.entities;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "approval_requests")
@@ -35,6 +36,22 @@ public class ApprovalRequest {
 
     @Column(name = "entity_type", length = 50)
     private String entityType; // CUSTOMER, BILLING
+
+    @Column(name = "division", length = 50)
+    private String division;
+
+    @Column(name = "billing_month", length = 20)
+    private String billingMonth;
+
+    @Column(name = "reviewed_by", length = 100)
+    private String reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Version
+    @Column(name = "row_version", nullable = false)
+    private long version;
 
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
@@ -149,4 +166,13 @@ public class ApprovalRequest {
     public void setEntityType(String entityType) {
         this.entityType = entityType;
     }
+
+    public String getDivision() { return division; }
+    public void setDivision(String division) { this.division = division; }
+    public String getBillingMonth() { return billingMonth; }
+    public void setBillingMonth(String billingMonth) { this.billingMonth = billingMonth; }
+    public String getReviewedBy() { return reviewedBy; }
+    public void setReviewedBy(String reviewedBy) { this.reviewedBy = reviewedBy; }
+    public LocalDateTime getReviewedAt() { return reviewedAt; }
+    public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
 }

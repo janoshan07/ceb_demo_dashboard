@@ -550,6 +550,7 @@ const Admin = () => {
                     <th>Requested By</th>
                     <th>Modification Type</th>
                     <th>Target account</th>
+                    <th>Division / Billing month</th>
                     <th>Details Comparison</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
@@ -561,6 +562,7 @@ const Admin = () => {
                       <td><div className="skeleton" style={{ height: '16px', width: '80px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '22px', width: '100px', borderRadius: '4px' }}></div></td>
                       <td><div className="skeleton" style={{ height: '16px', width: '90px' }}></div></td>
+                      <td><div className="skeleton" style={{ height: '16px', width: '110px' }}></div></td>
                       <td>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '1rem', border: '1px solid var(--border-color)', borderRadius: '8px' }}>
                           <div className="skeleton" style={{ height: '14px', width: '100%' }}></div>
@@ -591,6 +593,7 @@ const Admin = () => {
                     <th>Requested By</th>
                     <th>Modification Type</th>
                     <th>Target account</th>
+                    <th>Division / Billing month</th>
                     <th>Details Comparison</th>
                     <th style={{ textAlign: 'right' }}>Actions</th>
                   </tr>
@@ -619,6 +622,7 @@ const Admin = () => {
                       <td style={{ fontWeight: 600, color: 'var(--primary)' }}>
                         {req.accountNo}
                       </td>
+                      <td style={{ fontSize: '0.82rem' }}>{req.division || '—'}<br />{req.billingMonth || '—'}</td>
                       <td style={{ width: '40%' }}>
                         {renderCompareValues(req.oldValues, req.newValues, req.actionType, req.entityType)}
                       </td>

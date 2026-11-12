@@ -21,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -108,8 +109,9 @@ public class ApprovalController {
     }
 
     @PostMapping("/{id}/approve")
+    @Transactional
     public ResponseEntity<?> approveRequest(@PathVariable long id) {
-        Optional<ApprovalRequest> optRequest = approvalRequestRepository.findById(id);
+        Optional<ApprovalRequest> optRequest = approvalRequestRepository.findByIdForUpdate(id);
         if (optRequest.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -120,6 +122,9 @@ public class ApprovalController {
         }
 
         String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (adminUsername.equals(request.getChangedBy())) {
+            return ResponseEntity.status(403).body(new MessageResponse("A requester cannot approve their own request."));
+        }
 
         try {
             ObjectMapper objectMapper = new ObjectMapper();
@@ -200,9 +205,17 @@ public class ApprovalController {
                                     request.getAccountNo(), request.getChangedBy()));
                 } else if ("DELETE".equals(aType)) {
                     Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
-                    if (optBilling.isPresent()) {
-                        billingRecordRepository.delete(Objects.requireNonNull(optBilling.get()));
+                    if (optBilling.isEmpty()) {
+                        markFailed(request, adminUsername, "Billing record no longer exists.");
+                        return ResponseEntity.status(409).body(new MessageResponse("Request failed because the billing record no longer exists."));
                     }
+                    BillingRecord current = optBilling.get();
+                    if (!Objects.equals(request.getAccountNo(), current.getCustomer().getAccountNo())
+                            || !isBillingSnapshotCurrent(request, current, objectMapper)) {
+                        markFailed(request, adminUsername, "Underlying billing record changed after request submission.");
+                        return ResponseEntity.status(409).body(new MessageResponse("Request failed because the billing record changed. Submit a new request."));
+                    }
+                    billingRecordRepository.delete(current);
                     auditLogService.log("BILLING_DELETE_APPROVED",
                             String.format("Admin %s approved billing ID %d deletion requested by %s", adminUsername,
                                     request.getBillingId(), request.getChangedBy()));
@@ -210,9 +223,15 @@ public class ApprovalController {
                     // UPDATE
                     Optional<BillingRecord> optBilling = billingRecordRepository.findById(Objects.requireNonNull(request.getBillingId()));
                     if (optBilling.isEmpty()) {
+                        markFailed(request, adminUsername, "Billing record no longer exists.");
                         return ResponseEntity.badRequest().body(new MessageResponse("Billing record no longer exists."));
                     }
                     BillingRecord billing = optBilling.get();
+                    if (!Objects.equals(request.getAccountNo(), billing.getCustomer().getAccountNo())
+                            || !isBillingSnapshotCurrent(request, billing, objectMapper)) {
+                        markFailed(request, adminUsername, "Underlying billing record changed after request submission.");
+                        return ResponseEntity.status(409).body(new MessageResponse("Request failed because the billing record changed. Submit a new request."));
+                    }
                     applyBillingEdits(billing, newValues);
                     billingRecordRepository.save(Objects.requireNonNull(billing));
                     auditLogService.log("BILLING_EDIT_APPROVED",
@@ -222,6 +241,8 @@ public class ApprovalController {
             }
 
             request.setStatus("APPROVED");
+            request.setReviewedBy(adminUsername);
+            request.setReviewedAt(java.time.LocalDateTime.now());
             approvalRequestRepository.save(Objects.requireNonNull(request));
 
             if (eventPublisher != null) {
@@ -235,9 +256,41 @@ public class ApprovalController {
         }
     }
 
+    private void markFailed(ApprovalRequest request, String adminUsername, String reason) {
+        request.setStatus("FAILED");
+        request.setReviewedBy(adminUsername);
+        request.setReviewedAt(java.time.LocalDateTime.now());
+        approvalRequestRepository.save(request);
+        auditLogService.log("APPROVAL_FAILED", "Admin " + adminUsername + " could not apply request "
+                + request.getRequestId() + ": " + reason);
+    }
+
+    private boolean isBillingSnapshotCurrent(ApprovalRequest request, BillingRecord record, ObjectMapper mapper) {
+        try {
+            Map<String, Object> expected = mapper.readValue(request.getOldValues(), new TypeReference<Map<String, Object>>() {});
+            if (expected.isEmpty()) return true;
+            Map<String, Object> current = new java.util.LinkedHashMap<>();
+            current.put("refNo", record.getRefNo());
+            current.put("fromDate", record.getFromDate() == null ? null : record.getFromDate().toString());
+            current.put("toDate", record.getToDate() == null ? null : record.getToDate().toString());
+            current.put("importUnits", record.getImportUnits());
+            current.put("exportUnits", record.getExportUnits());
+            current.put("unitCost", record.getUnitCost());
+            current.put("billingMode", record.getBillingMode());
+            current.put("energyPurchase", record.getEnergyPurchase());
+            current.put("billSetOff", record.getBillSetOff());
+            current.put("retentionMoney", record.getRetentionMoney());
+            current.put("payment", record.getPayment());
+            return expected.equals(current);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     @PostMapping("/{id}/reject")
+    @Transactional
     public ResponseEntity<?> rejectRequest(@PathVariable long id) {
-        Optional<ApprovalRequest> optRequest = approvalRequestRepository.findById(id);
+        Optional<ApprovalRequest> optRequest = approvalRequestRepository.findByIdForUpdate(id);
         if (optRequest.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -248,8 +301,13 @@ public class ApprovalController {
         }
 
         String adminUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (adminUsername.equals(request.getChangedBy())) {
+            return ResponseEntity.status(403).body(new MessageResponse("A requester cannot reject their own request."));
+        }
 
         request.setStatus("REJECTED");
+        request.setReviewedBy(adminUsername);
+        request.setReviewedAt(java.time.LocalDateTime.now());
         approvalRequestRepository.save(Objects.requireNonNull(request));
 
         if ("CUSTOMER".equals(request.getEntityType())) {

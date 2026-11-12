@@ -204,8 +204,15 @@ public class AdminUserController {
     public ResponseEntity<?> approveStagingBatch(@PathVariable long batchId) {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
         try {
-            stagingMigrationService.migrateApprovedBatch(batchId, currentUsername);
-            return ResponseEntity.ok(new MessageResponse("Staging batch approved and successfully migrated to main tables."));
+            String status = stagingMigrationService.migrateApprovedBatch(batchId, currentUsername);
+            if (!"APPROVED".equals(status)) {
+                return ResponseEntity.status(409).body(Map.of(
+                        "status", status,
+                        "message", "Staging batch migration did not complete; the batch was not approved."));
+            }
+            return ResponseEntity.ok(Map.of(
+                    "status", status,
+                    "message", "Staging batch approved and successfully migrated to main tables."));
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
         } catch (Exception e) {

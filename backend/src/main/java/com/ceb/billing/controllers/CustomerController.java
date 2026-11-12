@@ -13,7 +13,6 @@ import com.ceb.billing.repositories.NetTypeRepository;
 import com.ceb.billing.repositories.ExpenseCodeRepository;
 import com.ceb.billing.services.ExcelValidationService;
 import com.ceb.billing.services.AuditLogService;
-import com.ceb.billing.security.OfficerStepUp;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
@@ -1593,7 +1592,6 @@ public class CustomerController {
 
     @PutMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
-    @OfficerStepUp(action = "CUSTOMER_UPDATE_REQUEST", recordId = "accountNo")
     public ResponseEntity<?> officerUpdateCustomer(@PathVariable String accountNo,
             @RequestBody Map<String, Object> payload) {
         Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
@@ -1622,6 +1620,7 @@ public class CustomerController {
                     oldJson,
                     newJson,
                     "PENDING");
+            request.setDivision(customer.getDivision());
             approvalRequestRepository.save(request);
             auditLogService.log("CUSTOMER_EDIT_REQUEST", "Billing Officer " + userDetails.getUsername()
                     + " submitted customer edit request for " + accountNo);
@@ -1977,6 +1976,7 @@ public class CustomerController {
                     "CREATE",
                     "CUSTOMER"
             );
+            request.setDivision(payload.get("division") == null ? null : payload.get("division").toString());
             approvalRequestRepository.save(request);
             auditLogService.log("CUSTOMER_CREATE_REQUEST", "Officer " + username + " submitted manual customer creation request for " + accountNo);
 
@@ -2014,7 +2014,6 @@ public class CustomerController {
 
     @DeleteMapping("/api/officer/customers/{accountNo}")
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
-    @OfficerStepUp(action = "CUSTOMER_DELETE_REQUEST", recordId = "accountNo")
     public ResponseEntity<?> officerDeleteCustomer(@PathVariable @NonNull String accountNo) {
         String normalizedAccountNo = accountNo.trim();
         Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(normalizedAccountNo));
@@ -2051,6 +2050,7 @@ public class CustomerController {
                     "DELETE",
                     "CUSTOMER"
             );
+            request.setDivision(optCustomer.isPresent() ? optCustomer.get().getDivision() : null);
             approvalRequestRepository.save(request);
             flagPendingApprovalInSnapshots(normalizedAccountNo);
             monthlyRecordsCache.clear();

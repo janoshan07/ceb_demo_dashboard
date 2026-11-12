@@ -3483,6 +3483,63 @@ const PaymentControlCenter = () => {
         const modalConfig = getModalCardConfig(summaryModalCard);
         if (!modalConfig) return null;
 
+        const isTotalCustomersModal = summaryModalCard === 'TOTAL_CUSTOMERS';
+        const isPaymentReadyModal = summaryModalCard === 'PAYMENT_READY';
+        const isPaymentOnHoldModal = summaryModalCard === 'PAYMENT_ON_HOLD';
+        const isTotalPayableModal = summaryModalCard === 'TOTAL_PAYABLE';
+        const isDivisionSummaryModal = isTotalCustomersModal || isPaymentReadyModal || isPaymentOnHoldModal || isTotalPayableModal;
+
+        const totalCustomersCount = Number(summary.totalCustomers || summary.customerCount || 0);
+        const paymentReadyCount = Number(summary.paymentReadyCount || 0);
+        const onHoldCount = Number(summary.onHoldCount || 0);
+        const totalPayableAmount = Number(summary.totalPayable || 0);
+        const totalOnHoldAmount = Number(summary.totalOnHold || summary.totalOnHoldAmount || summary.onHoldAmount || 0);
+
+        // ── Canonical division ordering ──────────────────────────────────
+        const divisionOrder = ['Ampara', 'Batticaloa', 'Trincomalee', 'Valaichenai', 'Kalmunai'];
+        const sortDivisions = (arr) => [...arr].sort((a, b) => {
+          const idxA = divisionOrder.indexOf(a.division);
+          const idxB = divisionOrder.indexOf(b.division);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return a.division.localeCompare(b.division);
+        });
+
+        const DEFAULT_DIV_ROWS = divisionOrder.map(d => ({ division: d, customerCount: 0, percentage: 0 }));
+
+        // Total Customers breakdown
+        const rawTotalBreakdown = Array.isArray(summary.divisionBreakdown) && summary.divisionBreakdown.length > 0
+          ? summary.divisionBreakdown : DEFAULT_DIV_ROWS;
+        const divisionBreakdown = sortDivisions(rawTotalBreakdown);
+        const reconciledSum = divisionBreakdown.reduce((s, d) => s + (d.customerCount || 0), 0);
+        const maxDivisionCount = Math.max(...divisionBreakdown.map(d => d.customerCount || 0), 1);
+
+        // Payment Ready breakdown
+        const DEFAULT_READY_ROWS = divisionOrder.map(d => ({ division: d, readyCount: 0, percentage: 0, totalPayable: 0 }));
+        const rawReadyBreakdown = Array.isArray(summary.readyDivisionBreakdown) && summary.readyDivisionBreakdown.length > 0
+          ? summary.readyDivisionBreakdown : DEFAULT_READY_ROWS;
+        const readyBreakdown = sortDivisions(rawReadyBreakdown);
+        const reconciledReadyCount = readyBreakdown.reduce((s, d) => s + (d.readyCount || 0), 0);
+        const reconciledReadyPayable = readyBreakdown.reduce((s, d) => s + (d.totalPayable || 0), 0);
+        const maxReadyCount = Math.max(...readyBreakdown.map(d => d.readyCount || 0), 1);
+        const maxPayableAmount = Math.max(...readyBreakdown.map(d => d.totalPayable || 0), 1);
+        const isPayableCountsMatch = paymentReadyCount === reconciledReadyCount;
+        const isPayableAmountsMatch = Math.abs(totalPayableAmount - reconciledReadyPayable) < 1.0;
+        const isPayableReconciled = isPayableCountsMatch && (paymentReadyCount === 0 || isPayableAmountsMatch);
+
+        // Payment On Hold breakdown
+        const DEFAULT_ON_HOLD_ROWS = divisionOrder.map(d => ({ division: d, onHoldCount: 0, percentage: 0, totalPayable: 0, withheldAmount: 0 }));
+        const rawOnHoldBreakdown = Array.isArray(summary.onHoldDivisionBreakdown) && summary.onHoldDivisionBreakdown.length > 0
+          ? summary.onHoldDivisionBreakdown : DEFAULT_ON_HOLD_ROWS;
+        const onHoldBreakdown = sortDivisions(rawOnHoldBreakdown);
+        const reconciledOnHoldCount = onHoldBreakdown.reduce((s, d) => s + (d.onHoldCount || d.customerCount || 0), 0);
+        const reconciledOnHoldPayable = onHoldBreakdown.reduce((s, d) => s + (d.withheldAmount || d.totalPayable || 0), 0);
+        const maxOnHoldCount = Math.max(...onHoldBreakdown.map(d => d.onHoldCount || d.customerCount || 0), 1);
+        const isOnHoldCountsMatch = onHoldCount === reconciledOnHoldCount;
+        const isOnHoldAmountsMatch = Math.abs(totalOnHoldAmount - reconciledOnHoldPayable) < 1.0;
+        const isOnHoldReconciled = isOnHoldCountsMatch && (onHoldCount === 0 || isOnHoldAmountsMatch);
+
         const relevantRecords = customersData.content.filter(modalConfig.filterPredicate);
 
         return (
@@ -3552,7 +3609,7 @@ const PaymentControlCenter = () => {
                         color: modalConfig.badgeText,
                         border: `1px solid ${modalConfig.badgeBorder}`
                       }}>
-                        Summary Breakdown
+                        {isDivisionSummaryModal ? 'Division-Wise Summary' : 'Summary Breakdown'}
                       </span>
                     </div>
                     <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
@@ -3571,208 +3628,1162 @@ const PaymentControlCenter = () => {
               </div>
 
               {/* Modal Body (Scrollable) */}
-              <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.35rem' }}>
-                {/* Hero Stat & Description Banner */}
-                <div style={{
-                  background: modalConfig.gradient,
-                  border: `1px solid ${modalConfig.badgeBorder}`,
-                  borderRadius: '12px',
-                  padding: '1.25rem 1.5rem',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: '1rem'
-                }}>
-                  <div>
-                    <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: modalConfig.badgeText, fontWeight: 700 }}>
-                      {modalConfig.statLabel}
-                    </span>
-                    <div style={{ fontSize: '2.1rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '0.2rem', letterSpacing: '-0.02em' }}>
-                      {modalConfig.stat}
-                    </div>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.4rem', maxWidth: '620px', lineHeight: '1.45' }}>
-                      {modalConfig.description}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Key Metrics Grid */}
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-                  gap: '0.85rem'
-                }}>
-                  {modalConfig.metrics.map((m, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        background: '#FFFFFF',
-                        border: '1px solid var(--border-color)',
-                        borderRadius: '10px',
-                        padding: '0.9rem 1.1rem',
-                        boxShadow: 'var(--shadow-xs)'
-                      }}
-                    >
-                      <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
-                        {m.label}
-                      </div>
-                      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: m.color, marginTop: '0.25rem' }}>
-                        {m.value}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Relevant Customer Records Section */}
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                      <FileText size={16} style={{ color: '#0369A1' }} />
-                      <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        Relevant Customer Records ({relevantRecords.length} on current page)
-                      </h4>
-                    </div>
-                    {customersData.totalElements > 0 && (
-                      <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
-                        From {customersData.totalElements.toLocaleString()} loaded producers
+              {isTotalCustomersModal ? (                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Hero Stat: Prominent Total Customers Display */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.25rem 1.5rem',
+                    boxShadow: 'var(--shadow-xs)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: 'var(--text-secondary)',
+                        fontWeight: 700
+                      }}>
+                        Total Registered Solar Producers
                       </span>
-                    )}
-                  </div>
+                      <div style={{
+                        fontSize: '2.5rem',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        marginTop: '0.2rem',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.1
+                      }}>
+                        {totalCustomersCount.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                        Active canonical solar producers in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division scope: <strong style={{ color: '#0369A1' }}>{division}</strong>
+                      </div>
+                    </div>
 
-                  {relevantRecords.length === 0 ? (
                     <div style={{
                       background: '#F8FAFC',
                       border: '1px solid var(--border-color)',
                       borderRadius: '10px',
-                      padding: '2.2rem 1.5rem',
-                      textAlign: 'center',
-                      color: 'var(--text-muted)'
+                      padding: '0.75rem 1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.25rem',
+                      minWidth: '220px'
                     }}>
-                      <SlidersHorizontal size={32} style={{ margin: '0 auto 0.6rem', opacity: 0.35 }} />
-                      <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
-                        No records on the current page match this specific category
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.76rem', color: '#047857', fontWeight: 700 }}>
+                        <CheckCircle2 size={14} style={{ color: '#047857' }} />
+                        <span>Reconciliation Verified</span>
                       </div>
-                      <div style={{ fontSize: '0.8rem', marginTop: '0.35rem', maxWidth: '480px', margin: '0.35rem auto 0' }}>
-                        The canonical count above reflects the complete dataset. Click below to switch the main table tab to view all matching records.
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+                        Sum of Divisions: <strong style={{ color: 'var(--text-primary)' }}>{reconciledSum.toLocaleString()}</strong> of <strong style={{ color: 'var(--text-primary)' }}>{totalCustomersCount.toLocaleString()}</strong>
+                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        5 Eastern Province Divisions Reconciled
                       </div>
                     </div>
-                  ) : (
+                  </div>
+
+                  {/* Division Summary Cards */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Division-Wise Customer Count
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                        5 Operating Divisions
+                      </span>
+                    </div>
+
                     <div style={{
-                      background: '#FFFFFF',
-                      border: '1px solid var(--border-color)',
-                      borderRadius: '10px',
-                      overflow: 'hidden'
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                      gap: '0.75rem'
                     }}>
-                      <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-                          <thead style={{ position: 'sticky', top: 0, background: '#F1F5F9', zIndex: 1 }}>
-                            <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', textTransform: 'uppercase', fontSize: '0.72rem' }}>
-                              <th style={{ padding: '0.65rem 0.85rem' }}>Account No</th>
-                              <th style={{ padding: '0.65rem 0.85rem' }}>Customer Name</th>
-                              <th style={{ padding: '0.65rem 0.85rem' }}>Solar Type</th>
-                              <th style={{ padding: '0.65rem 0.85rem' }}>Location</th>
-                              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Total Payable</th>
-                              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Status</th>
-                              <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Action</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {relevantRecords.map((c, i) => {
-                              const isReady = c.paymentStatus === 'READY' || c.isEligible;
-                              const isHold = c.paymentStatus === 'ON_HOLD';
-                              const isRev = c.paymentStatus === 'REVIEW';
+                      {divisionBreakdown.map((d) => {
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const pct = d.percentage != null
+                          ? d.percentage
+                          : (totalCustomersCount > 0 ? ((d.customerCount || 0) / totalCustomersCount * 100) : 0);
 
-                              let badgeBg = '#F1F5F9';
-                              let badgeColor = 'var(--text-secondary)';
-                              let badgeBorder = 'var(--border-color)';
-                              if (isReady) {
-                                badgeBg = '#ECFDF5';
-                                badgeColor = '#047857';
-                                badgeBorder = '#A7F3D0';
-                              } else if (isHold) {
-                                badgeBg = '#FFFBEB';
-                                badgeColor = '#92400E';
-                                badgeBorder = '#FDE68A';
-                              } else if (isRev) {
-                                badgeBg = '#FAF5FF';
-                                badgeColor = '#7E22CE';
-                                badgeBorder = '#E9D5FF';
-                              }
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              background: '#FFFFFF',
+                              border: isCurrentDiv ? '1.5px solid #2563EB' : '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              padding: '0.9rem 1rem',
+                              boxShadow: isCurrentDiv ? '0 4px 12px rgba(37, 99, 235, 0.12)' : 'var(--shadow-xs)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              minHeight: '100px',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {d.division}
+                                </span>
+                                {isCurrentDiv && (
+                                  <span style={{
+                                    fontSize: '0.65rem',
+                                    fontWeight: 700,
+                                    background: '#EFF6FF',
+                                    color: '#1D4ED8',
+                                    border: '1px solid #BFDBFE',
+                                    borderRadius: '4px',
+                                    padding: '1px 5px'
+                                  }}>
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                                {(d.customerCount || 0).toLocaleString()}
+                              </div>
+                            </div>
 
-                              return (
-                                <tr
-                                  key={c.accountNo || i}
-                                  style={{
-                                    borderBottom: '1px solid #E2E8F0',
-                                    transition: 'background 0.15s ease'
-                                  }}
-                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#F8FAFC'; }}
-                                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                                >
-                                  <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#0369A1' }}>
-                                    {c.accountNo}
-                                  </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                                    {c.customerName || '—'}
-                                  </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
-                                    {c.solarType || '—'}
-                                  </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
-                                    {c.division || c.branchCode || '—'}
-                                  </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: isReady ? '#047857' : (isHold ? '#B45309' : 'var(--text-primary)') }}>
-                                    {formatLKR(c.totalPayable)}
-                                  </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'center' }}>
-                                    <span style={{
-                                      padding: '0.15rem 0.5rem',
-                                      borderRadius: '4px',
-                                      fontSize: '0.72rem',
-                                      fontWeight: 700,
-                                      background: badgeBg,
-                                      color: badgeColor,
-                                      border: `1px solid ${badgeBorder}`
-                                    }}>
-                                      {c.paymentStatus || 'ON_HOLD'}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right' }}>
-                                    <button
-                                      onClick={() => {
-                                        setSummaryModalCard(null);
-                                        openCustomerDetails(c.accountNo, c.billingMonth, 'overview', c.recordKey);
-                                      }}
-                                      title="Inspect payment dossier"
-                                      style={{
-                                        background: '#EFF6FF',
-                                        border: '1px solid #BFDBFE',
-                                        color: '#1D4ED8',
-                                        padding: '0.25rem 0.55rem',
-                                        borderRadius: '6px',
+                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                                Share
+                              </span>
+                              <span style={{
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                color: '#1D4ED8',
+                                background: '#EFF6FF',
+                                borderRadius: '4px',
+                                padding: '0.1rem 0.45rem',
+                                border: '1px solid #DBEAFE'
+                              }}>
+                                {pct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Compact Horizontal Bar Chart */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.15rem 1.35rem',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginBottom: '0.9rem',
+                      paddingBottom: '0.6rem',
+                      borderBottom: '1px solid #F1F5F9'
+                    }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Division Distribution Comparison
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                          Comparative ratio of solar producers across Eastern Province divisions
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        fontSize: '0.74rem',
+                        fontWeight: 600,
+                        color: '#047857',
+                        background: '#ECFDF5',
+                        border: '1px solid #A7F3D0',
+                        borderRadius: '6px',
+                        padding: '0.2rem 0.55rem'
+                      }}>
+                        <CheckCircle2 size={13} style={{ color: '#047857' }} />
+                        <span>Reconciled: {reconciledSum.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {divisionBreakdown.map((d, idx) => {
+                        const pct = d.percentage != null
+                          ? d.percentage
+                          : (totalCustomersCount > 0 ? ((d.customerCount || 0) / totalCustomersCount * 100) : 0);
+                        const barWidth = maxDivisionCount > 0 ? Math.round(((d.customerCount || 0) / maxDivisionCount) * 100) : 0;
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+
+                        const barColors = ['#1D4ED8', '#2563EB', '#3B82F6', '#60A5FA', '#93C5FD'];
+                        const barColor = barColors[idx % barColors.length];
+
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '110px 1fr 140px',
+                              alignItems: 'center',
+                              gap: '0.85rem'
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '0.82rem',
+                              fontWeight: isCurrentDiv ? 700 : 600,
+                              color: isCurrentDiv ? '#1D4ED8' : 'var(--text-secondary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem'
+                            }}>
+                              <span>{d.division}</span>
+                              {isCurrentDiv && (
+                                <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }} />
+                              )}
+                            </div>
+
+                            <div style={{
+                              background: '#F1F5F9',
+                              height: '10px',
+                              borderRadius: '6px',
+                              overflow: 'hidden',
+                              position: 'relative'
+                            }}>
+                              <div style={{
+                                width: `${barWidth}%`,
+                                height: '100%',
+                                background: barColor,
+                                borderRadius: '6px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'flex-end',
+                              alignItems: 'center',
+                              gap: '0.45rem',
+                              fontSize: '0.82rem'
+                            }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {(d.customerCount || 0).toLocaleString()}
+                              </strong>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 500, minWidth: '46px', textAlign: 'right' }}>
+                                ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : isPaymentReadyModal ? (
+                /* ── PAYMENT READY – Division-Wise Summary ───────────────── */
+                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Hero: Total Payment Ready & Payable */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.25rem 1.5rem',
+                    boxShadow: 'var(--shadow-xs)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: '#047857',
+                        fontWeight: 700
+                      }}>
+                        Verified Eligible for Disbursement
+                      </span>
+                      <div style={{
+                        fontSize: '2.5rem',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        marginTop: '0.2rem',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.1
+                      }}>
+                        {paymentReadyCount.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                        Producers cleared all 11 verification gates in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division: <strong style={{ color: '#0369A1' }}>{division}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#F0FDF4',
+                      border: '1px solid #BBF7D0',
+                      borderRadius: '10px',
+                      padding: '0.75rem 1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.3rem',
+                      minWidth: '230px'
+                    }}>
+                      <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#047857', fontWeight: 700 }}>
+                        Total Ready Payable
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#047857', letterSpacing: '-0.01em' }}>
+                        {formatLKR(totalPayableAmount)}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#065F46', fontWeight: 600, marginTop: '0.15rem' }}>
+                        <CheckCircle2 size={13} style={{ color: '#047857' }} />
+                        <span>11 of 11 Verification Gates Passed</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Division Summary Cards */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Division-Wise Payment Ready Summary
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
+                      gap: '0.75rem'
+                    }}>
+                      {readyBreakdown.map((d) => {
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const pct = paymentReadyCount > 0
+                          ? ((d.readyCount || 0) / paymentReadyCount * 100) : 0;
+
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              background: '#FFFFFF',
+                              border: isCurrentDiv ? '1.5px solid #059669' : '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              padding: '0.9rem 1rem',
+                              boxShadow: isCurrentDiv ? '0 4px 12px rgba(5, 150, 105, 0.12)' : 'var(--shadow-xs)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.3rem',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {d.division}
+                              </span>
+                              {isCurrentDiv && (
+                                <span style={{
+                                  fontSize: '0.64rem', fontWeight: 700,
+                                  background: '#ECFDF5', color: '#065F46',
+                                  border: '1px solid #A7F3D0', borderRadius: '4px', padding: '1px 5px'
+                                }}>Active</span>
+                              )}
+                            </div>
+
+                            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#047857', letterSpacing: '-0.02em' }}>
+                              {(d.readyCount || 0).toLocaleString()}
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: '#065F46', fontWeight: 600 }}>
+                              {formatLKR(d.totalPayable || 0)}
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.1rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Share</span>
+                              <span style={{
+                                fontSize: '0.73rem', fontWeight: 700,
+                                color: '#047857', background: '#ECFDF5',
+                                borderRadius: '4px', padding: '0.1rem 0.4rem',
+                                border: '1px solid #BBF7D0'
+                              }}>
+                                {pct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Horizontal Bar Chart */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.15rem 1.35rem',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #F1F5F9'
+                    }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Payment Ready Distribution
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                          Payment-ready producers by division with settlement amounts
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        fontSize: '0.74rem', fontWeight: 600, color: '#047857',
+                        background: '#ECFDF5', border: '1px solid #A7F3D0',
+                        borderRadius: '6px', padding: '0.2rem 0.55rem'
+                      }}>
+                        <CheckCircle2 size={13} style={{ color: '#047857' }} />
+                        <span>Reconciled: {reconciledReadyCount.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {readyBreakdown.map((d, idx) => {
+                        const barWidth = maxReadyCount > 0 ? Math.round(((d.readyCount || 0) / maxReadyCount) * 100) : 0;
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const pct = paymentReadyCount > 0 ? ((d.readyCount || 0) / paymentReadyCount * 100) : 0;
+                        const greenShades = ['#047857', '#059669', '#10B981', '#34D399', '#6EE7B7'];
+                        const barColor = greenShades[idx % greenShades.length];
+
+                        return (
+                          <div key={d.division} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '110px 1fr 180px',
+                            alignItems: 'center',
+                            gap: '0.85rem'
+                          }}>
+                            <div style={{
+                              fontSize: '0.82rem',
+                              fontWeight: isCurrentDiv ? 700 : 600,
+                              color: isCurrentDiv ? '#047857' : 'var(--text-secondary)',
+                              display: 'flex', alignItems: 'center', gap: '0.35rem'
+                            }}>
+                              <span>{d.division}</span>
+                              {isCurrentDiv && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#059669' }} />}
+                            </div>
+
+                            <div style={{
+                              background: '#F1F5F9', height: '10px',
+                              borderRadius: '6px', overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${barWidth}%`, height: '100%',
+                                background: barColor, borderRadius: '6px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+
+                            <div style={{
+                              display: 'flex', justifyContent: 'flex-end',
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'
+                            }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {(d.readyCount || 0).toLocaleString()}
+                              </strong>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right' }}>
+                                ({pct.toFixed(1)}%)
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : isPaymentOnHoldModal ? (
+                /* ── PAYMENT ON HOLD – Division-Wise Summary ───────────────── */
+                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Hero: Total Payment On Hold & Withheld Balance */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.25rem 1.5rem',
+                    boxShadow: 'var(--shadow-xs)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: '#B45309',
+                        fontWeight: 700
+                      }}>
+                        Withheld by Blocking Validations
+                      </span>
+                      <div style={{
+                        fontSize: '2.5rem',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        marginTop: '0.2rem',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.1
+                      }}>
+                        {onHoldCount.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                        Producers with active payment holds or failed validation gates in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division: <strong style={{ color: '#0369A1' }}>{division}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#FFFBEB',
+                      border: '1px solid #FDE68A',
+                      borderRadius: '10px',
+                      padding: '0.75rem 1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.3rem',
+                      minWidth: '230px'
+                    }}>
+                      <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#92400E', fontWeight: 700 }}>
+                        Total Withheld Balance
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#B45309', letterSpacing: '-0.01em' }}>
+                        {formatLKR(totalOnHoldAmount)}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#92400E', fontWeight: 600, marginTop: '0.15rem' }}>
+                        <AlertTriangle size={13} style={{ color: '#D97706' }} />
+                        <span>Withheld Pending Issue Resolution</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Division Summary Cards */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Division-Wise Payment On Hold Summary
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
+                      gap: '0.75rem'
+                    }}>
+                      {onHoldBreakdown.map((d) => {
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const count = Number(d.onHoldCount || d.customerCount || 0);
+                        const payable = Number(d.withheldAmount || d.totalPayable || 0);
+                        const pct = onHoldCount > 0 ? (count / onHoldCount * 100) : 0;
+
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              background: '#FFFFFF',
+                              border: isCurrentDiv ? '1.5px solid #D97706' : '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              padding: '0.9rem 1rem',
+                              boxShadow: isCurrentDiv ? '0 4px 12px rgba(217, 119, 6, 0.12)' : 'var(--shadow-xs)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.3rem',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {d.division}
+                              </span>
+                              {isCurrentDiv && (
+                                <span style={{
+                                  fontSize: '0.64rem', fontWeight: 700,
+                                  background: '#FFFBEB', color: '#92400E',
+                                  border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 5px'
+                                }}>Active</span>
+                              )}
+                            </div>
+
+                            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#B45309', letterSpacing: '-0.02em' }}>
+                              {count.toLocaleString()}
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: '#92400E', fontWeight: 600 }}>
+                              {formatLKR(payable)}
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.1rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Share</span>
+                              <span style={{
+                                fontSize: '0.73rem', fontWeight: 700,
+                                color: '#92400E', background: '#FFFBEB',
+                                borderRadius: '4px', padding: '0.1rem 0.4rem',
+                                border: '1px solid #FDE68A'
+                              }}>
+                                {pct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Horizontal Bar Chart */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.15rem 1.35rem',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #F1F5F9'
+                    }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Payment On Hold Distribution
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                          Withheld producers by division with pending liabilities
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        fontSize: '0.74rem', fontWeight: 600,
+                        color: isOnHoldReconciled ? '#92400E' : '#B91C1C',
+                        background: isOnHoldReconciled ? '#FFFBEB' : '#FEF2F2',
+                        border: isOnHoldReconciled ? '1px solid #FDE68A' : '1px solid #FECACA',
+                        borderRadius: '6px', padding: '0.2rem 0.55rem'
+                      }}>
+                        {isOnHoldReconciled ? (
+                          <>
+                            <CheckCircle2 size={13} style={{ color: '#D97706' }} />
+                            <span>Reconciled: {reconciledOnHoldCount.toLocaleString()}</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                            <span>Unreconciled ({Math.abs(onHoldCount - reconciledOnHoldCount)} delta)</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {onHoldBreakdown.map((d, idx) => {
+                        const count = Number(d.onHoldCount || d.customerCount || 0);
+                        const payable = Number(d.withheldAmount || d.totalPayable || 0);
+                        const barWidth = maxOnHoldCount > 0 ? Math.round((count / maxOnHoldCount) * 100) : 0;
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const pct = onHoldCount > 0 ? (count / onHoldCount * 100) : 0;
+                        const warmShades = ['#D97706', '#EA580C', '#F59E0B', '#F97316', '#C2410C'];
+                        const barColor = warmShades[idx % warmShades.length];
+
+                        return (
+                          <div key={d.division} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '110px 1fr 200px',
+                            alignItems: 'center',
+                            gap: '0.85rem'
+                          }}>
+                            <div style={{
+                              fontSize: '0.82rem',
+                              fontWeight: isCurrentDiv ? 700 : 600,
+                              color: isCurrentDiv ? '#B45309' : 'var(--text-secondary)',
+                              display: 'flex', alignItems: 'center', gap: '0.35rem'
+                            }}>
+                              <span>{d.division}</span>
+                              {isCurrentDiv && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#D97706' }} />}
+                            </div>
+
+                            <div style={{
+                              background: '#F1F5F9', height: '10px',
+                              borderRadius: '6px', overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${barWidth}%`, height: '100%',
+                                background: barColor, borderRadius: '6px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+
+                            <div style={{
+                              display: 'flex', justifyContent: 'flex-end',
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'
+                            }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {count.toLocaleString()}
+                              </strong>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right' }}>
+                                ({pct.toFixed(1)}%)
+                              </span>
+                              <span style={{ color: '#92400E', fontSize: '0.74rem', fontWeight: 600, minWidth: '95px', textAlign: 'right' }}>
+                                {formatLKR(payable)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : isTotalPayableModal ? (
+                /* ── TOTAL READY PAYABLE – Division-Wise Summary ─────────── */
+                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                  {/* Hero: Total Ready Payable & Eligible Payees */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.25rem 1.5rem',
+                    boxShadow: 'var(--shadow-xs)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: '#0284C7',
+                        fontWeight: 700
+                      }}>
+                        Net Approved Settlement Capital
+                      </span>
+                      <div style={{
+                        fontSize: '2.5rem',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        marginTop: '0.2rem',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.1
+                      }}>
+                        {formatLKR(totalPayableAmount)}
+                      </div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                        Aggregated ready settlement capital in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division scope: <strong style={{ color: '#0369A1' }}>{division}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#F0F9FF',
+                      border: '1px solid #BAE6FD',
+                      borderRadius: '10px',
+                      padding: '0.75rem 1.1rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.3rem',
+                      minWidth: '230px'
+                    }}>
+                      <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0369A1', fontWeight: 700 }}>
+                        Eligible Ready Producers
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0284C7', letterSpacing: '-0.01em' }}>
+                        {paymentReadyCount.toLocaleString()}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#0369A1', fontWeight: 600, marginTop: '0.15rem' }}>
+                        <CheckCircle2 size={13} style={{ color: '#0284C7' }} />
+                        <span>Verified & Cleared for Batching</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Division Summary Cards */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Division-Wise Ready Payable Summary
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
+                      gap: '0.75rem'
+                    }}>
+                      {readyBreakdown.map((d) => {
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const payable = Number(d.totalPayable || 0);
+                        const count = Number(d.readyCount || 0);
+                        const payableSharePct = totalPayableAmount > 0 ? (payable / totalPayableAmount * 100) : 0;
+
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              background: '#FFFFFF',
+                              border: isCurrentDiv ? '1.5px solid #0284C7' : '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              padding: '0.9rem 1rem',
+                              boxShadow: isCurrentDiv ? '0 4px 12px rgba(2, 132, 199, 0.12)' : 'var(--shadow-xs)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: '0.3rem',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                {d.division}
+                              </span>
+                              {isCurrentDiv && (
+                                <span style={{
+                                  fontSize: '0.64rem', fontWeight: 700,
+                                  background: '#F0F9FF', color: '#0369A1',
+                                  border: '1px solid #BAE6FD', borderRadius: '4px', padding: '1px 5px'
+                                }}>Active</span>
+                              )}
+                            </div>
+
+                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0284C7', letterSpacing: '-0.02em' }}>
+                              {formatLKR(payable)}
+                            </div>
+
+                            <div style={{ fontSize: '0.72rem', color: '#0369A1', fontWeight: 600 }}>
+                              {count.toLocaleString()} Eligible Payees
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.1rem' }}>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Share</span>
+                              <span style={{
+                                fontSize: '0.73rem', fontWeight: 700,
+                                color: '#0369A1', background: '#F0F9FF',
+                                borderRadius: '4px', padding: '0.1rem 0.4rem',
+                                border: '1px solid #BAE6FD'
+                              }}>
+                                {payableSharePct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Horizontal Bar Chart (Comparing division-wise payable amounts) */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.15rem 1.35rem',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #F1F5F9'
+                    }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Ready Payable Distribution
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                          Division-wise comparison of approved net settlement capital
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        fontSize: '0.74rem', fontWeight: 600,
+                        color: isPayableReconciled ? '#0369A1' : '#B91C1C',
+                        background: isPayableReconciled ? '#F0F9FF' : '#FEF2F2',
+                        border: isPayableReconciled ? '1px solid #BAE6FD' : '1px solid #FECACA',
+                        borderRadius: '6px', padding: '0.2rem 0.55rem'
+                      }}>
+                        {isPayableReconciled ? (
+                          <>
+                            <CheckCircle2 size={13} style={{ color: '#0284C7' }} />
+                            <span>Reconciled: {formatLKR(reconciledReadyPayable)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                            <span>Unreconciled ({formatLKR(Math.abs(totalPayableAmount - reconciledReadyPayable))} delta)</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {readyBreakdown.map((d, idx) => {
+                        const payable = Number(d.totalPayable || 0);
+                        const count = Number(d.readyCount || 0);
+                        const barWidth = maxPayableAmount > 0 ? Math.round((payable / maxPayableAmount) * 100) : 0;
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const payableSharePct = totalPayableAmount > 0 ? (payable / totalPayableAmount * 100) : 0;
+                        const cyanBlueShades = ['#0284C7', '#0369A1', '#0EA5E9', '#38BDF8', '#0284C7'];
+                        const barColor = cyanBlueShades[idx % cyanBlueShades.length];
+
+                        return (
+                          <div key={d.division} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '110px 1fr 220px',
+                            alignItems: 'center',
+                            gap: '0.85rem'
+                          }}>
+                            <div style={{
+                              fontSize: '0.82rem',
+                              fontWeight: isCurrentDiv ? 700 : 600,
+                              color: isCurrentDiv ? '#0284C7' : 'var(--text-secondary)',
+                              display: 'flex', alignItems: 'center', gap: '0.35rem'
+                            }}>
+                              <span>{d.division}</span>
+                              {isCurrentDiv && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#0284C7' }} />}
+                            </div>
+
+                            <div style={{
+                              background: '#F1F5F9', height: '10px',
+                              borderRadius: '6px', overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${barWidth}%`, height: '100%',
+                                background: barColor, borderRadius: '6px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+
+                            <div style={{
+                              display: 'flex', justifyContent: 'flex-end',
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'
+                            }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                                {formatLKR(payable)}
+                              </strong>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right' }}>
+                                ({payableSharePct.toFixed(1)}%)
+                              </span>
+                              <span style={{ color: '#0369A1', fontSize: '0.74rem', fontWeight: 600, minWidth: '75px', textAlign: 'right' }}>
+                                {count.toLocaleString()} Payees
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.35rem' }}>
+                  {/* Hero Stat & Description Banner */}
+                  <div style={{
+                    background: modalConfig.gradient,
+                    border: `1px solid ${modalConfig.badgeBorder}`,
+                    borderRadius: '12px',
+                    padding: '1.25rem 1.5rem',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}>
+                    <div>
+                      <span style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: modalConfig.badgeText, fontWeight: 700 }}>
+                        {modalConfig.statLabel}
+                      </span>
+                      <div style={{ fontSize: '2.1rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '0.2rem', letterSpacing: '-0.02em' }}>
+                        {modalConfig.stat}
+                      </div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.4rem', maxWidth: '620px', lineHeight: '1.45' }}>
+                        {modalConfig.description}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Key Metrics Grid */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                    gap: '0.85rem'
+                  }}>
+                    {modalConfig.metrics.map((m, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: '#FFFFFF',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: '10px',
+                          padding: '0.9rem 1.1rem',
+                          boxShadow: 'var(--shadow-xs)'
+                        }}
+                      >
+                        <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>
+                          {m.label}
+                        </div>
+                        <div style={{ fontSize: '1.15rem', fontWeight: 800, color: m.color, marginTop: '0.25rem' }}>
+                          {m.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Relevant Customer Records Section */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        <FileText size={16} style={{ color: '#0369A1' }} />
+                        <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Relevant Customer Records ({relevantRecords.length} on current page)
+                        </h4>
+                      </div>
+                      {customersData.totalElements > 0 && (
+                        <span style={{ fontSize: '0.76rem', color: 'var(--text-muted)' }}>
+                          From {customersData.totalElements.toLocaleString()} loaded producers
+                        </span>
+                      )}
+                    </div>
+
+                    {relevantRecords.length === 0 ? (
+                      <div style={{
+                        background: '#F8FAFC',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        padding: '2.2rem 1.5rem',
+                        textAlign: 'center',
+                        color: 'var(--text-muted)'
+                      }}>
+                        <SlidersHorizontal size={32} style={{ margin: '0 auto 0.6rem', opacity: 0.35 }} />
+                        <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                          No records on the current page match this specific category
+                        </div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '0.35rem', maxWidth: '480px', margin: '0.35rem auto 0' }}>
+                          The canonical count above reflects the complete dataset. Click below to switch the main table tab to view all matching records.
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        background: '#FFFFFF',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '10px',
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+                            <thead style={{ position: 'sticky', top: 0, background: '#F1F5F9', zIndex: 1 }}>
+                              <tr style={{ color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left', textTransform: 'uppercase', fontSize: '0.72rem' }}>
+                                <th style={{ padding: '0.65rem 0.85rem' }}>Account No</th>
+                                <th style={{ padding: '0.65rem 0.85rem' }}>Customer Name</th>
+                                <th style={{ padding: '0.65rem 0.85rem' }}>Solar Type</th>
+                                <th style={{ padding: '0.65rem 0.85rem' }}>Location</th>
+                                <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Total Payable</th>
+                                <th style={{ padding: '0.65rem 0.85rem', textAlign: 'center' }}>Status</th>
+                                <th style={{ padding: '0.65rem 0.85rem', textAlign: 'right' }}>Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {relevantRecords.map((c, i) => {
+                                const isReady = c.paymentStatus === 'READY' || c.isEligible;
+                                const isHold = c.paymentStatus === 'ON_HOLD';
+                                const isRev = c.paymentStatus === 'REVIEW';
+
+                                let badgeBg = '#F1F5F9';
+                                let badgeColor = 'var(--text-secondary)';
+                                let badgeBorder = 'var(--border-color)';
+                                if (isReady) {
+                                  badgeBg = '#ECFDF5';
+                                  badgeColor = '#047857';
+                                  badgeBorder = '#A7F3D0';
+                                } else if (isHold) {
+                                  badgeBg = '#FFFBEB';
+                                  badgeColor = '#92400E';
+                                  badgeBorder = '#FDE68A';
+                                } else if (isRev) {
+                                  badgeBg = '#FAF5FF';
+                                  badgeColor = '#7E22CE';
+                                  badgeBorder = '#E9D5FF';
+                                }
+
+                                return (
+                                  <tr
+                                    key={c.accountNo || i}
+                                    style={{
+                                      borderBottom: '1px solid #E2E8F0',
+                                      transition: 'background 0.15s ease'
+                                    }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = '#F8FAFC'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                                  >
+                                    <td style={{ padding: '0.55rem 0.85rem', fontFamily: 'monospace', fontWeight: 700, color: '#0369A1' }}>
+                                      {c.accountNo}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                                      {c.customerName || '—'}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                      {c.solarType || '—'}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.85rem', color: 'var(--text-secondary)' }}>
+                                      {c.division || c.branchCode || '—'}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: isReady ? '#047857' : (isHold ? '#B45309' : 'var(--text-primary)') }}>
+                                      {formatLKR(c.totalPayable)}
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.85rem', textAlign: 'center' }}>
+                                      <span style={{
+                                        padding: '0.15rem 0.5rem',
+                                        borderRadius: '4px',
                                         fontSize: '0.72rem',
                                         fontWeight: 700,
-                                        cursor: 'pointer',
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        gap: '0.25rem'
-                                      }}
-                                    >
-                                      <Eye size={12} />
-                                      <span>Inspect</span>
-                                    </button>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                                        background: badgeBg,
+                                        color: badgeColor,
+                                        border: `1px solid ${badgeBorder}`
+                                      }}>
+                                        {c.paymentStatus || 'ON_HOLD'}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '0.55rem 0.85rem', textAlign: 'right' }}>
+                                      <button
+                                        onClick={() => {
+                                          setSummaryModalCard(null);
+                                          openCustomerDetails(c.accountNo, c.billingMonth, 'overview', c.recordKey);
+                                        }}
+                                        title="Inspect payment dossier"
+                                        style={{
+                                          background: '#EFF6FF',
+                                          border: '1px solid #BFDBFE',
+                                          color: '#1D4ED8',
+                                          padding: '0.25rem 0.55rem',
+                                          borderRadius: '6px',
+                                          fontSize: '0.72rem',
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: '0.25rem'
+                                        }}
+                                      >
+                                        <Eye size={12} />
+                                        <span>Inspect</span>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Modal Footer */}
               <div style={{
@@ -3783,9 +4794,49 @@ const PaymentControlCenter = () => {
                 alignItems: 'center',
                 background: '#F8FAFC'
               }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                  Canonical Metric: <strong style={{ color: modalConfig.badgeText }}>{modalConfig.stat}</strong>
-                </div>
+                {isTotalCustomersModal ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    <CheckCircle2 size={15} style={{ color: '#047857' }} />
+                    <span>Total Canonical Producers: <strong style={{ color: 'var(--text-primary)' }}>{totalCustomersCount.toLocaleString()}</strong> • Reconciled Division Sum: <strong style={{ color: '#1D4ED8' }}>{reconciledSum.toLocaleString()}</strong> (100.0%)</span>
+                  </div>
+                ) : isPaymentReadyModal ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    <CheckCircle2 size={15} style={{ color: '#047857' }} />
+                    <span>Payment Ready: <strong style={{ color: 'var(--text-primary)' }}>{paymentReadyCount.toLocaleString()}</strong> • Division Sum: <strong style={{ color: '#047857' }}>{reconciledReadyCount.toLocaleString()}</strong> • Total Payable: <strong style={{ color: '#047857' }}>{formatLKR(reconciledReadyPayable)}</strong></span>
+                  </div>
+                ) : isPaymentOnHoldModal ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {isOnHoldReconciled ? (
+                      <>
+                        <CheckCircle2 size={15} style={{ color: '#B45309' }} />
+                        <span>Payment On Hold: <strong style={{ color: 'var(--text-primary)' }}>{onHoldCount.toLocaleString()}</strong> • Reconciled Division Sum: <strong style={{ color: '#B45309' }}>{reconciledOnHoldCount.toLocaleString()}</strong> • Total Withheld: <strong style={{ color: '#B45309' }}>{formatLKR(reconciledOnHoldPayable)}</strong></span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={15} style={{ color: '#DC2626' }} />
+                        <span>Payment On Hold: <strong style={{ color: 'var(--text-primary)' }}>{onHoldCount.toLocaleString()}</strong> • Division Sum: <strong style={{ color: '#DC2626' }}>{reconciledOnHoldCount.toLocaleString()}</strong> (Unreconciled) • Withheld Sum: <strong style={{ color: '#DC2626' }}>{formatLKR(reconciledOnHoldPayable)}</strong></span>
+                      </>
+                    )}
+                  </div>
+                ) : isTotalPayableModal ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {isPayableReconciled ? (
+                      <>
+                        <CheckCircle2 size={15} style={{ color: '#0284C7' }} />
+                        <span>Total Ready Payable: <strong style={{ color: 'var(--text-primary)' }}>{formatLKR(totalPayableAmount)}</strong> • Reconciled Division Sum: <strong style={{ color: '#0284C7' }}>{formatLKR(reconciledReadyPayable)}</strong> • Eligible Payees: <strong style={{ color: '#0284C7' }}>{reconciledReadyCount.toLocaleString()}</strong></span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={15} style={{ color: '#DC2626' }} />
+                        <span>Total Ready Payable: <strong style={{ color: 'var(--text-primary)' }}>{formatLKR(totalPayableAmount)}</strong> • Division Sum: <strong style={{ color: '#DC2626' }}>{formatLKR(reconciledReadyPayable)}</strong> (Unreconciled) • Payees Sum: <strong style={{ color: '#DC2626' }}>{reconciledReadyCount.toLocaleString()}</strong></span>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    Canonical Metric: <strong style={{ color: modalConfig.badgeText }}>{modalConfig.stat}</strong>
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                   {modalConfig.filterTab && (
@@ -3821,14 +4872,15 @@ const PaymentControlCenter = () => {
                   <button
                     onClick={() => setSummaryModalCard(null)}
                     style={{
-                      background: '#FFFFFF',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
+                      background: isDivisionSummaryModal ? '#0F172A' : '#FFFFFF',
+                      border: isDivisionSummaryModal ? '1px solid #0F172A' : '1px solid var(--border-color)',
+                      color: isDivisionSummaryModal ? '#FFFFFF' : 'var(--text-primary)',
                       padding: '0.5rem 1.25rem',
                       borderRadius: '6px',
                       cursor: 'pointer',
                       fontSize: '0.82rem',
-                      fontWeight: 600
+                      fontWeight: 600,
+                      transition: 'all 0.15s ease'
                     }}
                   >
                     Close

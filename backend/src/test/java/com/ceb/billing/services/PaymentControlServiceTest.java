@@ -258,6 +258,64 @@ public class PaymentControlServiceTest {
         assertEquals(15000.0, fin.get("amountPayable"));
         assertEquals(15000.0, fin.get("totalPayable"));
     }
+
+    @Test
+    public void testP_CanonicalSummary_ReturnsDivisionBreakdownAndReconciles() {
+        Map<String, Object> summary = service.getCanonicalSummary("ALL", "ALL");
+        assertNotNull(summary);
+        assertTrue(summary.containsKey("divisionCustomerCounts"));
+        assertTrue(summary.containsKey("divisionBreakdown"));
+
+        @SuppressWarnings("unchecked")
+        Map<String, Integer> counts = (Map<String, Integer>) summary.get("divisionCustomerCounts");
+        assertEquals(5, counts.size());
+        assertTrue(counts.containsKey("Ampara"));
+        assertTrue(counts.containsKey("Batticaloa"));
+        assertTrue(counts.containsKey("Trincomalee"));
+        assertTrue(counts.containsKey("Valaichenai"));
+        assertTrue(counts.containsKey("Kalmunai"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> breakdown = (List<Map<String, Object>>) summary.get("divisionBreakdown");
+        assertNotNull(breakdown);
+        int sumCounts = 0;
+        for (Map<String, Object> item : breakdown) {
+            assertNotNull(item.get("division"));
+            assertNotNull(item.get("customerCount"));
+            assertNotNull(item.get("percentage"));
+            sumCounts += ((Number) item.get("customerCount")).intValue();
+        }
+        int totalCustomers = ((Number) summary.get("totalCustomers")).intValue();
+        assertEquals(totalCustomers, sumCounts, "Division customer counts must reconcile exactly to totalCustomers");
+
+        assertTrue(summary.containsKey("readyDivisionBreakdown"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> readyBreakdown = (List<Map<String, Object>>) summary.get("readyDivisionBreakdown");
+        assertNotNull(readyBreakdown);
+        int sumReady = 0;
+        for (Map<String, Object> item : readyBreakdown) {
+            assertNotNull(item.get("division"));
+            assertNotNull(item.get("readyCount"));
+            assertNotNull(item.get("totalPayable"));
+            sumReady += ((Number) item.get("readyCount")).intValue();
+        }
+        int totalReady = ((Number) summary.get("paymentReadyCount")).intValue();
+        assertEquals(totalReady, sumReady, "Ready division counts must reconcile to paymentReadyCount");
+
+        assertTrue(summary.containsKey("onHoldDivisionBreakdown"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> onHoldBreakdown = (List<Map<String, Object>>) summary.get("onHoldDivisionBreakdown");
+        assertNotNull(onHoldBreakdown);
+        int sumOnHold = 0;
+        for (Map<String, Object> item : onHoldBreakdown) {
+            assertNotNull(item.get("division"));
+            assertNotNull(item.get("onHoldCount"));
+            assertNotNull(item.get("totalPayable"));
+            sumOnHold += ((Number) item.get("onHoldCount")).intValue();
+        }
+        int totalOnHoldCount = ((Number) summary.get("onHoldCount")).intValue();
+        assertEquals(totalOnHoldCount, sumOnHold, "On Hold division counts must reconcile to onHoldCount");
+    }
 }
 
 

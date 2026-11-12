@@ -660,295 +660,275 @@ const PaymentControlCenter = () => {
         </div>
       </div>
 
-      {/* ── 1. CANONICAL SUMMARY CARDS (6 CARDS IN EXACT ORDER) ──────── */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-        gap: '1rem',
-        marginBottom: '1.75rem'
-      }}>
-        {/* Card 1: Total Customers */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('TOTAL_CUSTOMERS')}
-          onMouseEnter={() => setHoveredCard('TOTAL_CUSTOMERS')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'TOTAL_CUSTOMERS' ? '#EFF6FF' : '#FFFFFF',
-            border: hoveredCard === 'TOTAL_CUSTOMERS' ? '1px solid #3B82F6' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'TOTAL_CUSTOMERS' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'TOTAL_CUSTOMERS' ? '0 8px 20px -4px rgba(59, 130, 246, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#3B7EF6', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Total Customers
+      {/* ── 1. CANONICAL SUMMARY CARDS (7 CARDS IN EXACT ORDER) ──────── */}
+      {(() => {
+        const renderLkrKpi = (val) => {
+          if (val == null || isNaN(val)) return <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>;
+          const num = Number(val);
+          const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const [intPart, decPart] = formatted.split('.');
+          return (
+            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.2rem', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.04em' }}>LKR</span>
+              <span style={{
+                fontSize: 'clamp(1.15rem, 1.22vw, 1.38rem)',
+                fontWeight: 800,
+                color: '#0F172A',
+                letterSpacing: '-0.025em',
+                lineHeight: 1.15,
+                fontVariantNumeric: 'tabular-nums'
+              }}>
+                {intPart}
               </span>
-              <User size={18} style={{ color: '#3b82f6' }} />
+              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748B', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
+                .{decPart}
+              </span>
             </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
-              {(summary.totalCustomers || summary.customerCount || 0).toLocaleString()}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Total canonical producers</span>
-            <span style={{ fontSize: '0.72rem', color: '#3B7EF6', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_CUSTOMERS' ? 1 : 0.65 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
+          );
+        };
 
-        {/* Card 2: Payment Ready */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('PAYMENT_READY')}
-          onMouseEnter={() => setHoveredCard('PAYMENT_READY')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'PAYMENT_READY' ? '#ECFDF5' : '#FFFFFF',
-            border: hoveredCard === 'PAYMENT_READY' ? '1px solid #10B981' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'PAYMENT_READY' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'PAYMENT_READY' ? '0 8px 20px -4px rgba(16, 185, 129, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#059669', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Payment Ready
-              </span>
-              <CheckCircle2 size={18} style={{ color: '#10b981' }} />
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
-              {(summary.paymentReadyCount || 0).toLocaleString()}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Verified eligible for disbursement</span>
-            <span style={{ fontSize: '0.72rem', color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_READY' ? 1 : 0.65 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
+        const summaryCards = [
+          {
+            key: 'TOTAL_CUSTOMERS',
+            label: 'Total Customers',
+            icon: User,
+            accent: '#2563EB',
+            iconBg: '#EFF6FF',
+            iconBorder: '#DBEAFE',
+            iconColor: '#2563EB',
+            value: (summary.totalCustomers || summary.customerCount || 0).toLocaleString(),
+            isCurrency: false,
+            subtitle: 'Total canonical producers'
+          },
+          {
+            key: 'PAYMENT_READY',
+            label: 'Payment Ready',
+            icon: CheckCircle2,
+            accent: '#059669',
+            iconBg: '#ECFDF5',
+            iconBorder: '#A7F3D0',
+            iconColor: '#059669',
+            value: (summary.paymentReadyCount || 0).toLocaleString(),
+            isCurrency: false,
+            subtitle: 'Verified eligible for disbursement'
+          },
+          {
+            key: 'PAYMENT_ON_HOLD',
+            label: 'Payment On Hold',
+            icon: AlertTriangle,
+            accent: '#D97706',
+            iconBg: '#FFFBEB',
+            iconBorder: '#FDE68A',
+            iconColor: '#D97706',
+            value: (summary.onHoldCount || 0).toLocaleString(),
+            isCurrency: false,
+            subtitle: 'Withheld by blocking validations'
+          },
+          {
+            key: 'REQUIRES_REVIEW',
+            label: 'Requires Review',
+            icon: Clock,
+            accent: '#7C3AED',
+            iconBg: '#F5F3FF',
+            iconBorder: '#DDD6FE',
+            iconColor: '#7C3AED',
+            value: (summary.reviewCount || 0).toLocaleString(),
+            isCurrency: false,
+            subtitle: 'Duplicate / audit flag'
+          },
+          {
+            key: 'TOTAL_PAYABLE',
+            label: 'Total Payable',
+            icon: DollarSign,
+            accent: '#0284C7',
+            iconBg: '#F0F9FF',
+            iconBorder: '#BAE6FD',
+            iconColor: '#0284C7',
+            rawValue: summary.totalPayable,
+            isCurrency: true,
+            subtitle: 'Ready settlement balance'
+          },
+          {
+            key: 'TOTAL_ON_HOLD',
+            label: 'Total On Hold',
+            icon: Lock,
+            accent: '#DC2626',
+            iconBg: '#FEF2F2',
+            iconBorder: '#FECACA',
+            iconColor: '#DC2626',
+            rawValue: summary.totalOnHold,
+            isCurrency: true,
+            subtitle: 'Pending resolution'
+          },
+          {
+            key: 'MULTI_PAYMENTS',
+            label: 'Multi-Payments',
+            icon: Layers,
+            accent: '#4F46E5',
+            iconBg: '#EEF2FF',
+            iconBorder: '#C7D2FE',
+            iconColor: '#4F46E5',
+            value: (summary.multiPaymentCustomersCount || 0).toLocaleString(),
+            isCurrency: false,
+            subtitle: `${(summary.multiPaymentCount || 0).toLocaleString()} records`,
+            isActive: multiPaymentFilter
+          }
+        ];
 
-        {/* Card 3: Payment On Hold */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('PAYMENT_ON_HOLD')}
-          onMouseEnter={() => setHoveredCard('PAYMENT_ON_HOLD')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'PAYMENT_ON_HOLD' ? '#FFFBEB' : '#FFFFFF',
-            border: hoveredCard === 'PAYMENT_ON_HOLD' ? '1px solid #F59E0B' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'PAYMENT_ON_HOLD' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'PAYMENT_ON_HOLD' ? '0 8px 20px -4px rgba(245, 158, 11, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#D97706', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Payment On Hold
-              </span>
-              <AlertTriangle size={18} style={{ color: '#f59e0b' }} />
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
-              {(summary.onHoldCount || 0).toLocaleString()}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Withheld by blocking validations</span>
-            <span style={{ fontSize: '0.72rem', color: '#D97706', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'PAYMENT_ON_HOLD' ? 1 : 0.65 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))',
+            gap: '0.85rem',
+            marginBottom: '1.75rem'
+          }}>
+            {summaryCards.map((card) => {
+              const IconComp = card.icon;
+              const isHovered = hoveredCard === card.key;
+              const isActive = card.isActive;
 
-        {/* Card 4: Requires Review */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('REQUIRES_REVIEW')}
-          onMouseEnter={() => setHoveredCard('REQUIRES_REVIEW')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'REQUIRES_REVIEW' ? '#FAF5FF' : '#FFFFFF',
-            border: hoveredCard === 'REQUIRES_REVIEW' ? '1px solid #A855F7' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'REQUIRES_REVIEW' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'REQUIRES_REVIEW' ? '0 8px 20px -4px rgba(168, 85, 247, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#c084fc', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Requires Review
-              </span>
-              <Clock size={18} style={{ color: '#a855f7' }} />
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
-              {(summary.reviewCount || 0).toLocaleString()}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Duplicate / audit flag</span>
-            <span style={{ fontSize: '0.72rem', color: '#c084fc', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'REQUIRES_REVIEW' ? 1 : 0.65 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
+              return (
+                <div
+                  key={card.key}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSummaryModalCard(card.key)}
+                  onMouseEnter={() => setHoveredCard(card.key)}
+                  onMouseLeave={() => setHoveredCard(null)}
+                  style={{
+                    background: isHovered
+                      ? '#FAFCFF'
+                      : (isActive ? '#F8FAFF' : '#FFFFFF'),
+                    border: isActive
+                      ? '1px solid #818CF8'
+                      : (isHovered ? '1px solid #CBD5E1' : '1px solid #E2E8F0'),
+                    borderTop: isActive
+                      ? '3px solid #6366F1'
+                      : (isHovered ? `3px solid ${card.accent}` : `2.5px solid ${card.accent}`),
+                    borderRadius: '12px',
+                    padding: '1.05rem 1.15rem 0.95rem',
+                    cursor: 'pointer',
+                    transform: isHovered ? 'translateY(-2px)' : 'none',
+                    boxShadow: isActive
+                      ? '0 0 0 1px #818CF8, 0 6px 16px -2px rgba(99, 102, 241, 0.14)'
+                      : (isHovered
+                        ? '0 10px 22px -4px rgba(15, 23, 42, 0.08), 0 4px 6px -2px rgba(15, 23, 42, 0.03)'
+                        : '0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.02)'),
+                    transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    minHeight: '148px',
+                    outline: 'none'
+                  }}
+                >
+                  {/* Top: Header Label & Status Icon */}
+                  <div>
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      marginBottom: '0.55rem'
+                    }}>
+                      <span style={{
+                        fontSize: '0.71rem',
+                        fontWeight: 700,
+                        color: '#475569',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.055em',
+                        lineHeight: 1.2
+                      }}>
+                        {card.label}
+                      </span>
+                      <div style={{
+                        width: '30px',
+                        height: '30px',
+                        borderRadius: '8px',
+                        background: card.iconBg,
+                        border: `1px solid ${card.iconBorder}`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        <IconComp size={15} style={{ color: card.iconColor }} />
+                      </div>
+                    </div>
 
-        {/* Card 5: Total Payable */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('TOTAL_PAYABLE')}
-          onMouseEnter={() => setHoveredCard('TOTAL_PAYABLE')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'TOTAL_PAYABLE' ? '#F0FDFA' : '#FFFFFF',
-            border: hoveredCard === 'TOTAL_PAYABLE' ? '1px solid #06B6D4' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'TOTAL_PAYABLE' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'TOTAL_PAYABLE' ? '0 8px 20px -4px rgba(6, 182, 212, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Total Payable
-              </span>
-              <DollarSign size={18} style={{ color: '#06b6d4' }} />
-            </div>
-            <div style={{ fontSize: 'clamp(0.78rem, 0.92vw, 1.05rem)', fontWeight: 800, color: '#0891B2', letterSpacing: '-0.04em', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
-              {formatLKR(summary.totalPayable)}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Ready settlement balance</span>
-            <span style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_PAYABLE' ? 1 : 0.65 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
+                    {/* Middle: Prominent KPI Value */}
+                    <div style={{
+                      minHeight: '2.1rem',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}>
+                      {card.isCurrency ? (
+                        renderLkrKpi(card.rawValue)
+                      ) : (
+                        <div style={{
+                          fontSize: '1.75rem',
+                          fontWeight: 800,
+                          color: '#0F172A',
+                          lineHeight: 1.15,
+                          letterSpacing: '-0.025em',
+                          fontVariantNumeric: 'tabular-nums'
+                        }}>
+                          {card.value}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-        {/* Card 6: Total On Hold */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('TOTAL_ON_HOLD')}
-          onMouseEnter={() => setHoveredCard('TOTAL_ON_HOLD')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'TOTAL_ON_HOLD' ? '#FFF1F2' : '#FFFFFF',
-            border: hoveredCard === 'TOTAL_ON_HOLD' ? '1px solid #EF4444' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'TOTAL_ON_HOLD' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'TOTAL_ON_HOLD' ? '0 8px 20px -4px rgba(239, 68, 68, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#f87171', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Total On Hold
-              </span>
-              <Lock size={18} style={{ color: '#ef4444' }} />
-            </div>
-            <div style={{ fontSize: 'clamp(0.78rem, 0.92vw, 1.05rem)', fontWeight: 800, color: '#DC2626', letterSpacing: '-0.04em', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
-              {formatLKR(summary.totalOnHold)}
-            </div>
+                  {/* Bottom: Subtitle & Details Action */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    marginTop: '0.65rem',
+                    paddingTop: '0.6rem',
+                    borderTop: '1px solid #F1F5F9',
+                    gap: '0.5rem'
+                  }}>
+                    <span
+                      style={{
+                        fontSize: '0.72rem',
+                        color: '#64748B',
+                        fontWeight: 500,
+                        lineHeight: 1.25,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}
+                      title={card.subtitle}
+                    >
+                      {card.subtitle}
+                    </span>
+                    <span style={{
+                      fontSize: '0.72rem',
+                      color: isHovered ? card.accent : '#2563EB',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.15rem',
+                      flexShrink: 0,
+                      transition: 'color 0.15s ease'
+                    }}>
+                      <span>Details</span>
+                      <ChevronRight
+                        size={12}
+                        style={{
+                          transform: isHovered ? 'translateX(2px)' : 'none',
+                          transition: 'transform 0.18s ease'
+                        }}
+                      />
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Pending resolution</span>
-            <span style={{ fontSize: '0.72rem', color: '#f87171', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'TOTAL_ON_HOLD' ? 1 : 0.65 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
-
-        {/* Card 7: Multi-Payment Customers */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => setSummaryModalCard('MULTI_PAYMENTS')}
-          onMouseEnter={() => setHoveredCard('MULTI_PAYMENTS')}
-          onMouseLeave={() => setHoveredCard(null)}
-          style={{
-            background: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '#EEF2FF' : '#FFFFFF',
-            border: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '1px solid #818CF8' : '1px solid #E2E8F0',
-            borderRadius: '12px',
-            padding: '1.15rem 1.35rem',
-            cursor: 'pointer',
-            transform: hoveredCard === 'MULTI_PAYMENTS' ? 'translateY(-2px)' : 'none',
-            boxShadow: hoveredCard === 'MULTI_PAYMENTS' || multiPaymentFilter ? '0 8px 20px -4px rgba(99, 102, 241, 0.18)' : '0 1px 3px rgba(0,0,0,0.06)',
-            transition: 'all 0.22s cubic-bezier(0.4, 0, 0.2, 1)',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.45rem' }}>
-              <span style={{ fontSize: '0.8rem', color: '#4F46E5', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Multi-Payments
-              </span>
-              <Layers size={18} style={{ color: '#6366F1' }} />
-            </div>
-            <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A' }}>
-              {(summary.multiPaymentCustomersCount || 0).toLocaleString()}
-            </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
-            <span style={{ fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>
-              {(summary.multiPaymentCount || 0).toLocaleString()} records
-            </span>
-            <span style={{ fontSize: '0.72rem', color: '#4F46E5', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '0.2rem', opacity: hoveredCard === 'MULTI_PAYMENTS' ? 1 : 0.8 }}>
-              Details <ChevronRight size={12} />
-            </span>
-          </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* ── 2. FILTER BAR & DIVISION CONTROLS ─────────────────────────── */}
       <div style={{

@@ -660,7 +660,7 @@ const PaymentControlCenter = () => {
         </div>
       </div>
 
-      {/* ── 1. CANONICAL SUMMARY CARDS (7 CARDS IN EXACT ORDER) ──────── */}
+      {/* ── 1. CANONICAL SUMMARY CARDS (6 CARDS IN EXACT ORDER) ──────── */}
       {(() => {
         const renderLkrKpi = (val) => {
           if (val == null || isNaN(val)) return <span style={{ color: '#94A3B8', fontWeight: 600 }}>—</span>;
@@ -668,10 +668,10 @@ const PaymentControlCenter = () => {
           const formatted = num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
           const [intPart, decPart] = formatted.split('.');
           return (
-            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.2rem', whiteSpace: 'nowrap' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.04em' }}>LKR</span>
+            <div style={{ display: 'inline-flex', alignItems: 'baseline', gap: '0.22rem', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', letterSpacing: '0.04em', flexShrink: 0 }}>LKR</span>
               <span style={{
-                fontSize: 'clamp(1.15rem, 1.22vw, 1.38rem)',
+                fontSize: 'clamp(1.22rem, 1.25vw, 1.45rem)',
                 fontWeight: 800,
                 color: '#0F172A',
                 letterSpacing: '-0.025em',
@@ -680,7 +680,7 @@ const PaymentControlCenter = () => {
               }}>
                 {intPart}
               </span>
-              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748B', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#64748B', letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
                 .{decPart}
               </span>
             </div>
@@ -698,7 +698,8 @@ const PaymentControlCenter = () => {
             iconColor: '#2563EB',
             value: (summary.totalCustomers || summary.customerCount || 0).toLocaleString(),
             isCurrency: false,
-            subtitle: 'Total canonical producers'
+            subtitle: 'Canonical producers',
+            fullSubtitle: 'Total canonical solar producers'
           },
           {
             key: 'PAYMENT_READY',
@@ -710,7 +711,8 @@ const PaymentControlCenter = () => {
             iconColor: '#059669',
             value: (summary.paymentReadyCount || 0).toLocaleString(),
             isCurrency: false,
-            subtitle: 'Verified eligible for disbursement'
+            subtitle: 'Verified eligible',
+            fullSubtitle: 'Verified eligible for disbursement'
           },
           {
             key: 'PAYMENT_ON_HOLD',
@@ -722,19 +724,8 @@ const PaymentControlCenter = () => {
             iconColor: '#D97706',
             value: (summary.onHoldCount || 0).toLocaleString(),
             isCurrency: false,
-            subtitle: 'Withheld by blocking validations'
-          },
-          {
-            key: 'REQUIRES_REVIEW',
-            label: 'Requires Review',
-            icon: Clock,
-            accent: '#7C3AED',
-            iconBg: '#F5F3FF',
-            iconBorder: '#DDD6FE',
-            iconColor: '#7C3AED',
-            value: (summary.reviewCount || 0).toLocaleString(),
-            isCurrency: false,
-            subtitle: 'Duplicate / audit flag'
+            subtitle: 'Validation holds',
+            fullSubtitle: 'Withheld by blocking validations'
           },
           {
             key: 'TOTAL_PAYABLE',
@@ -746,7 +737,8 @@ const PaymentControlCenter = () => {
             iconColor: '#0284C7',
             rawValue: summary.totalPayable,
             isCurrency: true,
-            subtitle: 'Ready settlement balance'
+            subtitle: 'Ready settlement',
+            fullSubtitle: 'Ready settlement balance'
           },
           {
             key: 'TOTAL_ON_HOLD',
@@ -758,7 +750,8 @@ const PaymentControlCenter = () => {
             iconColor: '#DC2626',
             rawValue: summary.totalOnHold,
             isCurrency: true,
-            subtitle: 'Pending resolution'
+            subtitle: 'Pending resolution',
+            fullSubtitle: 'Pending resolution'
           },
           {
             key: 'MULTI_PAYMENTS',
@@ -771,17 +764,13 @@ const PaymentControlCenter = () => {
             value: (summary.multiPaymentCustomersCount || 0).toLocaleString(),
             isCurrency: false,
             subtitle: `${(summary.multiPaymentCount || 0).toLocaleString()} records`,
+            fullSubtitle: `${(summary.multiPaymentCount || 0).toLocaleString()} payment records`,
             isActive: multiPaymentFilter
           }
         ];
 
         return (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(185px, 1fr))',
-            gap: '0.85rem',
-            marginBottom: '1.75rem'
-          }}>
+          <div className="payment-control-summary-grid">
             {summaryCards.map((card) => {
               const IconComp = card.icon;
               const isHovered = hoveredCard === card.key;
@@ -806,7 +795,7 @@ const PaymentControlCenter = () => {
                       ? '3px solid #6366F1'
                       : (isHovered ? `3px solid ${card.accent}` : `2.5px solid ${card.accent}`),
                     borderRadius: '12px',
-                    padding: '1.05rem 1.15rem 0.95rem',
+                    padding: '1rem 1.05rem 0.9rem',
                     cursor: 'pointer',
                     transform: isHovered ? 'translateY(-2px)' : 'none',
                     boxShadow: isActive
@@ -818,7 +807,7 @@ const PaymentControlCenter = () => {
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    minHeight: '148px',
+                    minHeight: '142px',
                     outline: 'none'
                   }}
                 >
@@ -858,7 +847,7 @@ const PaymentControlCenter = () => {
 
                     {/* Middle: Prominent KPI Value */}
                     <div style={{
-                      minHeight: '2.1rem',
+                      minHeight: '2.2rem',
                       display: 'flex',
                       alignItems: 'center'
                     }}>
@@ -866,7 +855,7 @@ const PaymentControlCenter = () => {
                         renderLkrKpi(card.rawValue)
                       ) : (
                         <div style={{
-                          fontSize: '1.75rem',
+                          fontSize: '1.8rem',
                           fontWeight: 800,
                           color: '#0F172A',
                           lineHeight: 1.15,
@@ -887,7 +876,7 @@ const PaymentControlCenter = () => {
                     marginTop: '0.65rem',
                     paddingTop: '0.6rem',
                     borderTop: '1px solid #F1F5F9',
-                    gap: '0.5rem'
+                    gap: '0.4rem'
                   }}>
                     <span
                       style={{
@@ -899,7 +888,7 @@ const PaymentControlCenter = () => {
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap'
                       }}
-                      title={card.subtitle}
+                      title={card.fullSubtitle || card.subtitle}
                     >
                       {card.subtitle}
                     </span>
@@ -3487,13 +3476,17 @@ const PaymentControlCenter = () => {
         const isPaymentReadyModal = summaryModalCard === 'PAYMENT_READY';
         const isPaymentOnHoldModal = summaryModalCard === 'PAYMENT_ON_HOLD';
         const isTotalPayableModal = summaryModalCard === 'TOTAL_PAYABLE';
-        const isDivisionSummaryModal = isTotalCustomersModal || isPaymentReadyModal || isPaymentOnHoldModal || isTotalPayableModal;
+        const isTotalOnHoldModal = summaryModalCard === 'TOTAL_ON_HOLD';
+        const isMultiPaymentsModal = summaryModalCard === 'MULTI_PAYMENTS';
+        const isDivisionSummaryModal = isTotalCustomersModal || isPaymentReadyModal || isPaymentOnHoldModal || isTotalPayableModal || isTotalOnHoldModal || isMultiPaymentsModal;
 
         const totalCustomersCount = Number(summary.totalCustomers || summary.customerCount || 0);
         const paymentReadyCount = Number(summary.paymentReadyCount || 0);
         const onHoldCount = Number(summary.onHoldCount || 0);
         const totalPayableAmount = Number(summary.totalPayable || 0);
         const totalOnHoldAmount = Number(summary.totalOnHold || summary.totalOnHoldAmount || summary.onHoldAmount || 0);
+        const multiPaymentCustomersCount = Number(summary.multiPaymentCustomersCount || 0);
+        const multiPaymentRecordsCount = Number(summary.multiPaymentCount || 0);
 
         // ── Canonical division ordering ──────────────────────────────────
         const divisionOrder = ['Ampara', 'Batticaloa', 'Trincomalee', 'Valaichenai', 'Kalmunai'];
@@ -3536,9 +3529,22 @@ const PaymentControlCenter = () => {
         const reconciledOnHoldCount = onHoldBreakdown.reduce((s, d) => s + (d.onHoldCount || d.customerCount || 0), 0);
         const reconciledOnHoldPayable = onHoldBreakdown.reduce((s, d) => s + (d.withheldAmount || d.totalPayable || 0), 0);
         const maxOnHoldCount = Math.max(...onHoldBreakdown.map(d => d.onHoldCount || d.customerCount || 0), 1);
+        const maxWithheldAmount = Math.max(...onHoldBreakdown.map(d => d.withheldAmount || d.totalPayable || 0), 1);
         const isOnHoldCountsMatch = onHoldCount === reconciledOnHoldCount;
         const isOnHoldAmountsMatch = Math.abs(totalOnHoldAmount - reconciledOnHoldPayable) < 1.0;
         const isOnHoldReconciled = isOnHoldCountsMatch && (onHoldCount === 0 || isOnHoldAmountsMatch);
+
+        // Multi-Payments breakdown
+        const DEFAULT_MULTI_ROWS = divisionOrder.map(d => ({ division: d, customerCount: 0, recordCount: 0, percentage: 0, recordPercentage: 0 }));
+        const rawMultiBreakdown = Array.isArray(summary.multiDivisionBreakdown) && summary.multiDivisionBreakdown.length > 0
+          ? summary.multiDivisionBreakdown : DEFAULT_MULTI_ROWS;
+        const multiBreakdown = sortDivisions(rawMultiBreakdown);
+        const reconciledMultiCustomersCount = multiBreakdown.reduce((s, d) => s + (d.customerCount || d.multiPaymentCustomersCount || 0), 0);
+        const reconciledMultiRecordsCount = multiBreakdown.reduce((s, d) => s + (d.recordCount || d.multiPaymentCount || 0), 0);
+        const maxMultiCustomerCount = Math.max(...multiBreakdown.map(d => d.customerCount || d.multiPaymentCustomersCount || 0), 1);
+        const isMultiCustomersMatch = multiPaymentCustomersCount === reconciledMultiCustomersCount;
+        const isMultiRecordsMatch = multiPaymentRecordsCount === reconciledMultiRecordsCount;
+        const isMultiReconciled = isMultiCustomersMatch && isMultiRecordsMatch;
 
         const relevantRecords = customersData.content.filter(modalConfig.filterPredicate);
 
@@ -3566,8 +3572,8 @@ const PaymentControlCenter = () => {
               border: '1px solid var(--border-color)',
               borderRadius: '16px',
               width: '100%',
-              maxWidth: '880px',
-              maxHeight: '88vh',
+              maxWidth: '960px',
+              maxHeight: '90vh',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -3628,21 +3634,22 @@ const PaymentControlCenter = () => {
               </div>
 
               {/* Modal Body (Scrollable) */}
-              {isTotalCustomersModal ? (                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {isTotalCustomersModal ? (
+                <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {/* Hero Stat: Prominent Total Customers Display */}
                   <div style={{
                     background: '#FFFFFF',
                     border: '1px solid var(--border-color)',
                     borderRadius: '12px',
-                    padding: '1.25rem 1.5rem',
+                    padding: '1rem 1.25rem',
                     boxShadow: 'var(--shadow-xs)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     gap: '1rem'
                   }}>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         fontSize: '0.72rem',
                         textTransform: 'uppercase',
@@ -3653,16 +3660,16 @@ const PaymentControlCenter = () => {
                         Total Registered Solar Producers
                       </span>
                       <div style={{
-                        fontSize: '2.5rem',
+                        fontSize: '2.3rem',
                         fontWeight: 800,
                         color: 'var(--text-primary)',
-                        marginTop: '0.2rem',
+                        marginTop: '0.15rem',
                         letterSpacing: '-0.02em',
                         lineHeight: 1.1
                       }}>
                         {totalCustomersCount.toLocaleString()}
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Active canonical solar producers in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division scope: <strong style={{ color: '#0369A1' }}>{division}</strong>
                       </div>
                     </div>
@@ -3671,11 +3678,12 @@ const PaymentControlCenter = () => {
                       background: '#F8FAFC',
                       border: '1px solid var(--border-color)',
                       borderRadius: '10px',
-                      padding: '0.75rem 1.1rem',
+                      padding: '0.65rem 0.95rem',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '0.25rem',
-                      minWidth: '220px'
+                      minWidth: '220px',
+                      flexShrink: 0
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.76rem', color: '#047857', fontWeight: 700 }}>
                         <CheckCircle2 size={14} style={{ color: '#047857' }} />
@@ -3703,8 +3711,8 @@ const PaymentControlCenter = () => {
 
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                      gap: '0.75rem'
+                      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                      gap: '0.65rem'
                     }}>
                       {divisionBreakdown.map((d) => {
                         const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
@@ -3719,51 +3727,58 @@ const PaymentControlCenter = () => {
                               background: '#FFFFFF',
                               border: isCurrentDiv ? '1.5px solid #2563EB' : '1px solid var(--border-color)',
                               borderRadius: '10px',
-                              padding: '0.9rem 1rem',
+                              padding: '0.75rem 0.65rem',
                               boxShadow: isCurrentDiv ? '0 4px 12px rgba(37, 99, 235, 0.12)' : 'var(--shadow-xs)',
                               display: 'flex',
                               flexDirection: 'column',
                               justifyContent: 'space-between',
-                              minHeight: '100px',
+                              minHeight: '120px',
+                              minWidth: 0,
                               transition: 'all 0.15s ease'
                             }}
                           >
-                            <div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                                  {d.division}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {d.division}
+                              </span>
+                              {isCurrentDiv && (
+                                <span style={{
+                                  fontSize: '0.6rem',
+                                  fontWeight: 700,
+                                  background: '#EFF6FF',
+                                  color: '#1D4ED8',
+                                  border: '1px solid #BFDBFE',
+                                  borderRadius: '4px',
+                                  padding: '1px 4px',
+                                  flexShrink: 0
+                                }}>
+                                  Active
                                 </span>
-                                {isCurrentDiv && (
-                                  <span style={{
-                                    fontSize: '0.65rem',
-                                    fontWeight: 700,
-                                    background: '#EFF6FF',
-                                    color: '#1D4ED8',
-                                    border: '1px solid #BFDBFE',
-                                    borderRadius: '4px',
-                                    padding: '1px 5px'
-                                  }}>
-                                    Active
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                              )}
+                            </div>
+
+                            <div style={{ margin: '0.25rem 0' }}>
+                              <div style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
                                 {(d.customerCount || 0).toLocaleString()}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 500, marginTop: '0.15rem' }}>
+                                Registered Producers
                               </div>
                             </div>
 
-                            <div style={{ marginTop: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: '0.2rem', borderTop: '1px solid #F1F5F9' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)' }}>
                                 Share
                               </span>
                               <span style={{
-                                fontSize: '0.74rem',
+                                fontSize: '0.7rem',
                                 fontWeight: 700,
                                 color: '#1D4ED8',
                                 background: '#EFF6FF',
                                 borderRadius: '4px',
-                                padding: '0.1rem 0.45rem',
-                                border: '1px solid #DBEAFE'
+                                padding: '0.05rem 0.35rem',
+                                border: '1px solid #DBEAFE',
+                                flexShrink: 0
                               }}>
                                 {pct.toFixed(1)}%
                               </span>
@@ -3888,21 +3903,21 @@ const PaymentControlCenter = () => {
                 </div>
               ) : isPaymentReadyModal ? (
                 /* ── PAYMENT READY – Division-Wise Summary ───────────────── */
-                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {/* Hero: Total Payment Ready & Payable */}
                   <div style={{
                     background: '#FFFFFF',
                     border: '1px solid var(--border-color)',
                     borderRadius: '12px',
-                    padding: '1.25rem 1.5rem',
+                    padding: '1rem 1.25rem',
                     boxShadow: 'var(--shadow-xs)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     gap: '1rem'
                   }}>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         fontSize: '0.72rem',
                         textTransform: 'uppercase',
@@ -3913,16 +3928,16 @@ const PaymentControlCenter = () => {
                         Verified Eligible for Disbursement
                       </span>
                       <div style={{
-                        fontSize: '2.5rem',
+                        fontSize: '2.3rem',
                         fontWeight: 800,
                         color: 'var(--text-primary)',
-                        marginTop: '0.2rem',
+                        marginTop: '0.15rem',
                         letterSpacing: '-0.02em',
                         lineHeight: 1.1
                       }}>
                         {paymentReadyCount.toLocaleString()}
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Producers cleared all 11 verification gates in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division: <strong style={{ color: '#0369A1' }}>{division}</strong>
                       </div>
                     </div>
@@ -3931,11 +3946,12 @@ const PaymentControlCenter = () => {
                       background: '#F0FDF4',
                       border: '1px solid #BBF7D0',
                       borderRadius: '10px',
-                      padding: '0.75rem 1.1rem',
+                      padding: '0.65rem 0.95rem',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.3rem',
-                      minWidth: '230px'
+                      gap: '0.25rem',
+                      minWidth: '220px',
+                      flexShrink: 0
                     }}>
                       <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#047857', fontWeight: 700 }}>
                         Total Ready Payable
@@ -3961,8 +3977,8 @@ const PaymentControlCenter = () => {
 
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
-                      gap: '0.75rem'
+                      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                      gap: '0.65rem'
                     }}>
                       {readyBreakdown.map((d) => {
                         const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
@@ -3976,42 +3992,47 @@ const PaymentControlCenter = () => {
                               background: '#FFFFFF',
                               border: isCurrentDiv ? '1.5px solid #059669' : '1px solid var(--border-color)',
                               borderRadius: '10px',
-                              padding: '0.9rem 1rem',
+                              padding: '0.75rem 0.65rem',
                               boxShadow: isCurrentDiv ? '0 4px 12px rgba(5, 150, 105, 0.12)' : 'var(--shadow-xs)',
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '0.3rem',
+                              justifyContent: 'space-between',
+                              minHeight: '120px',
+                              minWidth: 0,
                               transition: 'all 0.15s ease'
                             }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {d.division}
                               </span>
                               {isCurrentDiv && (
                                 <span style={{
-                                  fontSize: '0.64rem', fontWeight: 700,
+                                  fontSize: '0.6rem', fontWeight: 700,
                                   background: '#ECFDF5', color: '#065F46',
-                                  border: '1px solid #A7F3D0', borderRadius: '4px', padding: '1px 5px'
+                                  border: '1px solid #A7F3D0', borderRadius: '4px', padding: '1px 4px',
+                                  flexShrink: 0
                                 }}>Active</span>
                               )}
                             </div>
 
-                            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#047857', letterSpacing: '-0.02em' }}>
-                              {(d.readyCount || 0).toLocaleString()}
+                            <div style={{ margin: '0.25rem 0' }}>
+                              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#047857', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                                {(d.readyCount || 0).toLocaleString()}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#065F46', fontWeight: 600, marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {formatLKR(d.totalPayable || 0)}
+                              </div>
                             </div>
 
-                            <div style={{ fontSize: '0.72rem', color: '#065F46', fontWeight: 600 }}>
-                              {formatLKR(d.totalPayable || 0)}
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.1rem' }}>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Share</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.2rem', borderTop: '1px solid #F1F5F9' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)' }}>Share</span>
                               <span style={{
-                                fontSize: '0.73rem', fontWeight: 700,
+                                fontSize: '0.7rem', fontWeight: 700,
                                 color: '#047857', background: '#ECFDF5',
-                                borderRadius: '4px', padding: '0.1rem 0.4rem',
-                                border: '1px solid #BBF7D0'
+                                borderRadius: '4px', padding: '0.05rem 0.35rem',
+                                border: '1px solid #BBF7D0',
+                                flexShrink: 0
                               }}>
                                 {pct.toFixed(1)}%
                               </span>
@@ -4108,21 +4129,21 @@ const PaymentControlCenter = () => {
                 </div>
               ) : isPaymentOnHoldModal ? (
                 /* ── PAYMENT ON HOLD – Division-Wise Summary ───────────────── */
-                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {/* Hero: Total Payment On Hold & Withheld Balance */}
                   <div style={{
                     background: '#FFFFFF',
                     border: '1px solid var(--border-color)',
                     borderRadius: '12px',
-                    padding: '1.25rem 1.5rem',
+                    padding: '1rem 1.25rem',
                     boxShadow: 'var(--shadow-xs)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     gap: '1rem'
                   }}>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         fontSize: '0.72rem',
                         textTransform: 'uppercase',
@@ -4133,16 +4154,16 @@ const PaymentControlCenter = () => {
                         Withheld by Blocking Validations
                       </span>
                       <div style={{
-                        fontSize: '2.5rem',
+                        fontSize: '2.3rem',
                         fontWeight: 800,
                         color: 'var(--text-primary)',
-                        marginTop: '0.2rem',
+                        marginTop: '0.15rem',
                         letterSpacing: '-0.02em',
                         lineHeight: 1.1
                       }}>
                         {onHoldCount.toLocaleString()}
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Producers with active payment holds or failed validation gates in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division: <strong style={{ color: '#0369A1' }}>{division}</strong>
                       </div>
                     </div>
@@ -4151,11 +4172,12 @@ const PaymentControlCenter = () => {
                       background: '#FFFBEB',
                       border: '1px solid #FDE68A',
                       borderRadius: '10px',
-                      padding: '0.75rem 1.1rem',
+                      padding: '0.65rem 0.95rem',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.3rem',
-                      minWidth: '230px'
+                      gap: '0.25rem',
+                      minWidth: '220px',
+                      flexShrink: 0
                     }}>
                       <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#92400E', fontWeight: 700 }}>
                         Total Withheld Balance
@@ -4181,8 +4203,8 @@ const PaymentControlCenter = () => {
 
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
-                      gap: '0.75rem'
+                      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                      gap: '0.65rem'
                     }}>
                       {onHoldBreakdown.map((d) => {
                         const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
@@ -4197,42 +4219,47 @@ const PaymentControlCenter = () => {
                               background: '#FFFFFF',
                               border: isCurrentDiv ? '1.5px solid #D97706' : '1px solid var(--border-color)',
                               borderRadius: '10px',
-                              padding: '0.9rem 1rem',
+                              padding: '0.75rem 0.65rem',
                               boxShadow: isCurrentDiv ? '0 4px 12px rgba(217, 119, 6, 0.12)' : 'var(--shadow-xs)',
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '0.3rem',
+                              justifyContent: 'space-between',
+                              minHeight: '120px',
+                              minWidth: 0,
                               transition: 'all 0.15s ease'
                             }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {d.division}
                               </span>
                               {isCurrentDiv && (
                                 <span style={{
-                                  fontSize: '0.64rem', fontWeight: 700,
+                                  fontSize: '0.6rem', fontWeight: 700,
                                   background: '#FFFBEB', color: '#92400E',
-                                  border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 5px'
+                                  border: '1px solid #FDE68A', borderRadius: '4px', padding: '1px 4px',
+                                  flexShrink: 0
                                 }}>Active</span>
                               )}
                             </div>
 
-                            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#B45309', letterSpacing: '-0.02em' }}>
-                              {count.toLocaleString()}
+                            <div style={{ margin: '0.25rem 0' }}>
+                              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#B45309', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                                {count.toLocaleString()}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#92400E', fontWeight: 600, marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {formatLKR(payable)}
+                              </div>
                             </div>
 
-                            <div style={{ fontSize: '0.72rem', color: '#92400E', fontWeight: 600 }}>
-                              {formatLKR(payable)}
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.1rem' }}>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Share</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.2rem', borderTop: '1px solid #F1F5F9' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)' }}>Share</span>
                               <span style={{
-                                fontSize: '0.73rem', fontWeight: 700,
+                                fontSize: '0.7rem', fontWeight: 700,
                                 color: '#92400E', background: '#FFFBEB',
-                                borderRadius: '4px', padding: '0.1rem 0.4rem',
-                                border: '1px solid #FDE68A'
+                                borderRadius: '4px', padding: '0.05rem 0.35rem',
+                                border: '1px solid #FDE68A',
+                                flexShrink: 0
                               }}>
                                 {pct.toFixed(1)}%
                               </span>
@@ -4298,7 +4325,7 @@ const PaymentControlCenter = () => {
                         return (
                           <div key={d.division} style={{
                             display: 'grid',
-                            gridTemplateColumns: '110px 1fr 200px',
+                            gridTemplateColumns: '100px 1fr 240px',
                             alignItems: 'center',
                             gap: '0.85rem'
                           }}>
@@ -4325,15 +4352,16 @@ const PaymentControlCenter = () => {
 
                             <div style={{
                               display: 'flex', justifyContent: 'flex-end',
-                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem',
+                              whiteSpace: 'nowrap'
                             }}>
-                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                 {count.toLocaleString()}
                               </strong>
-                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right' }}>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                 ({pct.toFixed(1)}%)
                               </span>
-                              <span style={{ color: '#92400E', fontSize: '0.74rem', fontWeight: 600, minWidth: '95px', textAlign: 'right' }}>
+                              <span style={{ color: '#92400E', fontSize: '0.74rem', fontWeight: 600, minWidth: '95px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                 {formatLKR(payable)}
                               </span>
                             </div>
@@ -4345,21 +4373,21 @@ const PaymentControlCenter = () => {
                 </div>
               ) : isTotalPayableModal ? (
                 /* ── TOTAL READY PAYABLE – Division-Wise Summary ─────────── */
-                <div style={{ padding: '1.5rem 1.75rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+                <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                   {/* Hero: Total Ready Payable & Eligible Payees */}
                   <div style={{
                     background: '#FFFFFF',
                     border: '1px solid var(--border-color)',
                     borderRadius: '12px',
-                    padding: '1.25rem 1.5rem',
+                    padding: '1rem 1.25rem',
                     boxShadow: 'var(--shadow-xs)',
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    flexWrap: 'wrap',
+                    flexWrap: 'nowrap',
                     gap: '1rem'
                   }}>
-                    <div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <span style={{
                         fontSize: '0.72rem',
                         textTransform: 'uppercase',
@@ -4370,16 +4398,16 @@ const PaymentControlCenter = () => {
                         Net Approved Settlement Capital
                       </span>
                       <div style={{
-                        fontSize: '2.5rem',
+                        fontSize: '2.2rem',
                         fontWeight: 800,
                         color: 'var(--text-primary)',
-                        marginTop: '0.2rem',
+                        marginTop: '0.15rem',
                         letterSpacing: '-0.02em',
                         lineHeight: 1.1
                       }}>
                         {formatLKR(totalPayableAmount)}
                       </div>
-                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                         Aggregated ready settlement capital in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division scope: <strong style={{ color: '#0369A1' }}>{division}</strong>
                       </div>
                     </div>
@@ -4388,19 +4416,20 @@ const PaymentControlCenter = () => {
                       background: '#F0F9FF',
                       border: '1px solid #BAE6FD',
                       borderRadius: '10px',
-                      padding: '0.75rem 1.1rem',
+                      padding: '0.65rem 0.95rem',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '0.3rem',
-                      minWidth: '230px'
+                      gap: '0.25rem',
+                      minWidth: '220px',
+                      flexShrink: 0
                     }}>
-                      <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0369A1', fontWeight: 700 }}>
+                      <div style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#0369A1', fontWeight: 700 }}>
                         Eligible Ready Producers
                       </div>
-                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0284C7', letterSpacing: '-0.01em' }}>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0284C7', letterSpacing: '-0.01em' }}>
                         {paymentReadyCount.toLocaleString()}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#0369A1', fontWeight: 600, marginTop: '0.15rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: '#0369A1', fontWeight: 600, marginTop: '0.1rem' }}>
                         <CheckCircle2 size={13} style={{ color: '#0284C7' }} />
                         <span>Verified & Cleared for Batching</span>
                       </div>
@@ -4409,23 +4438,25 @@ const PaymentControlCenter = () => {
 
                   {/* Division Summary Cards */}
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
-                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.55rem' }}>
+                      <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         Division-Wise Ready Payable Summary
                       </div>
-                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
                     </div>
 
                     <div style={{
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(148px, 1fr))',
-                      gap: '0.75rem'
+                      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                      gap: '0.65rem'
                     }}>
                       {readyBreakdown.map((d) => {
                         const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
                         const payable = Number(d.totalPayable || 0);
                         const count = Number(d.readyCount || 0);
                         const payableSharePct = totalPayableAmount > 0 ? (payable / totalPayableAmount * 100) : 0;
+                        const formattedPayable = Number(payable).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const amountFontSize = formattedPayable.length > 13 ? '0.88rem' : formattedPayable.length > 11 ? '0.94rem' : '1.05rem';
 
                         return (
                           <div
@@ -4434,42 +4465,63 @@ const PaymentControlCenter = () => {
                               background: '#FFFFFF',
                               border: isCurrentDiv ? '1.5px solid #0284C7' : '1px solid var(--border-color)',
                               borderRadius: '10px',
-                              padding: '0.9rem 1rem',
+                              padding: '0.75rem 0.65rem',
                               boxShadow: isCurrentDiv ? '0 4px 12px rgba(2, 132, 199, 0.12)' : 'var(--shadow-xs)',
                               display: 'flex',
                               flexDirection: 'column',
-                              gap: '0.3rem',
+                              justifyContent: 'space-between',
+                              minHeight: '120px',
+                              minWidth: 0,
                               transition: 'all 0.15s ease'
                             }}
                           >
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <span style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {d.division}
                               </span>
                               {isCurrentDiv && (
                                 <span style={{
-                                  fontSize: '0.64rem', fontWeight: 700,
+                                  fontSize: '0.6rem', fontWeight: 700,
                                   background: '#F0F9FF', color: '#0369A1',
-                                  border: '1px solid #BAE6FD', borderRadius: '4px', padding: '1px 5px'
+                                  border: '1px solid #BAE6FD', borderRadius: '4px', padding: '1px 4px',
+                                  flexShrink: 0
                                 }}>Active</span>
                               )}
                             </div>
 
-                            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0284C7', letterSpacing: '-0.02em' }}>
-                              {formatLKR(payable)}
+                            <div style={{ margin: '0.35rem 0' }} title={formatLKR(payable)}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'baseline',
+                                gap: '0.2rem',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden'
+                              }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#0369A1', flexShrink: 0 }}>LKR</span>
+                                <span style={{
+                                  fontSize: amountFontSize,
+                                  fontWeight: 800,
+                                  color: '#0284C7',
+                                  letterSpacing: '-0.02em',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {formattedPayable}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#0369A1', fontWeight: 600, marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {count.toLocaleString()} Eligible Payees
+                              </div>
                             </div>
 
-                            <div style={{ fontSize: '0.72rem', color: '#0369A1', fontWeight: 600 }}>
-                              {count.toLocaleString()} Eligible Payees
-                            </div>
-
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.1rem' }}>
-                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Share</span>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.2rem', borderTop: '1px solid #F1F5F9' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)' }}>Share</span>
                               <span style={{
-                                fontSize: '0.73rem', fontWeight: 700,
+                                fontSize: '0.7rem', fontWeight: 700,
                                 color: '#0369A1', background: '#F0F9FF',
-                                borderRadius: '4px', padding: '0.1rem 0.4rem',
-                                border: '1px solid #BAE6FD'
+                                borderRadius: '4px', padding: '0.05rem 0.35rem',
+                                border: '1px solid #BAE6FD',
+                                flexShrink: 0
                               }}>
                                 {payableSharePct.toFixed(1)}%
                               </span>
@@ -4485,24 +4537,24 @@ const PaymentControlCenter = () => {
                     background: '#FFFFFF',
                     border: '1px solid var(--border-color)',
                     borderRadius: '12px',
-                    padding: '1.15rem 1.35rem',
+                    padding: '1rem 1.25rem',
                     boxShadow: 'var(--shadow-xs)'
                   }}>
                     <div style={{
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #F1F5F9'
+                      marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: '1px solid #F1F5F9'
                     }}>
                       <div>
-                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                           Ready Payable Distribution
                         </h4>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
                           Division-wise comparison of approved net settlement capital
                         </div>
                       </div>
                       <div style={{
                         display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
-                        fontSize: '0.74rem', fontWeight: 600,
+                        fontSize: '0.72rem', fontWeight: 600,
                         color: isPayableReconciled ? '#0369A1' : '#B91C1C',
                         background: isPayableReconciled ? '#F0F9FF' : '#FEF2F2',
                         border: isPayableReconciled ? '1px solid #BAE6FD' : '1px solid #FECACA',
@@ -4522,7 +4574,7 @@ const PaymentControlCenter = () => {
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
                       {readyBreakdown.map((d, idx) => {
                         const payable = Number(d.totalPayable || 0);
                         const count = Number(d.readyCount || 0);
@@ -4535,7 +4587,7 @@ const PaymentControlCenter = () => {
                         return (
                           <div key={d.division} style={{
                             display: 'grid',
-                            gridTemplateColumns: '110px 1fr 220px',
+                            gridTemplateColumns: '100px 1fr 265px',
                             alignItems: 'center',
                             gap: '0.85rem'
                           }}>
@@ -4562,16 +4614,523 @@ const PaymentControlCenter = () => {
 
                             <div style={{
                               display: 'flex', justifyContent: 'flex-end',
-                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem'
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem',
+                              whiteSpace: 'nowrap'
                             }}>
-                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
                                 {formatLKR(payable)}
                               </strong>
-                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right' }}>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                 ({payableSharePct.toFixed(1)}%)
                               </span>
-                              <span style={{ color: '#0369A1', fontSize: '0.74rem', fontWeight: 600, minWidth: '75px', textAlign: 'right' }}>
+                              <span style={{ color: '#0369A1', fontSize: '0.74rem', fontWeight: 600, minWidth: '85px', textAlign: 'right', whiteSpace: 'nowrap' }}>
                                 {count.toLocaleString()} Payees
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : isTotalOnHoldModal ? (
+                /* ── TOTAL WITHHELD / ON HOLD – Division-Wise Summary ─────── */
+                <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Hero: Total Withheld Financial Liability & Withheld Producers */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.25rem',
+                    boxShadow: 'var(--shadow-xs)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'nowrap',
+                    gap: '1rem'
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: '#DC2626',
+                        fontWeight: 700
+                      }}>
+                        Withheld Financial Liability
+                      </span>
+                      <div style={{
+                        fontSize: '2.2rem',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        marginTop: '0.15rem',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.1
+                      }}>
+                        {formatLKR(totalOnHoldAmount)}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        Aggregate value of payments withheld across 5 divisions in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division scope: <strong style={{ color: '#0369A1' }}>{division}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#FEF2F2',
+                      border: '1px solid #FECACA',
+                      borderRadius: '10px',
+                      padding: '0.65rem 0.95rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.25rem',
+                      minWidth: '220px',
+                      flexShrink: 0
+                    }}>
+                      <div style={{ fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#991B1B', fontWeight: 700 }}>
+                        Withheld Producers
+                      </div>
+                      <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#DC2626', letterSpacing: '-0.01em' }}>
+                        {onHoldCount.toLocaleString()}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.72rem', color: '#991B1B', fontWeight: 600, marginTop: '0.1rem' }}>
+                        <Lock size={13} style={{ color: '#DC2626' }} />
+                        <span>Strictly Locked Under Disbursement Guard</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Division Summary Cards */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.55rem' }}>
+                      <div style={{ fontSize: '0.84rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Division-Wise Withheld Balance Summary
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                      gap: '0.65rem'
+                    }}>
+                      {onHoldBreakdown.map((d) => {
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const payable = Number(d.withheldAmount || d.totalPayable || 0);
+                        const count = Number(d.onHoldCount || d.customerCount || 0);
+                        const withheldSharePct = totalOnHoldAmount > 0 ? (payable / totalOnHoldAmount * 100) : 0;
+                        const formattedPayable = Number(payable).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const amountFontSize = formattedPayable.length > 13 ? '0.88rem' : formattedPayable.length > 11 ? '0.94rem' : '1.05rem';
+
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              background: '#FFFFFF',
+                              border: isCurrentDiv ? '1.5px solid #DC2626' : '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              padding: '0.75rem 0.65rem',
+                              boxShadow: isCurrentDiv ? '0 4px 12px rgba(220, 38, 38, 0.12)' : 'var(--shadow-xs)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              minHeight: '120px',
+                              minWidth: 0,
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {d.division}
+                              </span>
+                              {isCurrentDiv && (
+                                <span style={{
+                                  fontSize: '0.6rem', fontWeight: 700,
+                                  background: '#FEF2F2', color: '#991B1B',
+                                  border: '1px solid #FECACA', borderRadius: '4px', padding: '1px 4px',
+                                  flexShrink: 0
+                                }}>Active</span>
+                              )}
+                            </div>
+
+                            <div style={{ margin: '0.35rem 0' }} title={formatLKR(payable)}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'baseline',
+                                gap: '0.2rem',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden'
+                              }}>
+                                <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#991B1B', flexShrink: 0 }}>LKR</span>
+                                <span style={{
+                                  fontSize: amountFontSize,
+                                  fontWeight: 800,
+                                  color: '#DC2626',
+                                  letterSpacing: '-0.02em',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {formattedPayable}
+                                </span>
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#991B1B', fontWeight: 600, marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {count.toLocaleString()} Withheld Producers
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.2rem', borderTop: '1px solid #F1F5F9' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)' }}>Share</span>
+                              <span style={{
+                                fontSize: '0.7rem', fontWeight: 700,
+                                color: '#991B1B', background: '#FEF2F2',
+                                borderRadius: '4px', padding: '0.05rem 0.35rem',
+                                border: '1px solid #FECACA',
+                                flexShrink: 0
+                              }}>
+                                {withheldSharePct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Horizontal Bar Chart (Comparing division-wise withheld amounts) */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.25rem',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '0.8rem', paddingBottom: '0.5rem', borderBottom: '1px solid #F1F5F9'
+                    }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Total Withheld Balance Distribution
+                        </h4>
+                        <div style={{ fontSize: '0.73rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
+                          Division-wise comparison of withheld financial liabilities
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        fontSize: '0.72rem', fontWeight: 600,
+                        color: isOnHoldReconciled ? '#991B1B' : '#B91C1C',
+                        background: isOnHoldReconciled ? '#FEF2F2' : '#FEF2F2',
+                        border: isOnHoldReconciled ? '1px solid #FECACA' : '1px solid #FECACA',
+                        borderRadius: '6px', padding: '0.2rem 0.55rem'
+                      }}>
+                        {isOnHoldReconciled ? (
+                          <>
+                            <CheckCircle2 size={13} style={{ color: '#DC2626' }} />
+                            <span>Reconciled: {formatLKR(reconciledOnHoldPayable)}</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                            <span>Unreconciled ({formatLKR(Math.abs(totalOnHoldAmount - reconciledOnHoldPayable))} delta)</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+                      {onHoldBreakdown.map((d, idx) => {
+                        const payable = Number(d.withheldAmount || d.totalPayable || 0);
+                        const count = Number(d.onHoldCount || d.customerCount || 0);
+                        const barWidth = maxWithheldAmount > 0 ? Math.round((payable / maxWithheldAmount) * 100) : 0;
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const withheldSharePct = totalOnHoldAmount > 0 ? (payable / totalOnHoldAmount * 100) : 0;
+                        const redShades = ['#DC2626', '#B91C1C', '#EF4444', '#F87171', '#991B1B'];
+                        const barColor = redShades[idx % redShades.length];
+
+                        return (
+                          <div key={d.division} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '100px 1fr 265px',
+                            alignItems: 'center',
+                            gap: '0.85rem'
+                          }}>
+                            <div style={{
+                              fontSize: '0.82rem',
+                              fontWeight: isCurrentDiv ? 700 : 600,
+                              color: isCurrentDiv ? '#DC2626' : 'var(--text-secondary)',
+                              display: 'flex', alignItems: 'center', gap: '0.35rem'
+                            }}>
+                              <span>{d.division}</span>
+                              {isCurrentDiv && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#DC2626' }} />}
+                            </div>
+
+                            <div style={{
+                              background: '#F1F5F9', height: '10px',
+                              borderRadius: '6px', overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${barWidth}%`, height: '100%',
+                                background: barColor, borderRadius: '6px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+
+                            <div style={{
+                              display: 'flex', justifyContent: 'flex-end',
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {formatLKR(payable)}
+                              </strong>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                ({withheldSharePct.toFixed(1)}%)
+                              </span>
+                              <span style={{ color: '#991B1B', fontSize: '0.74rem', fontWeight: 600, minWidth: '85px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {count.toLocaleString()} Producers
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ) : isMultiPaymentsModal ? (
+                /* ── MULTI-PAYMENTS – Division-Wise Summary ───────────────── */
+                <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  {/* Hero: Multi-Payment Customers & Records */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1rem 1.25rem',
+                    boxShadow: 'var(--shadow-xs)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'nowrap',
+                    gap: '1rem'
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                        color: '#4338CA',
+                        fontWeight: 700
+                      }}>
+                        Customers with Multiple Payments
+                      </span>
+                      <div style={{
+                        fontSize: '2.2rem',
+                        fontWeight: 800,
+                        color: 'var(--text-primary)',
+                        marginTop: '0.15rem',
+                        letterSpacing: '-0.02em',
+                        lineHeight: 1.1
+                      }}>
+                        {multiPaymentCustomersCount.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.25rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        Producers with multiple active payment records in {billingPeriod === 'ALL' ? 'all months' : billingPeriod} • Division scope: <strong style={{ color: '#0369A1' }}>{division}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#EEF2FF',
+                      border: '1px solid #C7D2FE',
+                      borderRadius: '10px',
+                      padding: '0.65rem 0.95rem',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.25rem',
+                      minWidth: '220px',
+                      flexShrink: 0
+                    }}>
+                      <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.05em', color: '#4338CA', fontWeight: 700 }}>
+                        Total Payment Records
+                      </div>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#4338CA', letterSpacing: '-0.01em' }}>
+                        {multiPaymentRecordsCount.toLocaleString()}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#4338CA', fontWeight: 600, marginTop: '0.15rem' }}>
+                        <Layers size={13} style={{ color: '#4338CA' }} />
+                        <span>Multiple Arrears / Released Payment Items</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Division Summary Cards */}
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.65rem' }}>
+                      <div style={{ fontSize: '0.86rem', fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Division-Wise Multi-Payment Summary
+                      </div>
+                      <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>5 Eastern Province Divisions</span>
+                    </div>
+
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+                      gap: '0.65rem'
+                    }}>
+                      {multiBreakdown.map((d) => {
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const custCount = Number(d.customerCount || d.multiPaymentCustomersCount || 0);
+                        const recCount = Number(d.recordCount || d.multiPaymentCount || 0);
+                        const custPct = multiPaymentCustomersCount > 0 ? (custCount / multiPaymentCustomersCount * 100) : 0;
+
+                        return (
+                          <div
+                            key={d.division}
+                            style={{
+                              background: '#FFFFFF',
+                              border: isCurrentDiv ? '1.5px solid #4338CA' : '1px solid var(--border-color)',
+                              borderRadius: '10px',
+                              padding: '0.75rem 0.65rem',
+                              boxShadow: isCurrentDiv ? '0 4px 12px rgba(67, 56, 202, 0.12)' : 'var(--shadow-xs)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              minHeight: '120px',
+                              minWidth: 0,
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.25rem' }}>
+                              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {d.division}
+                              </span>
+                              {isCurrentDiv && (
+                                <span style={{
+                                  fontSize: '0.6rem', fontWeight: 700,
+                                  background: '#EEF2FF', color: '#4338CA',
+                                  border: '1px solid #C7D2FE', borderRadius: '4px', padding: '1px 4px',
+                                  flexShrink: 0
+                                }}>Active</span>
+                              )}
+                            </div>
+
+                            <div style={{ margin: '0.25rem 0' }}>
+                              <div style={{ fontSize: '1.35rem', fontWeight: 800, color: '#4338CA', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                                {custCount.toLocaleString()}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#4338CA', fontWeight: 600, marginTop: '0.15rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {recCount.toLocaleString()} Records
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: '0.2rem', borderTop: '1px solid #F1F5F9' }}>
+                              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)' }}>Share</span>
+                              <span style={{
+                                fontSize: '0.7rem', fontWeight: 700,
+                                color: '#4338CA', background: '#EEF2FF',
+                                borderRadius: '4px', padding: '0.05rem 0.35rem',
+                                border: '1px solid #C7D2FE',
+                                flexShrink: 0
+                              }}>
+                                {custPct.toFixed(1)}%
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Horizontal Bar Chart (Comparing multi-payment customers by division) */}
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '12px',
+                    padding: '1.15rem 1.35rem',
+                    boxShadow: 'var(--shadow-xs)'
+                  }}>
+                    <div style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      marginBottom: '0.9rem', paddingBottom: '0.6rem', borderBottom: '1px solid #F1F5F9'
+                    }}>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Multi-Payment Customers Distribution
+                        </h4>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                          Division-wise comparison of producers with multiple payment disbursements
+                        </div>
+                      </div>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: '0.35rem',
+                        fontSize: '0.74rem', fontWeight: 600,
+                        color: isMultiReconciled ? '#4338CA' : '#B91C1C',
+                        background: isMultiReconciled ? '#EEF2FF' : '#FEF2F2',
+                        border: isMultiReconciled ? '1px solid #C7D2FE' : '1px solid #FECACA',
+                        borderRadius: '6px', padding: '0.2rem 0.55rem'
+                      }}>
+                        {isMultiReconciled ? (
+                          <>
+                            <CheckCircle2 size={13} style={{ color: '#4338CA' }} />
+                            <span>Reconciled: {reconciledMultiCustomersCount.toLocaleString()} Customers ({reconciledMultiRecordsCount.toLocaleString()} Records)</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertTriangle size={13} style={{ color: '#DC2626' }} />
+                            <span>Unreconciled ({Math.abs(multiPaymentCustomersCount - reconciledMultiCustomersCount)} customer delta)</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {multiBreakdown.map((d, idx) => {
+                        const custCount = Number(d.customerCount || d.multiPaymentCustomersCount || 0);
+                        const recCount = Number(d.recordCount || d.multiPaymentCount || 0);
+                        const barWidth = maxMultiCustomerCount > 0 ? Math.round((custCount / maxMultiCustomerCount) * 100) : 0;
+                        const isCurrentDiv = division !== 'ALL' && division.toLowerCase() === d.division.toLowerCase();
+                        const custPct = multiPaymentCustomersCount > 0 ? (custCount / multiPaymentCustomersCount * 100) : 0;
+                        const indigoShades = ['#4338CA', '#4F46E5', '#6366F1', '#818CF8', '#3730A3'];
+                        const barColor = indigoShades[idx % indigoShades.length];
+
+                        return (
+                          <div key={d.division} style={{
+                            display: 'grid',
+                            gridTemplateColumns: '100px 1fr 240px',
+                            alignItems: 'center',
+                            gap: '0.85rem'
+                          }}>
+                            <div style={{
+                              fontSize: '0.82rem',
+                              fontWeight: isCurrentDiv ? 700 : 600,
+                              color: isCurrentDiv ? '#4338CA' : 'var(--text-secondary)',
+                              display: 'flex', alignItems: 'center', gap: '0.35rem'
+                            }}>
+                              <span>{d.division}</span>
+                              {isCurrentDiv && <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#4338CA' }} />}
+                            </div>
+
+                            <div style={{
+                              background: '#F1F5F9', height: '10px',
+                              borderRadius: '6px', overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${barWidth}%`, height: '100%',
+                                background: barColor, borderRadius: '6px',
+                                transition: 'width 0.4s ease'
+                              }} />
+                            </div>
+
+                            <div style={{
+                              display: 'flex', justifyContent: 'flex-end',
+                              alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              <strong style={{ color: 'var(--text-primary)', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                                {custCount.toLocaleString()} {custCount === 1 ? 'Customer' : 'Customers'}
+                              </strong>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', minWidth: '40px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                ({custPct.toFixed(1)}%)
+                              </span>
+                              <span style={{ color: '#4338CA', fontSize: '0.74rem', fontWeight: 600, minWidth: '75px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                                {recCount.toLocaleString()} Records
                               </span>
                             </div>
                           </div>
@@ -4829,6 +5388,34 @@ const PaymentControlCenter = () => {
                       <>
                         <AlertTriangle size={15} style={{ color: '#DC2626' }} />
                         <span>Total Ready Payable: <strong style={{ color: 'var(--text-primary)' }}>{formatLKR(totalPayableAmount)}</strong> • Division Sum: <strong style={{ color: '#DC2626' }}>{formatLKR(reconciledReadyPayable)}</strong> (Unreconciled) • Payees Sum: <strong style={{ color: '#DC2626' }}>{reconciledReadyCount.toLocaleString()}</strong></span>
+                      </>
+                    )}
+                  </div>
+                ) : isTotalOnHoldModal ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {isOnHoldReconciled ? (
+                      <>
+                        <CheckCircle2 size={15} style={{ color: '#DC2626' }} />
+                        <span>Total Withheld: <strong style={{ color: 'var(--text-primary)' }}>{formatLKR(totalOnHoldAmount)}</strong> • Reconciled Division Sum: <strong style={{ color: '#DC2626' }}>{formatLKR(reconciledOnHoldPayable)}</strong> • Withheld Producers: <strong style={{ color: '#DC2626' }}>{reconciledOnHoldCount.toLocaleString()}</strong></span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={15} style={{ color: '#DC2626' }} />
+                        <span>Total Withheld: <strong style={{ color: 'var(--text-primary)' }}>{formatLKR(totalOnHoldAmount)}</strong> • Division Sum: <strong style={{ color: '#DC2626' }}>{formatLKR(reconciledOnHoldPayable)}</strong> (Unreconciled) • Producers Sum: <strong style={{ color: '#DC2626' }}>{reconciledOnHoldCount.toLocaleString()}</strong></span>
+                      </>
+                    )}
+                  </div>
+                ) : isMultiPaymentsModal ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {isMultiReconciled ? (
+                      <>
+                        <CheckCircle2 size={15} style={{ color: '#4338CA' }} />
+                        <span>Multi-Payment Customers: <strong style={{ color: 'var(--text-primary)' }}>{multiPaymentCustomersCount.toLocaleString()}</strong> • Division Sum: <strong style={{ color: '#4338CA' }}>{reconciledMultiCustomersCount.toLocaleString()}</strong> • Total Records: <strong style={{ color: '#4338CA' }}>{reconciledMultiRecordsCount.toLocaleString()}</strong></span>
+                      </>
+                    ) : (
+                      <>
+                        <AlertTriangle size={15} style={{ color: '#DC2626' }} />
+                        <span>Multi-Payment Customers: <strong style={{ color: 'var(--text-primary)' }}>{multiPaymentCustomersCount.toLocaleString()}</strong> • Division Sum: <strong style={{ color: '#DC2626' }}>{reconciledMultiCustomersCount.toLocaleString()}</strong> (Unreconciled) • Records Sum: <strong style={{ color: '#DC2626' }}>{reconciledMultiRecordsCount.toLocaleString()}</strong></span>
                       </>
                     )}
                   </div>

@@ -425,21 +425,18 @@ public class PaymentControlService {
             }
         }
 
+        Map<String, Integer> custPaymentCounts = new HashMap<>();
+        Map<String, String> custOriginalAcc = new HashMap<>();
+        for (Map<String, Object> r : records) {
+            String rawAcc = strVal(r.get("accountNo"));
+            if (!rawAcc.isEmpty()) {
+                String accKey = rawAcc.toLowerCase();
+                custPaymentCounts.put(accKey, custPaymentCounts.getOrDefault(accKey, 0) + 1);
+                custOriginalAcc.putIfAbsent(accKey, rawAcc);
+            }
+        }
         int multiPaymentCount = 0;
         int multiPaymentCustomersCount = 0;
-        Map<String, Integer> custPaymentCounts = new HashMap<>();
-        for (Map<String, Object> r : records) {
-            String acc = strVal(r.get("accountNo")).toLowerCase();
-            if (!acc.isEmpty()) {
-                custPaymentCounts.put(acc, custPaymentCounts.getOrDefault(acc, 0) + 1);
-            }
-        }
-        for (int cnt : custPaymentCounts.values()) {
-            if (cnt > 1) {
-                multiPaymentCustomersCount++;
-                multiPaymentCount += cnt;
-            }
-        }
 
         // ── Division breakdown: total customers ──────────────────────────
         Map<String, Integer> divisionCustomerCounts = new LinkedHashMap<>();
@@ -448,6 +445,20 @@ public class PaymentControlService {
         divisionCustomerCounts.put("Trincomalee", 0);
         divisionCustomerCounts.put("Valaichenai", 0);
         divisionCustomerCounts.put("Kalmunai", 0);
+
+        // ── Division breakdown: multi-payment customers & records ────────
+        Map<String, Integer> divisionMultiCustomerCounts = new LinkedHashMap<>();
+        divisionMultiCustomerCounts.put("Ampara", 0);
+        divisionMultiCustomerCounts.put("Batticaloa", 0);
+        divisionMultiCustomerCounts.put("Trincomalee", 0);
+        divisionMultiCustomerCounts.put("Valaichenai", 0);
+        divisionMultiCustomerCounts.put("Kalmunai", 0);
+        Map<String, Integer> divisionMultiRecordCounts = new LinkedHashMap<>();
+        divisionMultiRecordCounts.put("Ampara", 0);
+        divisionMultiRecordCounts.put("Batticaloa", 0);
+        divisionMultiRecordCounts.put("Trincomalee", 0);
+        divisionMultiRecordCounts.put("Valaichenai", 0);
+        divisionMultiRecordCounts.put("Kalmunai", 0);
 
         // ── Division breakdown: payment-ready customers & payable ────────
         Map<String, Integer> divisionReadyCounts = new LinkedHashMap<>();
@@ -480,6 +491,35 @@ public class PaymentControlService {
         String activeCanonDiv = (division != null && !division.trim().isEmpty() && !"ALL".equalsIgnoreCase(division))
                 ? com.ceb.billing.utils.BranchDetector.canonicalDivision(division)
                 : "";
+
+        for (Map.Entry<String, Integer> entry : custPaymentCounts.entrySet()) {
+            int cnt = entry.getValue();
+            if (cnt > 1) {
+                multiPaymentCustomersCount++;
+                multiPaymentCount += cnt;
+
+                String accKey = entry.getKey();
+                String rawAcc = custOriginalAcc.getOrDefault(accKey, accKey);
+                String div = customerDivisionMap.get(rawAcc);
+                if (div == null || div.isEmpty()) {
+                    div = customerDivisionMap.get(accKey);
+                }
+                if (div == null || div.isEmpty()) {
+                    if (!activeCanonDiv.isEmpty()) {
+                        div = activeCanonDiv;
+                    } else {
+                        String detected = com.ceb.billing.utils.BranchDetector.detectBranch(rawAcc);
+                        div = (detected != null && !detected.isEmpty()) ? detected : "";
+                    }
+                }
+                if (div == null || div.isEmpty()) {
+                    div = !activeCanonDiv.isEmpty() ? activeCanonDiv : "Other";
+                }
+
+                divisionMultiCustomerCounts.put(div, divisionMultiCustomerCounts.getOrDefault(div, 0) + 1);
+                divisionMultiRecordCounts.put(div, divisionMultiRecordCounts.getOrDefault(div, 0) + cnt);
+            }
+        }
 
         for (String acc : distinctCustomers) {
             String div = customerDivisionMap.get(acc);
@@ -611,6 +651,28 @@ public class PaymentControlService {
             onHoldDivisionBreakdown.add(item);
         }
 
+        List<Map<String, Object>> multiDivisionBreakdown = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : divisionMultiCustomerCounts.entrySet()) {
+            if ("Other".equals(entry.getKey()) && entry.getValue() == 0)
+                continue;
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("division", entry.getKey());
+            item.put("customerCount", entry.getValue());
+            item.put("multiPaymentCustomersCount", entry.getValue());
+            int recCount = divisionMultiRecordCounts.getOrDefault(entry.getKey(), 0);
+            item.put("recordCount", recCount);
+            item.put("multiPaymentCount", recCount);
+            double pct = multiPaymentCustomersCount > 0
+                    ? Math.round((entry.getValue() * 100.0 / multiPaymentCustomersCount) * 10.0) / 10.0
+                    : 0.0;
+            item.put("percentage", pct);
+            double recPct = multiPaymentCount > 0
+                    ? Math.round((recCount * 100.0 / multiPaymentCount) * 10.0) / 10.0
+                    : 0.0;
+            item.put("recordPercentage", recPct);
+            multiDivisionBreakdown.add(item);
+        }
+
         double totalPending = totalPayable + totalOnHold;
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("totalCustomers", distinctCustomers.size());
@@ -634,6 +696,7 @@ public class PaymentControlService {
         summary.put("divisionBreakdown", divisionBreakdown);
         summary.put("readyDivisionBreakdown", readyDivisionBreakdown);
         summary.put("onHoldDivisionBreakdown", onHoldDivisionBreakdown);
+        summary.put("multiDivisionBreakdown", multiDivisionBreakdown);
 
         return summary;
     }

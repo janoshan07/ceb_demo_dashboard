@@ -315,6 +315,24 @@ public class PaymentControlServiceTest {
         }
         int totalOnHoldCount = ((Number) summary.get("onHoldCount")).intValue();
         assertEquals(totalOnHoldCount, sumOnHold, "On Hold division counts must reconcile to onHoldCount");
+
+        assertTrue(summary.containsKey("multiDivisionBreakdown"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> multiBreakdown = (List<Map<String, Object>>) summary.get("multiDivisionBreakdown");
+        assertNotNull(multiBreakdown);
+        int sumMultiCustomers = 0;
+        int sumMultiRecords = 0;
+        for (Map<String, Object> item : multiBreakdown) {
+            assertNotNull(item.get("division"));
+            assertNotNull(item.get("customerCount"));
+            assertNotNull(item.get("recordCount"));
+            sumMultiCustomers += ((Number) item.get("customerCount")).intValue();
+            sumMultiRecords += ((Number) item.get("recordCount")).intValue();
+        }
+        int totalMultiCustomers = ((Number) summary.get("multiPaymentCustomersCount")).intValue();
+        int totalMultiRecords = ((Number) summary.get("multiPaymentCount")).intValue();
+        assertEquals(totalMultiCustomers, sumMultiCustomers, "Multi-payment customer counts must reconcile to multiPaymentCustomersCount");
+        assertEquals(totalMultiRecords, sumMultiRecords, "Multi-payment record counts must reconcile to multiPaymentCount");
     }
 }
 

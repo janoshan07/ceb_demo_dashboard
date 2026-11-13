@@ -2204,3 +2204,31 @@ input.pcc-search-input:focus {
     flex-wrap: wrap;
   }
 }
+
+/* ── Payment Control Center Summary Cards Grid ──────────────────────── */
+.payment-control-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.75rem;
+}
+
+@media (max-width: 1280px) {
+  .payment-control-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .payment-control-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .payment-control-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

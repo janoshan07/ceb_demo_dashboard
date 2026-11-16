@@ -362,12 +362,13 @@ public class CustomerHashIndexService {
             boolean isRejected = "REJECTED".equals(dto.get("status")) || (directory != null && ("REJECTED".equals(directory.get("status")) || Boolean.TRUE.equals(directory.get("rejected"))));
             isOutstanding = isOutstanding && !isRejected;
 
+            boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
+            boolean isFullyComplete = isComplete && !hasMismatch && !isOutstanding && !isRejected;
+
             if ("COMPLETE".equals(compFilter)) {
-                if (!isComplete || hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch || isOutstanding || isRejected) return false;
+                if (!isFullyComplete) return false;
             } else if ("MISSING".equals(compFilter) || "INCOMPLETE".equals(compFilter)) {
-                if (isOutstanding || isRejected) return false;
-                boolean hasMismatch = hasNameMismatch || hasUnitRateMismatch || hasNetTypeMismatch;
-                if (isComplete && !hasMismatch) return false;
+                if (isFullyComplete) return false;
             } else if ("NAME_MISMATCH".equals(compFilter)) {
                 if (!hasNameMismatch || isOutstanding || isRejected) return false;
             } else if ("UNIT_RATE_MISMATCH".equals(compFilter)) {

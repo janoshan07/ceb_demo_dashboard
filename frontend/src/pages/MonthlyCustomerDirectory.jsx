@@ -157,6 +157,38 @@ export const normalizeNetType = (raw) => {
   return c.replace(/\b\w/g, ch => ch.toUpperCase());
 };
 
+const normalizeAccountNo = value => String(value ?? '').trim().toUpperCase();
+const hasDirectoryValue = value => {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'object') return value.value !== null && value.value !== undefined && String(value.value).trim() !== '';
+  return String(value).trim() !== '';
+};
+
+// A display-only customer projection: preserve source rows, choose the most complete row as
+// the edit target, and fill its blank fields from the remaining rows in stable order.
+const uniqueDirectoryRows = records => {
+  const grouped = new Map();
+  (records || []).forEach((row, idx) => {
+    const accountKey = normalizeAccountNo(row?.accountNo);
+    if (!accountKey) return;
+    const group = grouped.get(accountKey) || [];
+    group.push({ row, idx, score: Object.values(row || {}).filter(hasDirectoryValue).length, stable: JSON.stringify(row || {}) });
+    grouped.set(accountKey, group);
+  });
+
+  return [...grouped.values()].map(group => {
+    group.sort((a, b) => b.score - a.score || a.stable.localeCompare(b.stable) || a.idx - b.idx);
+    const merged = {};
+    group.forEach(({ row }) => {
+      Object.entries(row || {}).forEach(([key, value]) => {
+        if (!hasDirectoryValue(merged[key]) && hasDirectoryValue(value)) merged[key] = value;
+      });
+    });
+    merged.accountNo = String(group[0].row.accountNo).trim();
+    return { row: merged, idx: group[0].idx };
+  });
+};
+
 // Every filter the summary cards / Status dropdown can apply. Filtering is display-only —
 // records themselves are never changed. `card: false` keeps an option dropdown-only.
 export const STATUS_FILTERS = [
@@ -429,6 +461,7 @@ export const FilterDropdown = ({ value, options, onChange, minWidth = 190, place
 
 // In-Memory Client Hash Table Cache for instant O(1) dataset retrieval
 const datasetHashCache = new Map();
+let monthsOverviewHashCache = null;
 
 const MonthlyCustomerDirectory = () => {
   const { authFetch, user } = useAuth();
@@ -438,8 +471,8 @@ const MonthlyCustomerDirectory = () => {
 
   // Month → Division organization from GET /monthly-directory/months:
   // { divisions: [5 names], months: [{ billingMonth, divisions[5], ... }], unassigned: [...] }
-  const [monthsData, setMonthsData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [monthsData, setMonthsData] = useState(() => monthsOverviewHashCache);
+  const [loading, setLoading] = useState(() => !monthsOverviewHashCache);
   const [selectedMonth, setSelectedMonth] = useState(null); // billing month label being viewed, null = overview
 
   // "Start New Billing Month" picker
@@ -476,9 +509,14 @@ const MonthlyCustomerDirectory = () => {
     setCardLimit(48);
   }, [searchTerm, statusFilter, netTypeFilter]);
 
-  const loadList = useCallback(async () => {
+  const loadList = useCallback(async (bypassCache = false) => {
     try {
-      setLoading(true);
+      if (!bypassCache && monthsOverviewHashCache) {
+        setMonthsData(monthsOverviewHashCache);
+        setLoading(false);
+      } else if (!monthsOverviewHashCache) {
+        setLoading(true);
+      }
       const res = await authFetch('/api/officer/monthly-directory/months');
       const data = await res.json();
       if (!res.ok) { 
@@ -489,6 +527,7 @@ const MonthlyCustomerDirectory = () => {
         }); 
         return; 
       }
+      monthsOverviewHashCache = data;
       setMonthsData(data);
     } catch (e) {
       showToast({
@@ -520,7 +559,8 @@ const MonthlyCustomerDirectory = () => {
         message: `"${item.datasetName}" approved and customer details synced to directory.`,
         type: 'success'
       });
-      loadList();
+      monthsOverviewHashCache = null;
+      loadList(true);
     } catch (e) {
       showToast({
         title: 'Approval Failed',
@@ -638,7 +678,8 @@ const MonthlyCustomerDirectory = () => {
         type: 'success'
       });
       setRenaming(null);
-      loadList();
+      monthsOverviewHashCache = null;
+      loadList(true);
     } catch (e) {
       showToast({
         title: 'Rename Failed',
@@ -690,8 +731,9 @@ const MonthlyCustomerDirectory = () => {
       }
       
       datasetHashCache.delete(item.id);
+      monthsOverviewHashCache = null;
       if (viewing && viewing.id === item.id) setViewing(null);
-      loadList();
+      loadList(true);
     } catch (e) {
       showToast({
         title: 'Deletion Failed',
@@ -932,9 +974,11 @@ const MonthlyCustomerDirectory = () => {
     }
   }, [rowExpiry, isRecordComplete]);
 
+  const uniqueRecords = useMemo(() => uniqueDirectoryRows(viewing?.records || []), [viewing?.records]);
+
   // Live count per filter, computed in a SINGLE O(N) pass using a Hash Map
   const filterCounts = useMemo(() => {
-    const recs = viewing?.records || [];
+    const recs = uniqueRecords.map(({ row }) => row);
     const counts = { ALL: recs.length };
     for (let i = 0; i < STATUS_FILTERS.length; i++) {
       if (STATUS_FILTERS[i].key !== 'ALL') counts[STATUS_FILTERS[i].key] = 0;
@@ -949,28 +993,28 @@ const MonthlyCustomerDirectory = () => {
       }
     }
     return counts;
-  }, [viewing, matchesFilter]);
+  }, [uniqueRecords, matchesFilter]);
 
   // Pre-computed Account Number Hash Table for O(1) Instant Search
   const accountNoHashIndex = useMemo(() => {
     const map = new Map();
-    (viewing?.records || []).forEach((row, idx) => {
-      const acc = String(row.accountNo ?? '').trim().toLowerCase();
+    uniqueRecords.forEach(({ row, idx }) => {
+      const acc = normalizeAccountNo(row.accountNo);
       if (acc) map.set(acc, { row, idx });
     });
     return map;
-  }, [viewing?.records]);
+  }, [uniqueRecords]);
 
   // Snapshot records shown as Customer Cards: search + filters applied, always sorted by
   // Account No ascending. `idx` keeps each record's position in the stored snapshot array so
   // edits/revalidation/audit always target the correct record.
   const displayRecords = useMemo(() => {
-    const recs = (viewing?.records || []).map((row, idx) => ({ row, idx }));
+    const recs = uniqueRecords;
     const term = searchTerm.trim().toLowerCase();
     let list = recs;
     if (term) {
-      if (accountNoHashIndex.has(term)) {
-        list = [accountNoHashIndex.get(term)];
+      if (accountNoHashIndex.has(term.toUpperCase())) {
+        list = [accountNoHashIndex.get(term.toUpperCase())];
       } else {
         list = list.filter(({ row }) =>
           [row.accountNo, row.refNo, row.npayName, row.customerName]
@@ -985,17 +1029,17 @@ const MonthlyCustomerDirectory = () => {
     }
     return [...list].sort((a, b) =>
       String(a.row.accountNo ?? '').localeCompare(String(b.row.accountNo ?? ''), undefined, { numeric: true }));
-  }, [viewing, searchTerm, statusFilter, netTypeFilter, matchesFilter, accountNoHashIndex]);
+  }, [uniqueRecords, searchTerm, statusFilter, netTypeFilter, matchesFilter, accountNoHashIndex]);
 
   // Net Type dropdown options: normalized display names, deduped, alphabetical, with counts.
   const netTypeOptions = useMemo(() => {
     const counts = new Map();
-    (viewing?.records || []).forEach(r => {
+    uniqueRecords.forEach(({ row: r }) => {
       const nt = normalizeNetType(recordNetType(r));
       if (nt) counts.set(nt, (counts.get(nt) || 0) + 1);
     });
     return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
-  }, [viewing]);
+  }, [uniqueRecords]);
 
   const auditEntries = useMemo(() => {
     const log = viewing?.auditLog || [];
@@ -1003,7 +1047,7 @@ const MonthlyCustomerDirectory = () => {
     return log.filter(e => e.recordIndex === auditScope);
   }, [viewing, auditScope]);
 
-  const detailRecord = (detailsIdx !== null && viewing) ? (viewing.records || [])[detailsIdx] : null;
+  const detailRecord = detailsIdx !== null ? uniqueRecords.find(({ idx }) => idx === detailsIdx)?.row || null : null;
 
   // ── Month → Division derived views ────────────────────────────────────────
   const months = monthsData?.months || [];
@@ -1048,7 +1092,7 @@ const MonthlyCustomerDirectory = () => {
               <Plus size={14} /> Start New Billing Month
             </button>
           )}
-          <button onClick={loadList} style={{ padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+          <button onClick={() => { monthsOverviewHashCache = null; loadList(true); }} style={{ padding: '0.5rem 1.1rem', borderRadius: 10, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', background: '#FFFFFF', border: '1px solid #E2E8F0', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '0.4rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
             <RefreshCw size={14} /> Refresh
           </button>
         </div>
@@ -1062,6 +1106,10 @@ const MonthlyCustomerDirectory = () => {
       ) : !selectedMonth ? (
         <>
           {/* ── Billing Months overview ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', padding: '0.85rem 1.1rem', marginBottom: '1rem', borderRadius: 12, background: '#EFF6FF', border: '1px solid #DBEAFE' }}>
+            <span style={{ color: '#1E3A8A', fontWeight: 700, fontSize: '0.82rem' }}>All Customers · All Approved Months</span>
+            <strong style={{ color: '#1D4ED8', fontFamily: 'monospace' }}>{monthsData?.allCustomersCount ?? 0}</strong>
+          </div>
           {months.length === 0 ? (
             <div className="card" style={{ padding: '3rem', borderRadius: 16, textAlign: 'center', color: '#64748B', background: '#FFFFFF', border: '1px solid #E2E8F0' }}>
               <Calendar size={40} style={{ opacity: 0.4, marginBottom: '0.75rem', color: '#2563EB' }} />
@@ -1111,7 +1159,7 @@ const MonthlyCustomerDirectory = () => {
                       </div>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: '#475569' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Users size={12} color="#2563EB" /> {m.totalRecords} records</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}><Users size={12} color="#2563EB" /> {m.uniqueCustomers ?? m.totalRecords ?? 0} customers</span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', color: '#64748B' }}><Clock size={12} /> {m.lastUpdated || '—'}</span>
                     </div>
                   </button>
@@ -1132,7 +1180,7 @@ const MonthlyCustomerDirectory = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
                       <FolderOpen size={15} color="#2563EB" />
                       <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0F172A' }}>{item.datasetName}</span>
-                      <span style={{ fontSize: '0.7rem', color: '#64748B', fontFamily: 'monospace' }}>{item.totalRecords ?? 0} records</span>
+                      <span style={{ fontSize: '0.7rem', color: '#64748B', fontFamily: 'monospace' }}>{item.uniqueCustomers ?? item.totalRecords ?? 0} customers</span>
                       <StatusBadge status={item.status} />
                     </div>
                     <div style={{ display: 'inline-flex', gap: '0.35rem', flexWrap: 'wrap' }}>
@@ -1170,7 +1218,7 @@ const MonthlyCustomerDirectory = () => {
                 )}
               </div>
               <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '0.35rem' }}>
-                {monthView.approvedCount}/{monthView.divisionCount || divisionNames.length} divisions completed · {monthView.totalRecords} total records
+                {monthView.approvedCount}/{monthView.divisionCount || divisionNames.length} divisions completed · {monthView.uniqueCustomers ?? monthView.totalRecords ?? 0} unique customers
               </div>
             </div>
             <div style={{ minWidth: 230, flex: '0 1 260px' }}>
@@ -1210,8 +1258,8 @@ const MonthlyCustomerDirectory = () => {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.74rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#64748B' }}>Total Records</span>
-                      <span style={{ color: '#0F172A', fontWeight: 700, fontFamily: 'monospace' }}>{d.totalRecords ?? 0}</span>
+                      <span style={{ color: '#64748B' }}>Unique Customers</span>
+                      <span style={{ color: '#0F172A', fontWeight: 700, fontFamily: 'monospace' }}>{d.uniqueCustomers ?? d.totalRecords ?? 0}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span style={{ color: '#64748B' }}>Last Updated</span>
@@ -1268,7 +1316,7 @@ const MonthlyCustomerDirectory = () => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
                       <FolderOpen size={15} color="#2563EB" />
                       <span style={{ fontWeight: 600, fontSize: '0.82rem', color: '#0F172A' }}>{item.datasetName}</span>
-                      <span style={{ fontSize: '0.7rem', color: '#64748B', fontFamily: 'monospace' }}>{item.totalRecords ?? 0} records</span>
+                      <span style={{ fontSize: '0.7rem', color: '#64748B', fontFamily: 'monospace' }}>{item.uniqueCustomers ?? item.totalRecords ?? 0} customers</span>
                       <StatusBadge status={item.status} />
                     </div>
                     <div style={{ display: 'inline-flex', gap: '0.35rem', flexWrap: 'wrap' }}>
@@ -1345,7 +1393,7 @@ const MonthlyCustomerDirectory = () => {
                 <div style={{ marginTop: '0.45rem', fontSize: '0.78rem', color: '#64748B', display: 'flex', gap: '1.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
                   <span><strong style={{ color: '#0F172A' }}>Billing Month:</strong> {viewing.billingMonth || '—'}</span>
                   <span><strong style={{ color: '#0F172A' }}>Division:</strong> {viewing.division || '—'}</span>
-                  <span><strong style={{ color: '#0F172A' }}>Total Records:</strong> {viewing.totalRecords ?? 0}</span>
+                  <span><strong style={{ color: '#0F172A' }}>Unique Customers:</strong> {uniqueRecords.length}</span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
                     <strong style={{ color: '#0F172A' }}>Approved By:</strong>
                     <User size={13} color="#2563EB" /> {viewing.approvedBy || 'admin'}
@@ -1437,12 +1485,12 @@ const MonthlyCustomerDirectory = () => {
                   minWidth={200}
                   placeholderColor="#2563EB"
                   options={[
-                    { value: 'ALL', label: 'All Net Types', count: (viewing.records || []).length, color: '#2563EB' },
+                    { value: 'ALL', label: 'All Net Types', count: uniqueRecords.length, color: '#2563EB' },
                     ...netTypeOptions.map(([nt, count]) => ({ value: nt, label: nt, count, color: '#2563EB' })),
                   ]}
                 />
                 <span style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                  Showing <strong style={{ color: '#0F172A' }}>{displayRecords.length}</strong> of {(viewing.records || []).length} records · sorted by Account No
+                  Showing <strong style={{ color: '#0F172A' }}>{displayRecords.length}</strong> of {uniqueRecords.length} customers · sorted by Account No
                 </span>
               </div>
             )}

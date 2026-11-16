@@ -70,6 +70,9 @@ public class ApprovalController {
     @Autowired
     private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository monthlyDirectorySnapshotRepository;
 
+    @Autowired(required = false)
+    private com.ceb.billing.services.MonthlyDirectoryHashService monthlyDirectoryHashService;
+
     private static final java.util.logging.Logger log = java.util.logging.Logger.getLogger(ApprovalController.class.getName());
 
     private String str(Map<String, Object> r, String... keys) {
@@ -336,6 +339,12 @@ public class ApprovalController {
                 if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
                     continue;
                 }
+                if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isReady()) {
+                    Map<String, Map<String, Object>> recMap = monthlyDirectoryHashService.getRecordsMap(snap.getId());
+                    if (recMap != null && !recMap.containsKey(accountNo)) {
+                        continue; // O(1) hash skip: customer not present in this snapshot
+                    }
+                }
                 boolean modified = false;
                 List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
                         new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
@@ -502,6 +511,12 @@ public class ApprovalController {
                 if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
                     continue;
                 }
+                if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isReady()) {
+                    Map<String, Map<String, Object>> recMap = monthlyDirectoryHashService.getRecordsMap(snap.getId());
+                    if (recMap != null && !recMap.containsKey(accountNo)) {
+                        continue; // O(1) hash skip: customer not present in this snapshot
+                    }
+                }
                 boolean modified = false;
                 List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
                         new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
@@ -533,6 +548,12 @@ public class ApprovalController {
         for (com.ceb.billing.entities.MonthlyDirectorySnapshot snapshot : monthlyDirectorySnapshotRepository.findAll()) {
             if (snapshot.getFinalDataJson() == null || snapshot.getFinalDataJson().trim().isEmpty()) {
                 continue;
+            }
+            if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isReady()) {
+                Map<String, Map<String, Object>> recMap = monthlyDirectoryHashService.getRecordsMap(snapshot.getId());
+                if (recMap != null && !recMap.containsKey(accountNo)) {
+                    continue; // O(1) hash skip: customer not present in this snapshot
+                }
             }
             List<Map<String, Object>> records = objectMapper.readValue(snapshot.getFinalDataJson(),
                     new TypeReference<List<Map<String, Object>>>() {});

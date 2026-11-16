@@ -3556,7 +3556,7 @@ const UploadPage = () => {
     const warnDup = (mainDataset?.warningCount || 0) + (mainDataset?.duplicateCount || 0);
     if (warnDup > 0 || rejectedCount > 0) {
       const rejNote = rejectedCount > 0
-        ? `${rejectedCount} incomplete record(s) (missing CEB Assist, NGEN or NPAY data) have been automatically moved to the Rejected list and will NOT be imported. `
+        ? `${rejectedCount} incomplete record(s) (missing billing generation or payment records) have been automatically moved to the Rejected list and will NOT be imported. `
         : '';
       const warnNote = warnDup > 0
         ? `${warnDup} merged record(s) still have warnings (field mismatches or missing values) or duplicate Account Numbers carried from NGEN/NPAY. These do not block approval and remain reviewable during Master Data comparison. `
@@ -5026,7 +5026,7 @@ const UploadPage = () => {
         {(rejectedCount || 0) > 0 && (
           <div style={{ background: 'rgba(244,63,94,0.08)', border: '1px solid rgba(244,63,94,0.25)', borderRadius: 10, padding: '0.7rem 1rem', marginBottom: '1rem', display: 'flex', gap: '0.6rem', alignItems: 'flex-start', fontSize: '0.78rem', color: '#475569' }}>
             <XCircle size={15} color="#f43f5e" style={{ marginTop: 1, flexShrink: 0 }} />
-            <div><strong style={{ color: '#f43f5e' }}>{rejectedCount} incomplete record(s) auto-removed.</strong> Account Numbers missing an entire CEB Assist, NGEN or NPAY record are moved to the <strong>Rejected</strong> list and excluded from the Main Dataset. They are shown here for review only and are not imported. Duplicate records are not affected.</div>
+            <div><strong style={{ color: '#f43f5e' }}>{rejectedCount} incomplete record(s) auto-removed.</strong> Account Numbers missing billing records (both NGEN generation and NPAY payment) are moved to the <strong>Rejected</strong> list and excluded from the Main Dataset. They are shown here for review only and are not imported. Duplicate records are not affected.</div>
           </div>
         )}
 

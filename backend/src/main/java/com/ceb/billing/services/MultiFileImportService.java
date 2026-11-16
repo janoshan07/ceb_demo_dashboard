@@ -3056,11 +3056,16 @@ public class MultiFileImportService {
             }
         }
 
-        // Gather all unique account numbers from CEB, NGEN, and NPAY only (no Master Data)
+        // Candidate billing accounts for Step 5:
+        // A solar billing record must have an NGEN generation record or an NPAY settlement record.
+        // Accounts that exist solely in CEB Assist (meter reading dates) without any generation or
+        // payment activity are non-solar or inactive meters and should not manufacture empty billing rows.
         Set<String> allAccounts = new LinkedHashSet<>();
-        allAccounts.addAll(cebMap.keySet());
         allAccounts.addAll(ngenAll.keySet());
         allAccounts.addAll(npayAll.keySet());
+        if (allAccounts.isEmpty()) {
+            allAccounts.addAll(cebMap.keySet());
+        }
 
         List<Map<String, Object>> mergedList = new ArrayList<>();
         List<Map<String, Object>> rejectedList = new ArrayList<>();
@@ -3336,15 +3341,21 @@ public class MultiFileImportService {
                     errors.add("Account No is missing");
                 }
 
-                // ── 9. Incomplete merges (missing an entire source file) are auto-rejected ──
-                boolean incomplete = !hasCeb || !hasNgen || !hasNpay;
+                // ── 9. Incomplete merges: only records missing BOTH NGEN and NPAY are auto-rejected ──
+                boolean incomplete = !hasNgen && !hasNpay;
                 if (incomplete) {
-                    List<String> missSrc = new ArrayList<>();
-                    if (!hasCeb) missSrc.add("CEB Assist");
-                    if (!hasNgen) missSrc.add("NGEN");
-                    if (!hasNpay) missSrc.add("NPAY");
                     row.put("rejected", true);
-                    row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
+                    row.put("rejectionReason", "Incomplete merge — missing both NGEN generation and NPAY payment records");
+                } else {
+                    if (!hasCeb) {
+                        warnings.add("Reading dates missing from CEB Assist");
+                    }
+                    if (!hasNpay) {
+                        row.put("noNpay", true);
+                    }
+                    if (!hasNgen) {
+                        row.put("noNgen", true);
+                    }
                 }
 
                 // ── 10. Status precedence: REJECTED > ERROR > WARNING > MULTIPLE_PAYMENT > VALID ──
@@ -3470,6 +3481,12 @@ public class MultiFileImportService {
     public List<Map<String, Object>> revalidateMainDataset(Long sessionId,
                                                            Map<String, Map<String, Object>> corrections) {
         List<Map<String, Object>> mainDataset = getMainDataset(sessionId);
+        if (mainDataset.isEmpty()) {
+            try {
+                generateMainDataset(sessionId);
+                mainDataset = getMainDataset(sessionId);
+            } catch (Exception ignored) {}
+        }
         if (mainDataset.isEmpty()) {
             throw new IllegalStateException("No Main Dataset found. Please approve files first.");
         }
@@ -4735,15 +4752,17 @@ public class MultiFileImportService {
 
         if (accountNo == null || accountNo.trim().isEmpty()) errors.add("Account No is missing");
 
-        // Incomplete merges (missing an entire source file) are auto-rejected, mirroring generateMainDataset.
-        boolean incomplete = !hasCeb || !hasNgen || !hasNpay;
+        // Incomplete merges: only records missing BOTH NGEN and NPAY are auto-rejected
+        boolean incomplete = !hasNgen && !hasNpay;
         if (incomplete) {
-            List<String> missSrc = new ArrayList<>();
-            if (!hasCeb) missSrc.add("CEB Assist");
-            if (!hasNgen) missSrc.add("NGEN");
-            if (!hasNpay) missSrc.add("NPAY");
             row.put("rejected", true);
-            row.put("rejectionReason", "Incomplete merge — missing source file(s): " + String.join(", ", missSrc));
+            row.put("rejectionReason", "Incomplete merge — missing both NGEN generation and NPAY payment records");
+        } else {
+            row.remove("rejected");
+            row.remove("rejectionReason");
+            if (!hasCeb) {
+                warnings.add("Reading dates missing from CEB Assist");
+            }
         }
 
         String status;
@@ -5053,6 +5072,11 @@ public class MultiFileImportService {
      * callers (Step 6, finalize) keep using {@link #getMainDataset} which is primary-only.
      */
     public List<Map<String, Object>> getMainDatasetWithDuplicates(Long sessionId) {
+        if (!MAIN_DATA_CACHE.containsKey(sessionId)) {
+            try {
+                generateMainDataset(sessionId);
+            } catch (Exception ignored) {}
+        }
         List<Map<String, Object>> primary = MAIN_DATA_CACHE.getOrDefault(sessionId, new ArrayList<>());
         for (Map<String, Object> p : primary) {
             Double sa = parseDouble(p.get("salesAmount"));

@@ -49,6 +49,9 @@ public class CustomerDirectorySyncService {
     private CustomerHashIndexService customerHashIndexService;
 
     @Autowired(required = false)
+    private MonthlyDirectoryHashService monthlyDirectoryHashService;
+
+    @Autowired(required = false)
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     /**
@@ -57,16 +60,41 @@ public class CustomerDirectorySyncService {
      */
     @Transactional
     public int syncSnapshot(MonthlyDirectorySnapshot snap) {
+        return syncSnapshot(snap, false);
+    }
+
+    /** Strict variant used by snapshot approval so a partial directory sync cannot be approved. */
+    @Transactional
+    public int syncSnapshotStrict(MonthlyDirectorySnapshot snap) {
+        return syncSnapshot(snap, true);
+    }
+
+    private int syncSnapshot(MonthlyDirectorySnapshot snap, boolean strict) {
+        if (strict && (snap == null || snap.getFinalDataJson() == null)) {
+            throw new IllegalStateException("Approved snapshot has no customer data");
+        }
         if (snap == null || snap.getFinalDataJson() == null) return 0;
-        List<Map<String, Object>> records;
-        try {
-            records = objectMapper.readValue(snap.getFinalDataJson(),
-                    new TypeReference<List<Map<String, Object>>>() {});
-        } catch (Exception e) {
-            log.warning("CustomerDirectorySync: could not parse snapshot " + snap.getId() + ": " + e.getMessage());
+        List<Map<String, Object>> records = null;
+        if (snap.getId() != null && monthlyDirectoryHashService != null && monthlyDirectoryHashService.isCached(snap.getId())) {
+            Map<String, Object> cachedDto = monthlyDirectoryHashService.getSnapshot(snap.getId());
+            if (cachedDto != null && cachedDto.get("records") instanceof List) {
+                records = (List<Map<String, Object>>) cachedDto.get("records");
+            }
+        }
+        if (records == null) {
+            try {
+                records = objectMapper.readValue(snap.getFinalDataJson(),
+                        new TypeReference<List<Map<String, Object>>>() {});
+            } catch (Exception e) {
+                log.warning("CustomerDirectorySync: could not parse snapshot " + snap.getId() + ": " + e.getMessage());
+                if (strict) throw new IllegalStateException("Could not parse snapshot " + snap.getId(), e);
+                return 0;
+            }
+        }
+        if (records == null || records.isEmpty()) {
+            if (strict) throw new IllegalStateException("Snapshot " + snap.getId() + " has no customer records");
             return 0;
         }
-        if (records == null || records.isEmpty()) return 0;
 
         String division = snap.getDivision();
         String billingMonth = snap.getBillingMonth();
@@ -101,7 +129,7 @@ public class CustomerDirectorySyncService {
         for (Map<String, Object> record : records) {
             String acc = str(record, "accountNo");
             if (acc != null && !acc.isEmpty()) {
-                accountNos.add(acc);
+                accountNos.add(normalizeAccountNo(acc));
             }
         }
 
@@ -110,15 +138,16 @@ public class CustomerDirectorySyncService {
             try {
                 for (Customer c : customerRepository.findAllById(accountNos)) {
                     if (c.getAccountNo() != null) {
-                        customerHash.put(c.getAccountNo().trim(), c);
+                        customerHash.put(normalizeAccountNo(c.getAccountNo()), c);
                     }
                 }
-            } catch (Exception ignored) {}
+            } catch (Exception e) {
+                if (strict) throw new IllegalStateException("Could not load existing customers for snapshot " + snap.getId(), e);
+            }
         }
 
         // 3. Process records with O(1) lookups
         Map<String, Customer> toSave = new LinkedHashMap<>();
-        int synced = 0;
 
         for (Map<String, Object> record : records) {
             try {
@@ -130,24 +159,32 @@ public class CustomerDirectorySyncService {
                 }
 
                 String accountNo = str(record, "accountNo");
-                if (accountNo == null) continue;
+                if (accountNo == null) {
+                    if (strict) throw new IllegalStateException("Snapshot " + snap.getId() + " contains a row without accountNo");
+                    continue;
+                }
+                String accountKey = normalizeAccountNo(accountNo);
 
-                Customer c = customerHash.get(accountNo);
+                Customer c = customerHash.get(accountKey);
                 if (c == null) {
-                    c = toSave.get(accountNo);
+                    c = toSave.get(accountKey);
                 }
                 if (c == null) {
                     c = new Customer();
-                    c.setAccountNo(accountNo);
-                    customerHash.put(accountNo, c);
+                    c.setAccountNo(accountNo.trim());
+                    customerHash.put(accountKey, c);
                 }
 
                 populateCustomerFields(c, record, division, netTypeHash, costCodeHash, expenseCodeHash);
-                toSave.put(accountNo, c);
-                synced++;
+                toSave.put(accountKey, c);
             } catch (Exception e) {
                 log.warning("CustomerDirectorySync: failed to sync record: " + e.getMessage());
+                if (strict) throw new IllegalStateException("Failed to sync a row from snapshot " + snap.getId(), e);
             }
+        }
+
+        if (strict && toSave.size() != accountNos.size()) {
+            throw new IllegalStateException("Snapshot " + snap.getId() + " did not sync every distinct account");
         }
 
         // 4. Single Batch Save
@@ -155,17 +192,32 @@ public class CustomerDirectorySyncService {
             customerRepository.saveAll(Objects.requireNonNull(toSave.values()));
         }
 
-        log.info("CustomerDirectorySync: synced " + synced + " customer(s) from snapshot " + snap.getId()
+        log.info("CustomerDirectorySync: synced " + toSave.size() + " unique customer(s) from snapshot " + snap.getId()
                 + " (division=" + division + ") in high-performance batch mode.");
 
         // 5. In-Memory Hash Index Warmup / Rebuild & Event Publishing
-        if (customerHashIndexService != null && synced > 0) {
-            customerHashIndexService.rebuildIndex();
+        if (customerHashIndexService != null && !toSave.isEmpty()) {
+            afterCommit(customerHashIndexService::rebuildIndex);
         }
-        if (eventPublisher != null && synced > 0) {
-            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+        if (eventPublisher != null && !toSave.isEmpty()) {
+            afterCommit(() -> eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent()));
         }
-        return synced;
+        return toSave.size();
+    }
+
+    private String normalizeAccountNo(String accountNo) {
+        return accountNo == null ? "" : accountNo.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void afterCommit(Runnable action) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { action.run(); }
+                    });
+        } else {
+            action.run();
+        }
     }
 
     /** Upserts a single Monthly Directory record into the customer directory. */

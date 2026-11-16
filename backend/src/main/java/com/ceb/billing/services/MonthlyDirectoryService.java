@@ -227,20 +227,18 @@ public class MonthlyDirectoryService {
         }
 
         snap = snapshotRepository.save(snap);
-        if (monthlyDirectoryHashService != null) {
-            monthlyDirectoryHashService.putSnapshot(snap, finalData, computeSummary(finalData), parseJsonArray(snap.getAuditLogJson()));
-        }
         // If this snapshot is immediately approved (Admin save), push its records into the
         // permanent Customer Directory right away so both directories stay in sync.
         if ("APPROVED".equals(snap.getStatus())) {
-            try {
-                customerDirectorySyncService.syncSnapshot(snap);
-            } catch (Exception e) {
-                System.err.println("Customer Directory sync failed for snapshot " + snap.getId() + ": " + e.getMessage());
-            }
+            customerDirectorySyncService.syncSnapshotStrict(snap);
+        }
+        if (monthlyDirectoryHashService != null) {
+            MonthlyDirectorySnapshot savedSnapshot = snap;
+            afterCommit(() -> monthlyDirectoryHashService.putSnapshot(savedSnapshot, finalData,
+                    computeSummary(finalData), parseJsonArray(savedSnapshot.getAuditLogJson())));
         }
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+            afterCommit(() -> eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent()));
         }
         return toMetadata(snap);
     }
@@ -252,24 +250,26 @@ public class MonthlyDirectoryService {
      */
     @Transactional
     public Map<String, Object> approveSnapshot(Long id, String adminUsername) {
-        MonthlyDirectorySnapshot s = snapshotRepository.findById(id)
+        MonthlyDirectorySnapshot s = snapshotRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
+        if ("APPROVED".equalsIgnoreCase(strVal(s.getStatus()))) {
+            throw new IllegalStateException("Directory snapshot " + id + " is already approved");
+        }
+        // Sync first while the existing transaction is active. Any parse, row, or database
+        // failure aborts the transaction before the snapshot can become APPROVED.
+        customerDirectorySyncService.syncSnapshotStrict(s);
         s.setStatus("APPROVED");
         s.setApprovedBy(adminUsername);
         s.setApprovalDate(java.time.LocalDateTime.now());
         s = snapshotRepository.save(s);
         if (monthlyDirectoryHashService != null) {
-            monthlyDirectoryHashService.updateMetadata(s.getId(), s.getDatasetName(), s.getStatus(), s.getApprovedBy(), s.getApprovalDate());
-        }
-
-        try {
-            customerDirectorySyncService.syncSnapshot(s);
-        } catch (Exception e) {
-            System.err.println("Customer Directory sync failed for approved snapshot " + s.getId() + ": " + e.getMessage());
+            MonthlyDirectorySnapshot savedSnapshot = s;
+            afterCommit(() -> monthlyDirectoryHashService.updateMetadata(savedSnapshot.getId(), savedSnapshot.getDatasetName(),
+                    savedSnapshot.getStatus(), savedSnapshot.getApprovedBy(), savedSnapshot.getApprovalDate()));
         }
 
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+            afterCommit(() -> eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent()));
         }
 
         return toMetadata(s);
@@ -293,6 +293,13 @@ public class MonthlyDirectoryService {
      * nothing archived is ever hidden.
      */
     public Map<String, Object> listMonths() {
+        if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isReady()) {
+            Map<String, Object> cachedOverview = monthlyDirectoryHashService.getCachedMonthsOverview();
+            if (cachedOverview != null) {
+                return cachedOverview;
+            }
+        }
+
         Map<String, List<MonthlyDirectorySnapshot>> byMonth = new LinkedHashMap<>();
         List<Map<String, Object>> unassigned = new ArrayList<>();
 
@@ -306,12 +313,15 @@ public class MonthlyDirectoryService {
         }
 
         List<Map<String, Object>> months = new ArrayList<>();
+        Set<String> approvedAccounts = new HashSet<>();
+
         for (List<MonthlyDirectorySnapshot> snaps : byMonth.values()) {
             String label = snaps.get(0).getBillingMonth().trim();
 
             // One slot per fixed division; snapshots with an unknown division stay visible too.
             Map<String, MonthlyDirectorySnapshot> byDivision = new LinkedHashMap<>();
             List<Map<String, Object>> otherDatasets = new ArrayList<>();
+            Set<String> monthAccounts = new HashSet<>();
             for (MonthlyDirectorySnapshot s : snaps) {
                 String div = canonicalDivision(s.getDivision());
                 if (DIVISIONS.contains(div)) {
@@ -319,11 +329,16 @@ public class MonthlyDirectoryService {
                     byDivision.putIfAbsent(div, s);
                 } else {
                     otherDatasets.add(toMetadata(s));
+                    Set<String> accounts = snapshotAccounts(s);
+                    monthAccounts.addAll(accounts);
+                    if ("APPROVED".equalsIgnoreCase(strVal(s.getStatus()))) {
+                        approvedAccounts.addAll(accounts);
+                    }
                 }
             }
 
             List<Map<String, Object>> divisions = new ArrayList<>();
-            int approvedCount = 0, uploadedCount = 0, totalRecords = 0;
+            int approvedCount = 0, uploadedCount = 0;
             java.time.LocalDateTime lastUpdated = null;
             for (String div : DIVISIONS) {
                 MonthlyDirectorySnapshot s = byDivision.get(div);
@@ -332,6 +347,7 @@ public class MonthlyDirectoryService {
                 if (s == null) {
                     d.put("status", "NOT_UPLOADED");
                     d.put("totalRecords", 0);
+                    d.put("uniqueCustomers", 0);
                     d.put("lastUpdated", null);
                     d.put("snapshotId", null);
                     d.put("datasetName", null);
@@ -339,11 +355,16 @@ public class MonthlyDirectoryService {
                     boolean approved = "APPROVED".equals(s.getStatus());
                     if (approved) approvedCount++;
                     uploadedCount++;
-                    totalRecords += s.getTotalRecords() != null ? s.getTotalRecords() : 0;
+                    Set<String> divisionAccounts = snapshotAccounts(s);
+                    monthAccounts.addAll(divisionAccounts);
+                    if (approved) {
+                        approvedAccounts.addAll(divisionAccounts);
+                    }
                     java.time.LocalDateTime updated = s.getApprovalDate() != null ? s.getApprovalDate() : s.getCreatedDate();
                     if (updated != null && (lastUpdated == null || updated.isAfter(lastUpdated))) lastUpdated = updated;
                     d.put("status", approved ? "APPROVED" : "PENDING");
                     d.put("totalRecords", s.getTotalRecords() != null ? s.getTotalRecords() : 0);
+                    d.put("uniqueCustomers", divisionAccounts.size());
                     d.put("lastUpdated", updated != null ? updated.format(TS) : null);
                     d.put("snapshotId", s.getId());
                     d.put("datasetName", s.getDatasetName());
@@ -351,14 +372,14 @@ public class MonthlyDirectoryService {
                 }
                 divisions.add(d);
             }
-
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("billingMonth", label);
             m.put("divisions", divisions);
             m.put("divisionCount", DIVISIONS.size());
             m.put("uploadedCount", uploadedCount);
             m.put("approvedCount", approvedCount);
-            m.put("totalRecords", totalRecords);
+            m.put("totalRecords", monthAccounts.size());
+            m.put("uniqueCustomers", monthAccounts.size());
             m.put("lastUpdated", lastUpdated != null ? lastUpdated.format(TS) : null);
             m.put("completed", approvedCount == DIVISIONS.size());
             m.put("otherDatasets", otherDatasets);
@@ -374,12 +395,49 @@ public class MonthlyDirectoryService {
         out.put("divisions", DIVISIONS);
         out.put("months", months);
         out.put("unassigned", unassigned);
+        out.put("allCustomersCount", approvedAccounts.size());
+
+        if (monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.setCachedMonthsOverview(out);
+        }
         return out;
     }
 
     /** Case-insensitive grouping key so "july 2026" and "July 2026" land in the same month. */
     private String monthKey(String label) {
         return label.trim().toLowerCase(Locale.ENGLISH);
+    }
+
+    private Set<String> snapshotAccounts(MonthlyDirectorySnapshot snapshot) {
+        if (snapshot == null) return Collections.emptySet();
+        Long snapId = snapshot.getId();
+        if (snapId != null && monthlyDirectoryHashService != null) {
+            Set<String> cached = monthlyDirectoryHashService.getAccountNumbers(snapId);
+            if (cached != null) return cached;
+        }
+        Set<String> accounts = new HashSet<>();
+        for (Map<String, Object> row : parseJsonArray(snapshot.getFinalDataJson())) {
+            if ("REJECTED".equalsIgnoreCase(strVal(row.get("status"))) || Boolean.TRUE.equals(row.get("rejected"))) continue;
+            Object accountNo = row.get("accountNo");
+            if (accountNo == null) continue;
+            String normalized = String.valueOf(accountNo).trim().toUpperCase(Locale.ROOT);
+            if (!normalized.isEmpty()) accounts.add(normalized);
+        }
+        if (snapId != null && monthlyDirectoryHashService != null) {
+            monthlyDirectoryHashService.putAccountNumbers(snapId, accounts);
+        }
+        return accounts;
+    }
+
+    private void afterCommit(Runnable action) {
+        if (org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+                    new org.springframework.transaction.support.TransactionSynchronization() {
+                        @Override public void afterCommit() { action.run(); }
+                    });
+        } else {
+            action.run();
+        }
     }
 
     /** Parses labels like "July 2026" for sorting; returns null when the label is free-form. */
@@ -432,6 +490,7 @@ public class MonthlyDirectoryService {
         out.put("validationSummary", summary);
         out.put("records", records);
         out.put("totalRecords", records.size());
+        out.put("uniqueCustomers", snapshotAccounts(s).size());
         List<Map<String, Object>> auditLog = parseJsonArray(s.getAuditLogJson());
         out.put("auditLog", auditLog);
 
@@ -927,6 +986,7 @@ public class MonthlyDirectoryService {
         m.put("createdDate", s.getCreatedDate() != null ? s.getCreatedDate().format(TS) : null);
         m.put("approvedBy", s.getApprovedBy());
         m.put("totalRecords", s.getTotalRecords());
+        m.put("uniqueCustomers", snapshotAccounts(s).size());
         m.put("status", s.getStatus());
         m.put("sessionId", s.getSessionId());
         return m;

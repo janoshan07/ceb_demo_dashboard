@@ -46,8 +46,14 @@ public class MonthlyDirectoryHashService {
     // Secondary Hash Index: snapshotId -> Map<accountNo, recordMap> [O(1) Account Lookup]
     private final Map<Long, Map<String, Map<String, Object>>> recordsByAccountHashIndex = new ConcurrentHashMap<>();
 
+    // Account Numbers Hash Index: snapshotId -> Set<accountNo> [O(1) Account List / Count Retrieval]
+    private final Map<Long, Set<String>> snapshotAccountsHashIndex = new ConcurrentHashMap<>();
+
     // Slot Hash Index: "billingMonth|division" (lowercase) -> snapshotId [O(1) Slot Lookup]
     private final Map<String, Long> monthDivisionHashIndex = new ConcurrentHashMap<>();
+
+    // Pre-computed Months Overview Cache (instant response for directory list overview)
+    private volatile Map<String, Object> cachedMonthsOverview = null;
 
     private volatile boolean initialized = false;
 
@@ -67,6 +73,7 @@ public class MonthlyDirectoryHashService {
             List<MonthlyDirectorySnapshot> allSnapshots = snapshotRepository.findAllByOrderByCreatedDateDesc();
             Map<Long, Map<String, Object>> tempSnapshots = new HashMap<>();
             Map<Long, Map<String, Map<String, Object>>> tempRecords = new HashMap<>();
+            Map<Long, Set<String>> tempAccounts = new HashMap<>();
             Map<String, Long> tempSlots = new HashMap<>();
 
             for (MonthlyDirectorySnapshot s : allSnapshots) {
@@ -79,15 +86,18 @@ public class MonthlyDirectoryHashService {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> recList = (List<Map<String, Object>>) dto.get("records");
                     Map<String, Map<String, Object>> accMap = new HashMap<>();
+                    Set<String> accSet = new HashSet<>();
                     if (recList != null) {
                         for (Map<String, Object> r : recList) {
                             String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : "";
                             if (!acc.isEmpty()) {
                                 accMap.put(acc, r);
+                                accSet.add(acc.toUpperCase(Locale.ROOT));
                             }
                         }
                     }
                     tempRecords.put(s.getId(), accMap);
+                    tempAccounts.put(s.getId(), accSet);
 
                     // Build Month + Division hash slot key
                     String slotKey = slotKey(s.getBillingMonth(), s.getDivision());
@@ -105,9 +115,13 @@ public class MonthlyDirectoryHashService {
             recordsByAccountHashIndex.clear();
             recordsByAccountHashIndex.putAll(tempRecords);
 
+            snapshotAccountsHashIndex.clear();
+            snapshotAccountsHashIndex.putAll(tempAccounts);
+
             monthDivisionHashIndex.clear();
             monthDivisionHashIndex.putAll(tempSlots);
 
+            cachedMonthsOverview = null;
             initialized = true;
             long elapsed = System.currentTimeMillis() - start;
             log.info("Monthly Directory Hash Index built: " + snapshotHashIndex.size() + " snapshots indexed in " + elapsed + "ms.");
@@ -158,6 +172,58 @@ public class MonthlyDirectoryHashService {
     }
 
     /**
+     * O(1) constant-time lookup for the latest customer record across all snapshots.
+     */
+    public Map<String, Object> findLatestRecordByAccount(String accountNo) {
+        if (accountNo == null || accountNo.trim().isEmpty()) return null;
+        String acc = accountNo.trim();
+        for (Map<String, Map<String, Object>> accMap : recordsByAccountHashIndex.values()) {
+            if (accMap != null && accMap.containsKey(acc)) {
+                return new LinkedHashMap<>(accMap.get(acc));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * O(1) constant-time retrieval of all account numbers in a snapshot (zero JSON parsing).
+     */
+    public Set<String> getAccountNumbers(Long snapshotId) {
+        if (snapshotId == null) return Collections.emptySet();
+        Set<String> set = snapshotAccountsHashIndex.get(snapshotId);
+        if (set != null) return set;
+        Map<String, Map<String, Object>> accMap = recordsByAccountHashIndex.get(snapshotId);
+        if (accMap != null) {
+            Set<String> derived = new HashSet<>(accMap.keySet());
+            snapshotAccountsHashIndex.put(snapshotId, derived);
+            return derived;
+        }
+        return null;
+    }
+
+    public void putAccountNumbers(Long snapshotId, Set<String> accounts) {
+        if (snapshotId != null && accounts != null) {
+            snapshotAccountsHashIndex.put(snapshotId, accounts);
+        }
+    }
+
+    /**
+     * Returns pre-computed months overview in O(1) memory lookup.
+     */
+    public Map<String, Object> getCachedMonthsOverview() {
+        Map<String, Object> cached = cachedMonthsOverview;
+        return cached != null ? new LinkedHashMap<>(cached) : null;
+    }
+
+    public void setCachedMonthsOverview(Map<String, Object> overview) {
+        this.cachedMonthsOverview = overview != null ? new LinkedHashMap<>(overview) : null;
+    }
+
+    public void invalidateMonthsOverview() {
+        this.cachedMonthsOverview = null;
+    }
+
+    /**
      * O(1) lookup of snapshot ID for a given billing month and division.
      */
     public Long getSnapshotIdBySlot(String billingMonth, String division) {
@@ -184,21 +250,26 @@ public class MonthlyDirectoryHashService {
 
         snapshotHashIndex.put(id, dto);
 
-        // Update account hash index
+        // Update account hash index and accounts set
         Map<String, Map<String, Object>> accMap = new ConcurrentHashMap<>();
+        Set<String> accSet = new HashSet<>();
         for (Map<String, Object> r : safeRecords) {
             String acc = r.get("accountNo") != null ? String.valueOf(r.get("accountNo")).trim() : "";
             if (!acc.isEmpty()) {
                 accMap.put(acc, r);
+                accSet.add(acc.toUpperCase(Locale.ROOT));
             }
         }
         recordsByAccountHashIndex.put(id, accMap);
+        snapshotAccountsHashIndex.put(id, accSet);
 
         // Update slot hash index
         String slotKey = slotKey(snap.getBillingMonth(), snap.getDivision());
         if (!slotKey.isEmpty()) {
             monthDivisionHashIndex.put(slotKey, id);
         }
+
+        invalidateMonthsOverview();
     }
 
     /**
@@ -228,6 +299,7 @@ public class MonthlyDirectoryHashService {
                 }
             }
         }
+        invalidateMonthsOverview();
     }
 
     /**
@@ -241,6 +313,7 @@ public class MonthlyDirectoryHashService {
             if (approvedBy != null) cached.put("approvedBy", approvedBy);
             if (approvalDate != null) cached.put("approvalDate", approvalDate.format(TS));
         }
+        invalidateMonthsOverview();
     }
 
     /**
@@ -250,12 +323,14 @@ public class MonthlyDirectoryHashService {
         if (id == null) return;
         Map<String, Object> removed = snapshotHashIndex.remove(id);
         recordsByAccountHashIndex.remove(id);
+        snapshotAccountsHashIndex.remove(id);
         if (removed != null) {
             String slotKey = slotKey((String) removed.get("billingMonth"), (String) removed.get("division"));
             if (!slotKey.isEmpty() && id.equals(monthDivisionHashIndex.get(slotKey))) {
                 monthDivisionHashIndex.remove(slotKey);
             }
         }
+        invalidateMonthsOverview();
     }
 
     /**
@@ -264,7 +339,9 @@ public class MonthlyDirectoryHashService {
     public void clear() {
         snapshotHashIndex.clear();
         recordsByAccountHashIndex.clear();
+        snapshotAccountsHashIndex.clear();
         monthDivisionHashIndex.clear();
+        invalidateMonthsOverview();
     }
 
     public boolean isReady() {

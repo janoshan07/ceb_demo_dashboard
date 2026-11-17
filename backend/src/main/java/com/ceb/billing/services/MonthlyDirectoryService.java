@@ -20,8 +20,10 @@ import com.ceb.billing.entities.UploadHistory;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.poi.ss.usermodel.*;
+import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -128,6 +130,7 @@ public class MonthlyDirectoryService {
      * visible in the directory. Records are stored sorted by Account No ascending.
      */
     @Transactional
+    @CacheEvict(value = "canonicalRecords", allEntries = true)
     public Map<String, Object> createSnapshot(Long sessionId, String username, String datasetName,
                                               String billingMonth, String division, String validationSummaryJson,
                                               Map<String, Map<String, Object>> corrections,
@@ -249,6 +252,7 @@ public class MonthlyDirectoryService {
      * syncs all customer details contained in the dataset into the permanent Customer Directory.
      */
     @Transactional
+    @CacheEvict(value = "canonicalRecords", allEntries = true)
     public Map<String, Object> approveSnapshot(Long id, String adminUsername) {
         MonthlyDirectorySnapshot s = snapshotRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
@@ -905,13 +909,20 @@ public class MonthlyDirectoryService {
         return snapshotRepository.findById(id).orElse(null);
     }
 
-    /** Builds an .xlsx export of the archived final Customer Directory data. */
+    /**
+     * Builds an .xlsx export of the archived final Customer Directory data.
+     * Uses streaming SXSSFWorkbook (100 row window) and calibrated fixed column widths
+     * to eliminate heap memory spikes and O(N*cols) autoSizeColumn latency.
+     */
     public byte[] buildExcel(Long id) throws Exception {
         MonthlyDirectorySnapshot s = snapshotRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Directory snapshot not found: " + id));
         List<Map<String, Object>> records = parseJsonArray(s.getFinalDataJson());
 
-        try (XSSFWorkbook wb = new XSSFWorkbook(); ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
+        int estimatedSize = Math.max(8192, records.size() * 250 + 8192);
+
+        try (SXSSFWorkbook wb = new SXSSFWorkbook(100);
+             ByteArrayOutputStream bos = new ByteArrayOutputStream(estimatedSize)) {
             Sheet sheet = wb.createSheet("Customer Directory");
 
             CellStyle headerStyle = wb.createCellStyle();
@@ -934,11 +945,38 @@ public class MonthlyDirectoryService {
                     excelRow.createCell(c).setCellValue(cellString(val));
                 }
             }
+
+            // Calibrated fixed column widths (in 1/256th character units)
+            // Replaces O(n*cols) autoSizeColumn which takes seconds on 7500+ rows
+            int[] colWidths = {
+                3600, // Account No
+                7000, // Name
+                9000, // Address
+                3600, // Ref No
+                3400, // Mobile No
+                3400, // Solar Type
+                3200, // Tariff Type
+                3200, // Panel Capacity
+                3200, // Prev Reading
+                3200, // Curr Reading
+                3000, // Net Type
+                3000, // kWh Import
+                3000, // kWh Export
+                3000, // kWh Sales
+                2800, // Unit Rate
+                3800, // Energy Purchase
+                3200, // Bill Set Off
+                3200, // Retention Money
+                3800, // Payment
+                3800, // Outstanding
+                3000  // Status
+            };
             for (int c = 0; c < EXPORT_COLUMNS.length; c++) {
-                sheet.autoSizeColumn(c);
+                sheet.setColumnWidth(c, c < colWidths.length ? colWidths[c] : 3500);
             }
 
             wb.write(bos);
+            wb.dispose(); // Delete temporary streaming disk files
             return bos.toByteArray();
         }
     }

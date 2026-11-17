@@ -14,7 +14,11 @@ import java.time.LocalDateTime;
  * participate in any validation, merge, comparison, duplicate handling or approval logic.
  */
 @Entity
-@Table(name = "monthly_directory_snapshot")
+@Table(name = "monthly_directory_snapshot", indexes = {
+    @Index(name = "idx_snapshot_month_div", columnList = "billing_month, division"),
+    @Index(name = "idx_snapshot_status", columnList = "status"),
+    @Index(name = "idx_snapshot_created_date", columnList = "created_date")
+})
 public class MonthlyDirectorySnapshot {
 
     @Id

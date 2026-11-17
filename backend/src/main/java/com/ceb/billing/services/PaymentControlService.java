@@ -11,6 +11,8 @@ import com.ceb.billing.repositories.PaymentBatchRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -1700,6 +1702,7 @@ public class PaymentControlService {
      * resolved.
      */
     @Transactional
+    @CacheEvict(value = "canonicalRecords", allEntries = true)
     public Map<String, Object> correctCustomerAndRevalidate(String accountNo, String billingPeriod,
             Map<String, Object> corrections, String username) throws Exception {
         if (accountNo == null || corrections == null) {
@@ -1878,6 +1881,7 @@ public class PaymentControlService {
      * Explicit Payment Hold / Release Toggle.
      */
     @Transactional
+    @CacheEvict(value = "canonicalRecords", allEntries = true)
     public Map<String, Object> togglePaymentHold(String accountNo, String billingPeriod, boolean hold,
             String reason, String username) throws Exception {
         if (accountNo == null || accountNo.trim().isEmpty()) {
@@ -1945,6 +1949,7 @@ public class PaymentControlService {
      * records, months, and history.
      */
     @Transactional
+    @CacheEvict(value = "canonicalRecords", allEntries = true)
     public Map<String, Object> releaseCustomerPayments(String accountNo, String username) throws Exception {
         if (accountNo == null || accountNo.trim().isEmpty()) {
             throw new IllegalArgumentException("Account number is required.");
@@ -2508,6 +2513,7 @@ public class PaymentControlService {
     }
 
     // ── Canonical Data Loader ─────────────────────────────────────────────
+    @Cacheable(value = "canonicalRecords", key = "(#billingPeriod != null ? #billingPeriod.trim().toUpperCase() : 'ALL') + '::' + (#division != null ? #division.trim().toUpperCase() : 'ALL')")
     public List<Map<String, Object>> loadCanonicalRecords(String billingPeriod, String division) {
         String bp = billingPeriod != null ? billingPeriod.trim() : "";
         String divFilter = division != null ? division.trim() : "";

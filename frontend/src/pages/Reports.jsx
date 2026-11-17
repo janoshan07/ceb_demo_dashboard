@@ -17,10 +17,12 @@ import {
   Sun,
   Zap,
   Printer,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 import SVGDonutChart from '../components/charts/SVGDonutChart';
+import PaymentReadyReportView from '../components/PaymentReadyReportView';
 
 const Reports = () => {
   const navigate = useNavigate();
@@ -35,8 +37,24 @@ const Reports = () => {
   const [reportData, setReportData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { showToast } = useToast();
+
+  // Print lifecycle listeners
+  useEffect(() => {
+    const handleBeforePrint = () => setIsPrinting(true);
+    const handleAfterPrint = () => setIsPrinting(false);
+
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
+
+    return () => {
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
+    };
+  }, []);
 
   // Fetch branch list on mount
   useEffect(() => {
@@ -56,6 +74,9 @@ const Reports = () => {
 
   // Fetch report data when type or filters change
   const fetchReport = async () => {
+    if (reportType === 'PAYMENT_READY') {
+      return;
+    }
     try {
       setLoading(true);
       setError(null);
@@ -147,69 +168,105 @@ const Reports = () => {
 
   const stats = getSummaryStats();
 
-  // Export to CSV Function
+  // Optimized Export to CSV Function using Blob and memory-efficient streaming lines
   const exportToCSV = () => {
-    if (reportData.length === 0) return;
-    
-    let csvContent = "data:text/csv;charset=utf-8,";
-    
-    // Header
-    const keys = Object.keys(reportData[0]);
-    csvContent += keys.join(",") + "\r\n";
-    
-    // Rows
-    reportData.forEach((row) => {
-      const line = keys.map(k => {
-        let val = row[k];
-        if (typeof val === 'string') {
-          return `"${val.replace(/"/g, '""')}"`;
-        }
-        return val;
-      }).join(",");
-      csvContent += line + "\r\n";
-    });
+    if (reportData.length === 0 || isExporting) return;
+    setIsExporting(true);
+    try {
+      const keys = Object.keys(reportData[0]);
+      const lines = [keys.join(",")];
+      
+      for (let i = 0; i < reportData.length; i++) {
+        const row = reportData[i];
+        const line = keys.map(k => {
+          let val = row[k];
+          if (val === null || val === undefined) return '';
+          if (typeof val === 'string') {
+            return `"${val.replace(/"/g, '""')}"`;
+          }
+          return val;
+        }).join(",");
+        lines.push(line);
+      }
 
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `edl_report_${reportType.toLowerCase()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Report successfully exported as CSV.', 'success');
+      const blob = new Blob([lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `edl_report_${reportType.toLowerCase()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Report successfully exported as CSV.', 'success');
+    } catch (err) {
+      showToast('Failed to export CSV: ' + err.message, 'error');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
-  // Export to Excel Function (Tab-separated HTML format compatible with Excel)
+  // Optimized Export to Excel Function (Buffered HTML chunk array into Blob)
   const exportToExcel = () => {
-    if (reportData.length === 0) return;
-
-    const keys = Object.keys(reportData[0]);
-    let excelContent = "<table><tr>";
-    
-    // Headers
-    keys.forEach(k => {
-      excelContent += `<th>${k.toUpperCase().replace('_', ' ')}</th>`;
-    });
-    excelContent += "</tr>";
-
-    // Rows
-    reportData.forEach((row) => {
-      excelContent += "<tr>";
+    if (reportData.length === 0 || isExporting) return;
+    setIsExporting(true);
+    try {
+      const keys = Object.keys(reportData[0]);
+      const chunks = [];
+      chunks.push('<table><thead><tr>');
       keys.forEach(k => {
-        excelContent += `<td>${row[k] !== null ? row[k] : ''}</td>`;
+        chunks.push(`<th>${k.toUpperCase().replace('_', ' ')}</th>`);
       });
-      excelContent += "</tr>";
-    });
-    
-    excelContent += "</table>";
-    const blob = new Blob([excelContent], { type: "application/vnd.ms-excel" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `edl_report_${reportType.toLowerCase()}.xls`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast('Report successfully exported as Excel.', 'success');
+      chunks.push('</tr></thead><tbody>');
+
+      for (let i = 0; i < reportData.length; i++) {
+        const row = reportData[i];
+        chunks.push('<tr>');
+        for (let j = 0; j < keys.length; j++) {
+          const val = row[keys[j]];
+          chunks.push(`<td>${val !== null && val !== undefined ? val : ''}</td>`);
+        }
+        chunks.push('</tr>');
+      }
+      chunks.push('</tbody></table>');
+
+      const blob = new Blob(chunks, { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `edl_report_${reportType.toLowerCase()}.xls`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast('Report successfully exported as Excel.', 'success');
+    } catch (err) {
+      showToast('Failed to export Excel: ' + err.message, 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  // Optimized Print / PDF Preview handler
+  const handlePrint = () => {
+    if (isPrinting || reportData.length === 0) return;
+    setIsPrinting(true);
+
+    if (reportData.length > 500) {
+      showToast(`Preparing print layout for ${reportData.length} records...`, 'info');
+    }
+
+    setTimeout(() => {
+      try {
+        window.print();
+      } catch (err) {
+        console.error('Print failed:', err);
+        showToast('Failed to open print / PDF preview.', 'error');
+        setIsPrinting(false);
+      } finally {
+        setTimeout(() => setIsPrinting(false), 800);
+      }
+    }, 250);
   };
 
   // Render Charts based on Report Type
@@ -303,6 +360,7 @@ const Reports = () => {
   };
 
   const reportTypes = [
+    { id: 'PAYMENT_READY', label: 'Payment Ready Report', icon: CheckCircle2 },
     { id: 'MONTHLY_REVENUE', label: 'Monthly Revenue Report', icon: TrendingUp },
     { id: 'CUSTOMER_BILLING', label: 'Customer Billing Ledger', icon: FileText },
     { id: 'HIGHEST_EXPORTERS', label: 'Highest Solar Exporters', icon: Sun },
@@ -358,20 +416,58 @@ const Reports = () => {
           <h1 className="page-title">Advanced Report Center</h1>
           <p className="page-subtitle">Formulate financial ledgers, audit grid performance, and trace anomaly logs.</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }} className="no-print">
-          <button className="btn btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={exportToExcel} disabled={reportData.length === 0}>
-            <Download size={14} />
-            Export Excel
-          </button>
-          <button className="btn btn-secondary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={exportToCSV} disabled={reportData.length === 0}>
-            <Download size={14} />
-            Export CSV
-          </button>
-          <button className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.25rem' }} onClick={() => window.print()}>
-            <Printer size={14} />
-            Print PDF
-          </button>
-        </div>
+        {reportType !== 'PAYMENT_READY' && (
+          <div style={{ display: 'flex', gap: '0.5rem' }} className="no-print">
+            <button
+              className="btn btn-secondary"
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
+              }}
+              onClick={exportToExcel}
+              disabled={isExporting || isPrinting || reportData.length === 0}
+            >
+              {isExporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+              Export Excel
+            </button>
+            <button
+              className="btn btn-secondary"
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
+              }}
+              onClick={exportToCSV}
+              disabled={isExporting || isPrinting || reportData.length === 0}
+            >
+              {isExporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
+              Export CSV
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{
+                padding: '0.5rem 1rem',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
+              }}
+              onClick={handlePrint}
+              disabled={isPrinting || isExporting || reportData.length === 0}
+            >
+              {isPrinting ? <RefreshCw size={14} className="animate-spin" /> : <Printer size={14} />}
+              {isPrinting ? 'Preparing PDF...' : 'Print PDF'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem', alignItems: 'start' }}>
@@ -409,8 +505,11 @@ const Reports = () => {
           })}
         </div>
 
-        {/* Filters and View Grid */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* View Grid */}
+        {reportType === 'PAYMENT_READY' ? (
+          <PaymentReadyReportView authFetch={authFetch} showToast={showToast} branches={branches} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Filters Card */}
           <div className="neon-card no-print" style={{ padding: '1.25rem' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'flex-end' }}>
@@ -737,7 +836,77 @@ const Reports = () => {
             )}
           </div>
         </div>
+        )}
       </div>
+
+      {/* PDF Print Preparation Overlay */}
+      {isPrinting && (
+        <div className="no-print" style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(3px)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 99999
+        }}>
+          <div style={{
+            backgroundColor: '#ffffff',
+            borderRadius: '12px',
+            padding: '2rem 2.5rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            maxWidth: '380px',
+            width: '90%',
+            border: '1px solid #e2e8f0'
+          }}>
+            <div style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '50%',
+              backgroundColor: '#eff6ff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '1rem'
+            }}>
+              <RefreshCw size={28} className="animate-spin text-primary" style={{ color: '#2563eb' }} />
+            </div>
+
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
+              Preparing Print View...
+            </h3>
+            
+            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.25rem 0', lineHeight: 1.5 }}>
+              Formatting {reportData.length} report rows for print and PDF export. Opening print dialog.
+            </p>
+
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '4px 12px',
+              borderRadius: '16px',
+              backgroundColor: '#ecfdf5',
+              color: '#059669',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              border: '1px solid #a7f3d0'
+            }}>
+              <CheckCircle2 size={13} />
+              <span>Optimized Layout Ready</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

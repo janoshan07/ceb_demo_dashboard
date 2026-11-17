@@ -30,6 +30,9 @@ public class ReportController {
     @Autowired
     private com.ceb.billing.services.ReportService reportService;
 
+    @Autowired(required = false)
+    private com.ceb.billing.services.PaymentControlService paymentControlService;
+
     // --- Officer and Admin Report Endpoints ---
 
     @GetMapping("/api/officer/reports/totals")
@@ -160,5 +163,52 @@ public class ReportController {
         }
 
         return ResponseEntity.ok(reportData);
+    }
+
+    // --- Payment Ready Report Endpoints ---
+
+    @GetMapping("/api/officer/reports/payment-ready")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getPaymentReadyReport(
+            @RequestParam(value = "billingMonth", required = false) String billingMonth,
+            @RequestParam(value = "division", required = false) String division,
+            @RequestParam(value = "accountNo", required = false) String accountNo,
+            @RequestParam(value = "customerName", required = false) String customerName) {
+        return ResponseEntity.ok(reportService.getPaymentReadyReport(billingMonth, division, accountNo, customerName));
+    }
+
+    @GetMapping("/api/officer/reports/payment-ready/excel")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<byte[]> exportPaymentReadyExcel(
+            @RequestParam(value = "billingMonth", required = false) String billingMonth,
+            @RequestParam(value = "division", required = false) String division,
+            @RequestParam(value = "accountNo", required = false) String accountNo,
+            @RequestParam(value = "customerName", required = false) String customerName) {
+        try {
+            byte[] excelBytes = reportService.generatePaymentReadyExcel(billingMonth, division, accountNo, customerName);
+            String bMonth = (billingMonth == null || billingMonth.trim().isEmpty() || "ALL".equalsIgnoreCase(billingMonth))
+                    ? "ALL_MONTHS"
+                    : billingMonth.trim().replaceAll("[^a-zA-Z0-9_-]", "_");
+            String div = (division == null || division.trim().isEmpty() || "ALL".equalsIgnoreCase(division))
+                    ? "ALL_DIVISIONS"
+                    : division.trim().replaceAll("[^a-zA-Z0-9_-]", "_");
+            String filename = "Payment_Ready_Report_" + bMonth + "_" + div + ".xlsx";
+
+            return ResponseEntity.ok()
+                    .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                    .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                    .body(excelBytes);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    @GetMapping("/api/officer/reports/payment-ready/months")
+    @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
+    public ResponseEntity<?> getPaymentReadyMonths() {
+        if (paymentControlService != null) {
+            return ResponseEntity.ok(paymentControlService.getAvailableBillingMonths());
+        }
+        return ResponseEntity.ok(List.of("July 2026", "August 2026"));
     }
 }

@@ -116,9 +116,11 @@ public class ReportController {
     @PreAuthorize("hasRole('OFFICER') or hasRole('ADMIN')")
     public ResponseEntity<?> generateReport(
             @RequestParam("type") String type,
+            @RequestParam(value = "billingMonth", required = false) String billingMonth,
             @RequestParam(value = "startDate", required = false) String startDateStr,
             @RequestParam(value = "endDate", required = false) String endDateStr,
-            @RequestParam(value = "branchCode", required = false) String branchCode) {
+            @RequestParam(value = "branchCode", required = false) String branchCode,
+            @RequestParam(value = "division", required = false) String division) {
 
         LocalDate startDate = null;
         LocalDate endDate = null;
@@ -134,29 +136,39 @@ public class ReportController {
             return ResponseEntity.badRequest().body(Map.of("message", "Invalid date format. Use YYYY-MM-DD."));
         }
 
+        String effectiveBranch = (branchCode != null && !branchCode.trim().isEmpty()) ? branchCode.trim() : (division != null ? division.trim() : null);
+        if ("ALL".equalsIgnoreCase(effectiveBranch) || "All Branches".equalsIgnoreCase(effectiveBranch) || "All Divisions".equalsIgnoreCase(effectiveBranch)) {
+            effectiveBranch = null;
+        }
+
+        String effectiveMonth = (billingMonth != null && !billingMonth.trim().isEmpty()) ? billingMonth.trim() : null;
+        if ("ALL".equalsIgnoreCase(effectiveMonth) || "All Billing Months".equalsIgnoreCase(effectiveMonth)) {
+            effectiveMonth = null;
+        }
+
         List<Map<String, Object>> reportData;
 
         switch (type.toUpperCase()) {
             case "MONTHLY_REVENUE":
-                reportData = reportService.getMonthlyRevenueReport(startDate, endDate, branchCode);
+                reportData = reportService.getMonthlyRevenueReport(effectiveMonth, startDate, endDate, effectiveBranch);
                 break;
             case "CUSTOMER_BILLING":
-                reportData = reportService.getCustomerBillingReport(startDate, endDate, branchCode);
+                reportData = reportService.getCustomerBillingReport(effectiveMonth, startDate, endDate, effectiveBranch);
                 break;
             case "HIGHEST_EXPORTERS":
-                reportData = reportService.getHighestExportersReport(startDate, endDate, branchCode);
+                reportData = reportService.getHighestExportersReport(effectiveMonth, startDate, endDate, effectiveBranch);
                 break;
             case "HIGHEST_IMPORTERS":
-                reportData = reportService.getHighestImportersReport(startDate, endDate, branchCode);
+                reportData = reportService.getHighestImportersReport(effectiveMonth, startDate, endDate, effectiveBranch);
                 break;
             case "BRANCH_PERFORMANCE":
-                reportData = reportService.getBranchPerformanceReport(startDate, endDate);
+                reportData = reportService.getBranchPerformanceReport(effectiveMonth, startDate, endDate);
                 break;
             case "SOLAR_TYPE":
-                reportData = reportService.getSolarTypePerformanceReport(startDate, endDate, branchCode);
+                reportData = reportService.getSolarTypePerformanceReport(effectiveMonth, startDate, endDate, effectiveBranch);
                 break;
             case "ALERT_ANOMALY":
-                reportData = reportService.getAlertAnomalyReport(startDate, endDate, branchCode);
+                reportData = reportService.getAlertAnomalyReport(startDate, endDate, effectiveBranch);
                 break;
             default:
                 return ResponseEntity.badRequest().body(Map.of("message", "Unknown report type: " + type));

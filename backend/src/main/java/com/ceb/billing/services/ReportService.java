@@ -5,6 +5,7 @@ import com.ceb.billing.entities.BillingRecord;
 import com.ceb.billing.entities.PaymentBatchItem;
 import com.ceb.billing.models.PaymentEligibilityResult;
 import com.ceb.billing.repositories.PaymentBatchItemRepository;
+import com.ceb.billing.utils.BranchDetector;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.TypedQuery;
@@ -42,8 +43,89 @@ public class ReportService {
     @Autowired(required = false)
     private PaymentBatchItemRepository paymentBatchItemRepository;
 
-    @SuppressWarnings("unchecked")
+    private final Map<String, List<Map<String, Object>>> reportCache = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public void clearReportCache() {
+        reportCache.clear();
+    }
+
+    private String makeCacheKey(String reportType, String billingMonth, String branch) {
+        String bm = (billingMonth != null && !billingMonth.trim().isEmpty()) ? billingMonth.trim().toUpperCase() : "ALL";
+        String br = (branch != null && !branch.trim().isEmpty()) ? branch.trim().toUpperCase() : "ALL";
+        return reportType + "::" + bm + "::" + br;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 1. MONTHLY REVENUE REPORT
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getMonthlyRevenueReport(LocalDate start, LocalDate end, String branch) {
+        return getMonthlyRevenueReport(null, start, end, branch);
+    }
+
+    public List<Map<String, Object>> getMonthlyRevenueReport(String billingMonth, LocalDate start, LocalDate end, String branch) {
+        String cacheKey = (start == null && end == null) ? makeCacheKey("MONTHLY_REVENUE", billingMonth, branch) : null;
+        if (cacheKey != null) {
+            List<Map<String, Object>> cached = reportCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        List<Map<String, Object>> records = loadReportRecords(billingMonth, start, end, branch);
+        if (records.isEmpty() && hasDatabaseBillingRecords()) {
+            return getMonthlyRevenueReportFromDb(start, end, branch);
+        }
+
+        Map<Integer, Map<String, Object>> monthlyMap = new TreeMap<>(Collections.reverseOrder());
+        for (Map<String, Object> r : records) {
+            LocalDate d = extractRecordDate(r);
+            int year = d != null ? d.getYear() : 2026;
+            int month = d != null ? d.getMonthValue() : 7;
+
+            String bm = strVal(r.get("billingMonth"));
+            if (!bm.isEmpty()) {
+                int[] ym = parseYearMonthFromBillingMonth(bm);
+                if (ym != null) {
+                    year = ym[0];
+                    month = ym[1];
+                }
+            }
+
+            int key = year * 100 + month;
+            Map<String, Object> group = monthlyMap.computeIfAbsent(key, k -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("year", k / 100);
+                m.put("month", k % 100);
+                m.put("revenue", 0.0);
+                m.put("imports", 0.0);
+                m.put("exports", 0.0);
+                return m;
+            });
+
+            double rev = extractRevenue(r);
+            double imp = extractImports(r);
+            double exp = extractExports(r);
+
+            group.put("revenue", (Double) group.get("revenue") + rev);
+            group.put("imports", (Double) group.get("imports") + imp);
+            group.put("exports", (Double) group.get("exports") + exp);
+        }
+
+        // Round financial and energy values cleanly
+        List<Map<String, Object>> list = new ArrayList<>(monthlyMap.values());
+        for (Map<String, Object> m : list) {
+            m.put("revenue", Math.round((Double) m.get("revenue") * 100.0) / 100.0);
+            m.put("imports", Math.round((Double) m.get("imports") * 100.0) / 100.0);
+            m.put("exports", Math.round((Double) m.get("exports") * 100.0) / 100.0);
+        }
+
+        if (cacheKey != null) {
+            reportCache.put(cacheKey, list);
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getMonthlyRevenueReportFromDb(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT YEAR(b.fromDate) as yr, MONTH(b.fromDate) as mo, " +
                 "COALESCE(SUM(b.totalAmount), 0.0) as rev, " +
@@ -78,8 +160,84 @@ public class ReportService {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 2. CUSTOMER BILLING LEDGER
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getCustomerBillingReport(LocalDate start, LocalDate end, String branch) {
+        return getCustomerBillingReport(null, start, end, branch);
+    }
+
+    public List<Map<String, Object>> getCustomerBillingReport(String billingMonth, LocalDate start, LocalDate end, String branch) {
+        String cacheKey = (start == null && end == null) ? makeCacheKey("CUSTOMER_BILLING", billingMonth, branch) : null;
+        if (cacheKey != null) {
+            List<Map<String, Object>> cached = reportCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        List<Map<String, Object>> records = loadReportRecords(billingMonth, start, end, branch);
+        if (records.isEmpty() && hasDatabaseBillingRecords()) {
+            return getCustomerBillingReportFromDb(start, end, branch);
+        }
+
+        List<Map<String, Object>> list = new ArrayList<>(records.size());
+        for (Map<String, Object> r : records) {
+            Map<String, Object> map = new LinkedHashMap<>(16);
+            map.put("accountNo", strVal(r.get("accountNo")));
+            map.put("customerName", resolveCustomerName(r));
+            map.put("branchCode", resolveDivision(r));
+
+            String fromDate = strVal(r.get("prevReadingDate"));
+            if (fromDate.isEmpty()) fromDate = strVal(r.get("fromDate"));
+            if (fromDate.isEmpty()) fromDate = strVal(r.get("billingPeriodFrom"));
+            if (fromDate.isEmpty()) fromDate = strVal(r.get("billingFrom"));
+
+            String toDate = strVal(r.get("currReadingDate"));
+            if (toDate.isEmpty()) toDate = strVal(r.get("toDate"));
+            if (toDate.isEmpty()) toDate = strVal(r.get("billingPeriodTo"));
+            if (toDate.isEmpty()) toDate = strVal(r.get("billingTo"));
+
+            map.put("fromDate", fromDate);
+            map.put("toDate", toDate);
+            map.put("refNo", strVal(r.get("refNo")));
+
+            double imp = extractImports(r);
+            double exp = extractExports(r);
+            map.put("imports", imp);
+            map.put("exports", exp);
+
+            Object netUnitObj = r.get("netUnit");
+            if (netUnitObj == null) netUnitObj = r.get("netUnits");
+            if (netUnitObj == null) netUnitObj = r.get("kwhNet");
+            double netUnit = netUnitObj != null ? parseDoubleSafe(netUnitObj) : (exp - imp);
+            map.put("netUnit", Math.round(netUnit * 100.0) / 100.0);
+
+            double unitRate = extractUnitRate(r);
+            map.put("unitCost", unitRate);
+
+            double totalAmount = extractRevenue(r);
+            map.put("totalAmount", Math.round(totalAmount * 100.0) / 100.0);
+
+            list.add(map);
+        }
+
+        // Sort by toDate DESC, then accountNo ASC
+        list.sort((a, b) -> {
+            String tA = strVal(a.get("toDate"));
+            String tB = strVal(b.get("toDate"));
+            int c = tB.compareTo(tA);
+            if (c != 0) return c;
+            return strVal(a.get("accountNo")).compareTo(strVal(b.get("accountNo")));
+        });
+
+        if (cacheKey != null) {
+            reportCache.put(cacheKey, list);
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getCustomerBillingReportFromDb(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT b.customer.accountNo, b.customer.customerName, b.customer.branchCode, " +
                 "b.fromDate, b.toDate, b.refNo, b.importUnits, b.exportUnits, b.netUnit, b.unitCost, b.totalAmount " +
@@ -118,8 +276,64 @@ public class ReportService {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 3. HIGHEST SOLAR EXPORTERS
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getHighestExportersReport(LocalDate start, LocalDate end, String branch) {
+        return getHighestExportersReport(null, start, end, branch);
+    }
+
+    public List<Map<String, Object>> getHighestExportersReport(String billingMonth, LocalDate start, LocalDate end, String branch) {
+        String cacheKey = (start == null && end == null) ? makeCacheKey("HIGHEST_EXPORTERS", billingMonth, branch) : null;
+        if (cacheKey != null) {
+            List<Map<String, Object>> cached = reportCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        List<Map<String, Object>> records = loadReportRecords(billingMonth, start, end, branch);
+        if (records.isEmpty() && hasDatabaseBillingRecords()) {
+            return getHighestExportersReportFromDb(start, end, branch);
+        }
+
+        Map<String, Map<String, Object>> agg = new LinkedHashMap<>();
+        for (Map<String, Object> r : records) {
+            String acc = strVal(r.get("accountNo"));
+            if (acc.isEmpty()) continue;
+
+            Map<String, Object> map = agg.computeIfAbsent(acc, k -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("accountNo", k);
+                m.put("customerName", resolveCustomerName(r));
+                m.put("branchCode", resolveDivision(r));
+                m.put("exports", 0.0);
+                m.put("revenue", 0.0);
+                return m;
+            });
+
+            map.put("exports", (Double) map.get("exports") + extractExports(r));
+            map.put("revenue", (Double) map.get("revenue") + extractRevenue(r));
+        }
+
+        List<Map<String, Object>> list = new ArrayList<>(agg.values());
+        list.sort((a, b) -> Double.compare((Double) b.get("exports"), (Double) a.get("exports")));
+
+        for (Map<String, Object> m : list) {
+            m.put("exports", Math.round((Double) m.get("exports") * 100.0) / 100.0);
+            m.put("revenue", Math.round((Double) m.get("revenue") * 100.0) / 100.0);
+        }
+
+        if (list.size() > 100) {
+            list = list.subList(0, 100);
+        }
+        if (cacheKey != null) {
+            reportCache.put(cacheKey, list);
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getHighestExportersReportFromDb(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT b.customer.accountNo, b.customer.customerName, b.customer.branchCode, " +
                 "SUM(b.exportUnits) as totalExport, SUM(b.totalAmount) as totalRevenue " +
@@ -152,8 +366,64 @@ public class ReportService {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 4. HIGHEST IMPORT CONSUMERS
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getHighestImportersReport(LocalDate start, LocalDate end, String branch) {
+        return getHighestImportersReport(null, start, end, branch);
+    }
+
+    public List<Map<String, Object>> getHighestImportersReport(String billingMonth, LocalDate start, LocalDate end, String branch) {
+        String cacheKey = (start == null && end == null) ? makeCacheKey("HIGHEST_IMPORTERS", billingMonth, branch) : null;
+        if (cacheKey != null) {
+            List<Map<String, Object>> cached = reportCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        List<Map<String, Object>> records = loadReportRecords(billingMonth, start, end, branch);
+        if (records.isEmpty() && hasDatabaseBillingRecords()) {
+            return getHighestImportersReportFromDb(start, end, branch);
+        }
+
+        Map<String, Map<String, Object>> agg = new LinkedHashMap<>();
+        for (Map<String, Object> r : records) {
+            String acc = strVal(r.get("accountNo"));
+            if (acc.isEmpty()) continue;
+
+            Map<String, Object> map = agg.computeIfAbsent(acc, k -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("accountNo", k);
+                m.put("customerName", resolveCustomerName(r));
+                m.put("branchCode", resolveDivision(r));
+                m.put("imports", 0.0);
+                m.put("revenue", 0.0);
+                return m;
+            });
+
+            map.put("imports", (Double) map.get("imports") + extractImports(r));
+            map.put("revenue", (Double) map.get("revenue") + extractRevenue(r));
+        }
+
+        List<Map<String, Object>> list = new ArrayList<>(agg.values());
+        list.sort((a, b) -> Double.compare((Double) b.get("imports"), (Double) a.get("imports")));
+
+        for (Map<String, Object> m : list) {
+            m.put("imports", Math.round((Double) m.get("imports") * 100.0) / 100.0);
+            m.put("revenue", Math.round((Double) m.get("revenue") * 100.0) / 100.0);
+        }
+
+        if (list.size() > 100) {
+            list = list.subList(0, 100);
+        }
+        if (cacheKey != null) {
+            reportCache.put(cacheKey, list);
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getHighestImportersReportFromDb(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT b.customer.accountNo, b.customer.customerName, b.customer.branchCode, " +
                 "SUM(b.importUnits) as totalImport, SUM(b.totalAmount) as totalRevenue " +
@@ -186,8 +456,86 @@ public class ReportService {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 5. BRANCH PERFORMANCE SUMMARY
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getBranchPerformanceReport(LocalDate start, LocalDate end) {
+        return getBranchPerformanceReport(null, start, end);
+    }
+
+    public List<Map<String, Object>> getBranchPerformanceReport(String billingMonth, LocalDate start, LocalDate end) {
+        String cacheKey = (start == null && end == null) ? makeCacheKey("BRANCH_PERFORMANCE", billingMonth, "ALL") : null;
+        if (cacheKey != null) {
+            List<Map<String, Object>> cached = reportCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        List<Map<String, Object>> records = loadReportRecords(billingMonth, start, end, null);
+        if (records.isEmpty() && hasDatabaseBillingRecords()) {
+            return getBranchPerformanceReportFromDb(start, end);
+        }
+
+        List<String> canonicalDivisions = List.of("Ampara", "Batticaloa", "Kalmunai", "Trincomalee", "Valaichenai");
+        Map<String, Map<String, Object>> branchMap = new LinkedHashMap<>();
+        for (String div : canonicalDivisions) {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("branchCode", div);
+            m.put("customerCount", 0L);
+            m.put("imports", 0.0);
+            m.put("exports", 0.0);
+            m.put("revenue", 0.0);
+            branchMap.put(div, m);
+        }
+
+        Map<String, Set<String>> customersPerBranch = new HashMap<>();
+        for (String div : canonicalDivisions) {
+            customersPerBranch.put(div, new HashSet<>());
+        }
+
+        for (Map<String, Object> r : records) {
+            String div = resolveDivision(r);
+            String canon = BranchDetector.canonicalDivision(div);
+            if (canon.isEmpty()) canon = div;
+
+            Map<String, Object> m = branchMap.computeIfAbsent(canon, k -> {
+                Map<String, Object> nm = new LinkedHashMap<>();
+                nm.put("branchCode", k);
+                nm.put("customerCount", 0L);
+                nm.put("imports", 0.0);
+                nm.put("exports", 0.0);
+                nm.put("revenue", 0.0);
+                return nm;
+            });
+
+            String acc = strVal(r.get("accountNo"));
+            if (!acc.isEmpty()) {
+                customersPerBranch.computeIfAbsent(canon, k -> new HashSet<>()).add(acc);
+            }
+
+            m.put("imports", (Double) m.get("imports") + extractImports(r));
+            m.put("exports", (Double) m.get("exports") + extractExports(r));
+            m.put("revenue", (Double) m.get("revenue") + extractRevenue(r));
+        }
+
+        for (Map.Entry<String, Map<String, Object>> e : branchMap.entrySet()) {
+            Set<String> set = customersPerBranch.get(e.getKey());
+            e.getValue().put("customerCount", (long) (set != null ? set.size() : 0));
+            e.getValue().put("imports", Math.round((Double) e.getValue().get("imports") * 100.0) / 100.0);
+            e.getValue().put("exports", Math.round((Double) e.getValue().get("exports") * 100.0) / 100.0);
+            e.getValue().put("revenue", Math.round((Double) e.getValue().get("revenue") * 100.0) / 100.0);
+        }
+
+        List<Map<String, Object>> list = new ArrayList<>(branchMap.values());
+        list.sort((a, b) -> Double.compare((Double) b.get("revenue"), (Double) a.get("revenue")));
+        if (cacheKey != null) {
+            reportCache.put(cacheKey, list);
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getBranchPerformanceReportFromDb(LocalDate start, LocalDate end) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT c.branchCode, COUNT(DISTINCT c.accountNo), " +
                 "COALESCE(SUM(b.importUnits), 0.0), COALESCE(SUM(b.exportUnits), 0.0), " +
@@ -220,8 +568,69 @@ public class ReportService {
         return list;
     }
 
-    @SuppressWarnings("unchecked")
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 6. SOLAR CONNECTION DISTRIBUTION
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getSolarTypePerformanceReport(LocalDate start, LocalDate end, String branch) {
+        return getSolarTypePerformanceReport(null, start, end, branch);
+    }
+
+    public List<Map<String, Object>> getSolarTypePerformanceReport(String billingMonth, LocalDate start, LocalDate end, String branch) {
+        String cacheKey = (start == null && end == null) ? makeCacheKey("SOLAR_TYPE", billingMonth, branch) : null;
+        if (cacheKey != null) {
+            List<Map<String, Object>> cached = reportCache.get(cacheKey);
+            if (cached != null) return cached;
+        }
+
+        List<Map<String, Object>> records = loadReportRecords(billingMonth, start, end, branch);
+        if (records.isEmpty() && hasDatabaseBillingRecords()) {
+            return getSolarTypePerformanceReportFromDb(start, end, branch);
+        }
+
+        Map<String, Map<String, Object>> solarMap = new LinkedHashMap<>();
+        Map<String, Set<String>> customersPerType = new HashMap<>();
+
+        for (Map<String, Object> r : records) {
+            String st = resolveSolarType(r);
+            Map<String, Object> m = solarMap.computeIfAbsent(st, k -> {
+                Map<String, Object> nm = new LinkedHashMap<>();
+                nm.put("solarType", k);
+                nm.put("customerCount", 0L);
+                nm.put("imports", 0.0);
+                nm.put("exports", 0.0);
+                nm.put("revenue", 0.0);
+                return nm;
+            });
+
+            String acc = strVal(r.get("accountNo"));
+            if (!acc.isEmpty()) {
+                customersPerType.computeIfAbsent(st, k -> new HashSet<>()).add(acc);
+            }
+
+            m.put("imports", (Double) m.get("imports") + extractImports(r));
+            m.put("exports", (Double) m.get("exports") + extractExports(r));
+            m.put("revenue", (Double) m.get("revenue") + extractRevenue(r));
+        }
+
+        for (Map.Entry<String, Map<String, Object>> e : solarMap.entrySet()) {
+            Set<String> set = customersPerType.get(e.getKey());
+            e.getValue().put("customerCount", (long) (set != null ? set.size() : 0));
+            e.getValue().put("imports", Math.round((Double) e.getValue().get("imports") * 100.0) / 100.0);
+            e.getValue().put("exports", Math.round((Double) e.getValue().get("exports") * 100.0) / 100.0);
+            e.getValue().put("revenue", Math.round((Double) e.getValue().get("revenue") * 100.0) / 100.0);
+        }
+
+        List<Map<String, Object>> list = new ArrayList<>(solarMap.values());
+        list.sort((a, b) -> Long.compare((Long) b.get("customerCount"), (Long) a.get("customerCount")));
+        if (cacheKey != null) {
+            reportCache.put(cacheKey, list);
+        }
+        return list;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> getSolarTypePerformanceReportFromDb(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder(
                 "SELECT c.solarType, COUNT(DISTINCT c.accountNo), " +
                 "COALESCE(SUM(b.importUnits), 0.0), COALESCE(SUM(b.exportUnits), 0.0), " +
@@ -256,6 +665,10 @@ public class ReportService {
         return list;
     }
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // 7. ALERT ANOMALY AUDIT LOG
+    // ─────────────────────────────────────────────────────────────────────────────
+
     public List<Map<String, Object>> getAlertAnomalyReport(LocalDate start, LocalDate end, String branch) {
         StringBuilder jpql = new StringBuilder("SELECT a FROM Alert a WHERE 1=1 ");
 
@@ -264,8 +677,14 @@ public class ReportService {
 
         if (startLdt != null) jpql.append("AND a.createdAt >= :startLdt ");
         if (endLdt != null) jpql.append("AND a.createdAt <= :endLdt ");
-        if (branch != null && !branch.trim().isEmpty()) {
-            jpql.append("AND EXISTS (SELECT c FROM Customer c WHERE c.accountNo = a.accountNo AND c.branchCode = :branch) ");
+
+        String canonBranch = (branch != null && !branch.trim().isEmpty() && !"ALL".equalsIgnoreCase(branch.trim()))
+                ? BranchDetector.canonicalDivision(branch) : "";
+
+        // If division/branch is specified, filter by account prefix directly
+        String branchPrefix = canonBranch.isEmpty() ? null : BranchDetector.BRANCH_TO_PREFIX.get(canonBranch);
+        if (branchPrefix != null) {
+            jpql.append("AND a.accountNo LIKE :branchPattern ");
         }
 
         jpql.append("ORDER BY a.createdAt DESC");
@@ -273,22 +692,223 @@ public class ReportService {
         TypedQuery<Alert> query = entityManager.createQuery(jpql.toString(), Alert.class);
         if (startLdt != null) query.setParameter("startLdt", startLdt);
         if (endLdt != null) query.setParameter("endLdt", endLdt);
-        if (branch != null && !branch.trim().isEmpty()) query.setParameter("branch", branch.trim());
+        if (branchPrefix != null) query.setParameter("branchPattern", branchPrefix + "%");
 
         List<Alert> results = query.getResultList();
-        List<Map<String, Object>> list = new ArrayList<>();
+        List<Map<String, Object>> list = new ArrayList<>(results.size());
         for (Alert alert : results) {
-            Map<String, Object> map = new HashMap<>();
+            // Verify branch detection if branch filter was supplied
+            if (!canonBranch.isEmpty()) {
+                String accBranch = BranchDetector.detectBranch(alert.getAccountNo());
+                if (accBranch != null && !canonBranch.equalsIgnoreCase(accBranch)) {
+                    continue;
+                }
+            }
+            Map<String, Object> map = new LinkedHashMap<>();
             map.put("alertId", alert.getAlertId());
             map.put("accountNo", alert.getAccountNo());
-            map.put("alertType", alert.getAlertType());
-            map.put("severity", alert.getSeverity());
-            map.put("message", alert.getMessage());
-            map.put("status", alert.getStatus());
+            map.put("alertType", alert.getAlertType() != null ? alert.getAlertType() : "");
+            map.put("severity", alert.getSeverity() != null ? alert.getSeverity() : "INFO");
+            map.put("message", alert.getMessage() != null ? alert.getMessage() : "");
+            map.put("status", alert.getStatus() != null ? alert.getStatus() : "UNREAD");
             map.put("createdAt", alert.getCreatedAt());
             list.add(map);
         }
         return list;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // HELPER METHODS FOR REPORT GENERATION & DATA NORMALIZATION
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    private List<Map<String, Object>> loadReportRecords(String billingMonth, LocalDate start, LocalDate end, String branch) {
+        if (paymentControlService == null) {
+            return Collections.emptyList();
+        }
+
+        String bm = billingMonth != null ? billingMonth.trim() : "";
+        if ("ALL".equalsIgnoreCase(bm) || "All Billing Months".equalsIgnoreCase(bm)) {
+            bm = "";
+        }
+
+        String div = branch != null ? branch.trim() : "";
+        if ("ALL".equalsIgnoreCase(div) || "All Branches".equalsIgnoreCase(div) || "All Divisions".equalsIgnoreCase(div)) {
+            div = "";
+        }
+
+        List<Map<String, Object>> all = paymentControlService.loadCanonicalRecords(bm, div);
+        if (all == null || all.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        if (start != null || end != null) {
+            List<Map<String, Object>> filtered = new ArrayList<>(all.size());
+            for (Map<String, Object> r : all) {
+                if (matchesDateFilter(r, start, end)) {
+                    filtered.add(r);
+                }
+            }
+            return filtered;
+        }
+
+        return all;
+    }
+
+    private boolean hasDatabaseBillingRecords() {
+        try {
+            if (entityManager == null) return false;
+            Long count = entityManager.createQuery("SELECT COUNT(b) FROM BillingRecord b", Long.class).getSingleResult();
+            return count != null && count > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean matchesDateFilter(Map<String, Object> r, LocalDate start, LocalDate end) {
+        if (start == null && end == null) return true;
+        LocalDate recDate = extractRecordDate(r);
+        if (recDate == null) return true;
+        if (start != null && recDate.isBefore(start)) return false;
+        if (end != null && recDate.isAfter(end)) return false;
+        return true;
+    }
+
+    private LocalDate extractRecordDate(Map<String, Object> r) {
+        LocalDate d = parseDateSafe(r.get("currReadingDate"));
+        if (d == null) d = parseDateSafe(r.get("toDate"));
+        if (d == null) d = parseDateSafe(r.get("billingPeriodTo"));
+        if (d == null) d = parseDateSafe(r.get("billingTo"));
+        if (d == null) d = parseDateSafe(r.get("prevReadingDate"));
+        if (d == null) d = parseDateSafe(r.get("fromDate"));
+        if (d == null) d = parseDateSafe(r.get("billingPeriodFrom"));
+        if (d == null) d = parseDateSafe(r.get("billingFrom"));
+        if (d == null) {
+            String bm = strVal(r.get("billingMonth"));
+            int[] ym = parseYearMonthFromBillingMonth(bm);
+            if (ym != null) {
+                d = LocalDate.of(ym[0], ym[1], 1);
+            }
+        }
+        return d;
+    }
+
+    private int[] parseYearMonthFromBillingMonth(String bm) {
+        if (bm == null || bm.trim().isEmpty()) return null;
+        String clean = bm.trim().toLowerCase();
+        int month = 7;
+        if (clean.contains("jan")) month = 1;
+        else if (clean.contains("feb")) month = 2;
+        else if (clean.contains("mar")) month = 3;
+        else if (clean.contains("apr")) month = 4;
+        else if (clean.contains("may")) month = 5;
+        else if (clean.contains("jun")) month = 6;
+        else if (clean.contains("jul")) month = 7;
+        else if (clean.contains("aug")) month = 8;
+        else if (clean.contains("sep")) month = 9;
+        else if (clean.contains("oct")) month = 10;
+        else if (clean.contains("nov")) month = 11;
+        else if (clean.contains("dec")) month = 12;
+
+        int year = 2026;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(20\\d\\d)").matcher(bm);
+        if (m.find()) {
+            try {
+                year = Integer.parseInt(m.group(1));
+            } catch (Exception ignored) {}
+        }
+        return new int[]{year, month};
+    }
+
+    private LocalDate parseDateSafe(Object obj) {
+        if (obj == null) return null;
+        if (obj instanceof LocalDate) return (LocalDate) obj;
+        if (obj instanceof java.sql.Date) return ((java.sql.Date) obj).toLocalDate();
+        String s = obj.toString().trim();
+        if (s.isEmpty()) return null;
+        try {
+            if (s.length() >= 10) {
+                return LocalDate.parse(s.substring(0, 10));
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    private double extractRevenue(Map<String, Object> r) {
+        Double val = parseDouble(r.get("salesAmount"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("energyPurchase"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("totalAmount"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("paymentSettled"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("payment"));
+        if (val != null && val > 0) return val;
+        return val != null ? val : 0.0;
+    }
+
+    private double extractImports(Map<String, Object> r) {
+        Double val = parseDouble(r.get("kwhImport"));
+        if (val != null) return val;
+        val = parseDouble(r.get("importUnits"));
+        if (val != null) return val;
+        val = parseDouble(r.get("imports"));
+        if (val != null) return val;
+        return 0.0;
+    }
+
+    private double extractExports(Map<String, Object> r) {
+        Double val = parseDouble(r.get("kwhExport"));
+        if (val != null) return val;
+        val = parseDouble(r.get("exportUnits"));
+        if (val != null) return val;
+        val = parseDouble(r.get("exports"));
+        if (val != null) return val;
+        return 0.0;
+    }
+
+    private double extractUnitRate(Map<String, Object> r) {
+        Double val = parseDouble(r.get("unitRate"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("ngenUnitRate"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("masterUnitRate"));
+        if (val != null && val > 0) return val;
+        val = parseDouble(r.get("unitCost"));
+        if (val != null && val > 0) return val;
+        return 0.0;
+    }
+
+    private String resolveDivision(Map<String, Object> rec) {
+        String div = strVal(rec.get("division"));
+        if (div.isEmpty()) div = strVal(rec.get("snapshotDivision"));
+        if (div.isEmpty()) div = strVal(rec.get("branchCode"));
+        if (div.isEmpty()) div = strVal(rec.get("location"));
+        String canon = BranchDetector.canonicalDivision(div);
+        if (!canon.isEmpty()) return canon;
+        String acc = strVal(rec.get("accountNo"));
+        String detected = BranchDetector.detectBranch(acc);
+        if (detected != null && !detected.isEmpty()) return detected;
+        return div.isEmpty() ? "Eastern Province" : div;
+    }
+
+    private String resolveSolarType(Map<String, Object> rec) {
+        String st = strVal(rec.get("solarType"));
+        if (st.isEmpty()) st = strVal(rec.get("masterNetType"));
+        if (st.isEmpty()) st = strVal(rec.get("ngenNetType"));
+        if (st.isEmpty()) st = strVal(rec.get("npayNetType"));
+        if (st.isEmpty()) return "Net Accounting";
+        String lower = st.toLowerCase();
+        if (lower.contains("plus plus") || lower.contains("++") || lower.contains("net++")) return "Net Plus Plus";
+        if (lower.contains("plus") || lower.contains("net+")) return "Net Plus";
+        if (lower.contains("metering")) return "Net Metering";
+        if (lower.contains("accounting")) return "Net Accounting";
+        return st;
+    }
+
+    private double parseDoubleSafe(Object obj) {
+        Double d = parseDouble(obj);
+        return d != null ? d : 0.0;
     }
 
     // ─────────────────────────────────────────────────────────────────────────────

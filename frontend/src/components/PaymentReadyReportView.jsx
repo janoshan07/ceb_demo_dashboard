@@ -11,7 +11,11 @@ import {
   Calendar, 
   DollarSign, 
   FileText,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 
 const PaymentReadyReportView = ({ authFetch, showToast }) => {
@@ -27,6 +31,8 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
   const [exportingExcel, setExportingExcel] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
   const [reportData, setReportData] = useState({
     summary: {
       reportTitle: 'SLIP TRANSACTION LISTING - PAYMENT OF NET ACCOUNTING / NET PLUS / NET PLUS PLUS',
@@ -98,6 +104,7 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
   };
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchReport();
   }, [billingMonth, division]);
 
@@ -197,6 +204,20 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
 
   const summary = reportData.summary || {};
   const records = reportData.records || [];
+
+  // Pagination computations for optimal rendering performance
+  const totalRows = records.length;
+  const isAll = pageSize === 'ALL';
+  const effectivePageSize = isAll ? Math.max(1, totalRows) : Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalRows / effectivePageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const displayedRecords = isAll || isPrinting
+    ? records
+    : records.slice((validCurrentPage - 1) * effectivePageSize, validCurrentPage * effectivePageSize);
+
+  const startIndex = totalRows === 0 ? 0 : (validCurrentPage - 1) * effectivePageSize + 1;
+  const endIndex = isAll ? totalRows : Math.min(validCurrentPage * effectivePageSize, totalRows);
 
   return (
     <div className="payment-ready-container animate-fade-in">
@@ -312,36 +333,46 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
       `}</style>
 
       {/* Top Action Bar */}
-      <div className="card no-print" style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#ffffff', border: '1px solid #e2e8f0' }}>
+      <div 
+        className="no-print" 
+        style={{ 
+          padding: '1.35rem 1.5rem', 
+          marginBottom: '1.5rem', 
+          background: '#ffffff', 
+          border: '1px solid #e2e8f0',
+          borderRadius: '12px',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)'
+        }}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+              <h2 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em', margin: 0 }}>
                 Payment Ready Report
               </h2>
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '3px 9px',
-                borderRadius: '12px',
-                fontSize: '0.75rem',
+                gap: '5px',
+                padding: '3px 10px',
+                borderRadius: '20px',
+                fontSize: '0.72rem',
                 fontWeight: 700,
                 backgroundColor: '#ecfdf5',
                 color: '#059669',
                 border: '1px solid #a7f3d0'
               }}>
-                <CheckCircle2 size={13} />
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block' }}></span>
                 STATUS: READY
-                <Lock size={11} style={{ marginLeft: '2px', opacity: 0.7 }} />
+                <Lock size={11} style={{ marginLeft: '1px', opacity: 0.8 }} />
               </span>
             </div>
-            <p style={{ fontSize: '0.82rem', color: '#64748b', margin: '4px 0 0 0' }}>
+            <p style={{ fontSize: '0.84rem', color: '#64748b', margin: '4px 0 0 0' }}>
               Authoritative slip transaction listing of accounts validated and ready for payment disbursement.
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
               onClick={handleExportExcel}
               disabled={exportingExcel || isPrinting || loading || records.length === 0}
@@ -349,25 +380,27 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.4rem',
+                gap: '0.45rem',
                 padding: '0.5rem 1rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 backgroundColor: '#ffffff',
                 border: '1px solid #cbd5e1',
-                borderRadius: '6px',
+                borderRadius: '8px',
+                color: '#1e293b',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 cursor: (exportingExcel || isPrinting || loading || records.length === 0) ? 'not-allowed' : 'pointer'
               }}
             >
               {exportingExcel ? (
                 <>
-                  <RefreshCw size={15} className="animate-spin text-success" />
-                  Exporting Excel...
+                  <RefreshCw size={14} className="animate-spin text-success" />
+                  <span>Exporting...</span>
                 </>
               ) : (
                 <>
                   <FileSpreadsheet size={15} className="text-success" />
-                  Export Excel
+                  <span>Export Excel</span>
                 </>
               )}
             </button>
@@ -379,25 +412,27 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.4rem',
+                gap: '0.45rem',
                 padding: '0.5rem 1rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 backgroundColor: '#ffffff',
                 border: '1px solid #cbd5e1',
-                borderRadius: '6px',
+                borderRadius: '8px',
+                color: '#1e293b',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 cursor: (isPrinting || exportingExcel || loading || records.length === 0) ? 'not-allowed' : 'pointer'
               }}
             >
               {isPrinting ? (
                 <>
-                  <RefreshCw size={15} className="animate-spin" style={{ color: '#2563eb' }} />
-                  Generating PDF...
+                  <RefreshCw size={14} className="animate-spin" style={{ color: '#2563eb' }} />
+                  <span>Generating PDF...</span>
                 </>
               ) : (
                 <>
-                  <Download size={15} />
-                  Export PDF
+                  <Download size={14} />
+                  <span>Export PDF</span>
                 </>
               )}
             </button>
@@ -409,19 +444,20 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.4rem',
-                padding: '0.5rem 1.1rem',
+                gap: '0.45rem',
+                padding: '0.5rem 1.15rem',
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 backgroundColor: '#2563eb',
                 color: '#ffffff',
                 border: 'none',
-                borderRadius: '6px',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
                 cursor: (isPrinting || exportingExcel || loading || records.length === 0) ? 'not-allowed' : 'pointer'
               }}
             >
               <Printer size={15} />
-              Print Report
+              <span>Print Report</span>
             </button>
           </div>
         </div>
@@ -432,20 +468,30 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
           paddingTop: '1.25rem',
           borderTop: '1px solid #f1f5f9',
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
           gap: '1rem',
           alignItems: 'flex-end'
         }}>
           {/* Billing Month Dropdown */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
               Billing Month
             </label>
             <select
               value={billingMonth}
               onChange={(e) => setBillingMonth(e.target.value)}
-              className="neon-input"
-              style={{ width: '100%', height: '38px', fontSize: '0.85rem', borderRadius: '6px' }}
+              style={{
+                width: '100%',
+                height: '40px',
+                fontSize: '0.85rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                padding: '0 0.75rem',
+                color: '#0f172a',
+                outline: 'none',
+                transition: 'all 0.15s ease'
+              }}
             >
               <option value="ALL">All Billing Months</option>
               {availableMonths.map((m) => (
@@ -456,14 +502,24 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
 
           {/* Division Dropdown */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
               Division
             </label>
             <select
               value={division}
               onChange={(e) => setDivision(e.target.value)}
-              className="neon-input"
-              style={{ width: '100%', height: '38px', fontSize: '0.85rem', borderRadius: '6px' }}
+              style={{
+                width: '100%',
+                height: '40px',
+                fontSize: '0.85rem',
+                borderRadius: '8px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                padding: '0 0.75rem',
+                color: '#0f172a',
+                outline: 'none',
+                transition: 'all 0.15s ease'
+              }}
             >
               {divisionsList.map((d) => (
                 <option key={d} value={d}>
@@ -475,7 +531,7 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
 
           {/* Account Number Search */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
               Account Number
             </label>
             <div style={{ position: 'relative' }}>
@@ -485,16 +541,27 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
                 value={accountNo}
                 onChange={(e) => setAccountNo(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && fetchReport()}
-                className="neon-input"
-                style={{ width: '100%', height: '38px', fontSize: '0.85rem', paddingLeft: '2rem', borderRadius: '6px' }}
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  fontSize: '0.85rem',
+                  paddingLeft: '2.1rem',
+                  paddingRight: '0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  color: '#0f172a',
+                  outline: 'none',
+                  transition: 'all 0.15s ease'
+                }}
               />
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '12px', color: '#94a3b8' }} />
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '13px', color: '#94a3b8' }} />
             </div>
           </div>
 
           {/* Customer Name Search */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
               Customer Name
             </label>
             <div style={{ position: 'relative' }}>
@@ -504,27 +571,38 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && fetchReport()}
-                className="neon-input"
-                style={{ width: '100%', height: '38px', fontSize: '0.85rem', paddingLeft: '2rem', borderRadius: '6px' }}
+                style={{
+                  width: '100%',
+                  height: '40px',
+                  fontSize: '0.85rem',
+                  paddingLeft: '2.1rem',
+                  paddingRight: '0.75rem',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                  backgroundColor: '#ffffff',
+                  color: '#0f172a',
+                  outline: 'none',
+                  transition: 'all 0.15s ease'
+                }}
               />
-              <Search size={14} style={{ position: 'absolute', left: '10px', top: '12px', color: '#94a3b8' }} />
+              <Search size={14} style={{ position: 'absolute', left: '10px', top: '13px', color: '#94a3b8' }} />
             </div>
           </div>
 
           {/* Payment Status (Locked Display) */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+            <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
               Payment Status
             </label>
             <div style={{
-              height: '38px',
+              height: '40px',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               padding: '0 12px',
               background: '#f8fafc',
               border: '1px solid #cbd5e1',
-              borderRadius: '6px',
+              borderRadius: '8px',
               fontSize: '0.82rem',
               fontWeight: 600,
               color: '#059669'
@@ -542,77 +620,134 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
               className="btn btn-secondary"
               style={{
                 width: '100%',
-                height: '38px',
+                height: '40px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: '6px',
                 fontSize: '0.85rem',
                 fontWeight: 600,
-                borderRadius: '6px'
+                backgroundColor: '#f8fafc',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                color: '#1e293b',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.15s ease'
               }}
             >
               <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              Apply Filters
+              <span>Apply Filters</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* Summary KPI Ribbon */}
-      <div className="metrics-grid no-print" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', marginBottom: '1.5rem' }}>
-        <div className="metric-card success" style={{ padding: '1rem', background: '#ffffff', border: '1px solid #e2e8f0' }}>
-          <div className="metric-info">
-            <span className="metric-label" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+      <div 
+        className="metrics-grid no-print" 
+        style={{ 
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', 
+          gap: '1rem',
+          marginBottom: '1.5rem' 
+        }}
+      >
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderTop: '3px solid #059669',
+          borderRadius: '12px',
+          padding: '1.15rem 1.25rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div>
+            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
               PAYMENT READY CUSTOMERS
             </span>
-            <span className="metric-value" style={{ fontSize: '1.4rem', fontWeight: 700, color: '#059669' }}>
+            <span style={{ fontSize: '1.45rem', fontWeight: 800, color: '#059669', fontVariantNumeric: 'tabular-nums' }}>
               {summary.totalPaymentReadyCustomers || 0}
             </span>
           </div>
-          <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#ecfdf5', color: '#059669' }}>
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <CheckCircle2 size={18} />
           </div>
         </div>
 
-        <div className="metric-card primary" style={{ padding: '1rem', background: '#ffffff', border: '1px solid #e2e8f0' }}>
-          <div className="metric-info">
-            <span className="metric-label" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderTop: '3px solid #2563eb',
+          borderRadius: '12px',
+          padding: '1.15rem 1.25rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div>
+            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
               TOTAL AMOUNT (GROSS)
             </span>
-            <span className="metric-value" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#2563eb' }}>
+            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#2563eb', fontVariantNumeric: 'tabular-nums' }}>
               LKR {formatAlwaysNumber(summary.totalAmountSum)}
             </span>
           </div>
-          <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#eff6ff', color: '#2563eb' }}>
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <DollarSign size={18} />
           </div>
         </div>
 
-        <div className="metric-card warning" style={{ padding: '1rem', background: '#ffffff', border: '1px solid #e2e8f0' }}>
-          <div className="metric-info">
-            <span className="metric-label" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
-              TOTAL SET OFF & STAMP
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderTop: '3px solid #d97706',
+          borderRadius: '12px',
+          padding: '1.15rem 1.25rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div>
+            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+              TOTAL SET OFF &amp; STAMP
             </span>
-            <span className="metric-value" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#d97706' }}>
+            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#d97706', fontVariantNumeric: 'tabular-nums' }}>
               LKR {formatAlwaysNumber((summary.totalBillSetOffSum || 0) + (summary.totalStampDutySum || 0))}
             </span>
           </div>
-          <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#fffbeb', color: '#d97706' }}>
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Building size={18} />
           </div>
         </div>
 
-        <div className="metric-card teal" style={{ padding: '1rem', background: '#ffffff', border: '1px solid #e2e8f0' }}>
-          <div className="metric-info">
-            <span className="metric-label" style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b' }}>
+        <div style={{
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderTop: '3px solid #0d9488',
+          borderRadius: '12px',
+          padding: '1.15rem 1.25rem',
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <div>
+            <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
               NET PAYABLE (L9001)
             </span>
-            <span className="metric-value" style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0d9488' }}>
+            <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0d9488', fontVariantNumeric: 'tabular-nums' }}>
               LKR {formatAlwaysNumber(summary.totalAmountPayableSum)}
             </span>
           </div>
-          <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#f0fdfa', color: '#0d9488' }}>
+          <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: '#f0fdfa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <FileText size={18} />
           </div>
         </div>
@@ -622,9 +757,9 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
       <div className="slip-wrapper card" style={{
         padding: '1.75rem',
         background: '#ffffff',
-        border: '1px solid #cbd5e1',
-        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05)',
-        borderRadius: '6px'
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
+        borderRadius: '12px'
       }}>
         {/* Slip Header Banner */}
         <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
@@ -683,7 +818,8 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
             No payment ready records match the selected month and division parameters.
           </div>
         ) : (
-          /* Table Reproduction */
+          <>
+          {/* Table Reproduction */}
           <div className="slip-table-container">
             <table className="slip-table">
               <thead>
@@ -713,7 +849,7 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
                 </tr>
               </thead>
               <tbody>
-                {records.map((r, idx) => (
+                {displayedRecords.map((r, idx) => (
                   <tr key={idx}>
                     <td className="cell-center">{r.sNo}</td>
                     <td className="cell-center" style={{ fontWeight: 600 }}>{r.accountNo}</td>
@@ -757,6 +893,135 @@ const PaymentReadyReportView = ({ authFetch, showToast }) => {
               </tbody>
             </table>
           </div>
+
+          {/* Slip Table Pagination Controls */}
+          {totalRows > 0 && (
+            <div className="no-print" style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '0.75rem',
+              marginTop: '0.85rem',
+              padding: '0.65rem 0.95rem',
+              backgroundColor: '#f8fafc',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.82rem', color: '#64748b' }}>
+                <span>
+                  Showing <strong style={{ color: '#0f172a' }}>{startIndex}</strong> to <strong style={{ color: '#0f172a' }}>{endIndex}</strong> of <strong style={{ color: '#0f172a' }}>{totalRows.toLocaleString()}</strong> records
+                </span>
+                <span style={{ color: '#cbd5e1' }}>•</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span>Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '2px 8px',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: '#ffffff',
+                      color: '#0f172a',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={250}>250</option>
+                    <option value="ALL">All ({totalRows.toLocaleString()})</option>
+                  </select>
+                </div>
+              </div>
+
+              {!isAll && totalPages > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <button
+                    onClick={() => setCurrentPage(1)}
+                    disabled={validCurrentPage === 1}
+                    title="First Page"
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: validCurrentPage === 1 ? '#f1f5f9' : '#ffffff',
+                      color: validCurrentPage === 1 ? '#94a3b8' : '#0f172a',
+                      cursor: validCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <ChevronsLeft size={14} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={validCurrentPage === 1}
+                    title="Previous Page"
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: validCurrentPage === 1 ? '#f1f5f9' : '#ffffff',
+                      color: validCurrentPage === 1 ? '#94a3b8' : '#0f172a',
+                      cursor: validCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', padding: '0 8px' }}>
+                    Page {validCurrentPage} of {totalPages}
+                  </span>
+
+                  <button
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    disabled={validCurrentPage === totalPages}
+                    title="Next Page"
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: validCurrentPage === totalPages ? '#f1f5f9' : '#ffffff',
+                      color: validCurrentPage === totalPages ? '#94a3b8' : '#0f172a',
+                      cursor: validCurrentPage === totalPages ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                  <button
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={validCurrentPage === totalPages}
+                    title="Last Page"
+                    style={{
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid #cbd5e1',
+                      backgroundColor: validCurrentPage === totalPages ? '#f1f5f9' : '#ffffff',
+                      color: validCurrentPage === totalPages ? '#94a3b8' : '#0f172a',
+                      cursor: validCurrentPage === totalPages ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <ChevronsRight size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+          </>
         )}
 
         {/* Footer Meta */}

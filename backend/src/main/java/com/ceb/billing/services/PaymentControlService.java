@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
 @SuppressWarnings("null")
@@ -2512,6 +2513,32 @@ public class PaymentControlService {
         return paymentBatchItemRepository.findByPaymentStatusIgnoreCase("PAID");
     }
 
+    private static final Map<Long, List<Map<String, Object>>> SNAPSHOT_JSON_PARSE_CACHE = new ConcurrentHashMap<>();
+
+    public static void clearSnapshotParseCache() {
+        SNAPSHOT_JSON_PARSE_CACHE.clear();
+    }
+
+    private List<Map<String, Object>> getParsedSnapshotData(MonthlyDirectorySnapshot snap) {
+        if (snap == null || snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
+            return Collections.emptyList();
+        }
+        if (snap.getId() != null) {
+            List<Map<String, Object>> cached = SNAPSHOT_JSON_PARSE_CACHE.get(snap.getId());
+            if (cached != null) return cached;
+        }
+        try {
+            List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
+            if (snap.getId() != null && list != null) {
+                SNAPSHOT_JSON_PARSE_CACHE.put(snap.getId(), list);
+            }
+            return list != null ? list : Collections.emptyList();
+        } catch (Exception e) {
+            log.warning("Could not read snapshot data for ID " + snap.getId() + ": " + e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
     // ── Canonical Data Loader ─────────────────────────────────────────────
     @Cacheable(value = "canonicalRecords", key = "(#billingPeriod != null ? #billingPeriod.trim().toUpperCase() : 'ALL') + '::' + (#division != null ? #division.trim().toUpperCase() : 'ALL')")
     public List<Map<String, Object>> loadCanonicalRecords(String billingPeriod, String division) {
@@ -2530,9 +2557,9 @@ public class PaymentControlService {
 
         // 1. Process month-wise directory snapshots
         for (MonthlyDirectorySnapshot snap : snapshots) {
-            if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
+            List<Map<String, Object>> list = getParsedSnapshotData(snap);
+            if (!list.isEmpty()) {
                 try {
-                    List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(), LIST_MAP_TYPE);
                     for (int i = 0; i < list.size(); i++) {
                         Map<String, Object> rec = list.get(i);
                         String acc = strVal(rec.get("accountNo"));

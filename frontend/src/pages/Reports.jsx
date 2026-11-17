@@ -18,7 +18,11 @@ import {
   Zap,
   Printer,
   RefreshCw,
-  CheckCircle2
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 import SVGLineChart from '../components/charts/SVGLineChart';
 import SVGDonutChart from '../components/charts/SVGDonutChart';
@@ -30,8 +34,8 @@ const Reports = () => {
   
   // States
   const [reportType, setReportType] = useState('MONTHLY_REVENUE');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [billingMonth, setBillingMonth] = useState('ALL');
+  const [availableMonths, setAvailableMonths] = useState(['July 2026', 'August 2026']);
   const [branchCode, setBranchCode] = useState('');
   const [branches, setBranches] = useState([]);
   const [reportData, setReportData] = useState([]);
@@ -39,6 +43,8 @@ const Reports = () => {
   const [error, setError] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   const { showToast } = useToast();
 
@@ -56,20 +62,29 @@ const Reports = () => {
     };
   }, []);
 
-  // Fetch branch list on mount
+  // Fetch branch list and available billing months on mount
   useEffect(() => {
-    const fetchBranches = async () => {
+    const fetchMetadata = async () => {
       try {
-        const res = await authFetch('/api/officer/reports/branches');
-        if (res.ok) {
-          const data = await res.json();
-          setBranches(data);
+        const [branchRes, monthsRes] = await Promise.all([
+          authFetch('/api/officer/reports/branches'),
+          authFetch('/api/officer/reports/payment-ready/months')
+        ]);
+        if (branchRes.ok) {
+          const branchList = await branchRes.json();
+          setBranches(branchList);
+        }
+        if (monthsRes.ok) {
+          const monthList = await monthsRes.json();
+          if (Array.isArray(monthList) && monthList.length > 0) {
+            setAvailableMonths(monthList);
+          }
         }
       } catch (err) {
-        console.error('Error fetching branches:', err);
+        console.error('Error fetching report metadata:', err);
       }
     };
-    fetchBranches();
+    fetchMetadata();
   }, []);
 
   // Fetch report data when type or filters change
@@ -82,9 +97,8 @@ const Reports = () => {
       setError(null);
 
       let url = `/api/officer/reports/generate?type=${reportType}`;
-      if (startDate) url += `&startDate=${startDate}`;
-      if (endDate) url += `&endDate=${endDate}`;
-      if (branchCode) url += `&branchCode=${branchCode}`;
+      if (billingMonth && billingMonth !== 'ALL') url += `&billingMonth=${encodeURIComponent(billingMonth)}`;
+      if (branchCode && branchCode !== 'ALL') url += `&branchCode=${encodeURIComponent(branchCode)}`;
 
       const res = await authFetch(url);
       if (res.ok) {
@@ -103,8 +117,9 @@ const Reports = () => {
   };
 
   useEffect(() => {
+    setCurrentPage(1);
     fetchReport();
-  }, [reportType]);
+  }, [reportType, billingMonth, branchCode]);
 
   const formatLKR = (val) => {
     return new Intl.NumberFormat('en-LK', {
@@ -168,6 +183,20 @@ const Reports = () => {
 
   const stats = getSummaryStats();
 
+  // Pagination computations for high-performance virtual rendering
+  const totalRows = reportData ? reportData.length : 0;
+  const isAll = pageSize === 'ALL';
+  const effectivePageSize = isAll ? Math.max(1, totalRows) : Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalRows / effectivePageSize));
+  const validCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const displayedRows = isAll || isPrinting
+    ? reportData
+    : reportData.slice((validCurrentPage - 1) * effectivePageSize, validCurrentPage * effectivePageSize);
+
+  const startIndex = totalRows === 0 ? 0 : (validCurrentPage - 1) * effectivePageSize + 1;
+  const endIndex = isAll ? totalRows : Math.min(validCurrentPage * effectivePageSize, totalRows);
+
   // Optimized Export to CSV Function using Blob and memory-efficient streaming lines
   const exportToCSV = () => {
     if (reportData.length === 0 || isExporting) return;
@@ -193,7 +222,9 @@ const Reports = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `edl_report_${reportType.toLowerCase()}.csv`;
+      const bMonthName = billingMonth && billingMonth !== 'ALL' ? billingMonth.replace(/\s+/g, '_') : 'all_months';
+      const bBranchName = branchCode && branchCode !== 'ALL' ? branchCode.replace(/\s+/g, '_') : 'all_branches';
+      link.download = `edl_${reportType.toLowerCase()}_${bMonthName}_${bBranchName}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -234,7 +265,9 @@ const Reports = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `edl_report_${reportType.toLowerCase()}.xls`;
+      const bMonthName = billingMonth && billingMonth !== 'ALL' ? billingMonth.replace(/\s+/g, '_') : 'all_months';
+      const bBranchName = branchCode && branchCode !== 'ALL' ? branchCode.replace(/\s+/g, '_') : 'all_branches';
+      link.download = `edl_${reportType.toLowerCase()}_${bMonthName}_${bBranchName}.xls`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -360,7 +393,7 @@ const Reports = () => {
   };
 
   const reportTypes = [
-    { id: 'PAYMENT_READY', label: 'Payment Ready Report', icon: CheckCircle2 },
+    { id: 'PAYMENT_READY', label: 'Payment Ready Report', icon: CheckCircle2, badge: 'READY', badgeColor: '#059669', badgeBg: '#ecfdf5' },
     { id: 'MONTHLY_REVENUE', label: 'Monthly Revenue Report', icon: TrendingUp },
     { id: 'CUSTOMER_BILLING', label: 'Customer Billing Ledger', icon: FileText },
     { id: 'HIGHEST_EXPORTERS', label: 'Highest Solar Exporters', icon: Sun },
@@ -371,7 +404,7 @@ const Reports = () => {
   ];
 
   return (
-    <div className="page-wrapper animate-fade-in">
+    <div className="page-wrapper animate-fade-in" style={{ maxWidth: '1600px', margin: '0 auto', padding: '1.25rem 1.5rem 2.5rem 1.5rem' }}>
       <style>{`
         @media print {
           body {
@@ -404,76 +437,268 @@ const Reports = () => {
             color: #000000 !important;
           }
         }
+
+        .reports-sidebar-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          padding: 0.7rem 0.85rem;
+          border: none;
+          border-radius: 8px;
+          background-color: transparent;
+          color: #475569;
+          cursor: pointer;
+          font-weight: 500;
+          text-align: left;
+          transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+          width: 100%;
+          position: relative;
+        }
+        .reports-sidebar-btn:hover {
+          background-color: #f8fafc;
+          color: #0f172a;
+          transform: translateX(2px);
+        }
+        .reports-sidebar-btn.active {
+          background-color: #eff6ff;
+          color: #1d4ed8;
+          font-weight: 700;
+          box-shadow: inset 3px 0 0 #2563eb;
+        }
+
+        .report-filter-input {
+          width: 100%;
+          height: 40px;
+          border-radius: 8px;
+          border: 1px solid #cbd5e1;
+          background-color: #ffffff;
+          padding: 0 0.85rem;
+          font-size: 0.85rem;
+          color: #0f172a;
+          transition: all 0.15s ease;
+          outline: none;
+        }
+        .report-filter-input:focus {
+          border-color: #2563eb;
+          box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+
+        .modern-metric-card {
+          background: #ffffff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 1.15rem 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+          transition: all 0.2s ease;
+          position: relative;
+          overflow: hidden;
+        }
+        .modern-metric-card:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+        }
       `}</style>
 
-      <button onClick={() => navigate('/')} className="back-btn no-print">
-        <ArrowLeft size={16} />
-        Back to Dashboard
+      {/* Modern Back Button */}
+      <button 
+        onClick={() => navigate('/')} 
+        className="back-btn no-print"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '0.45rem',
+          padding: '0.4rem 0.85rem',
+          borderRadius: '8px',
+          border: '1px solid #e2e8f0',
+          backgroundColor: '#ffffff',
+          color: '#475569',
+          fontSize: '0.82rem',
+          fontWeight: 600,
+          cursor: 'pointer',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+          transition: 'all 0.15s ease',
+          marginBottom: '1rem'
+        }}
+      >
+        <ArrowLeft size={14} />
+        <span>Back to Dashboard</span>
       </button>
 
-      <div className="page-header">
+      {/* Modern Executive Page Header */}
+      <div className="page-header" style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: '1.5rem',
+        flexWrap: 'wrap',
+        gap: '1rem',
+        paddingBottom: '0.5rem'
+      }}>
         <div>
-          <h1 className="page-title">Advanced Report Center</h1>
-          <p className="page-subtitle">Formulate financial ledgers, audit grid performance, and trace anomaly logs.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', margin: 0 }}>
+              Advanced Report Center
+            </h1>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '2px 8px',
+              borderRadius: '6px',
+              fontSize: '0.72rem',
+              fontWeight: 700,
+              backgroundColor: '#eff6ff',
+              color: '#2563eb',
+              border: '1px solid #bfdbfe',
+              letterSpacing: '0.02em'
+            }}>
+              ENTERPRISE REPORTING
+            </span>
+          </div>
+          <p style={{ fontSize: '0.86rem', color: '#64748b', margin: 0 }}>
+            Formulate financial ledgers, audit grid performance, and trace anomaly logs across all Eastern Province divisions.
+          </p>
         </div>
+
         {reportType !== 'PAYMENT_READY' && (
-          <div style={{ display: 'flex', gap: '0.5rem' }} className="no-print">
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }} className="no-print">
             <button
               className="btn btn-secondary"
               style={{
                 padding: '0.5rem 1rem',
                 fontSize: '0.85rem',
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                color: '#1e293b',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
               }}
               onClick={exportToExcel}
               disabled={isExporting || isPrinting || reportData.length === 0}
+              title="Download Excel Spreadsheet (.xls)"
             >
-              {isExporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-              Export Excel
+              {isExporting ? <RefreshCw size={14} className="animate-spin text-success" /> : <Download size={14} className="text-success" />}
+              <span>Export Excel</span>
             </button>
+
             <button
               className="btn btn-secondary"
               style={{
                 padding: '0.5rem 1rem',
                 fontSize: '0.85rem',
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                color: '#1e293b',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
               }}
               onClick={exportToCSV}
               disabled={isExporting || isPrinting || reportData.length === 0}
+              title="Download CSV file"
             >
               {isExporting ? <RefreshCw size={14} className="animate-spin" /> : <Download size={14} />}
-              Export CSV
+              <span>Export CSV</span>
             </button>
+
             <button
-              className="btn btn-primary"
+              className="btn btn-secondary"
               style={{
                 padding: '0.5rem 1rem',
                 fontSize: '0.85rem',
+                fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.45rem',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                borderRadius: '8px',
+                color: '#1e293b',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
                 cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
               }}
               onClick={handlePrint}
               disabled={isPrinting || isExporting || reportData.length === 0}
+              title="Export report as formatted PDF"
+            >
+              <Download size={14} className="text-primary" />
+              <span>Export PDF</span>
+            </button>
+
+            <button
+              className="btn btn-primary"
+              style={{
+                padding: '0.5rem 1.15rem',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '8px',
+                boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)',
+                cursor: (isExporting || isPrinting || reportData.length === 0) ? 'not-allowed' : 'pointer'
+              }}
+              onClick={handlePrint}
+              disabled={isPrinting || isExporting || reportData.length === 0}
+              title="Open browser print dialog"
             >
               {isPrinting ? <RefreshCw size={14} className="animate-spin" /> : <Printer size={14} />}
-              {isPrinting ? 'Preparing PDF...' : 'Print PDF'}
+              <span>{isPrinting ? 'Preparing Print...' : 'Print Report'}</span>
             </button>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem', alignItems: 'start' }}>
-        {/* Sidebar Tabs */}
-        <div className="card reports-sidebar no-print" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <h4 style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', paddingLeft: '0.75rem', marginBottom: '0.5rem' }}>Report Categories</h4>
+      <div style={{ display: 'grid', gridTemplateColumns: '270px 1fr', gap: '1.5rem', alignItems: 'start' }}>
+        {/* Modern Sidebar Tabs */}
+        <div 
+          className="reports-sidebar no-print" 
+          style={{ 
+            background: '#ffffff',
+            border: '1px solid #e2e8f0',
+            borderRadius: '12px',
+            padding: '1rem',
+            boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
+            display: 'flex', 
+            flexDirection: 'column', 
+            gap: '0.35rem' 
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.4rem 0.5rem 0.65rem 0.5rem',
+            borderBottom: '1px solid #f1f5f9',
+            marginBottom: '0.35rem'
+          }}>
+            <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Report Directory
+            </span>
+            <span style={{
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              padding: '2px 7px',
+              borderRadius: '10px',
+              backgroundColor: '#f1f5f9',
+              color: '#475569'
+            }}>
+              {reportTypes.length}
+            </span>
+          </div>
+
           {reportTypes.map((type) => {
             const Icon = type.icon;
             const isActive = reportType === type.id;
@@ -481,25 +706,47 @@ const Reports = () => {
               <button
                 key={type.id}
                 onClick={() => setReportType(type.id)}
-                style={{
+                className={`reports-sidebar-btn ${isActive ? 'active' : ''}`}
+              >
+                <div style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '7px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '0.75rem',
-                  padding: '0.75rem 1rem',
-                  border: 'none',
-                  borderRadius: 'var(--radius)',
-                  backgroundColor: isActive ? 'rgba(59, 130, 246, 0.12)' : 'transparent',
-                  color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  fontWeight: isActive ? 600 : 500,
-                  textAlign: 'left',
-                  transition: 'var(--transition)',
-                  borderLeft: isActive ? '3px solid var(--primary)' : '3px solid transparent',
-                  paddingLeft: isActive ? 'calc(1rem - 3px)' : '1rem'
-                }}
-              >
-                <Icon size={16} className={isActive ? 'text-primary' : ''} />
-                <span style={{ fontSize: '0.88rem' }}>{type.label}</span>
+                  justifyContent: 'center',
+                  backgroundColor: isActive ? '#dbeafe' : '#f8fafc',
+                  color: isActive ? '#2563eb' : '#64748b',
+                  flexShrink: 0,
+                  transition: 'all 0.15s ease'
+                }}>
+                  <Icon size={16} />
+                </div>
+
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ 
+                    fontSize: '0.85rem', 
+                    whiteSpace: 'nowrap', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis' 
+                  }}>
+                    {type.label}
+                  </span>
+                  {type.badge && (
+                    <span style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '8px',
+                      backgroundColor: type.badgeBg,
+                      color: type.badgeColor,
+                      border: `1px solid ${type.badgeColor}30`,
+                      marginLeft: '6px'
+                    }}>
+                      {type.badge}
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -510,39 +757,43 @@ const Reports = () => {
           <PaymentReadyReportView authFetch={authFetch} showToast={showToast} branches={branches} />
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Filters Card */}
-          <div className="neon-card no-print" style={{ padding: '1.25rem' }}>
+          {/* Modern Filters Card */}
+          <div 
+            className="no-print" 
+            style={{ 
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '1.25rem 1.5rem',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)'
+            }}
+          >
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', alignItems: 'flex-end' }}>
-              <div style={{ flex: 1, minWidth: '150px' }}>
-                <label className="neon-label">Start Cycle Date</label>
-                <input 
-                  type="date" 
-                  value={startDate} 
-                  onChange={(e) => setStartDate(e.target.value)} 
-                  className="neon-input" 
-                  style={{ width: '100%', height: 42, paddingLeft: '1rem' }} 
-                />
-              </div>
-
-              <div style={{ flex: 1, minWidth: '150px' }}>
-                <label className="neon-label">End Cycle Date</label>
-                <input 
-                  type="date" 
-                  value={endDate} 
-                  onChange={(e) => setEndDate(e.target.value)} 
-                  className="neon-input" 
-                  style={{ width: '100%', height: 42, paddingLeft: '1rem' }} 
-                />
+              <div style={{ flex: 1, minWidth: '160px' }}>
+                <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                  Billing Month
+                </label>
+                <select 
+                  value={billingMonth} 
+                  onChange={(e) => setBillingMonth(e.target.value)} 
+                  className="report-filter-input"
+                >
+                  <option value="ALL">All Billing Months</option>
+                  {availableMonths.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
               </div>
 
               {reportType !== 'BRANCH_PERFORMANCE' && (
-                <div style={{ flex: 1, minWidth: '150px' }}>
-                  <label className="neon-label">Divisional Branch</label>
+                <div style={{ flex: 1, minWidth: '160px' }}>
+                  <label style={{ display: 'block', fontSize: '0.74rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>
+                    Divisional Branch
+                  </label>
                   <select 
                     value={branchCode} 
                     onChange={(e) => setBranchCode(e.target.value)} 
-                    className="neon-input"
-                    style={{ width: '100%', height: 42, padding: '0 1rem' }}
+                    className="report-filter-input"
                   >
                     <option value="">All Branches</option>
                     {branches.map(b => (
@@ -553,66 +804,102 @@ const Reports = () => {
               )}
 
               <button 
-                className="neon-btn-primary" 
                 onClick={fetchReport}
-                style={{ height: 42, padding: '0 1.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.85rem' }}
+                disabled={loading}
+                style={{ 
+                  height: 40, 
+                  padding: '0 1.35rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.45rem', 
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  backgroundColor: '#2563eb',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  boxShadow: '0 1px 2px rgba(37, 99, 235, 0.2)',
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  transition: 'all 0.15s ease'
+                }}
               >
-                <RefreshCw size={15} />
-                Refresh
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                <span>Apply Filters</span>
               </button>
             </div>
           </div>
 
           {/* Aggregate Stats Cards */}
           {stats && (
-            <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', marginBottom: 0 }}>
+            <div className="metrics-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: 0 }}>
               {stats.totalRevenue > 0 && (
-                <div className="metric-card primary" style={{ padding: '1.25rem' }}>
-                  <div className="metric-info">
-                    <span className="metric-label" style={{ fontSize: '0.8rem' }}>Report Aggregate Balance</span>
-                    <span className="metric-value" style={{ fontSize: '1.4rem' }}>{formatLKR(stats.totalRevenue)}</span>
-                  </div>
-                  <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px' }}>
-                    <DollarSign size={18} />
+                <div className="modern-metric-card" style={{ borderTop: '3px solid #2563eb' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                        Report Aggregate Balance
+                      </span>
+                      <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', fontVariantNumeric: 'tabular-nums' }}>
+                        {formatLKR(stats.totalRevenue)}
+                      </span>
+                    </div>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <DollarSign size={18} />
+                    </div>
                   </div>
                 </div>
               )}
 
               {stats.totalImports > 0 && (
-                <div className="metric-card warning" style={{ padding: '1.25rem' }}>
-                  <div className="metric-info">
-                    <span className="metric-label" style={{ fontSize: '0.8rem' }}>Total Imports</span>
-                    <span className="metric-value" style={{ fontSize: '1.4rem', color: 'var(--warning)' }}>
-                      {Math.round(stats.totalImports).toLocaleString()} <span style={{ fontSize: '0.8rem' }}>kWh</span>
-                    </span>
-                  </div>
-                  <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px', color: 'var(--warning)', backgroundColor: 'var(--warning-glow)' }}>
-                    <TrendingDown size={18} />
+                <div className="modern-metric-card" style={{ borderTop: '3px solid #d97706' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                        Total Imports
+                      </span>
+                      <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#d97706', fontVariantNumeric: 'tabular-nums' }}>
+                        {Math.round(stats.totalImports).toLocaleString()} <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8' }}>kWh</span>
+                      </span>
+                    </div>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#fffbeb', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <TrendingDown size={18} />
+                    </div>
                   </div>
                 </div>
               )}
 
               {stats.totalExports > 0 && (
-                <div className="metric-card success" style={{ padding: '1.25rem' }}>
-                  <div className="metric-info">
-                    <span className="metric-label" style={{ fontSize: '0.8rem' }}>Total Exports</span>
-                    <span className="metric-value" style={{ fontSize: '1.4rem', color: 'var(--success)' }}>
-                      {Math.round(stats.totalExports).toLocaleString()} <span style={{ fontSize: '0.8rem' }}>kWh</span>
-                    </span>
-                  </div>
-                  <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px' }}>
-                    <TrendingUp size={18} />
+                <div className="modern-metric-card" style={{ borderTop: '3px solid #059669' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div>
+                      <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                        Total Exports
+                      </span>
+                      <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#059669', fontVariantNumeric: 'tabular-nums' }}>
+                        {Math.round(stats.totalExports).toLocaleString()} <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#94a3b8' }}>kWh</span>
+                      </span>
+                    </div>
+                    <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#ecfdf5', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <TrendingUp size={18} />
+                    </div>
                   </div>
                 </div>
               )}
 
-              <div className="metric-card teal" style={{ padding: '1.25rem' }}>
-                <div className="metric-info">
-                  <span className="metric-label" style={{ fontSize: '0.8rem' }}>Records Compiled</span>
-                  <span className="metric-value" style={{ fontSize: '1.4rem', color: 'var(--accent-teal)' }}>{stats.totalRows}</span>
-                </div>
-                <div className="metric-icon-box" style={{ width: '36px', height: '36px', borderRadius: '8px', color: 'var(--accent-teal)', backgroundColor: 'var(--accent-teal-glow)' }}>
-                  <FileText size={18} />
+              <div className="modern-metric-card" style={{ borderTop: '3px solid #0d9488' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div>
+                    <span style={{ display: 'block', fontSize: '0.72rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>
+                      Records Compiled
+                    </span>
+                    <span style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0d9488', fontVariantNumeric: 'tabular-nums' }}>
+                      {stats.totalRows}
+                    </span>
+                  </div>
+                  <div style={{ width: '38px', height: '38px', borderRadius: '10px', backgroundColor: '#f0fdfa', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <FileText size={18} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -622,52 +909,48 @@ const Reports = () => {
           {renderReportChart()}
 
           {/* Report Data Table */}
-          <div className="card" style={{ padding: '1.5rem' }}>
-            <div className="panel-header" style={{ marginBottom: '1rem' }}>
-              <h2 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
-                <FileText size={16} className="text-primary" />
-                Data Records Table View
-              </h2>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                {startDate || 'Beginning'} &rarr; {endDate || 'Latest'}
+          <div 
+            className="card" 
+            style={{ 
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '1.5rem',
+              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)'
+            }}
+          >
+            <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <div style={{ width: '28px', height: '28px', borderRadius: '6px', backgroundColor: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <FileText size={15} />
+                </div>
+                <h2 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>
+                  Data Records Table View
+                </h2>
+              </div>
+              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#64748b', backgroundColor: '#f8fafc', padding: '3px 9px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                {billingMonth === 'ALL' ? 'All Billing Months' : billingMonth}{branchCode && branchCode !== 'ALL' ? ` • ${branchCode}` : ' • All Branches'}
               </span>
             </div>
 
             {loading ? (
-      <div className="page-wrapper animate-fade-in">
-        {/* Title Header Skeleton */}
-        <div className="page-header" style={{ marginBottom: '2.5rem' }}>
-          <div>
-            <div className="skeleton" style={{ height: '32px', width: '280px', marginBottom: '8px' }}></div>
-            <div className="skeleton" style={{ height: '16px', width: '450px' }}></div>
-          </div>
-        </div>
-
-        {/* 3 cards skeleton */}
-        <div className="metrics-grid" style={{ marginBottom: '2.5rem' }}>
-          {[...Array(3)].map((_, i) => (
-            <div key={i} className="metric-card skeleton" style={{ height: '120px' }}></div>
-          ))}
-        </div>
-
-        {/* Main layout skeleton */}
-        <div style={{ display: 'grid', gridTemplateColumns: '260px 1fr', gap: '1.5rem' }}>
-          <div className="card skeleton" style={{ height: '320px' }}></div>
-          <div className="card skeleton" style={{ height: '320px' }}></div>
-        </div>
-      </div>
-    ) : error ? (
-              <div style={{ padding: '2rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '0.75rem', border: '1px solid var(--danger)', borderRadius: '8px', backgroundColor: 'rgba(239, 68, 68, 0.05)' }}>
+              <div style={{ padding: '3.5rem 0', textAlign: 'center', color: '#64748b' }}>
+                <RefreshCw size={26} className="animate-spin" style={{ margin: '0 auto 12px auto', display: 'block', color: '#2563eb' }} />
+                <span style={{ fontSize: '0.88rem', fontWeight: 600 }}>Compiling report records...</span>
+              </div>
+            ) : error ? (
+              <div style={{ padding: '1.25rem', color: '#dc2626', display: 'flex', alignItems: 'center', gap: '0.75rem', border: '1px solid #fecaca', borderRadius: '8px', backgroundColor: '#fef2f2' }}>
                 <AlertCircle size={20} />
-                <span style={{ fontSize: '0.9rem' }}>{error}</span>
+                <span style={{ fontSize: '0.88rem', fontWeight: 500 }}>{error}</span>
               </div>
             ) : reportData.length === 0 ? (
-              <div style={{ padding: '3rem 0', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ padding: '3.5rem 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.88rem' }}>
                 No records match the active criteria parameters.
               </div>
             ) : (
-              <div className="table-container" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-                <table className="custom-table" style={{ fontSize: '0.85rem' }}>
+              <>
+                <div className="table-container" style={{ maxHeight: '520px', overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                <table className="custom-table" style={{ fontSize: '0.85rem', width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     {reportType === 'MONTHLY_REVENUE' && (
                       <tr>
@@ -736,7 +1019,7 @@ const Reports = () => {
                     )}
                   </thead>
                   <tbody>
-                    {reportData.map((row, i) => (
+                    {displayedRows.map((row, i) => (
                       <tr key={i}>
                         {reportType === 'MONTHLY_REVENUE' && (
                           <>
@@ -775,7 +1058,7 @@ const Reports = () => {
 
                         {(reportType === 'HIGHEST_EXPORTERS' || reportType === 'HIGHEST_IMPORTERS') && (
                           <>
-                            <td style={{ fontWeight: 700 }}>#{i + 1}</td>
+                            <td style={{ fontWeight: 700 }}>#{startIndex + i}</td>
                             <td style={{ fontWeight: 600 }}>{row.accountNo}</td>
                             <td>{row.customerName}</td>
                             <td><span className="badge info">{row.branchCode}</span></td>
@@ -833,7 +1116,136 @@ const Reports = () => {
                   </tbody>
                 </table>
               </div>
-            )}
+
+              {/* Table Pagination Controls */}
+              {totalRows > 0 && (
+                <div className="no-print" style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexWrap: 'wrap',
+                  gap: '0.75rem',
+                  marginTop: '0.85rem',
+                  padding: '0.65rem 0.95rem',
+                  backgroundColor: '#f8fafc',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', fontSize: '0.82rem', color: '#64748b' }}>
+                    <span>
+                      Showing <strong style={{ color: '#0f172a' }}>{startIndex}</strong> to <strong style={{ color: '#0f172a' }}>{endIndex}</strong> of <strong style={{ color: '#0f172a' }}>{totalRows.toLocaleString()}</strong> records
+                    </span>
+                    <span style={{ color: '#cbd5e1' }}>•</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span>Per page:</span>
+                      <select
+                        value={pageSize}
+                        onChange={(e) => {
+                          setPageSize(e.target.value === 'ALL' ? 'ALL' : Number(e.target.value));
+                          setCurrentPage(1);
+                        }}
+                        style={{
+                          padding: '2px 8px',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: '#ffffff',
+                          color: '#0f172a',
+                          outline: 'none',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                        <option value={250}>250</option>
+                        <option value="ALL">All ({totalRows.toLocaleString()})</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {!isAll && totalPages > 1 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <button
+                        onClick={() => setCurrentPage(1)}
+                        disabled={validCurrentPage === 1}
+                        title="First Page"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: validCurrentPage === 1 ? '#f1f5f9' : '#ffffff',
+                          color: validCurrentPage === 1 ? '#94a3b8' : '#0f172a',
+                          cursor: validCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <ChevronsLeft size={14} />
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={validCurrentPage === 1}
+                        title="Previous Page"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: validCurrentPage === 1 ? '#f1f5f9' : '#ffffff',
+                          color: validCurrentPage === 1 ? '#94a3b8' : '#0f172a',
+                          cursor: validCurrentPage === 1 ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: '#334155', padding: '0 8px' }}>
+                        Page {validCurrentPage} of {totalPages}
+                      </span>
+
+                      <button
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={validCurrentPage === totalPages}
+                        title="Next Page"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: validCurrentPage === totalPages ? '#f1f5f9' : '#ffffff',
+                          color: validCurrentPage === totalPages ? '#94a3b8' : '#0f172a',
+                          cursor: validCurrentPage === totalPages ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                      <button
+                        onClick={() => setCurrentPage(totalPages)}
+                        disabled={validCurrentPage === totalPages}
+                        title="Last Page"
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          border: '1px solid #cbd5e1',
+                          backgroundColor: validCurrentPage === totalPages ? '#f1f5f9' : '#ffffff',
+                          color: validCurrentPage === totalPages ? '#94a3b8' : '#0f172a',
+                          cursor: validCurrentPage === totalPages ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <ChevronsRight size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
           </div>
         </div>
         )}

@@ -15,6 +15,7 @@ import org.springframework.data.repository.query.Param;
 public interface UploadHistoryRepository extends JpaRepository<UploadHistory, Long> {
     List<UploadHistory> findTop5ByOrderByUploadTimeDesc();
     List<UploadHistory> findByStatusOrderByUploadTimeDesc(String status);
+    List<UploadHistory> findByStatusInOrderByUploadTimeDesc(java.util.Collection<String> statuses);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select h from UploadHistory h where h.id = :id")

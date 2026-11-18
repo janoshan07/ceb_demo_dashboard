@@ -444,7 +444,7 @@ public class StagingMigrationService {
         history.setBillingInserted(billingInserted);
         history.setRowsProcessed(successfulRows + invalidCount + duplicateCount + skippedCount);
         history.setErrorsCount(invalidCount);
-        uploadHistoryRepository.save(Objects.requireNonNull(history));
+        uploadHistoryRepository.saveAndFlush(Objects.requireNonNull(history));
 
         if ("FAILED".equals(finalStatus)) {
             // No valid rows were migrated. Keep staged rows available for review and do not

@@ -352,8 +352,8 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
           const msg = body.message || 'Batch approved and migrated successfully.';
           setActionSuccess(msg);
           showToast(msg, 'success');
-          setPendingBatches(prev => prev.filter(b => b.id !== selectedBatch.id));
-          setSelectedBatch(null);
+          setPendingBatches(prev => prev.map(b => b.id === selectedBatch.id ? { ...b, status: 'APPROVED' } : b));
+          setSelectedBatch(prev => prev ? { ...prev, status: 'APPROVED' } : null);
           await fetchPendingBatches();
         } catch (err) {
           const errMsg = err.message || 'Approval operation failed.';
@@ -751,13 +751,20 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
             </div>
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: '0.25rem' }}>
-              Review: {selectedBatch.filename}
-            </h3>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Uploaded by <strong>{selectedBatch.uploadedBy}</strong> on {new Date(selectedBatch.uploadTime).toLocaleString('en-LK')}
-            </p>
+          <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0 }}>
+                  Review: {selectedBatch.filename}
+                </h3>
+                <span className={`badge ${selectedBatch.status === 'APPROVED' ? 'success' : selectedBatch.status === 'REJECTED' || selectedBatch.status === 'FAILED' ? 'danger' : 'warning'}`}>
+                  {selectedBatch.status === 'APPROVED' ? 'Approved' : (selectedBatch.status ? selectedBatch.status.replaceAll('_', ' ') : 'PENDING APPROVAL')}
+                </span>
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
+                Uploaded by <strong>{selectedBatch.uploadedBy}</strong> on {new Date(selectedBatch.uploadTime).toLocaleString('en-LK')}
+              </p>
+            </div>
           </div>
 
           {detailsLoading ? (
@@ -1400,7 +1407,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pendingBatches.filter(b => b.status !== 'APPROVED').map((batch) => {
+                  {pendingBatches.map((batch) => {
                     const isApproved = batch.status === 'APPROVED';
                     return (
                       <tr key={batch.id}>
@@ -1409,7 +1416,7 @@ const StagingReview = ({ authFetch, onConfirmAction }) => {
                         <td>{batch.uploadedBy}</td>
                         <td>
                           <span className={`badge ${isApproved ? 'success' : batch.status === 'REJECTED' || batch.status === 'FAILED' ? 'danger' : 'warning'}`}>
-                            {batch.status ? batch.status.replaceAll('_', ' ') : 'PENDING APPROVAL'}
+                            {batch.status ? (batch.status === 'APPROVED' ? 'Approved' : batch.status.replaceAll('_', ' ')) : 'PENDING APPROVAL'}
                           </span>
                         </td>
                         <td>{batch.rowsProcessed}</td>

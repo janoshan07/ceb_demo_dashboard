@@ -183,7 +183,7 @@ public class AdminUserController {
     @GetMapping("/staging/pending")
     public ResponseEntity<?> getPendingStagingBatches() {
         try {
-            return ResponseEntity.ok(uploadHistoryRepository.findByStatusOrderByUploadTimeDesc("PENDING_APPROVAL"));
+            return ResponseEntity.ok(uploadHistoryRepository.findByStatusInOrderByUploadTimeDesc(List.of("PENDING_APPROVAL", "APPROVED")));
         } catch (Exception e) {
             e.printStackTrace();
             return ResponseEntity.internalServerError().body(new MessageResponse("Failed to load pending staging batches: " + e.getMessage()));

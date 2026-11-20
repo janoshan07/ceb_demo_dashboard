@@ -29,17 +29,14 @@ import {
   CheckCircle,
   AlertTriangle,
   Trash2,
-  Download,
   ChevronDown,
   ChevronUp,
   Plus,
   Eye,
   FileText,
   MoreVertical,
-  Filter,
   Layers,
   Phone,
-  UserPlus,
   Shield,
   Tag,
   Code,
@@ -644,12 +641,20 @@ const CustomerDetails = () => {
         }
       }
       const uniqueMonths = Array.from(monthSet);
+      const parseMonthToTime = (m) => {
+        if (!m) return 0;
+        const t = Date.parse(`1 ${m}`);
+        if (!isNaN(t)) return t;
+        const t2 = Date.parse(m);
+        return isNaN(t2) ? 0 : t2;
+      };
+      uniqueMonths.sort((a, b) => parseMonthToTime(b) - parseMonthToTime(a));
       setBillingMonths(uniqueMonths);
       setSelectedBillingMonth(prev => {
         if (prev && prev !== 'ALL' && uniqueMonths.includes(prev)) {
           return prev;
         }
-        return uniqueMonths.length > 0 ? uniqueMonths[0] : 'ALL';
+        return 'ALL';
       });
     } catch (e) {
       console.error('Failed to load lookup lists:', e);
@@ -1061,121 +1066,6 @@ const CustomerDetails = () => {
     }
   };
 
-  // --- ADD CUSTOMER HANDLERS ---
-  const [addCustomerModalOpen, setAddCustomerModalOpen] = useState(false);
-  const [newCustAccNo, setNewCustAccNo] = useState('');
-  const [newCustName, setNewCustName] = useState('');
-  const [newCustAddress, setNewCustAddress] = useState('');
-  const [newCustMobile, setNewCustMobile] = useState('');
-  const [newCustAgreementDate, setNewCustAgreementDate] = useState('');
-  const [newCustCapacity, setNewCustCapacity] = useState('');
-  const [newCustSolarType, setNewCustSolarType] = useState('Net Plus');
-  const [newCustBankCode, setNewCustBankCode] = useState('');
-  const [newCustBranchCode, setNewCustBranchCode] = useState('');
-  const [newCustBankAccountNo, setNewCustBankAccountNo] = useState('');
-  const [newCustRefNo, setNewCustRefNo] = useState('');
-  const [newCustUnitRate, setNewCustUnitRate] = useState('');
-  const [newCustTariffType, setNewCustTariffType] = useState('');
-  const [newCustCostCodeId, setNewCustCostCodeId] = useState('');
-  const [newCustNetTypeId, setNewCustNetTypeId] = useState('');
-  const [newCustExpenseCodeId, setNewCustExpenseCodeId] = useState('');
-
-
-
-  const [addCustError, setAddCustError] = useState(null);
-  const [addCustLoading, setAddCustLoading] = useState(false);
-
-  // Auto-recalculate newCustExpenseCodeId based on newCustSolarType and newCustTariffType
-  useEffect(() => {
-    const lCode = deriveLCode(newCustSolarType, newCustTariffType);
-    if (lCode) {
-      const match = expenseCodesList.find(e => e.expCode === lCode);
-      if (match) {
-        setNewCustExpenseCodeId(match.id.toString());
-      } else {
-        setNewCustExpenseCodeId('');
-      }
-    } else {
-      setNewCustExpenseCodeId('');
-    }
-  }, [newCustSolarType, newCustTariffType, expenseCodesList]);
-
-  const openAddCustomerModal = () => {
-    setNewCustAccNo('');
-    setNewCustName('');
-    setNewCustAddress('');
-    setNewCustMobile('');
-    setNewCustAgreementDate('');
-    setNewCustCapacity('');
-    setNewCustSolarType('Net Plus');
-    setNewCustBankCode('');
-    setNewCustBranchCode('');
-    setNewCustBankAccountNo('');
-    setNewCustRefNo('');
-    setNewCustUnitRate('');
-    setNewCustTariffType('');
-    setNewCustCostCodeId('');
-    setNewCustNetTypeId('');
-    setNewCustExpenseCodeId('');
-    setAddCustError(null);
-    setAddCustomerModalOpen(true);
-  };
-
-  const handleAddCustomerSubmit = async (e) => {
-    e.preventDefault();
-    if (!newCustAccNo.trim() || newCustAccNo.trim().length !== 10 || !/^\d+$/.test(newCustAccNo.trim())) {
-      setAddCustError('Account number must be exactly 10 digits and numeric.');
-      return;
-    }
-    if (!newCustName.trim()) {
-      setAddCustError('Customer name is required.');
-      return;
-    }
-
-    try {
-      setAddCustLoading(true);
-      setAddCustError(null);
-      const postPrefix = user.role === 'ADMIN' ? 'admin' : 'officer';
-      const res = await authFetch(`/api/${postPrefix}/customers`, {
-        method: 'POST',
-        body: JSON.stringify({
-          accountNo: newCustAccNo.trim(),
-          customerName: newCustName.trim(),
-          customerAddress: newCustAddress.trim(),
-          mobileNo: newCustMobile.trim(),
-          agreementDate: newCustAgreementDate || null,
-          panelCapacity: newCustCapacity ? parseFloat(newCustCapacity) : null,
-          solarType: newCustSolarType,
-          bankCode: newCustBankCode.trim(),
-          branchCode: newCustBranchCode.trim(),
-          bankAccountNo: newCustBankAccountNo.trim(),
-          refNo: newCustRefNo.trim(),
-          unitRate: newCustUnitRate ? parseFloat(newCustUnitRate) : null,
-          tariffType: newCustTariffType.trim(),
-          costCodeId: newCustCostCodeId ? parseInt(newCustCostCodeId) : null,
-          netTypeId: newCustNetTypeId ? parseInt(newCustNetTypeId) : null,
-          expenseCodeId: newCustExpenseCodeId ? parseInt(newCustExpenseCodeId) : null
-        })
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.message || 'Failed to create customer.');
-      }
-      
-      if (data.status === 'PENDING') {
-        showToast('Customer creation request queued for Admin approval.', 'warning');
-      } else {
-        showToast('Customer created successfully.', 'success');
-      }
-      setAddCustomerModalOpen(false);
-      fetchCustomers(currentPage, searchQuery);
-    } catch (err) {
-      setAddCustError(err.message || 'Failed to add customer.');
-    } finally {
-      setAddCustLoading(false);
-    }
-  };
-
   const handleDeleteCustomer = async () => {
     const accountNo = String(selectedCustomer?.accountNo || '').trim();
     if (!accountNo) {
@@ -1361,16 +1251,6 @@ const CustomerDetails = () => {
           <h1 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', margin: 0, letterSpacing: '-0.02em' }}>Customer Directory</h1>
           <p style={{ color: '#64748B', fontSize: '0.88rem', marginTop: '0.25rem', margin: 0 }}>Search customer electricity accounts, edit profiles, and view ledger details.</p>
         </div>
-        {(user?.role === 'ADMIN' || user?.role === 'OFFICER') && (
-          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-            <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#FFFFFF', border: '1px solid #E2E8F0', fontWeight: 600, color: '#0F172A', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-              <Download size={15} /> Export <ChevronDown size={14} />
-            </button>
-            <button className="btn btn-primary" onClick={openAddCustomerModal} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', borderRadius: '8px', padding: '0.55rem 1.1rem', background: '#2563EB', borderColor: '#2563EB', fontWeight: 600, color: '#FFFFFF', cursor: 'pointer', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}>
-              <Plus size={16} /> Add Customer
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Completeness Summary Cards */}
@@ -1841,8 +1721,9 @@ const CustomerDetails = () => {
 
       {/* Filter and Search Bar */}
       <div className="card" style={{ marginBottom: '1.5rem', padding: '1.25rem', borderRadius: '12px', border: '1px solid #E2E8F0', background: '#F1F5F9', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+        {/* Row 1: Search box, Search button, Clear Filters */}
         <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', width: '100%', marginBottom: '1rem', flexWrap: 'wrap' }}>
-          <form onSubmit={handleSearchSubmit} style={{ flex: 1, display: 'flex', gap: '0.5rem', margin: 0 }}>
+          <form onSubmit={handleSearchSubmit} style={{ flex: 1, minWidth: '260px', display: 'flex', gap: '0.5rem', margin: 0 }}>
             <div className="input-group" style={{ flex: 1, position: 'relative' }}>
               <Search size={16} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: '#64748B' }} />
               <input
@@ -1854,7 +1735,7 @@ const CustomerDetails = () => {
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 1.5rem', borderRadius: '8px', background: '#2563EB', borderColor: '#2563EB', color: '#FFFFFF', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}>
+            <button type="submit" className="btn btn-primary" style={{ height: '42px', padding: '0 1.5rem', borderRadius: '8px', background: '#2563EB', borderColor: '#2563EB', color: '#FFFFFF', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(37,99,235,0.2)', whiteSpace: 'nowrap' }}>
               <Search size={14} /> Search
             </button>
           </form>
@@ -1868,27 +1749,21 @@ const CustomerDetails = () => {
               setCompletenessFilter('ALL');
               setAgreementStatusFilter('ALL');
               setNetTypeFilter('ALL');
+              setSelectedBillingMonth('ALL');
               setSearchQuery('');
               setAppliedQuery('');
               setCurrentPage(0);
+              fetchSummaryStats('ALL', 'ALL');
             }}
-            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #FECACA', background: '#FFFFFF', color: '#DC2626', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #FECACA', background: '#FFFFFF', color: '#DC2626', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', whiteSpace: 'nowrap' }}
           >
             <Trash2 size={14} /> Clear Filters
           </button>
-
-          <button
-            type="button"
-            className="btn btn-secondary"
-            style={{ height: '42px', display: 'flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', borderRadius: '8px', padding: '0 1.25rem', fontWeight: 600, fontSize: '0.85rem', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
-          >
-            <Filter size={14} /> Filter <ChevronDown size={14} />
-          </button>
         </div>
 
-        {/* Billing Month, Agreement Status and Net Type Filter Panel */}
-        <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #E2E8F0' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
+        {/* Row 2: Month, Agreement Status, Net Type dropdowns (equal width) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', width: '100%', marginBottom: '1rem', paddingBottom: '1rem', borderBottom: '1px solid #E2E8F0' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', width: '100%' }}>
             <label style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Reference Billing Month:</label>
             <select
               value={selectedBillingMonth}
@@ -1901,14 +1776,14 @@ const CustomerDetails = () => {
               className="form-input"
               style={{ appearance: 'auto', padding: '0.45rem 0.75rem', fontSize: '0.85rem', background: '#FFFFFF', color: '#0F172A', border: '1px solid #E2E8F0', borderRadius: '8px', height: '40px', width: '100%', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
             >
-              <option value="ALL">All Billing Months</option>
+              <option value="ALL">All Months</option>
               {billingMonths.map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', width: '100%' }}>
             <label style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Agreement Status:</label>
             <select
               value={agreementStatusFilter}
@@ -1922,7 +1797,7 @@ const CustomerDetails = () => {
             </select>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', minWidth: '220px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', width: '100%' }}>
             <label style={{ color: '#475569', fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Net Type:</label>
             <select
               value={netTypeFilter}
@@ -1938,8 +1813,8 @@ const CustomerDetails = () => {
           </div>
         </div>
 
-        {/* Location tags + Sorting controls */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', paddingTop: '0.85rem', borderTop: '1px solid #E2E8F0' }}>
+        {/* Row 3: Locations chips and Sort controls */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', paddingTop: '0.25rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span style={{ color: '#475569', fontSize: '0.78rem', fontWeight: 700, marginRight: '0.35rem' }}>
               Locations:
@@ -1978,7 +1853,7 @@ const CustomerDetails = () => {
             })}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             <span style={{ color: '#475569', fontSize: '0.78rem', fontWeight: 700 }}>Sort by:</span>
             <select
               value={sortBy}
@@ -1995,7 +1870,7 @@ const CustomerDetails = () => {
               className="btn btn-secondary"
               title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
               onClick={() => { setSortDir((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(0); }}
-              style={{ padding: '0 0.75rem', height: '36px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+              style={{ padding: '0 0.75rem', height: '36px', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: '0.3rem', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)', whiteSpace: 'nowrap' }}
             >
               <ArrowUpDown size={13} /> {sortDir === 'asc' ? 'A-Z' : 'Z-A'}
             </button>
@@ -2055,7 +1930,7 @@ const CustomerDetails = () => {
                       ? 'No customer records matched your search query. Try checking for typos or searching by account number.'
                       : 'The Customer Directory is empty. Records will automatically populate here when new billing data is uploaded and approved by an Admin.')}
                 </div>
-                {(locationFilter !== 'ALL' || appliedQuery || statusFilter !== 'ALL' || completenessFilter !== 'ALL' || agreementStatusFilter !== 'ALL' || netTypeFilter !== 'ALL') && (
+                {(locationFilter !== 'ALL' || appliedQuery || statusFilter !== 'ALL' || completenessFilter !== 'ALL' || agreementStatusFilter !== 'ALL' || netTypeFilter !== 'ALL' || selectedBillingMonth !== 'ALL') && (
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -2065,9 +1940,11 @@ const CustomerDetails = () => {
                       setCompletenessFilter('ALL');
                       setAgreementStatusFilter('ALL');
                       setNetTypeFilter('ALL');
+                      setSelectedBillingMonth('ALL');
                       setSearchQuery('');
                       setAppliedQuery('');
                       setCurrentPage(0);
+                      fetchSummaryStats('ALL', 'ALL');
                     }}
                     style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #2563EB', color: '#FFFFFF', background: '#2563EB', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
                   >
@@ -2483,7 +2360,7 @@ const CustomerDetails = () => {
                 ? 'No customer records matched your search query. Try checking for typos or searching by account number.'
                 : 'The Customer Directory is empty. Records will automatically populate here when new billing data is uploaded and approved by an Admin.')}
           </div>
-          {(locationFilter !== 'ALL' || appliedQuery || statusFilter !== 'ALL' || completenessFilter !== 'ALL' || agreementStatusFilter !== 'ALL' || netTypeFilter !== 'ALL') && (
+          {(locationFilter !== 'ALL' || appliedQuery || statusFilter !== 'ALL' || completenessFilter !== 'ALL' || agreementStatusFilter !== 'ALL' || netTypeFilter !== 'ALL' || selectedBillingMonth !== 'ALL') && (
             <button
               type="button"
               className="btn btn-secondary"
@@ -2493,9 +2370,11 @@ const CustomerDetails = () => {
                 setCompletenessFilter('ALL');
                 setAgreementStatusFilter('ALL');
                 setNetTypeFilter('ALL');
+                setSelectedBillingMonth('ALL');
                 setSearchQuery('');
                 setAppliedQuery('');
                 setCurrentPage(0);
+                fetchSummaryStats('ALL', 'ALL');
               }}
               style={{ marginTop: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem', border: '1px solid #2563EB', color: '#FFFFFF', background: '#2563EB', borderRadius: '8px', padding: '0.45rem 1.2rem', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 1px 2px rgba(37,99,235,0.2)' }}
             >
@@ -5366,380 +5245,6 @@ const CustomerDetails = () => {
                   disabled={billEditLoading}
                 >
                   {billEditLoading ? 'Submitting...' : 'Save Statement'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {addCustomerModalOpen && (
-        <div className="modal-overlay animate-fade-in" style={{ zIndex: 10000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(4px)' }}>
-          <style>{`
-            .add-cust-input {
-              width: 100%;
-              height: 42px;
-              padding: 0 14px 0 42px;
-              background: #F8FAFC;
-              border: 1px solid var(--border);
-              border-radius: var(--radius-md);
-              color: var(--text-primary);
-              font-size: 0.88rem;
-              outline: none;
-              transition: all 0.2s ease;
-            }
-            .add-cust-input:focus {
-              border-color: var(--primary) !important;
-              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
-              background: #FFFFFF !important;
-            }
-            .add-cust-input::placeholder {
-              color: var(--text-muted);
-            }
-            .add-cust-select {
-              appearance: none;
-              width: 100%;
-              height: 42px;
-              padding: 0 38px 0 42px;
-              background: #F8FAFC;
-              border: 1px solid var(--border);
-              border-radius: var(--radius-md);
-              color: var(--text-primary);
-              font-size: 0.88rem;
-              outline: none;
-              cursor: pointer;
-              transition: all 0.2s ease;
-            }
-            .add-cust-select:focus {
-              border-color: var(--primary) !important;
-              box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
-              background: #FFFFFF !important;
-            }
-            .add-cust-select option {
-              background: #FFFFFF;
-              color: #1E293B;
-            }
-          `}</style>
-          <div className="modal-content animate-fade-in" style={{
-            maxWidth: 680,
-            width: '100%',
-            maxHeight: '92vh',
-            overflowY: 'auto',
-            padding: '2rem 2.25rem',
-            background: '#FFFFFF',
-            border: '1px solid var(--border)',
-            boxShadow: 'var(--shadow-xl)',
-            borderRadius: '16px',
-            color: 'var(--text-primary)'
-          }}>
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '1rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '10px', background: 'rgba(37, 99, 235, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <UserPlus size={20} color="var(--primary)" />
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700, color: 'var(--text-primary)' }}>Add Customer Profile</h3>
-                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--text-muted)' }}>Enter consumer solar account and banking information</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setAddCustomerModalOpen(false)} 
-                style={{ 
-                  background: 'none', 
-                  border: 'none', 
-                  width: 32, 
-                  height: 32, 
-                  borderRadius: 8, 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  color: 'var(--text-muted)', 
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg-subtle)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {addCustError && (
-              <div style={{ padding: '0.75rem 1rem', background: '#FEE2E2', border: '1px solid #FCA5A5', borderRadius: 8, color: '#B91C1C', fontSize: '0.85rem', marginBottom: '1.25rem' }}>
-                {addCustError}
-              </div>
-            )}
-
-            <form onSubmit={handleAddCustomerSubmit}>
-              {/* Row 1: Account Number & Customer Name */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
-                    Account Number (10 digits)<span style={{ color: 'var(--danger)' }}>*</span>
-                  </label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Shield size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      maxLength={10}
-                      className="add-cust-input"
-                      placeholder="e.g. 5431209876"
-                      value={newCustAccNo}
-                      onChange={(e) => setNewCustAccNo(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
-                    Customer Name<span style={{ color: 'var(--danger)' }}>*</span>
-                  </label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <User size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      className="add-cust-input"
-                      placeholder="Full Name"
-                      value={newCustName}
-                      onChange={(e) => setNewCustName(e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 2: Customer Address */}
-              <div style={{ marginBottom: '1rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Customer Address</label>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <MapPin size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  <input
-                    type="text"
-                    className="add-cust-input"
-                    placeholder="Residential / Business Address"
-                    value={newCustAddress}
-                    onChange={(e) => setNewCustAddress(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: Mobile Number & Agreement Date */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Mobile Number</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Phone size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      className="add-cust-input"
-                      placeholder="07XXXXXXXX"
-                      value={newCustMobile}
-                      onChange={(e) => setNewCustMobile(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Agreement Date</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="date"
-                      className="add-cust-input"
-                      style={{ paddingLeft: 14, paddingRight: 40 }}
-                      value={newCustAgreementDate}
-                      onChange={(e) => setNewCustAgreementDate(e.target.value)}
-                    />
-                    <Calendar size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 4: Panel Capacity (kW) & Net Type */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Panel Capacity (kW)</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Sun size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="number"
-                      step="0.01"
-                      className="add-cust-input"
-                      placeholder="0.00"
-                      value={newCustCapacity}
-                      onChange={(e) => setNewCustCapacity(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Net Type (Solar Type)</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <select
-                      className="add-cust-select"
-                      style={{ paddingLeft: 14 }}
-                      value={newCustNetTypeId}
-                      onChange={(e) => {
-                        setNewCustNetTypeId(e.target.value);
-                        const selected = netTypesList.find(n => n.id.toString() === e.target.value);
-                        if (selected) setNewCustSolarType(selected.name);
-                      }}
-                    >
-                      <option value="">Select Net Type</option>
-                      {netTypesList.map(n => (
-                        <option key={n.id} value={n.id}>{n.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 5: Reference No & Unit Rate */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Reference No (Ref No)</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Tag size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      className="add-cust-input"
-                      placeholder="Optional reference"
-                      value={newCustRefNo}
-                      onChange={(e) => setNewCustRefNo(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Unit Rate (LKR)</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <DollarSign size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="number"
-                      step="0.001"
-                      className="add-cust-input"
-                      placeholder="0.00"
-                      value={newCustUnitRate}
-                      onChange={(e) => setNewCustUnitRate(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 6: Tariff Type & Cost Code */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Tariff Type</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Code size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      className="add-cust-input"
-                      placeholder="DOMESTIC / COMMERCIAL"
-                      value={newCustTariffType}
-                      onChange={(e) => setNewCustTariffType(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Cost Code</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <select
-                      className="add-cust-select"
-                      style={{ paddingLeft: 14 }}
-                      value={newCustCostCodeId}
-                      onChange={(e) => setNewCustCostCodeId(e.target.value)}
-                    >
-                      <option value="">Select Cost Code</option>
-                      {costCodesList.map(c => (
-                        <option key={c.id} value={c.id}>{c.costCode} - {c.areaName}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 7: L-Code */}
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>L-Code</label>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <select
-                    className="add-cust-select"
-                    style={{ paddingLeft: 14, background: '#F1F5F9', cursor: 'not-allowed', opacity: 0.8 }}
-                    value={newCustExpenseCodeId}
-                    disabled
-                  >
-                    <option value="">Select L-Code</option>
-                    {expenseCodesList.map(e => (
-                      <option key={e.id} value={e.id}>{e.expCode} - {e.description}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={17} style={{ position: 'absolute', right: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                </div>
-              </div>
-
-              {/* Section Divider: Banking Details */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', margin: '1.25rem 0 1rem 0' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Banking Details</span>
-                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-              </div>
-
-              {/* Row 8: Banking Details (Bank Code, Branch Code, Bank Account No) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Bank Code</label>
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <Landmark size={17} style={{ position: 'absolute', left: 14, color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                    <input
-                      type="text"
-                      className="add-cust-input"
-                      placeholder="e.g. 7010"
-                      value={newCustBankCode}
-                      onChange={(e) => setNewCustBankCode(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Branch Code</label>
-                  <input
-                    type="text"
-                    className="add-cust-input"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Branch"
-                    value={newCustBranchCode}
-                    onChange={(e) => setNewCustBranchCode(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>Bank Account No</label>
-                  <input
-                    type="text"
-                    className="add-cust-input"
-                    style={{ paddingLeft: 14 }}
-                    placeholder="Account No"
-                    value={newCustBankAccountNo}
-                    onChange={(e) => setNewCustBankAccountNo(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Footer Actions */}
-              <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-                <button
-                  type="button"
-                  onClick={() => setAddCustomerModalOpen(false)}
-                  disabled={addCustLoading}
-                  className="btn btn-secondary"
-                  style={{ height: 40, padding: '0 1.25rem', borderRadius: '8px' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={addCustLoading}
-                  className="btn btn-primary"
-                  style={{ height: 40, padding: '0 1.5rem', borderRadius: '8px', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}
-                >
-                  {addCustLoading ? 'Adding...' : 'Add Profile +'}
                 </button>
               </div>
             </form>

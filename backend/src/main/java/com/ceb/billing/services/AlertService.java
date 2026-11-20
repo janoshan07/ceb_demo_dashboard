@@ -27,8 +27,17 @@ public class AlertService {
     @Autowired
     private CustomerRepository customerRepository;
 
+    @Autowired
+    private com.ceb.billing.repositories.MonthlyDirectorySnapshotRepository snapshotRepository;
+
+    @Autowired(required = false)
+    private com.ceb.billing.services.MonthlyDirectoryHashService monthlyDirectoryHashService;
+
+    @Autowired
+    private AuditLogService auditLogService;
+
     private static final List<String> MANAGED_ALERT_TYPES = List.of(
-            "IMPOSSIBLE_VALUE", "DUPLICATE_BILL", "EXPORT_DROP", "IMPORT_SPIKE", "MISSING_BILL");
+            "IMPOSSIBLE_VALUE", "DUPLICATE_BILL", "EXPORT_DROP", "IMPORT_SPIKE", "MISSING_BILL", "NET_IMPORT");
 
     /**
      * Incrementally runs the anomaly detection engine for a set of impacted customer accounts.
@@ -115,13 +124,26 @@ public class AlertService {
                     Double importUnits = bill.getImportUnits();
                     Double exportUnits = bill.getExportUnits();
                     Double unitCost = bill.getUnitCost();
-                    Double totalAmount = bill.getTotalAmount();
 
-                    if ((importUnits != null && importUnits < 0) || (exportUnits != null && exportUnits < 0)
-                            || (unitCost != null && unitCost < 0) || (totalAmount != null && totalAmount < 0)) {
-                        String msg = String.format("Negative values found in bill Ref %s: Import=%s kWh, Export=%s kWh, Cost=%s LKR.",
-                                bill.getRefNo(), importUnits, exportUnits, unitCost);
+                    // Physical quantities (meter readings, tariff rates) cannot be negative.
+                    // Note: totalAmount < 0 occurs normally whenever grid import exceeds solar export and is not a physical defect.
+                    boolean negImport = importUnits != null && importUnits < 0;
+                    boolean negExport = exportUnits != null && exportUnits < 0;
+                    boolean negCost = unitCost != null && unitCost < 0;
+
+                    if (negImport || negExport || negCost) {
+                        StringBuilder offending = new StringBuilder();
+                        if (negImport) offending.append("Import=").append(importUnits).append(" kWh ");
+                        if (negExport) offending.append("Export=").append(exportUnits).append(" kWh ");
+                        if (negCost) offending.append("Cost=").append(unitCost).append(" LKR ");
+                        String msg = String.format("Negative physical value found in bill Ref %s: %s(physical quantities cannot be negative).",
+                                bill.getRefNo(), offending.toString().trim());
                         alertsToSave.add(new Alert(accountNo, "IMPOSSIBLE_VALUE", "CRITICAL", msg, "UNREAD"));
+                    } else if (importUnits != null && exportUnits != null && importUnits > exportUnits) {
+                        double netUnit = exportUnits - importUnits;
+                        String msg = String.format(java.util.Locale.US, "Net grid import in bill Ref %s: Import=%.1f kWh, Export=%.1f kWh, Net=%.1f kWh.",
+                                bill.getRefNo(), importUnits, exportUnits, netUnit);
+                        alertsToSave.add(new Alert(accountNo, "NET_IMPORT", "INFO", msg, "UNREAD"));
                     } else if (customer.getPanelCapacity() != null && customer.getPanelCapacity() > 0
                             && exportUnits != null && exportUnits > 1000.0 * customer.getPanelCapacity()) {
                         String msg = String.format("Solar export of %s kWh in bill Ref %s exceeds safety yield limit for panel capacity %s kW (max 1000 kWh/kW).",
@@ -211,7 +233,60 @@ public class AlertService {
             Alert alert = optAlert.get();
             alert.setStatus("RESOLVED");
             alertRepository.save(alert);
+            clearOrphanCountCache();
         }
+    }
+
+    /**
+     * Resolves all unread alerts matching optional severity and alertType filters.
+     */
+    @Transactional
+    public int resolveAlertGroup(String severity, String alertType, String resolvedBy) {
+        List<Alert> alerts = alertRepository.findAll().stream()
+                .filter(a -> "UNREAD".equalsIgnoreCase(a.getStatus()))
+                .filter(a -> severity == null || severity.isBlank() || "ALL".equalsIgnoreCase(severity) || severity.equalsIgnoreCase(a.getSeverity()))
+                .filter(a -> alertType == null || alertType.isBlank() || "ALL".equalsIgnoreCase(alertType) || alertType.equalsIgnoreCase(a.getAlertType()))
+                .toList();
+        for (Alert a : alerts) {
+            a.setStatus("RESOLVED");
+        }
+        alertRepository.saveAll(alerts);
+        clearOrphanCountCache();
+        return alerts.size();
+    }
+
+    /**
+     * Re-checks and resolves historical false-positive "Negative values found" alerts
+     * where all measured physical values were actually positive (grid import > solar export).
+     */
+    @Transactional
+    public Map<String, Integer> recheckAndResolveFalseNegativeAlerts(String resolvedBy) {
+        List<Alert> impossibleAlerts = alertRepository.findAll().stream()
+                .filter(a -> "IMPOSSIBLE_VALUE".equalsIgnoreCase(a.getAlertType()) && "UNREAD".equalsIgnoreCase(a.getStatus()))
+                .filter(a -> a.getMessage() != null && a.getMessage().contains("Negative values found in bill Ref"))
+                .toList();
+
+        int totalEvaluated = impossibleAlerts.size();
+        int resolvedCount = 0;
+        for (Alert alert : impossibleAlerts) {
+            String msg = alert.getMessage();
+            boolean hasRealNegative = msg.contains("=-") || msg.contains("= -");
+            if (!hasRealNegative) {
+                alert.setStatus("RESOLVED");
+                alert.setMessage(msg + " [Resolved: Net grid import (export < import) is not a negative physical meter anomaly]");
+                alertRepository.save(alert);
+                resolvedCount++;
+            }
+        }
+        if (resolvedCount > 0) {
+            clearOrphanCountCache();
+        }
+        int skippedCount = totalEvaluated - resolvedCount;
+        Map<String, Integer> result = new LinkedHashMap<>();
+        result.put("totalEvaluated", totalEvaluated);
+        result.put("resolvedCount", resolvedCount);
+        result.put("skippedCount", skippedCount);
+        return result;
     }
 
     /**
@@ -224,5 +299,166 @@ public class AlertService {
         counters.put("info", alertRepository.countBySeverityAndStatus("INFO", "UNREAD"));
         counters.put("total", alertRepository.countByStatus("UNREAD"));
         return counters;
+    }
+
+    /**
+     * Checks if an account exists in any APPROVED monthly directory snapshot.
+     */
+    public boolean isAccountInAnyApprovedSnapshot(String accountNo) {
+        if (accountNo == null || accountNo.isBlank()) return false;
+        String acc = accountNo.trim();
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> approved = snapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : approved) {
+            String json = snap.getFinalDataJson();
+            if (json == null || json.isBlank()) continue;
+            if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isReady()) {
+                Map<String, Map<String, Object>> recMap = monthlyDirectoryHashService.getRecordsMap(snap.getId());
+                if (recMap != null && recMap.containsKey(acc)) {
+                    return true;
+                }
+            }
+            if (json.contains("\"" + acc + "\"")) {
+                try {
+                    List<Map<String, Object>> recs = mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                    for (Map<String, Object> r : recs) {
+                        if (acc.equalsIgnoreCase(String.valueOf(r.get("accountNo")).trim())) {
+                            return true;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return false;
+    }
+
+    // 30-second server-side cache for orphan alert count
+    private static volatile Integer cachedOrphanCount = null;
+    private static volatile long cachedOrphanExpiry = 0L;
+    private static volatile long lastQueryDurationMs = 0L;
+
+    public static void clearOrphanCountCache() {
+        cachedOrphanCount = null;
+        cachedOrphanExpiry = 0L;
+    }
+
+    public static long getLastQueryDurationMs() {
+        return lastQueryDurationMs;
+    }
+
+    /**
+     * Resolves open alerts for an account that has been deleted from a snapshot,
+     * provided the account no longer exists in any other APPROVED snapshot.
+     */
+    @Transactional
+    public int resolveAlertsForRemovedCustomer(String accountNo, String actor) {
+        if (accountNo == null || accountNo.isBlank()) return 0;
+        String trimmed = accountNo.trim();
+
+        if (isAccountInAnyApprovedSnapshot(trimmed)) {
+            return 0; // Still active in another approved snapshot
+        }
+
+        List<Alert> unread = alertRepository.findByAccountNoAndStatus(trimmed, "UNREAD");
+        if (unread.isEmpty()) return 0;
+
+        for (Alert a : unread) {
+            a.setStatus("RESOLVED");
+        }
+        alertRepository.saveAll(unread);
+        clearOrphanCountCache();
+
+        auditLogService.log("ALERT_RESOLVED", String.format(
+                "%s resolved %d open alert(s) for account %s. Reason: Customer removed from directory",
+                actor, unread.size(), trimmed
+        ));
+
+        com.ceb.billing.controllers.DashboardController.invalidateCache();
+        return unread.size();
+    }
+
+    /**
+     * Returns the set of all account numbers present across all APPROVED snapshots.
+     */
+    public Set<String> getApprovedSnapshotAccountNumbers() {
+        Set<String> accounts = new HashSet<>();
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> approved = snapshotRepository.findByStatusOrderByCreatedDateDesc("APPROVED");
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : approved) {
+            String json = snap.getFinalDataJson();
+            if (json == null || json.isBlank()) continue;
+            if (monthlyDirectoryHashService != null && monthlyDirectoryHashService.isReady()) {
+                Map<String, Map<String, Object>> recMap = monthlyDirectoryHashService.getRecordsMap(snap.getId());
+                if (recMap != null) {
+                    accounts.addAll(recMap.keySet());
+                    continue;
+                }
+            }
+            try {
+                List<Map<String, Object>> recs = mapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                for (Map<String, Object> r : recs) {
+                    Object a = r.get("accountNo");
+                    if (a != null) {
+                        accounts.add(String.valueOf(a).trim());
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return accounts;
+    }
+
+    /**
+     * Counts open alerts for accounts that no longer exist in any APPROVED snapshot.
+     * Cached for 30 seconds to prevent repetitive scanning.
+     */
+    public int countOrphanAlerts() {
+        long now = System.currentTimeMillis();
+        if (cachedOrphanCount != null && now < cachedOrphanExpiry) {
+            return cachedOrphanCount;
+        }
+
+        long start = System.nanoTime();
+        Set<String> approvedAccounts = getApprovedSnapshotAccountNumbers();
+        int count = (int) alertRepository.findByStatusOrderByCreatedAtDesc("UNREAD").stream()
+                .filter(a -> a.getAccountNo() != null && !approvedAccounts.contains(a.getAccountNo().trim()))
+                .count();
+        lastQueryDurationMs = (System.nanoTime() - start) / 1_000_000;
+
+        cachedOrphanCount = count;
+        cachedOrphanExpiry = now + 30_000L; // 30 seconds
+        return count;
+    }
+
+    /**
+     * Admin one-off cleanup action: resolves all open alerts belonging to accounts
+     * that no longer exist in any APPROVED snapshot.
+     */
+    @Transactional
+    public Map<String, Object> resolveAllOrphanAlerts(String adminUsername) {
+        Set<String> approvedAccounts = getApprovedSnapshotAccountNumbers();
+        List<Alert> orphanAlerts = alertRepository.findByStatusOrderByCreatedAtDesc("UNREAD").stream()
+                .filter(a -> a.getAccountNo() != null && !approvedAccounts.contains(a.getAccountNo().trim()))
+                .toList();
+
+        for (Alert a : orphanAlerts) {
+            a.setStatus("RESOLVED");
+        }
+        alertRepository.saveAll(orphanAlerts);
+        clearOrphanCountCache();
+
+        int resolvedCount = orphanAlerts.size();
+        long distinctAccountsCount = orphanAlerts.stream().map(Alert::getAccountNo).distinct().count();
+
+        auditLogService.log("ALERT_RESOLVED", String.format(
+                "Admin %s resolved %d open orphan alert(s) across %d account(s). Reason: Customer removed from directory",
+                adminUsername, resolvedCount, distinctAccountsCount
+        ));
+
+        com.ceb.billing.controllers.DashboardController.invalidateCache();
+
+        Map<String, Object> res = new LinkedHashMap<>();
+        res.put("resolvedCount", resolvedCount);
+        res.put("message", String.format("Successfully resolved %d alerts of removed customers.", resolvedCount));
+        return res;
     }
 }

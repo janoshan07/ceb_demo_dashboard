@@ -39,7 +39,8 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Locale;
-import java.util.logging.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.LocalDate;
 import java.time.Month;
 import java.time.format.DateTimeFormatter;
@@ -48,7 +49,7 @@ import java.time.format.DateTimeFormatter;
 @RequestMapping
 public class CustomerController {
 
-    private static final Logger log = Logger.getLogger(CustomerController.class.getName());
+    private static final Logger log = LoggerFactory.getLogger(CustomerController.class);
 
     @Autowired
     private CustomerRepository customerRepository;
@@ -88,6 +89,9 @@ public class CustomerController {
 
     @Autowired
     private com.ceb.billing.services.CustomerHashIndexService customerHashIndexService;
+
+    @Autowired
+    private com.ceb.billing.services.AlertService alertService;
 
     // Fast in-memory cache for pre-mapped monthly snapshot records
     private final Map<String, List<Map<String, Object>>> monthlyRecordsCache = new java.util.concurrent.ConcurrentHashMap<>();
@@ -685,7 +689,7 @@ public class CustomerController {
                 dto.put("outstandingBalance", 0.0);
             }
         } catch (Exception ex) {
-            log.warning("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
+            log.warn("toSafeDto error for account " + c.getAccountNo() + ": " + ex.getMessage());
         }
         return dto;
     }
@@ -851,104 +855,133 @@ public class CustomerController {
     }
 
     private List<Map<String, Object>> getAllMappedRecords() {
-        return monthlyRecordsCache.computeIfAbsent("ALL", allKey -> {
-            List<Map<String, Object>> allMapped = new ArrayList<>();
-            Set<String> seenAccounts = new HashSet<>();
+        List<Map<String, Object>> cached = monthlyRecordsCache.get("ALL");
+        if (cached != null) {
+            return cached;
+        }
+        List<Map<String, Object>> allMapped = new ArrayList<>();
+        Set<String> seenAccounts = new HashSet<>();
 
-            // 1. Gather all distinct non-rejected billing months from snapshots, ordered newest first
-            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> allSnapshots =
-                    monthlyDirectorySnapshotRepository != null ? monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc() : Collections.emptyList();
+        // 1. Gather all distinct non-rejected billing months from snapshots, ordered newest first
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> allSnapshots =
+                monthlyDirectorySnapshotRepository != null ? monthlyDirectorySnapshotRepository.findAllByOrderByCreatedDateDesc() : Collections.emptyList();
 
-            Set<String> monthsOrdered = new LinkedHashSet<>();
-            if (allSnapshots != null) {
-                for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : allSnapshots) {
-                    if (snap != null && snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
-                        if (!"REJECTED".equalsIgnoreCase(snap.getStatus())) {
-                            monthsOrdered.add(snap.getBillingMonth().trim());
-                        }
+        Set<String> monthsOrdered = new LinkedHashSet<>();
+        if (allSnapshots != null) {
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : allSnapshots) {
+                if (snap != null && snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
+                    if (!"REJECTED".equalsIgnoreCase(snap.getStatus())) {
+                        monthsOrdered.add(snap.getBillingMonth().trim());
                     }
                 }
             }
+        }
 
-            // Also check billingRecordRepository for any additional months
-            if (billingRecordRepository != null) {
-                try {
-                    for (BillingRecord br : billingRecordRepository.findAll()) {
-                        if (br != null && br.getFromDate() != null) {
-                            String mStr = br.getFromDate().getMonth().name().substring(0, 1)
-                                    + br.getFromDate().getMonth().name().substring(1).toLowerCase()
-                                    + " " + br.getFromDate().getYear();
-                            monthsOrdered.add(mStr);
-                        }
+        // Also check billingRecordRepository for any additional months
+        if (billingRecordRepository != null) {
+            try {
+                for (BillingRecord br : billingRecordRepository.findAll()) {
+                    if (br != null && br.getFromDate() != null) {
+                        String mStr = br.getFromDate().getMonth().name().substring(0, 1)
+                                + br.getFromDate().getMonth().name().substring(1).toLowerCase()
+                                + " " + br.getFromDate().getYear();
+                        monthsOrdered.add(mStr);
                     }
-                } catch (Exception ignored) {}
-            }
+                }
+            } catch (Exception ignored) {}
+        }
 
-            // Process records from each billing month (newest month first)
-            for (String month : monthsOrdered) {
-                List<Map<String, Object>> monthRecords = getMappedRecordsForBillingMonth(month);
-                for (Map<String, Object> rec : monthRecords) {
-                    String acc = str(rec, "accountNo");
-                    if (acc == null || acc.trim().isEmpty()) continue;
-                    String normAcc = acc.trim().toUpperCase(Locale.ROOT);
+        // Process records from each billing month (newest month first)
+        for (String month : monthsOrdered) {
+            List<Map<String, Object>> monthRecords = getMappedRecordsForBillingMonth(month);
+            for (Map<String, Object> rec : monthRecords) {
+                String acc = str(rec, "accountNo");
+                if (acc == null || acc.trim().isEmpty()) continue;
+                String normAcc = acc.trim().toUpperCase(Locale.ROOT);
+                if (seenAccounts.contains(normAcc)) continue;
+                seenAccounts.add(normAcc);
+                allMapped.add(rec);
+            }
+        }
+
+        // Also include any customer records from customerRepository that were not in any snapshot
+        if (customerRepository != null) {
+            try {
+                List<Customer> allCustomers = customerRepository.findAll();
+                for (Customer c : allCustomers) {
+                    if (c == null || c.getAccountNo() == null) continue;
+                    String normAcc = c.getAccountNo().trim().toUpperCase(Locale.ROOT);
                     if (seenAccounts.contains(normAcc)) continue;
-                    seenAccounts.add(normAcc);
-                    allMapped.add(rec);
+                    try {
+                        Map<String, Object> dto = toSafeDto(c);
+                        seenAccounts.add(normAcc);
+                        allMapped.add(dto);
+                    } catch (Exception ignored) {}
                 }
-            }
+            } catch (Exception ignored) {}
+        }
 
-            // Also include any customer records from customerRepository that were not in any snapshot
-            if (customerRepository != null) {
-                try {
-                    List<Customer> allCustomers = customerRepository.findAll();
-                    for (Customer c : allCustomers) {
-                        if (c == null || c.getAccountNo() == null) continue;
-                        String normAcc = c.getAccountNo().trim().toUpperCase(Locale.ROOT);
-                        if (seenAccounts.contains(normAcc)) continue;
-                        try {
-                            Map<String, Object> dto = toSafeDto(c);
-                            seenAccounts.add(normAcc);
-                            allMapped.add(dto);
-                        } catch (Exception ignored) {}
-                    }
-                } catch (Exception ignored) {}
-            }
+        // Also include any billing records that were not yet in seenAccounts
+        if (billingRecordRepository != null) {
+            try {
+                for (BillingRecord br : billingRecordRepository.findAll()) {
+                    if (br == null || br.getCustomer() == null || br.getCustomer().getAccountNo() == null) continue;
+                    String normAcc = br.getCustomer().getAccountNo().trim().toUpperCase(Locale.ROOT);
+                    if (seenAccounts.contains(normAcc)) continue;
+                    try {
+                        Map<String, Object> bMap = convertBillingRecordToMap(br, "ALL");
+                        Map<String, Object> dto = mapRecordToDto(bMap);
+                        seenAccounts.add(normAcc);
+                        allMapped.add(dto);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception ignored) {}
+        }
 
-            // Also include any billing records that were not yet in seenAccounts
-            if (billingRecordRepository != null) {
-                try {
-                    for (BillingRecord br : billingRecordRepository.findAll()) {
-                        if (br == null || br.getCustomer() == null || br.getCustomer().getAccountNo() == null) continue;
-                        String normAcc = br.getCustomer().getAccountNo().trim().toUpperCase(Locale.ROOT);
-                        if (seenAccounts.contains(normAcc)) continue;
-                        try {
-                            Map<String, Object> bMap = convertBillingRecordToMap(br, "ALL");
-                            Map<String, Object> dto = mapRecordToDto(bMap);
-                            seenAccounts.add(normAcc);
-                            allMapped.add(dto);
-                        } catch (Exception ignored) {}
-                    }
-                } catch (Exception ignored) {}
-            }
-
-            return Collections.unmodifiableList(allMapped);
-        });
+        List<Map<String, Object>> result = Collections.unmodifiableList(allMapped);
+        monthlyRecordsCache.put("ALL", result);
+        return result;
     }
 
     private List<Map<String, Object>> getMappedRecordsForBillingMonth(String bmTrim) {
         if (bmTrim == null || bmTrim.trim().isEmpty() || "ALL".equalsIgnoreCase(bmTrim)) {
             return getAllMappedRecords();
         }
-        return monthlyRecordsCache.computeIfAbsent(bmTrim.trim(), month -> {
-            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(month);
-            List<Map<String, Object>> rawRecords = new ArrayList<>();
-            Set<String> seenAccounts = new HashSet<>();
-            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
-                if (snap.getId() != null && monthlyDirectoryHashService != null && monthlyDirectoryHashService.isCached(snap.getId())) {
-                    Map<String, Object> snapDto = monthlyDirectoryHashService.getSnapshot(snap.getId());
-                    if (snapDto != null && snapDto.get("records") instanceof List) {
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> list = (List<Map<String, Object>>) snapDto.get("records");
+        String month = bmTrim.trim();
+        List<Map<String, Object>> cached = monthlyRecordsCache.get(month);
+        if (cached != null) {
+            return cached;
+        }
+
+        List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = getSnapshotsForBillingMonth(month);
+        List<Map<String, Object>> rawRecords = new ArrayList<>();
+        Set<String> seenAccounts = new HashSet<>();
+        for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+            if (snap.getId() != null && monthlyDirectoryHashService != null && monthlyDirectoryHashService.isCached(snap.getId())) {
+                Map<String, Object> snapDto = monthlyDirectoryHashService.getSnapshot(snap.getId());
+                if (snapDto != null && snapDto.get("records") instanceof List) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> list = (List<Map<String, Object>>) snapDto.get("records");
+                    for (Map<String, Object> rec : list) {
+                        String acc = str(rec, "accountNo");
+                        if (acc == null || seenAccounts.contains(acc)) continue;
+                        if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
+                            rec.put("snapshotDivision", snap.getDivision().trim());
+                        }
+                        if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
+                            rec.put("billingMonth", snap.getBillingMonth().trim());
+                        }
+                        seenAccounts.add(acc);
+                        rawRecords.add(new LinkedHashMap<>(rec));
+                    }
+                    continue;
+                }
+            }
+            if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
+                try {
+                    List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                            new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                    if (list != null) {
                         for (Map<String, Object> rec : list) {
                             String acc = str(rec, "accountNo");
                             if (acc == null || seenAccounts.contains(acc)) continue;
@@ -959,95 +992,73 @@ public class CustomerController {
                                 rec.put("billingMonth", snap.getBillingMonth().trim());
                             }
                             seenAccounts.add(acc);
-                            rawRecords.add(new LinkedHashMap<>(rec));
+                            rawRecords.add(rec);
                         }
-                        continue;
                     }
-                }
-                if (snap.getFinalDataJson() != null && !snap.getFinalDataJson().trim().isEmpty()) {
-                    try {
-                        List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
-                                new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
-                        if (list != null) {
-                            for (Map<String, Object> rec : list) {
-                                String acc = str(rec, "accountNo");
-                                if (acc == null || seenAccounts.contains(acc)) continue;
-                                if (snap.getDivision() != null && !snap.getDivision().trim().isEmpty()) {
-                                    rec.put("snapshotDivision", snap.getDivision().trim());
-                                }
-                                if (snap.getBillingMonth() != null && !snap.getBillingMonth().trim().isEmpty()) {
-                                    rec.put("billingMonth", snap.getBillingMonth().trim());
-                                }
-                                seenAccounts.add(acc);
-                                rawRecords.add(rec);
-                            }
-                        }
-                    } catch (Exception e) {
-                        log.warning("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
-                    }
+                } catch (Exception e) {
+                    log.warn("Failed to parse finalDataJson from snapshot " + snap.getId() + ": " + e.getMessage());
                 }
             }
+        }
 
-            // Also synchronize with MySQL billing_records for this billing month
-            LocalDate[] monthRange = getBillingMonthRange(month);
-            if (monthRange != null) {
+        // Also synchronize with MySQL billing_records for this billing month
+        LocalDate[] monthRange = getBillingMonthRange(month);
+        if (monthRange != null) {
+            try {
+                int yr = monthRange[0].getYear();
+                int mo = monthRange[0].getMonthValue();
+                List<BillingRecord> bRecords = billingRecordRepository.findAll();
+                for (BillingRecord br : bRecords) {
+                    if (br.getFromDate() != null && br.getFromDate().getYear() == yr && br.getFromDate().getMonthValue() == mo) {
+                        String bAcc = br.getCustomer() != null ? br.getCustomer().getAccountNo() : null;
+                        if (bAcc == null) continue;
+                        if (!seenAccounts.contains(bAcc)) {
+                            Map<String, Object> bMap = convertBillingRecordToMap(br, month);
+                            seenAccounts.add(bAcc);
+                            rawRecords.add(bMap);
+                        }
+                    }
+                }
+            } catch (Exception ex) {
+                log.warn("Failed to check billing_records for month " + month + ": " + ex.getMessage());
+            }
+        }
+
+        // Also include any customer records matching this billing month from customer repository
+        List<Customer> allCustomers = customerRepository.findAll();
+        for (Customer c : allCustomers) {
+            String acc = c.getAccountNo();
+            if (acc == null || seenAccounts.contains(acc)) continue;
+            if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
                 try {
-                    int yr = monthRange[0].getYear();
-                    int mo = monthRange[0].getMonthValue();
-                    List<BillingRecord> bRecords = billingRecordRepository.findAll();
-                    for (BillingRecord br : bRecords) {
-                        if (br.getFromDate() != null && br.getFromDate().getYear() == yr && br.getFromDate().getMonthValue() == mo) {
-                            String bAcc = br.getCustomer() != null ? br.getCustomer().getAccountNo() : null;
-                            if (bAcc == null) continue;
-                            if (!seenAccounts.contains(bAcc)) {
-                                Map<String, Object> bMap = convertBillingRecordToMap(br, month);
-                                seenAccounts.add(bAcc);
-                                rawRecords.add(bMap);
-                            }
+                    Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
+                            new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+                    String cMonth = str(dirMap, "billingMonth");
+                    if (cMonth != null && (cMonth.equalsIgnoreCase(month) || isSameMonth(cMonth, month))) {
+                        if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
+                            dirMap.put("snapshotDivision", c.getDivision().trim());
                         }
+                        seenAccounts.add(acc);
+                        rawRecords.add(dirMap);
                     }
-                } catch (Exception ex) {
-                    log.warning("Failed to check billing_records for month " + month + ": " + ex.getMessage());
-                }
-            }
-
-            // Also include any customer records matching this billing month from customer repository
-            List<Customer> allCustomers = customerRepository.findAll();
-            for (Customer c : allCustomers) {
-                String acc = c.getAccountNo();
-                if (acc == null || seenAccounts.contains(acc)) continue;
-                if (c.getDirectoryJson() != null && !c.getDirectoryJson().trim().isEmpty()) {
-                    try {
-                        Map<String, Object> dirMap = objectMapper.readValue(c.getDirectoryJson(),
-                                new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
-                        String cMonth = str(dirMap, "billingMonth");
-                        if (cMonth != null && (cMonth.equalsIgnoreCase(month) || isSameMonth(cMonth, month))) {
-                            if (c.getDivision() != null && !c.getDivision().trim().isEmpty()) {
-                                dirMap.put("snapshotDivision", c.getDivision().trim());
-                            }
-                            seenAccounts.add(acc);
-                            rawRecords.add(dirMap);
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-
-            List<Map<String, Object>> mapped = new ArrayList<>();
-            for (Map<String, Object> rec : rawRecords) {
-                try {
-                    mapped.add(mapRecordToDto(rec));
                 } catch (Exception ignored) {}
             }
-            return Collections.unmodifiableList(mapped);
-        });
+        }
+
+        List<Map<String, Object>> mapped = new ArrayList<>();
+        for (Map<String, Object> rec : rawRecords) {
+            try {
+                mapped.add(mapRecordToDto(rec));
+            } catch (Exception ignored) {}
+        }
+        List<Map<String, Object>> result = Collections.unmodifiableList(mapped);
+        monthlyRecordsCache.put(month, result);
+        return result;
     }
 
     @EventListener
     public void invalidateMonthlyRecordsCache(com.ceb.billing.events.CustomerDirectoryChangedEvent event) {
         monthlyRecordsCache.clear();
-        if (customerHashIndexService != null) {
-            customerHashIndexService.rebuildIndex();
-        }
     }
 
     private Optional<Map<String, Object>> findSnapshotCustomerRecord(String accountNo) {
@@ -1075,7 +1086,7 @@ public class CustomerController {
                     }
                 }
             } catch (Exception ex) {
-                log.warning("Failed to inspect customer directory snapshot " + snapshot.getId()
+                log.warn("Failed to inspect customer directory snapshot " + snapshot.getId()
                         + " while looking up account " + accountNo + ": " + ex.getMessage());
             }
         }
@@ -1243,7 +1254,7 @@ public class CustomerController {
 
             return ResponseEntity.ok(stats);
         } catch (Exception ex) {
-            log.severe("GET /api/officer/customers/summary failed: " + ex.getMessage());
+            log.error("GET /api/officer/customers/summary failed: " + ex.getMessage(), ex);
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load summary stats: " + ex.getMessage()));
         }
     }
@@ -1412,7 +1423,7 @@ public class CustomerController {
 
                     dtoList.add(dto);
                 } catch (Exception ex) {
-                    log.warning("Skipping parsed customer due to mapping error: " + ex.getMessage());
+                    log.warn("Skipping parsed customer due to mapping error: " + ex.getMessage());
                 }
             }
 
@@ -1456,7 +1467,7 @@ public class CustomerController {
 
             return ResponseEntity.ok(response);
         } catch (Exception ex) {
-            log.severe("GET /api/officer/customers failed: " + ex.getMessage());
+            log.error("GET /api/officer/customers failed: " + ex.getMessage(), ex);
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load customers: " + ex.getMessage()));
         }
     }
@@ -1471,7 +1482,7 @@ public class CustomerController {
             }
             return ResponseEntity.notFound().build();
         } catch (Exception ex) {
-            log.severe("GET /api/officer/customers/" + accountNo + " failed: " + ex.getMessage());
+            log.error("GET /api/officer/customers/" + accountNo + " failed: " + ex.getMessage(), ex);
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load customer: " + ex.getMessage()));
         }
     }
@@ -1502,7 +1513,7 @@ public class CustomerController {
             }
             return ResponseEntity.ok(dtoList);
         } catch (Exception ex) {
-            log.severe("GET /api/officer/customers/" + accountNo + "/billing failed: " + ex.getMessage());
+            log.error("GET /api/officer/customers/" + accountNo + "/billing failed: " + ex.getMessage(), ex);
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to load billing history: " + ex.getMessage()));
         }
     }
@@ -1584,7 +1595,34 @@ public class CustomerController {
                 }
             }
         } catch (Exception ex) {
-            log.warning("Failed to flag pending approval in snapshots for account " + accountNo + ": " + ex.getMessage());
+            log.warn("Failed to flag pending approval in snapshots for account " + accountNo + ": " + ex.getMessage());
+        }
+    }
+
+    private void removeCustomerFromSnapshots(String accountNo) {
+        try {
+            List<com.ceb.billing.entities.MonthlyDirectorySnapshot> snapshots = monthlyDirectorySnapshotRepository.findAll();
+            for (com.ceb.billing.entities.MonthlyDirectorySnapshot snap : snapshots) {
+                if (snap.getFinalDataJson() == null || snap.getFinalDataJson().trim().isEmpty()) {
+                    continue;
+                }
+                List<Map<String, Object>> list = objectMapper.readValue(snap.getFinalDataJson(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Map<String, Object>>>() {});
+                if (list != null) {
+                    int originalSize = list.size();
+                    list.removeIf(rec -> accountNo.equals(str(rec, "accountNo")));
+                    if (list.size() != originalSize) {
+                        snap.setFinalDataJson(objectMapper.writeValueAsString(list));
+                        snap.setTotalRecords(list.size());
+                        monthlyDirectorySnapshotRepository.save(snap);
+                        if (monthlyDirectoryHashService != null) {
+                            monthlyDirectoryHashService.evict(snap.getId());
+                        }
+                    }
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to remove customer from snapshots for account " + accountNo + ": " + ex.getMessage());
         }
     }
 
@@ -1605,7 +1643,7 @@ public class CustomerController {
                     String.format("Admin %s cleared all %d customer records from Customer Directory", adminUsername, count));
             return ResponseEntity.ok(Map.of("message", "Successfully cleared " + count + " customer records."));
         } catch (Exception ex) {
-            log.severe("DELETE /api/admin/customers/clear-all failed: " + ex.getMessage());
+            log.error("DELETE /api/admin/customers/clear-all failed: " + ex.getMessage(), ex);
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to clear customers: " + ex.getMessage()));
         }
     }
@@ -1643,8 +1681,7 @@ public class CustomerController {
 
             return ResponseEntity.ok(toSafeDto(savedCustomer));
         } catch (Exception ex) {
-            log.severe("PUT /api/admin/customers/" + accountNo + " failed: " + ex.getMessage());
-            ex.printStackTrace();
+            log.error("PUT /api/admin/customers/" + accountNo + " failed: " + ex.getMessage(), ex);
             return ResponseEntity.internalServerError().body(Map.of("message", "Failed to update customer details: " + ex.getMessage()));
         }
     }
@@ -1712,7 +1749,7 @@ public class CustomerController {
                 }
             }
         } catch (Exception ex) {
-            log.warning("Failed to update customer in snapshots for account " + accountNo + ": " + ex.getMessage());
+            log.warn("Failed to update customer in snapshots for account " + accountNo + ": " + ex.getMessage());
         }
     }
 
@@ -1809,7 +1846,7 @@ public class CustomerController {
             dto.put("uploadHistoryId",  br.getUploadHistoryId());
             dto.put("createdAt",        br.getCreatedAt() != null ? br.getCreatedAt().toString() : null);
         } catch (Exception ex) {
-            log.warning("toBillingDto error for billing id " + br.getBillingId() + ": " + ex.getMessage());
+            log.warn("toBillingDto error for billing id " + br.getBillingId() + ": " + ex.getMessage());
         }
         return dto;
     }
@@ -1910,22 +1947,36 @@ public class CustomerController {
     @DeleteMapping("/api/admin/customers/{accountNo}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<?> adminDeleteCustomer(@PathVariable String accountNo) {
-        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(accountNo));
-        if (optCustomer.isEmpty()) {
+        String normalizedAccountNo = accountNo != null ? accountNo.trim() : "";
+        Optional<Customer> optCustomer = customerRepository.findById(Objects.requireNonNull(normalizedAccountNo));
+        Optional<Map<String, Object>> snapshotCustomer = optCustomer.isEmpty()
+                ? findSnapshotCustomerRecord(normalizedAccountNo)
+                : Optional.empty();
+        if (optCustomer.isEmpty() && snapshotCustomer.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
         
-        long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(accountNo);
+        long activeRecordsCount = billingRecordRepository.countByCustomerAccountNo(normalizedAccountNo);
         if (activeRecordsCount > 0) {
-            return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + accountNo + " because they have " + activeRecordsCount + " active billing records. Delete the billing records first."));
+            return ResponseEntity.badRequest().body(new MessageResponse("Cannot delete customer account " + normalizedAccountNo + " because they have " + activeRecordsCount + " active billing records. Delete the billing records first."));
         }
 
-        customerRepository.delete(Objects.requireNonNull(optCustomer.get()));
-        if (customerHashIndexService != null) {
-            customerHashIndexService.evict(accountNo);
+        if (optCustomer.isPresent()) {
+            customerRepository.delete(Objects.requireNonNull(optCustomer.get()));
         }
+        if (customerHashIndexService != null) {
+            customerHashIndexService.evict(normalizedAccountNo);
+        }
+        removeCustomerFromSnapshots(normalizedAccountNo);
+        monthlyRecordsCache.clear();
+
         String actor = SecurityContextHolder.getContext().getAuthentication().getName();
-        auditLogService.log("CUSTOMER_DELETE", "Admin " + actor + " manually deleted customer account: " + accountNo);
+        auditLogService.log("CUSTOMER_DELETE", "Admin " + actor + " manually deleted customer account: " + normalizedAccountNo);
+
+        alertService.resolveAlertsForRemovedCustomer(normalizedAccountNo, actor);
+        com.ceb.billing.services.AlertService.clearOrphanCountCache();
+        com.ceb.billing.controllers.DashboardController.invalidateCache();
+
         return ResponseEntity.ok(new MessageResponse("Customer account deleted successfully."));
     }
 

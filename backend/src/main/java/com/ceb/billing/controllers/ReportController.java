@@ -94,16 +94,74 @@ public class ReportController {
         String accountNo = userDetails.getUsername();
         List<BillingRecord> records = billingRecordRepository.findByCustomerAccountNoOrderByFromDateDesc(accountNo);
         List<Map<String, Object>> reports = new ArrayList<>();
-        for (BillingRecord r : records) {
-            Map<String, Object> map = new HashMap<>();
-            map.put("year", r.getFromDate().getYear());
-            map.put("month", r.getFromDate().getMonthValue());
-            map.put("revenue", r.getTotalAmount());
-            map.put("imports", r.getImportUnits());
-            map.put("exports", r.getExportUnits());
-            reports.add(map);
+        if (!records.isEmpty()) {
+            for (BillingRecord r : records) {
+                Map<String, Object> map = new HashMap<>();
+                map.put("year", r.getFromDate().getYear());
+                map.put("month", r.getFromDate().getMonthValue());
+                map.put("revenue", r.getTotalAmount());
+                map.put("imports", r.getImportUnits());
+                map.put("exports", r.getExportUnits());
+                reports.add(map);
+            }
+        } else if (paymentControlService != null) {
+            List<Map<String, Object>> canonical = paymentControlService.loadCanonicalRecords(null, null);
+            for (Map<String, Object> r : canonical) {
+                String acc = r.get("accountNo") != null ? r.get("accountNo").toString().trim() : "";
+                if (accountNo.equalsIgnoreCase(acc)) {
+                    Map<String, Object> map = new HashMap<>();
+                    String bm = r.get("billingMonth") != null ? r.get("billingMonth").toString().trim() : "";
+                    int year = 2026;
+                    int month = 7;
+                    if (!bm.isEmpty()) {
+                        String clean = bm.toLowerCase();
+                        if (clean.contains("jan")) month = 1;
+                        else if (clean.contains("feb")) month = 2;
+                        else if (clean.contains("mar")) month = 3;
+                        else if (clean.contains("apr")) month = 4;
+                        else if (clean.contains("may")) month = 5;
+                        else if (clean.contains("jun")) month = 6;
+                        else if (clean.contains("jul")) month = 7;
+                        else if (clean.contains("aug")) month = 8;
+                        else if (clean.contains("sep")) month = 9;
+                        else if (clean.contains("oct")) month = 10;
+                        else if (clean.contains("nov")) month = 11;
+                        else if (clean.contains("dec")) month = 12;
+
+                        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(20\\d\\d)").matcher(bm);
+                        if (m.find()) {
+                            try { year = Integer.parseInt(m.group(1)); } catch (Exception ignored) {}
+                        }
+                    }
+                    map.put("year", year);
+                    map.put("month", month);
+                    map.put("revenue", extractDouble(r, "salesAmount", "payment", "energyPurchase", "totalAmount"));
+                    map.put("imports", extractDouble(r, "kwhImport", "importUnits", "imports"));
+                    map.put("exports", extractDouble(r, "kwhExport", "exportUnits", "exports"));
+                    reports.add(map);
+                }
+            }
         }
         return ResponseEntity.ok(reports);
+    }
+
+    private double extractDouble(Map<String, Object> r, String... keys) {
+        for (String k : keys) {
+            Object o = r.get(k);
+            if (o instanceof Number) {
+                double d = ((Number) o).doubleValue();
+                if (d > 0) return d;
+            } else if (o != null) {
+                try {
+                    String s = o.toString().trim().replace(",", "");
+                    if (!s.isEmpty()) {
+                        double d = Double.parseDouble(s);
+                        if (d > 0) return d;
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return 0.0;
     }
 
     @GetMapping("/api/officer/reports/branches")

@@ -1,3 +1,4 @@
+
 package com.ceb.billing.controllers;
 
 import com.ceb.billing.entities.Alert;
@@ -62,5 +63,70 @@ public class AlertController {
                 "Alert ID %d resolved by %s", alertId, userDetails.getUsername()));
 
         return ResponseEntity.ok().body(Map.of("message", "Alert successfully resolved."));
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean IS_RECHECKING = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    @PostMapping("/recheck-false-negatives")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> recheckFalseNegatives() {
+        if (!IS_RECHECKING.compareAndSet(false, true)) {
+            return ResponseEntity.status(409).body(Map.of("message", "Recheck operation is already in progress. Please wait."));
+        }
+        try {
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String username = auth != null ? auth.getName() : "admin";
+            Map<String, Integer> result = alertService.recheckAndResolveFalseNegativeAlerts(username);
+            int resolved = result.get("resolvedCount");
+            int skipped = result.get("skippedCount");
+            int total = result.get("totalEvaluated");
+            auditLogService.log("ALERTS_BATCH_RESOLVED", String.format(
+                    "Rechecked %d false negative alerts (%d resolved, %d skipped) by %s", total, resolved, skipped, username));
+            return ResponseEntity.ok(Map.of(
+                    "message", String.format("Recheck complete: %d resolved, %d skipped out of %d evaluated.", resolved, skipped, total),
+                    "resolvedCount", resolved,
+                    "skippedCount", skipped,
+                    "totalEvaluated", total
+            ));
+        } finally {
+            IS_RECHECKING.set(false);
+        }
+    }
+
+    @PostMapping("/resolve-group")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> resolveAlertGroup(
+            @RequestParam(required = false) String severity,
+            @RequestParam(required = false) String alertType) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth != null ? auth.getName() : "admin";
+        int resolved = alertService.resolveAlertGroup(severity, alertType, username);
+        auditLogService.log("ALERT_GROUP_RESOLVED", String.format(
+                "Bulk resolved %d alerts (severity: %s, type: %s) by %s",
+                resolved, severity != null ? severity : "ALL", alertType != null ? alertType : "ALL", username));
+        return ResponseEntity.ok(Map.of(
+                "message", "Successfully resolved " + resolved + " alerts.",
+                "resolvedCount", resolved
+        ));
+    }
+
+    @GetMapping("/orphan-count")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> getOrphanAlertCount() {
+        int count = alertService.countOrphanAlerts();
+        long durationMs = com.ceb.billing.services.AlertService.getLastQueryDurationMs();
+        return ResponseEntity.ok(Map.of(
+                "orphanCount", count,
+                "durationMs", durationMs
+        ));
+    }
+
+    @PostMapping("/resolve-orphans")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> resolveOrphanAlerts() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String username = auth != null ? auth.getName() : "admin";
+        Map<String, Object> result = alertService.resolveAllOrphanAlerts(username);
+        return ResponseEntity.ok(result);
     }
 }

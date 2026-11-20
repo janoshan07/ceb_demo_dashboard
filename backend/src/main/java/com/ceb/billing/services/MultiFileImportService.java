@@ -3056,16 +3056,23 @@ public class MultiFileImportService {
             }
         }
 
+        List<Map<String, Object>> masterStaged = loadMasterDataFromStaging(sessionId);
+        Map<String, Map<String, Object>> masterMap = new HashMap<>();
+        for (Map<String, Object> m : masterStaged) {
+            String mAcc = strVal(m.get("accountNo")).trim();
+            if (!mAcc.isEmpty()) {
+                masterMap.put(mAcc, m);
+            }
+        }
+
         // Candidate billing accounts for Step 5:
-        // A solar billing record must have an NGEN generation record or an NPAY settlement record.
-        // Accounts that exist solely in CEB Assist (meter reading dates) without any generation or
-        // payment activity are non-solar or inactive meters and should not manufacture empty billing rows.
+        // Must include all accounts from CEB Assist, NGEN, and NPAY.
+        // Accounts present in CEB Assist but missing in NGEN and/or NPAY are evaluated
+        // and marked as REJECTED with a clear reason so they are visible in the Rejected tab.
         Set<String> allAccounts = new LinkedHashSet<>();
+        allAccounts.addAll(cebMap.keySet());
         allAccounts.addAll(ngenAll.keySet());
         allAccounts.addAll(npayAll.keySet());
-        if (allAccounts.isEmpty()) {
-            allAccounts.addAll(cebMap.keySet());
-        }
 
         List<Map<String, Object>> mergedList = new ArrayList<>();
         List<Map<String, Object>> rejectedList = new ArrayList<>();
@@ -3141,20 +3148,25 @@ public class MultiFileImportService {
                 row.put("rowNum", rowIdx++);
                 row.put("accountNo", acc);
 
-                // No Master Data lookup in Step 5 — only CEB, NGEN, NPAY
-                row.put("customerName", "—");
-                row.put("customerAddress", "—");
-                row.put("refNo", "—");
-                row.put("costCode", "—");
-                row.put("mobileNo", "—");
-                row.put("panelCapacity", null);
-                row.put("agreementDate", null);
-                row.put("bankCode", "—");
-                row.put("branchCode", "—");
-                row.put("bankAccountNo", "—");
-                row.put("solarType", null);
-                row.put("tariffType", null);
-                row.put("billingMode", null);
+                Map<String, Object> masterCust = masterMap.get(acc);
+                String refNo = masterCust != null && masterCust.get("refNo") != null ? masterCust.get("refNo").toString() : "—";
+                String custName = cebName != null && !cebName.trim().isEmpty()
+                        ? cebName
+                        : (masterCust != null && masterCust.get("customerName") != null ? masterCust.get("customerName").toString() : "—");
+
+                row.put("customerName", custName);
+                row.put("customerAddress", masterCust != null && masterCust.get("customerAddress") != null ? masterCust.get("customerAddress").toString() : "—");
+                row.put("refNo", refNo);
+                row.put("costCode", masterCust != null && masterCust.get("costCode") != null ? masterCust.get("costCode").toString() : "—");
+                row.put("mobileNo", masterCust != null && masterCust.get("mobileNo") != null ? masterCust.get("mobileNo").toString() : "—");
+                row.put("panelCapacity", masterCust != null ? masterCust.get("panelCapacity") : null);
+                row.put("agreementDate", masterCust != null ? masterCust.get("agreementDate") : null);
+                row.put("bankCode", masterCust != null && masterCust.get("bankCode") != null ? masterCust.get("bankCode").toString() : "—");
+                row.put("branchCode", masterCust != null && masterCust.get("branchCode") != null ? masterCust.get("branchCode").toString() : "—");
+                row.put("bankAccountNo", masterCust != null && masterCust.get("bankAccountNo") != null ? masterCust.get("bankAccountNo").toString() : "—");
+                row.put("solarType", masterCust != null ? masterCust.get("solarType") : null);
+                row.put("tariffType", masterCust != null ? masterCust.get("tariffType") : null);
+                row.put("billingMode", masterCust != null ? masterCust.get("billingMode") : null);
 
                 row.put("hasCeb", hasCeb);
                 row.put("hasNgen", hasNgen);
@@ -3341,19 +3353,34 @@ public class MultiFileImportService {
                     errors.add("Account No is missing");
                 }
 
-                // ── 9. Incomplete merges: only records missing BOTH NGEN and NPAY are auto-rejected ──
-                boolean incomplete = !hasNgen && !hasNpay;
-                if (incomplete) {
+                // ── 9. Incomplete merges: records present in CEB Assist but missing in NGEN and/or NPAY are marked REJECTED ──
+                boolean isMissingNgen = !hasNgen;
+                boolean isMissingNpay = !hasNpay;
+                boolean isMissingBoth = isMissingNgen && isMissingNpay;
+
+                boolean incomplete = false;
+                if (hasCeb && (isMissingNgen || isMissingNpay)) {
+                    incomplete = true;
+                    row.put("rejected", true);
+                    if (isMissingBoth) {
+                        row.put("rejectionReason", "Missing in NGEN and NPAY");
+                    } else if (isMissingNgen) {
+                        row.put("rejectionReason", "Missing in NGEN");
+                    } else {
+                        row.put("rejectionReason", "Missing in NPAY");
+                    }
+                } else if (!hasCeb && isMissingBoth) {
+                    incomplete = true;
                     row.put("rejected", true);
                     row.put("rejectionReason", "Incomplete merge — missing both NGEN generation and NPAY payment records");
                 } else {
                     if (!hasCeb) {
                         warnings.add("Reading dates missing from CEB Assist");
                     }
-                    if (!hasNpay) {
+                    if (isMissingNpay) {
                         row.put("noNpay", true);
                     }
-                    if (!hasNgen) {
+                    if (isMissingNgen) {
                         row.put("noNgen", true);
                     }
                 }
@@ -3859,7 +3886,7 @@ public class MultiFileImportService {
         session.setStage("MASTER_COMPARISON_GENERATED");
         sessionRepository.save(session);
 
-        Map<String, Object> summary = computeStep6SummaryStats(enrichedList);
+        Map<String, Object> summary = computeStep6SummaryStats(enrichedList, sessionId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
@@ -3878,6 +3905,10 @@ public class MultiFileImportService {
     }
 
     public Map<String, Object> computeStep6SummaryStats(List<Map<String, Object>> rows) {
+        return computeStep6SummaryStats(rows, null);
+    }
+
+    public Map<String, Object> computeStep6SummaryStats(List<Map<String, Object>> rows, Long sessionId) {
         int validCount = 0;
         int errorCount = 0;
         int warningCount = 0;
@@ -4045,8 +4076,20 @@ public class MultiFileImportService {
             }
         }
 
+        int totalUpload = rows.size();
+        int cebAssistUploadCount = 0;
+        if (sessionId != null) {
+            try {
+                ImportSession session = sessionRepository.findById(sessionId).orElse(null);
+                if (session != null && session.getCebAssistCount() != null && session.getCebAssistCount() > 0) {
+                    cebAssistUploadCount = session.getCebAssistCount();
+                    totalUpload = cebAssistUploadCount;
+                }
+            } catch (Exception ignored) {}
+        }
+
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("totalRecords", rows.size());
+        m.put("totalRecords", totalUpload);
         m.put("uniqueCustomers", uniqueAccountNos.size());
         m.put("validCount", validCount);
         m.put("errorCount", errorCount);
@@ -4066,7 +4109,8 @@ public class MultiFileImportService {
         m.put("mismatchCount", mismatchCount);
         m.put("notFoundCount", notFoundCount);
         m.put("masterOnlyCount", masterOnlyCount);
-        m.put("rejectedCount", rejectedCount);
+        int finalRejectedCount = cebAssistUploadCount > 0 ? Math.max(0, cebAssistUploadCount - (validCount + warningCount)) : rejectedCount;
+        m.put("rejectedCount", finalRejectedCount);
 
         return m;
     }
@@ -4115,7 +4159,7 @@ public class MultiFileImportService {
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 
-        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+        Map<String, Object> summary = computeStep6SummaryStats(dataset, sessionId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
@@ -4178,7 +4222,7 @@ public class MultiFileImportService {
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 
-        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+        Map<String, Object> summary = computeStep6SummaryStats(dataset, sessionId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
@@ -4242,7 +4286,7 @@ public class MultiFileImportService {
                         username, approvedAccounts.size(), sessionId,
                         java.time.LocalDateTime.now(), String.join(", ", approvedAccounts)));
 
-        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+        Map<String, Object> summary = computeStep6SummaryStats(dataset, sessionId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);
@@ -4428,7 +4472,7 @@ public class MultiFileImportService {
                         username, fld, acctKey, sessionId, java.time.LocalDateTime.now(),
                         oldValue, newValue, resolved ? "RESOLVED (Valid)" : "STILL MISMATCH"));
 
-        Map<String, Object> summary = computeStep6SummaryStats(dataset);
+        Map<String, Object> summary = computeStep6SummaryStats(dataset, sessionId);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("sessionId", sessionId);

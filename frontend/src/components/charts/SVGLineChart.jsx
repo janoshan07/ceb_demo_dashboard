@@ -1,5 +1,27 @@
 import React, { useState } from 'react';
 
+export const formatCompactAxis = (val) => {
+  if (val === null || val === undefined || isNaN(val)) return '0';
+  const num = Number(val);
+  if (num === 0) return '0';
+  const abs = Math.abs(num);
+  const sign = num < 0 ? '-' : '';
+
+  if (abs >= 1_000_000_000) {
+    const d = abs / 1_000_000_000;
+    return `${sign}${d >= 100 ? Math.round(d) : Number(d.toFixed(1))}B`;
+  }
+  if (abs >= 1_000_000) {
+    const d = abs / 1_000_000;
+    return `${sign}${d >= 100 ? Math.round(d) : Number(d.toFixed(1))}M`;
+  }
+  if (abs >= 1_000) {
+    const d = abs / 1_000;
+    return `${sign}${d >= 100 ? Math.round(d) : Number(d.toFixed(1))}k`;
+  }
+  return `${sign}${Math.round(abs)}`;
+};
+
 const SVGLineChart = ({
   data = [],
   dataKey = 'value',
@@ -10,6 +32,8 @@ const SVGLineChart = ({
   fillColorEnd = 'rgba(59, 130, 246, 0)',
   tooltipSuffix = '',
   formatter = (val) => val.toLocaleString(),
+  axisFormatter = (val) => formatCompactAxis(val),
+  paddingLeft = 68,
 }) => {
   const [hoveredIndex, setHoveredIndex] = useState(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -26,7 +50,6 @@ const SVGLineChart = ({
   const svgWidth = 600;
   const svgHeight = 220;
 
-  const paddingLeft = 55;
   const paddingRight = 20;
   const paddingTop = 25;
   const paddingBottom = 35;
@@ -166,7 +189,7 @@ const SVGLineChart = ({
             textAnchor="end"
             fontWeight="500"
           >
-            {formatter(tick)}
+            {axisFormatter(tick)}
           </text>
         ))}
 

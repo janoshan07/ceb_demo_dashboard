@@ -309,6 +309,8 @@ public class PaymentControlService {
             currentPayment = parseDouble(record.get("salesAmount"));
         if (currentPayment == null)
             currentPayment = parseDouble(record.get("kwhSalesAmount"));
+        if (currentPayment == null)
+            currentPayment = parseDouble(record.get("totalAmount"));
 
         Double totalPayable = paymentSettled != null ? paymentSettled : (npayPayment != null ? npayPayment : payment);
         if (totalPayable == null) {
@@ -352,6 +354,11 @@ public class PaymentControlService {
         int reviewCount = 0;
         double totalPayable = 0.0;
         double totalOnHold = 0.0;
+        double netStatementTotal = 0.0;
+        double totalBillSetOff = 0.0;
+        double totalStampDuty = 0.0;
+        double totalImportUnits = 0.0;
+        double totalExportUnits = 0.0;
         Set<String> distinctCustomers = new HashSet<>();
 
         // Pre-fetch all batch items to reflect settlement state per month
@@ -372,6 +379,8 @@ public class PaymentControlService {
         }
 
         Map<String, String> customerDivisionMap = new HashMap<>();
+        Map<String, Integer> holdReasonCounts = new LinkedHashMap<>();
+        Map<String, Integer> holdReasonAnyCounts = new LinkedHashMap<>();
         for (Map<String, Object> r : records) {
             String acc = strVal(r.get("accountNo"));
             if (!acc.isEmpty()) {
@@ -392,6 +401,15 @@ public class PaymentControlService {
             PaymentEligibilityResult elig = canPay(r);
             Map<String, Double> fin = elig.getFinancials();
             double payable = fin.getOrDefault("totalPayable", 0.0);
+            double currPayment = fin.getOrDefault("currentPayment", 0.0);
+            double setOff = fin.getOrDefault("billSetOff", 0.0);
+            double stamp = fin.getOrDefault("stampDuty", 0.0);
+
+            netStatementTotal += currPayment;
+            totalBillSetOff += setOff;
+            totalStampDuty += stamp;
+            totalImportUnits += extractImports(r);
+            totalExportUnits += extractExports(r);
 
             String status = elig.getPaymentStatus();
             String bMonth = strVal(r.get("billingMonth"));
@@ -425,6 +443,14 @@ public class PaymentControlService {
             } else {
                 onHoldCount++;
                 totalOnHold += payable;
+                List<String> reasons = elig.getHoldReasons();
+                String primary = (reasons != null && !reasons.isEmpty()) ? reasons.get(0) : "Other";
+                holdReasonCounts.put(primary, holdReasonCounts.getOrDefault(primary, 0) + 1);
+                if (reasons != null) {
+                    for (String rsn : reasons) {
+                        holdReasonAnyCounts.put(rsn, holdReasonAnyCounts.getOrDefault(rsn, 0) + 1);
+                    }
+                }
             }
         }
 
@@ -677,6 +703,7 @@ public class PaymentControlService {
         }
 
         double totalPending = totalPayable + totalOnHold;
+        double totalDeductions = totalBillSetOff + totalStampDuty;
         Map<String, Object> summary = new LinkedHashMap<>();
         summary.put("totalCustomers", distinctCustomers.size());
         summary.put("customerCount", distinctCustomers.size());
@@ -693,6 +720,14 @@ public class PaymentControlService {
         summary.put("totalOnHoldAmount", Math.round(totalOnHold * 100.0) / 100.0);
         summary.put("readyAmount", Math.round(totalPayable * 100.0) / 100.0);
         summary.put("onHoldAmount", Math.round(totalOnHold * 100.0) / 100.0);
+        summary.put("netStatementTotal", Math.round(netStatementTotal * 100.0) / 100.0);
+        summary.put("totalStatementRevenue", Math.round(netStatementTotal * 100.0) / 100.0);
+        summary.put("totalBillSetOff", Math.round(totalBillSetOff * 100.0) / 100.0);
+        summary.put("totalStampDuty", Math.round(totalStampDuty * 100.0) / 100.0);
+        summary.put("totalDeductions", Math.round(totalDeductions * 100.0) / 100.0);
+        summary.put("totalNetPayable", Math.round((totalPayable + totalOnHold) * 100.0) / 100.0);
+        summary.put("totalImportUnits", totalImportUnits);
+        summary.put("totalExportUnits", totalExportUnits);
         summary.put("billingPeriod", billingPeriod != null ? billingPeriod : "ALL");
         summary.put("division", division != null ? division : "ALL");
         summary.put("divisionCustomerCounts", divisionCustomerCounts);
@@ -700,6 +735,19 @@ public class PaymentControlService {
         summary.put("readyDivisionBreakdown", readyDivisionBreakdown);
         summary.put("onHoldDivisionBreakdown", onHoldDivisionBreakdown);
         summary.put("multiDivisionBreakdown", multiDivisionBreakdown);
+
+        List<Map<String, Object>> holdReasonsList = new ArrayList<>();
+        for (Map.Entry<String, Integer> entry : holdReasonCounts.entrySet()) {
+            Map<String, Object> hrItem = new LinkedHashMap<>();
+            hrItem.put("reason", entry.getKey());
+            hrItem.put("count", entry.getValue());
+            hrItem.put("totalAffected", holdReasonAnyCounts.getOrDefault(entry.getKey(), entry.getValue()));
+            double pct = onHoldCount > 0 ? Math.round((entry.getValue() * 100.0 / onHoldCount) * 10.0) / 10.0 : 0.0;
+            hrItem.put("percentage", pct);
+            holdReasonsList.add(hrItem);
+        }
+        holdReasonsList.sort((a, b) -> Integer.compare((Integer) b.get("count"), (Integer) a.get("count")));
+        summary.put("holdReasonsBreakdown", holdReasonsList);
 
         return summary;
     }
@@ -2987,5 +3035,25 @@ public class PaymentControlService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    public double extractImports(Map<String, Object> r) {
+        if (r == null) return 0.0;
+        Double val = parseDouble(r.get("importUnits"));
+        if (val != null) return val;
+        val = parseDouble(r.get("kwhImport"));
+        if (val != null) return val;
+        val = parseDouble(r.get("ngenImportUnits"));
+        return val != null ? val : 0.0;
+    }
+
+    public double extractExports(Map<String, Object> r) {
+        if (r == null) return 0.0;
+        Double val = parseDouble(r.get("exportUnits"));
+        if (val != null) return val;
+        val = parseDouble(r.get("kwhExport"));
+        if (val != null) return val;
+        val = parseDouble(r.get("ngenExportUnits"));
+        return val != null ? val : 0.0;
     }
 }

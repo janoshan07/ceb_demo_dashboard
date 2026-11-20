@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
@@ -224,6 +225,71 @@ const CustomerDetails = () => {
   const [selectedBillingMonth, setSelectedBillingMonth] = useState('ALL');
   const [agreementStatusFilter, setAgreementStatusFilter] = useState('ALL');
   const [netTypeFilter, setNetTypeFilter] = useState('ALL');
+
+  // Completeness Popover State & Position
+  const [activePopover, setActivePopover] = useState(null); // { accountNo, rect, missingFields, customer }
+  const hoverTimerRef = useRef(null);
+  const popoverLeaveTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!activePopover) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        const triggerEl = document.querySelector(`[data-completeness-trigger="${activePopover.accountNo}"]`);
+        setActivePopover(null);
+        if (triggerEl) triggerEl.focus();
+      }
+    };
+
+    const handleMouseDown = (e) => {
+      if (
+        e.target.closest('[data-completeness-popover]') ||
+        e.target.closest(`[data-completeness-trigger="${activePopover.accountNo}"]`)
+      ) {
+        return;
+      }
+      setActivePopover(null);
+    };
+
+    const handleScrollOrResize = () => {
+      const triggerEl = document.querySelector(`[data-completeness-trigger="${activePopover.accountNo}"]`);
+      if (triggerEl) {
+        setActivePopover(prev => prev ? { ...prev, rect: triggerEl.getBoundingClientRect() } : null);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('scroll', handleScrollOrResize, true);
+    window.addEventListener('resize', handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('scroll', handleScrollOrResize, true);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [activePopover]);
+
+  const getPopoverCoords = (rect) => {
+    if (!rect) return { top: 0, left: 0 };
+    const popoverWidth = 320;
+    const popoverEstimatedHeight = 220;
+
+    let left = rect.left;
+    if (left + popoverWidth > window.innerWidth - 16) {
+      left = window.innerWidth - popoverWidth - 16;
+    }
+    if (left < 16) left = 16;
+
+    let top = rect.bottom + 6;
+    if (top + popoverEstimatedHeight > window.innerHeight - 12 && rect.top > popoverEstimatedHeight + 12) {
+      top = rect.top - popoverEstimatedHeight - 6;
+    }
+
+    return { top, left };
+  };
 
   // Helper to evaluate completeness of customer details
   const getCustomerCompleteness = (cust) => {
@@ -2010,57 +2076,71 @@ const CustomerDetails = () => {
                 )}
               </div>
             ) : (
-              <table className="custom-table">
+              <table className="custom-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr>
-                    <th style={{ width: '60px' }}>#</th>
-                    <th>ACCOUNT NO</th>
-                    <th>CUSTOMER NAME</th>
-                    <th>MOBILE</th>
-                    <th>SOLAR TYPE</th>
-                    <th>COMPLETENESS</th>
-                    <th style={{ textAlign: 'center' }}>PAYMENT STATUS</th>
-                    <th>AGREEMENT DATE</th>
-                    <th>LOCATION</th>
-                    <th style={{ textAlign: 'right' }}>ACTIONS</th>
+                  <tr style={{ height: '48px' }}>
+                    <th style={{ width: '50px', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>#</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>ACCOUNT NO</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>CUSTOMER NAME</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>MOBILE</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>SOLAR TYPE</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>COMPLETENESS</th>
+                    <th style={{ textAlign: 'center', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>PAYMENT STATUS</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>AGREEMENT DATE</th>
+                    <th style={{ verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>LOCATION</th>
+                    <th style={{ textAlign: 'right', verticalAlign: 'middle', whiteSpace: 'nowrap', padding: '0.65rem 0.85rem' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {customers.map((cust, idx) => {
                     const comp = getCustomerCompleteness(cust);
                     return (
-                      <tr key={cust.accountNo}>
-                        <td style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>
+                      <tr key={cust.accountNo} style={{ height: '60px' }}>
+                        <td style={{ color: 'var(--text-secondary)', fontWeight: 500, verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                           {currentPage * pageSize + idx + 1}
                         </td>
-                        <td style={{ fontWeight: 600 }}>
-                          <span style={{ color: '#3B7EF6', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
+                        <td style={{ fontWeight: 600, verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
+                          <span style={{ color: '#2563EB', cursor: 'pointer' }} onClick={() => handleViewDetails(cust)}>
                             {cust.accountNo}
                           </span>
                         </td>
-                        <td style={{ fontWeight: 500 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <span>{cust.customerName}</span>
+                        <td style={{ fontWeight: 500, verticalAlign: 'middle', padding: '0.65rem 0.85rem', minWidth: '150px', maxWidth: '220px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span
+                              title={cust.customerName}
+                              style={{
+                                display: '-webkit-box',
+                                WebkitLineClamp: 2,
+                                WebkitBoxOrient: 'vertical',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                lineHeight: 1.25,
+                                maxHeight: '2.5em',
+                                wordBreak: 'break-word'
+                              }}
+                            >
+                              {cust.customerName}
+                            </span>
                             {cust.validationStatus === 'ERROR' && (
                               <span 
                                 className="badge danger" 
-                                style={{ padding: '0.15rem 0.45rem', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: 'rgba(239, 68, 68, 0.18)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', cursor: 'help' }}
+                                style={{ padding: '0.12rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, background: 'rgba(239, 68, 68, 0.18)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.3)', cursor: 'help', whiteSpace: 'nowrap', flexShrink: 0 }}
                                 title={cust.validationErrors ? parseErrors(cust.validationErrors).join('; ') : 'New customer details present'}
                               >
-                                New Customer
+                                New
                               </span>
                             )}
                           </div>
                         </td>
-                        <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                           {cust.mobileNo ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', whiteSpace: 'nowrap' }}>
                               <Phone size={12} style={{ opacity: 0.6 }} />
                               <span>{cust.mobileNo}</span>
                             </div>
                           ) : '—'}
                         </td>
-                        <td>
+                        <td style={{ verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                           {(() => {
                             const st = (cust.solarType || 'Net Plus').toUpperCase();
                             let bg = 'rgba(139,92,246,0.12)';
@@ -2080,33 +2160,99 @@ const CustomerDetails = () => {
                               border = '1px solid rgba(245,158,11,0.2)';
                             }
                             return (
-                              <span className="badge" style={{ background: bg, color: color, border: border, padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700 }}>
+                              <span className="badge" style={{ background: bg, color: color, border: border, padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center' }}>
                                 {st}
                               </span>
                             );
                           })()}
                         </td>
-                        <td>
+                        <td style={{ verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                           {comp.isComplete ? (
-                            <span className="badge success" style={{ background: 'rgba(16,185,129,0.12)', color: '#059669', border: '1px solid rgba(16,185,129,0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                            <span
+                              className="badge success"
+                              style={{
+                                background: 'rgba(16,185,129,0.12)',
+                                color: '#059669',
+                                border: '1px solid rgba(16,185,129,0.25)',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '6px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                whiteSpace: 'nowrap'
+                              }}
+                            >
                               <CheckCircle size={12} /> COMPLETE
                             </span>
                           ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                              <span className="badge warning" style={{ background: 'rgba(245,158,11,0.15)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.3)', padding: '0.2rem 0.55rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.3rem', width: 'fit-content' }}>
-                                <AlertTriangle size={12} /> MISSING ({comp.missingFields.length})
-                              </span>
-                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.15rem' }}>
-                                {comp.missingFields.map(f => (
-                                  <span key={f} style={{ padding: '0.1rem 0.4rem', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.12)', color: '#f87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
-                                    {f}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
+                            <button
+                              type="button"
+                              data-completeness-trigger={cust.accountNo}
+                              aria-haspopup="dialog"
+                              aria-expanded={activePopover?.accountNo === cust.accountNo}
+                              aria-label={`Missing details: ${comp.missingFields.length} fields missing`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                if (activePopover?.accountNo === cust.accountNo) {
+                                  setActivePopover(null);
+                                } else {
+                                  setActivePopover({
+                                    accountNo: cust.accountNo,
+                                    rect,
+                                    missingFields: comp.missingFields,
+                                    customer: cust
+                                  });
+                                }
+                              }}
+                              onMouseEnter={(e) => {
+                                const el = e.currentTarget;
+                                hoverTimerRef.current = setTimeout(() => {
+                                  const rect = el.getBoundingClientRect();
+                                  setActivePopover({
+                                    accountNo: cust.accountNo,
+                                    rect,
+                                    missingFields: comp.missingFields,
+                                    customer: cust
+                                  });
+                                }, 300);
+                              }}
+                              onMouseLeave={() => {
+                                if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+                              }}
+                              style={{
+                                background: 'rgba(245,158,11,0.12)',
+                                color: '#b45309',
+                                border: '1px solid rgba(245,158,11,0.3)',
+                                padding: '0.22rem 0.55rem',
+                                borderRadius: '6px',
+                                fontSize: '0.72rem',
+                                fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.35rem',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                                fontFamily: 'inherit',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <AlertTriangle size={12} color="#D97706" />
+                              MISSING ({comp.missingFields.length})
+                              <ChevronDown
+                                size={11}
+                                style={{
+                                  opacity: 0.7,
+                                  transform: activePopover?.accountNo === cust.accountNo ? 'rotate(180deg)' : 'none',
+                                  transition: 'transform 0.15s ease'
+                                }}
+                              />
+                            </button>
                           )}
                         </td>
-                        <td style={{ textAlign: 'center' }}>
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                           {(() => {
                             const status = cust.paymentStatus || 'ON_HOLD';
                             let bg = 'rgba(245, 158, 11, 0.15)';
@@ -2149,7 +2295,8 @@ const CustomerDetails = () => {
                                   cursor: 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '0.35rem'
+                                  gap: '0.35rem',
+                                  whiteSpace: 'nowrap'
                                 }}
                               >
                                 <CreditCard size={11} />
@@ -2158,16 +2305,16 @@ const CustomerDetails = () => {
                             );
                           })()}
                         </td>
-                        <td style={{ fontSize: '0.85rem' }}>{cust.agreementDate || '—'}</td>
-                        <td>
+                        <td style={{ fontSize: '0.85rem', verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>{cust.agreementDate || '—'}</td>
+                        <td style={{ verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
                           {(cust.division || cust.branchCode) ? (
-                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.2)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600 }}>
+                            <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(56,189,248,0.12)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.2)', padding: '0.15rem 0.5rem', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 600, whiteSpace: 'nowrap' }}>
                               <MapPin size={11} /> {(cust.division || cust.branchCode).toUpperCase()}
                             </span>
                           ) : '—'}
                         </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end' }}>
+                        <td style={{ textAlign: 'right', verticalAlign: 'middle', padding: '0.65rem 0.85rem', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', gap: '0.35rem', justifyContent: 'flex-end', alignItems: 'center', whiteSpace: 'nowrap' }}>
                             <button 
                               className="btn btn-secondary" 
                               title="Payment Control & Dossier"
@@ -2206,6 +2353,118 @@ const CustomerDetails = () => {
                   })}
                 </tbody>
               </table>
+            )}
+
+            {activePopover && createPortal(
+              <div
+                data-completeness-popover
+                role="dialog"
+                aria-label={`Missing details for account ${activePopover.accountNo}`}
+                onMouseEnter={() => {
+                  if (popoverLeaveTimerRef.current) clearTimeout(popoverLeaveTimerRef.current);
+                }}
+                onMouseLeave={() => {
+                  popoverLeaveTimerRef.current = setTimeout(() => setActivePopover(null), 250);
+                }}
+                style={{
+                  position: 'fixed',
+                  top: getPopoverCoords(activePopover.rect).top,
+                  left: getPopoverCoords(activePopover.rect).left,
+                  width: '320px',
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: '10px',
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08)',
+                  padding: '0.85rem 1rem',
+                  zIndex: 99999,
+                  fontFamily: 'inherit'
+                }}
+              >
+                {/* Popover Header */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '6px', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <AlertTriangle size={13} color="#D97706" />
+                    </div>
+                    <span style={{ fontWeight: 700, fontSize: '0.82rem', color: '#0F172A' }}>
+                      Missing details ({activePopover.missingFields.length})
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const triggerEl = document.querySelector(`[data-completeness-trigger="${activePopover.accountNo}"]`);
+                      setActivePopover(null);
+                      if (triggerEl) triggerEl.focus();
+                    }}
+                    aria-label="Close popover"
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: '2px',
+                      color: '#94A3B8',
+                      cursor: 'pointer',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+
+                {/* Popover Body: Two per line list with small red dots */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: '0.45rem 0.6rem',
+                  padding: '0.5rem 0',
+                  borderTop: '1px solid #F1F5F9',
+                  borderBottom: '1px solid #F1F5F9'
+                }}>
+                  {activePopover.missingFields.map((field) => (
+                    <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.74rem', color: '#334155', fontWeight: 500 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', backgroundColor: '#EF4444', flexShrink: 0 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={field}>
+                        {field}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Popover Footer: Edit customer link */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.6rem', paddingTop: '0.2rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cust = activePopover.customer;
+                      setActivePopover(null);
+                      handleViewDetails(cust, 'profile');
+                      setIsEditing(true);
+                    }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      padding: 0,
+                      color: '#2563EB',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <Edit size={12} />
+                    Edit customer
+                  </button>
+                  <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>
+                    {activePopover.accountNo}
+                  </span>
+                </div>
+              </div>,
+              document.body
             )}
           </div>
         </div>

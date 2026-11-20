@@ -2032,7 +2032,9 @@ const SessionBanner = ({ session, onDiscard }) => (
       <div>
         <div style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.92rem' }}>Active Import Session</div>
         <div style={{ fontSize: '0.75rem', color: '#475569' }}>
-          {session.masterCustomerCount} customers imported · Stage: <strong style={{ color: '#1D4ED8' }}>
+          {session.ngenCount || session.npayCount
+            ? `${session.ngenCount || session.npayCount} accepted billing records (${session.masterCustomerCount || 0} master customer profiles)`
+            : `${session.masterCustomerCount || 0} master customer profiles`} · Stage: <strong style={{ color: '#1D4ED8' }}>
             {session.stage === 'MASTER_APPROVED' ? 'Awaiting CEB Assist' : session.stage === 'CEB_APPROVED' ? 'Awaiting NGEN' : session.stage}
           </strong>
         </div>
@@ -4248,6 +4250,8 @@ const UploadPage = () => {
         nameMismatchCount: masterComparison.nameMismatchCount,
         unitRateMismatchCount: masterComparison.unitRateMismatchCount,
         netTypeMismatchCount: masterComparison.netTypeMismatchCount,
+        masterOnlyCount: masterComparison.masterOnlyCount,
+        rejectedCount: masterComparison.rejectedCount,
       } : {};
       const fd = new FormData();
       fd.append('datasetName', directoryName || '');
@@ -4839,7 +4843,7 @@ const UploadPage = () => {
       if (!mainSearchText || mainSearchText.trim() === '') return true;
       const q = mainSearchText.trim().toLowerCase();
       const acc = String(r.accountNo || '').toLowerCase();
-      const name = String(r.customerName || '').toLowerCase();
+      const name = String(r.customerName || r.cebName || r.npayName || '').toLowerCase();
       const ref = String(r.refNo || '').toLowerCase();
       return acc.includes(q) || name.includes(q) || ref.includes(q);
     });
@@ -5071,6 +5075,28 @@ const UploadPage = () => {
           </div>
         )}
 
+        {/* Consistency definition line */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.74rem', color: '#64748B', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <div>
+            <strong>All Records ({mainRecordCount}):</strong> {validCount} Accepted Billing Records + {rejectedCount} Rejected Records (= CEB Assist Total Upload)
+          </div>
+          {mainDatasetFilter === 'REJECTED' && (
+            <div style={{ color: '#E11D48', fontWeight: 600 }}>
+              Showing {filteredRows.length} Rejected Record(s) (Excluded from import)
+            </div>
+          )}
+        </div>
+
+        {/* Note above the Rejected list */}
+        {mainDatasetFilter === 'REJECTED' && (
+          <div style={{ background: '#FFF1F2', border: '1px solid #FECDD3', borderRadius: 8, padding: '0.65rem 0.9rem', marginBottom: '1rem', display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.78rem', color: '#9F1239' }}>
+            <XCircle size={15} style={{ flexShrink: 0, marginTop: 2, color: '#E11D48' }} />
+            <div>
+              <strong>Rejected Records Notice ({rejectedCount} accounts):</strong> These accounts were present in the CEB Assist upload (meter reading records) but have no solar generation record in NGEN and/or payment settlement record in NPAY. They are safely excluded from the final billing dataset and will NOT be committed into monthly directory snapshots.
+            </div>
+          </div>
+        )}
+
         {(() => {
           const pagedMainRows = mainPageSize === 'ALL'
             ? filteredRows
@@ -5109,13 +5135,18 @@ const UploadPage = () => {
                           <td style={{ padding: '0.5rem 0.75rem', color: '#64748B', fontFamily: 'monospace' }}>{rowIndex + 1}</td>
                         <td style={{ padding: '0.5rem 0.75rem', fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {row.accountNo || '—'}
+                          {row.refNo && row.refNo !== '—' && (
+                            <div style={{ fontSize: '0.66rem', color: '#64748B', fontWeight: 500 }}>
+                              Ref: {row.refNo}
+                            </div>
+                          )}
                           {row.sourceFile && (
                             <div style={{ fontFamily: 'inherit', fontSize: '0.58rem', fontWeight: 600, color: '#ec4899', marginTop: 2, letterSpacing: '0.02em' }}>
                               {row.isDuplicateEntry ? '↳ ' : ''}{row.sourceFile}{row.sourceRowNum != null ? ` · row ${row.sourceRowNum}` : ''}
                             </div>
                           )}
                         </td>
-                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.npayName)}</td>
+                        <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis' }}>{renderPlain(row.customerName || row.cebName || row.npayName)}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.prevReadingDate)}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderPlain(row.currReadingDate)}</td>
                         <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}>{renderMergedType(row.mergedNetType)}</td>
@@ -5133,6 +5164,11 @@ const UploadPage = () => {
                             background: row.status === 'VALID' ? 'rgba(16,185,129,0.15)' : row.status === 'MULTIPLE_PAYMENT' ? 'rgba(129,140,248,0.15)' : row.status === 'ERROR' ? 'rgba(239,68,68,0.15)' : row.status === 'REJECTED' ? 'rgba(244,63,94,0.15)' : row.status === 'DUPLICATE' ? 'rgba(236,72,153,0.15)' : 'rgba(245,158,11,0.15)',
                             color: row.status === 'VALID' ? '#10b981' : row.status === 'MULTIPLE_PAYMENT' ? '#818cf8' : row.status === 'ERROR' ? '#ef4444' : row.status === 'REJECTED' ? '#f43f5e' : row.status === 'DUPLICATE' ? '#ec4899' : '#f59e0b'
                           }}>{row.status === 'MULTIPLE_PAYMENT' ? 'Multiple Payment' : row.status === 'DUPLICATE' ? 'Duplicate Record' : row.status}</span>
+                          {row.status === 'REJECTED' && row.rejectionReason && (
+                            <div style={{ fontSize: '0.68rem', color: '#f43f5e', fontWeight: 600, marginTop: '0.2rem', whiteSpace: 'nowrap' }}>
+                              {row.rejectionReason}
+                            </div>
+                          )}
                           {dupMembers && (
                             <span style={{
                               marginLeft: '0.35rem', padding: '0.15rem 0.5rem', borderRadius: 20, fontSize: '0.68rem', fontWeight: 700,

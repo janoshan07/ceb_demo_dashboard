@@ -20,6 +20,8 @@ public interface AlertRepository extends JpaRepository<Alert, Long> {
 
     List<Alert> findByAccountNoAndAlertTypeAndStatus(String accountNo, String alertType, String status);
 
+    List<Alert> findByAccountNoAndStatus(String accountNo, String status);
+
     @Transactional
     void deleteByAccountNoAndAlertTypeAndStatus(String accountNo, String alertType, String status);
 

@@ -73,6 +73,9 @@ public class MonthlyDirectoryService {
     private MonthlyDirectoryHashService monthlyDirectoryHashService;
 
     @Autowired(required = false)
+    private AlertService alertService;
+
+    @Autowired(required = false)
     private CustomerHashIndexService customerHashIndexService;
 
     @Autowired(required = false)
@@ -693,6 +696,7 @@ public class MonthlyDirectoryService {
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
+        AlertService.clearOrphanCountCache();
         return toMetadata(s);
     }
 
@@ -709,6 +713,7 @@ public class MonthlyDirectoryService {
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
+        AlertService.clearOrphanCountCache();
     }
 
     @Transactional
@@ -747,7 +752,8 @@ public class MonthlyDirectoryService {
         }
 
         if (accountNumbers.isEmpty()) {
-            com.ceb.billing.controllers.DashboardController.invalidateCache();
+            AlertService.clearOrphanCountCache();
+        com.ceb.billing.controllers.DashboardController.invalidateCache();
             return;
         }
 
@@ -890,6 +896,19 @@ public class MonthlyDirectoryService {
             eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
         }
 
+        // Resolve open alerts for accounts that no longer exist in any approved snapshot
+        if (alertService != null && !noFallbackAccounts.isEmpty()) {
+            String actor = "System";
+            try {
+                org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+                if (auth != null && auth.getName() != null) actor = auth.getName();
+            } catch (Exception ignored) {}
+            for (String noFallAcc : noFallbackAccounts) {
+                alertService.resolveAlertsForRemovedCustomer(noFallAcc, actor);
+            }
+        }
+
+        AlertService.clearOrphanCountCache();
         com.ceb.billing.controllers.DashboardController.invalidateCache();
     }
 

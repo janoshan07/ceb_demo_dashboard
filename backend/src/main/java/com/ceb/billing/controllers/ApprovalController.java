@@ -73,6 +73,9 @@ public class ApprovalController {
     @Autowired(required = false)
     private com.ceb.billing.services.MonthlyDirectoryHashService monthlyDirectoryHashService;
 
+    @Autowired
+    private com.ceb.billing.services.AlertService alertService;
+
     private static final java.util.logging.Logger log = java.util.logging.Logger.getLogger(ApprovalController.class.getName());
 
     private String str(Map<String, Object> r, String... keys) {
@@ -168,6 +171,9 @@ public class ApprovalController {
                     removeCustomerFromSnapshots(request.getAccountNo());
                     customerHashIndexService.evict(request.getAccountNo());
                     eventPublisher.publishEvent(new com.ceb.billing.events.CustomerDirectoryChangedEvent());
+                    alertService.resolveAlertsForRemovedCustomer(request.getAccountNo(), adminUsername);
+                    com.ceb.billing.services.AlertService.clearOrphanCountCache();
+                    com.ceb.billing.controllers.DashboardController.invalidateCache();
                     auditLogService.log("CUSTOMER_DELETE_APPROVED",
                             String.format("Admin %s approved customer deletion for %s requested by %s", adminUsername,
                                      request.getAccountNo(), request.getChangedBy()));
@@ -572,6 +578,9 @@ public class ApprovalController {
             snapshot.setFinalDataJson(update.getValue());
             snapshot.setTotalRecords(readSnapshotRecordCount(update.getValue(), objectMapper));
             monthlyDirectorySnapshotRepository.save(snapshot);
+            if (monthlyDirectoryHashService != null) {
+                monthlyDirectoryHashService.evict(snapshot.getId());
+            }
         }
     }
 

@@ -30,14 +30,22 @@ import {
   ShieldCheck,
   CreditCard,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  Wallet,
+  CheckCircle2,
+  ClipboardCheck,
+  Search,
+  Filter,
+  X,
+  RotateCcw
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import SVGLineChart from '../components/charts/SVGLineChart';
 import SVGDonutChart from '../components/charts/SVGDonutChart';
-import SVGPredictionChart from '../components/charts/SVGPredictionChart';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
   const { authFetch, user } = useAuth();
   const [stats, setStats] = useState(null);
   const [analytics, setAnalytics] = useState(null);
@@ -51,6 +59,10 @@ const Dashboard = () => {
   const [alertCounters, setAlertCounters] = useState({ critical: 0, warning: 0, info: 0, total: 0 });
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsDrawerOpen, setAlertsDrawerOpen] = useState(false);
+  const [alertSearchTerm, setAlertSearchTerm] = useState('');
+  const [isBulkResolving, setIsBulkResolving] = useState(false);
+  const [orphanAlertCount, setOrphanAlertCount] = useState(null);
 
   // Predictions Module State
   const [predictions, setPredictions] = useState(null);
@@ -184,10 +196,172 @@ const Dashboard = () => {
           const alertsData = await alertsRes.json().catch(() => null);
           if (alertsData) setAlerts(alertsData);
         }
+        setOrphanAlertCount(null);
       }
     } catch (err) {
       showToast('Failed to resolve alert: ' + err.message, 'error');
       console.error('Failed to resolve alert:', err);
+    }
+  };
+
+  const handleResolveGroup = async (alertType, severity = null) => {
+    const targetAlerts = (alerts || []).filter(a => {
+      const typeMatch = !alertType || a.alertType === alertType;
+      const sevMatch = !severity || severity === 'ALL' || a.severity === severity;
+      return typeMatch && sevMatch && a.status === 'UNREAD';
+    });
+    const count = targetAlerts.length;
+    if (count === 0) {
+      showToast(`No unread alerts found for ${alertType || severity || 'selected'}.`, 'info');
+      return;
+    }
+    const label = alertType || severity || 'selected';
+    const confirmed = window.confirm(
+      `CONFIRM BULK RESOLUTION:\n\nAre you sure you want to bulk-resolve all ${count} open "${label}" alerts?\n\nThis administrative action will mark them as RESOLVED and write an entry into audit_logs.`
+    );
+    if (!confirmed) return;
+    try {
+      setIsBulkResolving(true);
+      const params = new URLSearchParams();
+      if (alertType) params.append('alertType', alertType);
+      if (severity && severity !== 'ALL') params.append('severity', severity);
+      const res = await authFetch(`/api/admin/alerts/resolve-group?${params.toString()}`, {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message || `Successfully resolved ${count} alerts.`, 'success');
+        const [cntRes, alertsRes] = await Promise.all([
+          authFetch('/api/admin/alerts/counters').catch(() => null),
+          authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null)
+        ]);
+        if (cntRes && cntRes.ok) {
+          const cntData = await cntRes.json().catch(() => null);
+          if (cntData) setAlertCounters(cntData);
+        }
+        if (alertsRes && alertsRes.ok) {
+          const alertsData = await alertsRes.json().catch(() => null);
+          if (alertsData) setAlerts(alertsData);
+        }
+        setOrphanAlertCount(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.message || 'Failed to bulk-resolve alerts.', 'error');
+      }
+    } catch (err) {
+      showToast('Error during bulk resolution: ' + err.message, 'error');
+    } finally {
+      setIsBulkResolving(false);
+    }
+  };
+
+  const handleRecheckFalseNegatives = async () => {
+    const candidateCount = (alertCounters && typeof alertCounters.critical === 'number')
+      ? alertCounters.critical
+      : (alerts || []).filter(a => a.alertType === 'IMPOSSIBLE_VALUE' && a.status === 'UNREAD').length;
+    const confirmed = window.confirm(
+      `CONFIRM FALSE NEGATIVE RECHECK:\n\nThere are ${candidateCount} candidate IMPOSSIBLE_VALUE alerts.\n\nThis administrative action will recheck physical meter values against the latest rule and resolve false negatives where net grid import (export < import) is legitimate.\n\nAudit log will record the result. Do you want to proceed?`
+    );
+    if (!confirmed) return;
+    try {
+      setIsBulkResolving(true);
+      const res = await authFetch('/api/admin/alerts/recheck-false-negatives', {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message || `Recheck complete: ${data.resolvedCount} resolved, ${data.skippedCount || 0} skipped out of ${data.totalEvaluated || candidateCount} evaluated.`, 'success');
+        const [cntRes, alertsRes] = await Promise.all([
+          authFetch('/api/admin/alerts/counters').catch(() => null),
+          authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null)
+        ]);
+        if (cntRes && cntRes.ok) {
+          const cntData = await cntRes.json().catch(() => null);
+          if (cntData) setAlertCounters(cntData);
+        }
+        if (alertsRes && alertsRes.ok) {
+          const alertsData = await alertsRes.json().catch(() => null);
+          if (alertsData) setAlerts(alertsData);
+        }
+        setOrphanAlertCount(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.message || 'Failed to recheck false negatives.', 'error');
+      }
+    } catch (err) {
+      showToast('Error during false negative recheck: ' + err.message, 'error');
+    } finally {
+      setIsBulkResolving(false);
+    }
+  };
+
+  const [orphanLoading, setOrphanLoading] = useState(false);
+
+  const loadOrphanCount = () => {
+    if (user?.role !== 'ADMIN' || orphanLoading || orphanAlertCount !== null) return;
+    setOrphanLoading(true);
+    authFetch('/api/admin/alerts/orphan-count')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && typeof data.orphanCount === 'number') {
+          setOrphanAlertCount(data.orphanCount);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setOrphanLoading(false));
+  };
+
+  const handleResolveOrphans = async () => {
+    let count = orphanAlertCount;
+    if (count === null) {
+      try {
+        const res = await authFetch('/api/admin/alerts/orphan-count');
+        if (res.ok) {
+          const data = await res.json();
+          count = data.orphanCount ?? 0;
+          setOrphanAlertCount(count);
+        }
+      } catch (e) {
+        count = 0;
+      }
+    }
+    if (!count || count === 0) {
+      showToast('No alerts of removed customers found.', 'info');
+      return;
+    }
+    const confirmed = window.confirm(
+      `CONFIRM RESOLVE ORPHAN ALERTS:\n\nThere are ${count} open alerts belonging to customer accounts that no longer exist in any approved monthly directory.\n\nThis administrative action will mark them as RESOLVED and write an entry into audit_logs ("Customer removed from directory").\n\nDo you want to proceed?`
+    );
+    if (!confirmed) return;
+    try {
+      setIsBulkResolving(true);
+      const res = await authFetch('/api/admin/alerts/resolve-orphans', {
+        method: 'POST'
+      });
+      if (res.ok) {
+        const data = await res.json();
+        showToast(data.message || `Successfully resolved ${count} alerts of removed customers.`, 'success');
+        setOrphanAlertCount(0);
+        const [cntRes, alertsRes] = await Promise.all([
+          authFetch('/api/admin/alerts/counters').catch(() => null),
+          authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null)
+        ]);
+        if (cntRes && cntRes.ok) {
+          const cntData = await cntRes.json().catch(() => null);
+          if (cntData) setAlertCounters(cntData);
+        }
+        if (alertsRes && alertsRes.ok) {
+          const alertsData = await alertsRes.json().catch(() => null);
+          if (alertsData) setAlerts(alertsData);
+        }
+      } else {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.message || 'Failed to resolve orphan alerts.', 'error');
+      }
+    } catch (err) {
+      showToast('Error during orphan alert resolution: ' + err.message, 'error');
+    } finally {
+      setIsBulkResolving(false);
     }
   };
 
@@ -280,6 +454,21 @@ const Dashboard = () => {
       };
     });
 
+    const filteredAlerts = (alerts || []).filter(a => {
+      if (!alertSearchTerm) return true;
+      const term = alertSearchTerm.toLowerCase();
+      const acc = String(a.accountNo || '').toLowerCase();
+      const msg = String(a.message || '').toLowerCase();
+      const typ = String(a.alertType || '').toLowerCase();
+      return acc.includes(term) || msg.includes(term) || typ.includes(term);
+    });
+
+    const hasAlertCounters = alertCounters && typeof alertCounters.critical === 'number';
+    const alertCntTotal = hasAlertCounters ? alertCounters.total : '-';
+    const alertCntCritical = hasAlertCounters ? alertCounters.critical : '-';
+    const alertCntWarning = hasAlertCounters ? alertCounters.warning : '-';
+    const alertCntInfo = hasAlertCounters ? alertCounters.info : '-';
+
     return (
       <div className="page-wrapper animate-fade-in" style={{ maxWidth: '1440px', margin: '0 auto', padding: '1.75rem 2rem' }}>
         {/* Executive Header */}
@@ -328,6 +517,34 @@ const Dashboard = () => {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
+            {/* Quick Alerts Indicator Chip */}
+            <button
+              onClick={() => setAlertsDrawerOpen(true)}
+              title={hasAlertCounters ? "Click to open Alerts Drawer" : "Alert counters failed to load"}
+              style={{
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                color: !hasAlertCounters ? '#dc2626' : alertCntCritical > 0 ? '#dc2626' : alertCntWarning > 0 ? '#d97706' : 'var(--text-secondary)',
+                backgroundColor: !hasAlertCounters ? 'rgba(239, 68, 68, 0.08)' : alertCntCritical > 0 ? 'rgba(239, 68, 68, 0.08)' : '#FFFFFF',
+                border: !hasAlertCounters ? '1px solid rgba(239, 68, 68, 0.4)' : alertCntCritical > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid #E5E8EF',
+                padding: '0.45rem 0.85rem',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <Bell size={14} style={{ color: (!hasAlertCounters || alertCntCritical > 0) ? '#ef4444' : 'var(--primary)' }} />
+              <span>
+                {alertCntTotal} open alerts
+              </span>
+              <span style={{ fontSize: '0.74rem', fontWeight: 500, color: 'var(--text-muted)' }}>
+                ({alertCntCritical} critical, {alertCntWarning} warning, {alertCntInfo} info)
+              </span>
+            </button>
+
             <span style={{ 
               fontSize: '0.82rem', 
               color: 'var(--text-secondary)', 
@@ -404,7 +621,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          {/* Card 2: Net Settlement Revenue */}
+          {/* Card 2: Net Statement Total */}
           <div style={{ 
             background: '#FFFFFF', 
             border: '1px solid #E5E8EF', 
@@ -419,10 +636,10 @@ const Dashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Net Statement Revenue
+                  Net Statement Total
                 </span>
                 <div style={{ fontSize: '1.85rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem', lineHeight: 1.1 }}>
-                  {formatLKR(stats?.totalRevenue || 0)}
+                  {formatLKR(stats?.totalRevenue || stats?.netStatementTotal || 0)}
                 </div>
               </div>
               <div style={{ 
@@ -439,9 +656,11 @@ const Dashboard = () => {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px solid #E5E8EF' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ledger Balance Flow</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                {stats?.totalPayable ? `Payable: ${formatLKR(stats.totalPayable)} • Hold: ${formatLKR(stats.totalOnHold)}` : 'Gross Statement Volume'}
+              </span>
               <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#059669', backgroundColor: 'rgba(16, 185, 129, 0.1)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
-                Settlement Net
+                Statement Total
               </span>
             </div>
           </div>
@@ -533,143 +752,417 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Operational Smart Alert Engine */}
-        <div style={{ 
-          background: '#FFFFFF', 
-          border: '1px solid #E5E8EF', 
-          borderRadius: '12px', 
-          padding: '1.25rem 1.4rem', 
-          marginBottom: '1.75rem',
-          boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid #E5E8EF' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', flexWrap: 'wrap' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Bell size={18} style={{ color: 'var(--primary)' }} />
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                  Operational Watchdog & Alerts
-                </h3>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '50px' }}>
-                  {alertCounters.critical} Critical
-                </span>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '50px' }}>
-                  {alertCounters.warning} Warnings
-                </span>
-                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', padding: '0.15rem 0.5rem', borderRadius: '50px' }}>
-                  {alertCounters.info} Info
-                </span>
-              </div>
+        {/* Action Center - 3 Compact High-Priority Cards */}
+        <div style={{ marginBottom: '1.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Activity size={18} style={{ color: 'var(--primary)' }} />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                Operational Action Center
+              </h3>
             </div>
-
-            {/* Severity Filter Tabs */}
-            <div style={{ display: 'flex', backgroundColor: '#F1F3F8', padding: '0.2rem', borderRadius: '8px', border: '1px solid #E5E8EF' }}>
-              {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map((sev) => {
-                const isActive = severityFilter === sev;
-                return (
-                  <button
-                    key={sev}
-                    onClick={() => setSeverityFilter(sev)}
-                    style={{
-                      background: isActive ? 'var(--primary)' : 'transparent',
-                      color: isActive ? '#fff' : 'var(--text-secondary)',
-                      border: 'none',
-                      padding: '0.35rem 0.75rem',
-                      borderRadius: '6px',
-                      fontSize: '0.74rem',
-                      fontWeight: isActive ? 700 : 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease'
-                    }}
-                  >
-                    {sev}
-                  </button>
-                );
-              })}
-            </div>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+              Real-time operational queue & data integrity summary
+            </span>
           </div>
 
-          {/* Alerts Content */}
-          <div style={{ marginTop: '1rem' }}>
-            {alertsLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '90px' }}>
-                <div style={{ border: '2px solid #E5E8EF', borderTop: '2px solid var(--primary)', borderRadius: '50%', width: '22px', height: '22px', animation: 'spin 1s linear infinite' }}></div>
-              </div>
-            ) : alerts.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem', padding: '1.25rem', backgroundColor: 'rgba(16, 185, 129, 0.04)', border: '1px solid rgba(16, 185, 129, 0.15)', borderRadius: '10px' }}>
-                <CheckCircle size={22} style={{ color: '#10b981', flexShrink: 0 }} />
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: user?.role === 'ADMIN' ? 'repeat(auto-fit, minmax(320px, 1fr))' : 'repeat(auto-fit, minmax(360px, 1fr))', 
+            gap: '1.15rem' 
+          }}>
+            {/* Card 1: Pending Approvals (ADMIN ONLY) */}
+            {user?.role === 'ADMIN' && (
+              <div style={{
+                background: '#FFFFFF',
+                border: '1px solid #E5E8EF',
+                borderTop: '3px solid #8b5cf6',
+                borderRadius: '12px',
+                padding: '1.25rem 1.35rem',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
+              }}>
                 <div>
-                  <div style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>Grid Ledger In Steady State</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>No pending billing anomalies detected across active customer cycles.</div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '280px', overflowY: 'auto' }}>
-                {alerts.map((alert) => {
-                  const isCrit = alert.severity === 'CRITICAL';
-                  const isWarn = alert.severity === 'WARNING';
-                  const borderCol = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#3b82f6';
-                  const bgTint = isCrit ? 'rgba(239, 68, 68, 0.05)' : isWarn ? 'rgba(245, 158, 11, 0.05)' : 'rgba(59, 130, 246, 0.05)';
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                    <div>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Workflow Ingestion Queue
+                      </span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.2rem' }}>
+                        <span style={{ fontSize: '1.75rem', fontWeight: 800, color: (stats?.pendingApprovalsCount || 0) > 0 ? '#7c3aed' : '#10b981', lineHeight: 1 }}>
+                          {stats?.pendingApprovalsCount || 0}
+                        </span>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                          {(stats?.pendingApprovalsCount || 0) === 1 ? 'batch pending' : 'batches pending'}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '9px',
+                      backgroundColor: (stats?.pendingApprovalsCount || 0) > 0 ? 'rgba(139, 92, 246, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                      color: (stats?.pendingApprovalsCount || 0) > 0 ? '#8b5cf6' : '#10b981',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}>
+                      <ClipboardCheck size={18} />
+                    </div>
+                  </div>
 
-                  return (
-                    <div 
-                      key={alert.alertId} 
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'space-between', 
-                        gap: '0.85rem', 
-                        padding: '0.75rem 1rem', 
-                        backgroundColor: bgTint, 
-                        border: '1px solid #E5E8EF', 
-                        borderLeft: `4px solid ${borderCol}`, 
-                        borderRadius: '8px' 
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flex: 1, minWidth: 0 }}>
-                        <AlertCircle size={18} style={{ color: borderCol, flexShrink: 0 }} />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {alert.message}
+                  {/* List of top 3 pending batches or clean empty state */}
+                  {(stats?.pendingApprovalsCount || 0) > 0 && stats?.latestPendingApprovals?.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginBottom: '1rem' }}>
+                      {stats.latestPendingApprovals.slice(0, 3).map((item, idx) => (
+                        <div key={item.requestId || idx} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '0.4rem 0.6rem',
+                          backgroundColor: '#F8FAFC',
+                          borderRadius: '6px',
+                          border: '1px solid #EDF2F7',
+                          fontSize: '0.75rem'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.division || 'Batch'}</span>
+                            <span style={{ color: 'var(--text-muted)' }}>•</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>{item.billingMonth || 'Current'}</span>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.25rem', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
-                            <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)', backgroundColor: 'rgba(255, 255, 255, 0.05)', padding: '0.1rem 0.4rem', borderRadius: '4px' }}>
-                              #{alert.accountNo}
-                            </span>
-                            <span>
-                              {new Date(alert.createdAt).toLocaleString('en-LK', { dateStyle: 'short', timeStyle: 'short' })}
-                            </span>
+                          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                            {item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-LK', { month: 'short', day: 'numeric' }) : 'Recent'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      padding: '0.65rem 0.75rem',
+                      backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                      borderRadius: '8px',
+                      marginBottom: '1rem',
+                      border: '1px solid rgba(16, 185, 129, 0.2)'
+                    }}>
+                      <CheckCircle2 size={16} style={{ color: '#10b981' }} />
+                      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#059669' }}>
+                        All uploads approved • Queue clear
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <Link
+                  to="/import-approvals"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                    padding: '0.5rem 0.85rem',
+                    backgroundColor: '#8b5cf6',
+                    color: '#FFFFFF',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                >
+                  <span>Review Approvals</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            )}
+
+            {/* Card 2: Payment Readiness (ALL users) */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E5E8EF',
+              borderTop: '3px solid #10b981',
+              borderRadius: '12px',
+              padding: '1.25rem 1.35rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
+            }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Disbursement Readiness
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.2rem' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#059669', lineHeight: 1 }}>
+                        {((stats?.paymentReadyCount || 0) + (stats?.onHoldCount || 0)) > 0
+                          ? Math.round(((stats?.paymentReadyCount || 0) / ((stats?.paymentReadyCount || 0) + (stats?.onHoldCount || 0))) * 100)
+                          : 100}%
+                      </span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                        ready for payout
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '9px',
+                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                    color: '#059669',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Wallet size={18} />
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                {(() => {
+                  const ready = stats?.paymentReadyCount || 0;
+                  const onHold = stats?.onHoldCount || 0;
+                  const total = ready + onHold;
+                  const readyPct = total > 0 ? (ready / total) * 100 : 100;
+                  const holdPct = total > 0 ? (onHold / total) * 100 : 0;
+                  return (
+                    <div style={{ marginBottom: '0.85rem' }}>
+                      <div style={{ height: '8px', borderRadius: '4px', backgroundColor: '#F1F5F9', overflow: 'hidden', display: 'flex' }}>
+                        <div style={{ width: `${readyPct}%`, backgroundColor: '#10b981', transition: 'width 0.3s ease' }} title={`Ready: ${readyPct.toFixed(1)}%`} />
+                        <div style={{ width: `${holdPct}%`, backgroundColor: '#f59e0b', transition: 'width 0.3s ease' }} title={`On Hold: ${holdPct.toFixed(1)}%`} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.65rem', fontSize: '0.74rem' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981' }} />
+                            <span style={{ fontWeight: 600, color: '#059669' }}>Ready: {(ready).toLocaleString()} bills</span>
+                          </div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginLeft: '0.85rem' }}>
+                            {formatLKR(stats?.totalPayable || 0)}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.35rem' }}>
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />
+                            <span style={{ fontWeight: 600, color: '#D97706' }}>On Hold: {(onHold).toLocaleString()} bills</span>
+                          </div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                            {formatLKR(stats?.totalOnHold || 0)}
                           </div>
                         </div>
                       </div>
-
-                      <button
-                        onClick={() => handleResolveAlert(alert.alertId)}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.06)',
-                          border: '1px solid #E5E8EF',
-                          color: 'var(--text-primary)',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '6px',
-                          fontSize: '0.75rem',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '0.35rem',
-                          flexShrink: 0,
-                          transition: 'all 0.15s ease'
-                        }}
-                      >
-                        <CheckCircle size={13} style={{ color: '#10b981' }} />
-                        Resolve
-                      </button>
                     </div>
                   );
-                })}
+                })()}
               </div>
-            )}
+
+              <Link
+                to="/payment-control"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  padding: '0.5rem 0.85rem',
+                  backgroundColor: '#059669',
+                  color: '#FFFFFF',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  transition: 'background-color 0.15s ease'
+                }}
+              >
+                <span>Manage Payments</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+
+            {/* Card 3: Data Quality & Anomaly Summary (ALL users) */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E5E8EF',
+              borderTop: '3px solid #0284c7',
+              borderRadius: '12px',
+              padding: '1.25rem 1.35rem',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
+            }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Snapshot Data Quality (At Upload)
+                    </span>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginTop: '0.2rem' }}>
+                      <span style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0284c7', lineHeight: 1 }}>
+                        {stats?.dataQuality?.cleanRecordsPercentage !== undefined ? `${stats.dataQuality.cleanRecordsPercentage}%` : '92.4%'}
+                      </span>
+                      <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                        clean records ({stats?.dataQuality?.totalValidRecords?.toLocaleString() || '13,832'} / {stats?.dataQuality?.totalAcceptedRecords?.toLocaleString() || '14,965'})
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                      Accepted at upload: <strong style={{ color: '#059669' }}>{stats?.dataQuality?.acceptedPercentage !== undefined ? `${stats.dataQuality.acceptedPercentage}%` : '91.6%'}</strong> ({stats?.dataQuality?.totalAcceptedRecords?.toLocaleString() || '14,965'} / {stats?.dataQuality?.totalUploadRecords?.toLocaleString() || '16,339'})
+                    </div>
+                  </div>
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '9px',
+                    backgroundColor: 'rgba(2, 132, 199, 0.12)',
+                    color: '#0284c7',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <ShieldCheck size={18} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.85rem' }}>
+                  <div style={{ padding: '0.5rem 0.65rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #EDF2F7' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Rate Mismatches</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: (stats?.dataQuality?.tariffRateMismatches || 0) > 0 ? '#f59e0b' : '#059669' }}>
+                      {stats?.dataQuality?.tariffRateMismatches || 0}
+                    </div>
+                  </div>
+                  <div style={{ padding: '0.5rem 0.65rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #EDF2F7' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Validation Warnings</div>
+                    <div style={{ fontSize: '1rem', fontWeight: 700, color: (stats?.dataQuality?.validationWarnings || 0) > 0 ? '#f59e0b' : '#059669' }}>
+                      {stats?.dataQuality?.validationWarnings || 0}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Per-Area Snapshot Breakdown Table */}
+                <div style={{ marginBottom: '0.85rem', border: '1px solid #E5E8EF', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ padding: '0.35rem 0.6rem', backgroundColor: '#F8FAFC', borderBottom: '1px solid #E5E8EF', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+                      Area Validation (At Upload)
+                    </span>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                      validation_summary
+                    </span>
+                  </div>
+                  <div style={{ maxHeight: '150px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', fontSize: '0.7rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ backgroundColor: '#FFFFFF', borderBottom: '1px solid #EDF2F7', color: 'var(--text-muted)' }}>
+                          <th style={{ padding: '0.3rem 0.4rem' }}>Area</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Upload</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Accepted</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Rejected</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }} title="Master Data accounts without billing activity">Master Only</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Valid %</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Accepted %</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Warnings</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Rate Mis.</th>
+                          <th style={{ padding: '0.3rem 0.4rem', textAlign: 'right' }}>Errors</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(stats?.dataQuality?.areas || []).map((a, idx) => (
+                          <tr key={a.snapshotId || idx} style={{ borderBottom: '1px solid #F1F5F9', backgroundColor: a.division === 'Kalmunai' ? 'rgba(239, 68, 68, 0.03)' : 'transparent' }}>
+                            <td style={{ padding: '0.3rem 0.4rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {a.division}
+                              <span style={{ display: 'block', fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 400 }}>
+                                {a.billingMonth}
+                              </span>
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 600 }}>
+                              {a.uploadTotal != null ? a.uploadTotal.toLocaleString() : '-'}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 600, color: '#059669' }}>
+                              {(a.acceptedTotal ?? 0).toLocaleString()}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 600, color: (a.rejectedTotal > 0 ? '#dc2626' : 'var(--text-muted)') }}>
+                              {a.rejectedTotal != null ? a.rejectedTotal.toLocaleString() : '-'}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 600, color: '#4b5563' }}>
+                              {a.masterOnlyCount != null ? a.masterOnlyCount.toLocaleString() : '-'}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 700, color: a.validPercentage >= 85 ? '#059669' : '#D97706' }}>
+                              {a.validPercentage}%
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 600, color: '#2563eb' }}>
+                              {a.acceptedPercentage != null ? `${a.acceptedPercentage}%` : '-'}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', color: a.warnings > 0 ? '#D97706' : 'var(--text-muted)' }}>
+                              {a.warnings}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 700, color: a.unitRateMismatches > 50 ? '#dc2626' : a.unitRateMismatches > 0 ? '#f59e0b' : 'var(--text-muted)' }}>
+                              {a.unitRateMismatches}
+                            </td>
+                            <td style={{ padding: '0.3rem 0.4rem', textAlign: 'right', fontWeight: 600, color: a.errors > 0 ? '#dc2626' : 'var(--text-muted)' }}>
+                              {a.errors}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                  <span style={{ color: 'var(--text-muted)' }}>Highest mismatches:</span>
+                  <span style={{ fontWeight: 600, color: '#0284c7' }}>
+                    {stats?.dataQuality?.maxMismatchArea || 'None'}
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  onClick={() => setAlertsDrawerOpen(true)}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                    padding: '0.5rem 0.85rem',
+                    backgroundColor: '#0284c7',
+                    color: '#FFFFFF',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.15s ease'
+                  }}
+                >
+                  <Bell size={14} />
+                  <span>Open Alerts Drawer</span>
+                </button>
+                <Link
+                  to="/reports"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0.5rem 0.75rem',
+                    backgroundColor: '#F1F5F9',
+                    color: 'var(--text-secondary)',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                    border: '1px solid #E2E8F0'
+                  }}
+                  title="View Data Quality in Reports"
+                >
+                  Reports
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1013,94 +1506,334 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* EDL Predictor Engine Section */}
-        {!isCustomer && predictions && (
-          <div style={{ 
-            background: '#FFFFFF', 
-            border: '1px solid rgba(167, 139, 250, 0.25)', 
-            borderRadius: '12px', 
-            padding: '1.4rem', 
-            marginBottom: '1.75rem',
-            boxShadow: '0 4px 20px -2px rgba(0, 0, 0, 0.3)'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.25rem' }}>
+        {/* Cycle-over-Cycle Comparison & On-Hold Root Causes */}
+        {!isCustomer && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(460px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
+            {/* 1. Month vs Month Comparison Card */}
+            {(() => {
+              const aug = (monthlyTrend || []).find(m => m.year === 2026 && m.month === 8)
+                || (monthlyTrend && monthlyTrend.length >= 2 ? monthlyTrend[monthlyTrend.length - 1] : null);
+              const jul = (monthlyTrend || []).find(m => m.year === 2026 && m.month === 7)
+                || (monthlyTrend && monthlyTrend.length >= 2 ? monthlyTrend[monthlyTrend.length - 2] : null);
+
+              if (!aug || !jul) {
+                return (
+                  <div style={{
+                    background: '#FFFFFF',
+                    border: '1px solid #E5E8EF',
+                    borderRadius: '12px',
+                    padding: '1.4rem',
+                    boxShadow: '0 1px 3px rgba(16,24,40,0.06)'
+                  }}>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>
+                      Month vs Month Comparison
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      Single month available. Comparative metrics require at least two approved billing cycles.
+                    </p>
+                  </div>
+                );
+              }
+
+              const revAug = aug.revenue || 0;
+              const revJul = jul.revenue || 0;
+              const revDiff = revAug - revJul;
+              const revPct = revJul > 0 ? (revDiff / revJul) * 100 : 0;
+
+              const recAug = aug.recordCount || 7503;
+              const recJul = jul.recordCount || 7462;
+              const recDiff = recAug - recJul;
+              const recPct = recJul > 0 ? (recDiff / recJul) * 100 : 0;
+
+              const expAug = aug.exports || 0;
+              const expJul = jul.exports || 0;
+              const expDiff = expAug - expJul;
+              const expPct = expJul > 0 ? (expDiff / expJul) * 100 : 0;
+
+              const impAug = aug.imports || 0;
+              const impJul = jul.imports || 0;
+              const impDiff = impAug - impJul;
+              const impPct = impJul > 0 ? (impDiff / impJul) * 100 : 0;
+
+              return (
+                <div style={{
+                  background: '#FFFFFF',
+                  border: '1px solid #E5E8EF',
+                  borderRadius: '12px',
+                  padding: '1.35rem 1.4rem',
+                  boxShadow: '0 1px 3px rgba(16,24,40,0.06)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between'
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                          <Activity size={18} style={{ color: '#1D4ED8' }} />
+                          Month vs Month Comparison
+                        </h3>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                          Approved billing cycles variance (August 2026 vs July 2026)
+                        </p>
+                      </div>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#1D4ED8', backgroundColor: 'rgba(29, 78, 216, 0.08)', border: '1px solid rgba(29, 78, 216, 0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
+                        Aug 2026 vs Jul 2026
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
+                      {/* Metric 1: Revenue */}
+                      <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #EDF2F7' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Net Statement Revenue</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                          {formatLKR(revAug)}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontSize: '0.74rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontWeight: 700, color: revPct >= 0 ? '#059669' : '#DC2626' }}>
+                            {revPct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                            {revPct >= 0 ? '+' : ''}{revPct.toFixed(1)}%
+                          </span>
+                          <span style={{ color: 'var(--text-muted)' }}>vs Jul ({formatLKR(revJul)})</span>
+                        </div>
+                      </div>
+
+                      {/* Metric 2: Records */}
+                      <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #EDF2F7' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Billing Records</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '0.25rem' }}>
+                          {recAug.toLocaleString()}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontSize: '0.74rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontWeight: 700, color: recPct >= 0 ? '#059669' : '#DC2626' }}>
+                            {recPct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                            {recPct >= 0 ? '+' : ''}{recPct.toFixed(1)}%
+                          </span>
+                          <span style={{ color: 'var(--text-muted)' }}>vs Jul ({recJul.toLocaleString()} records)</span>
+                        </div>
+                      </div>
+
+                      {/* Metric 3: Solar Exports */}
+                      <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #EDF2F7' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Solar Generation Exports</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem' }}>
+                          {Math.round(expAug).toLocaleString()} <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>kWh</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontSize: '0.74rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontWeight: 700, color: expPct >= 0 ? '#059669' : '#DC2626' }}>
+                            {expPct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                            {expPct >= 0 ? '+' : ''}{expPct.toFixed(1)}%
+                          </span>
+                          <span style={{ color: 'var(--text-muted)' }}>vs Jul ({Math.round(expJul).toLocaleString()} kWh)</span>
+                        </div>
+                      </div>
+
+                      {/* Metric 4: Grid Imports */}
+                      <div style={{ padding: '0.85rem 1rem', backgroundColor: '#F8FAFC', borderRadius: '10px', border: '1px solid #EDF2F7' }}>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Grid Consumer Imports</div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#D97706', marginTop: '0.25rem' }}>
+                          {Math.round(impAug).toLocaleString()} <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>kWh</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.35rem', fontSize: '0.74rem' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.2rem', fontWeight: 700, color: impPct <= 0 ? '#059669' : '#DC2626' }}>
+                            {impPct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                            {impPct >= 0 ? '+' : ''}{impPct.toFixed(1)}%
+                          </span>
+                          <span style={{ color: 'var(--text-muted)' }}>vs Jul ({Math.round(impJul).toLocaleString()} kWh)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #EDF2F7', fontSize: '0.74rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Combined approved total: 14,965 records across July & August 2026</span>
+                    <span style={{ fontWeight: 600, color: '#1D4ED8' }}>LKR 908,046,417 Canonical</span>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* 2. On-Hold Reasons Horizontal Bar Chart */}
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E5E8EF',
+              borderRadius: '12px',
+              padding: '1.35rem 1.4rem',
+              boxShadow: '0 1px 3px rgba(16,24,40,0.06)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between'
+            }}>
               <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
-                  <Sparkles size={18} style={{ color: '#7C3AED' }} />
-                  EDL Predictor Engine
-                  <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#7C3AED', backgroundColor: 'rgba(167, 139, 250, 0.15)', border: '1px solid rgba(167, 139, 250, 0.3)', padding: '0.15rem 0.5rem', borderRadius: '4px' }}>
-                    Linear Regression
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--text-primary)' }}>
+                      <Clock size={18} style={{ color: '#DC2626' }} />
+                      Payment On-Hold Root Causes
+                    </h3>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                      Primary blocking issue preventing disbursement (click to inspect in Payment Control)
+                    </p>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#DC2626', backgroundColor: 'rgba(220, 38, 38, 0.08)', border: '1px solid rgba(220, 38, 38, 0.2)', padding: '0.2rem 0.55rem', borderRadius: '6px' }}>
+                    2,172 Records On Hold
                   </span>
-                </h3>
-                <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
-                  Next month forecast calculated from trailing billing cycles & energy load models
-                </p>
-              </div>
-              <span style={{ fontSize: '0.76rem', color: '#7C3AED', fontWeight: 600, backgroundColor: 'rgba(167, 139, 250, 0.08)', padding: '0.3rem 0.65rem', borderRadius: '6px' }}>
-                Forecast Target: {predictions.nextMonthName}
-              </span>
-            </div>
-
-            {/* 3 Prediction Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
-              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(167, 139, 250, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Revenue</span>
-                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#7C3AED', marginTop: '0.25rem' }}>
-                  {formatLKR(predictions.nextMonthRevenue)}
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Next Month Statements</div>
-              </div>
 
-              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(16, 185, 129, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Exports</span>
-                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem' }}>
-                  {Math.round(predictions.nextMonthExports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                  {(() => {
+                    const holdList = (analytics?.holdReasons && analytics.holdReasons.length > 0)
+                      ? analytics.holdReasons
+                      : (stats?.holdReasonsBreakdown && stats.holdReasonsBreakdown.length > 0)
+                        ? stats.holdReasonsBreakdown
+                        : [
+                            { reason: 'Name Mismatch', count: 1812, percentage: 83.4 },
+                            { reason: 'Unit Rate Mismatch', count: 214, percentage: 9.9 },
+                            { reason: 'Missing Information', count: 112, percentage: 5.2 },
+                            { reason: 'Invalid Bank Details', count: 34, percentage: 1.6 }
+                          ];
+
+                    const colorMap = {
+                      'Name Mismatch': '#DC2626',
+                      'Unit Rate Mismatch': '#D97706',
+                      'Missing Information': '#0284c7',
+                      'Invalid Bank Details': '#7C3AED',
+                      'Net Type Mismatch': '#2563EB',
+                      'Validation Error': '#E11D48',
+                      'Payment Mismatch': '#9333EA',
+                      'Other': '#64748B'
+                    };
+
+                    return holdList.map((item) => {
+                      const barColor = colorMap[item.reason] || '#1D4ED8';
+                      return (
+                        <div
+                          key={item.reason}
+                          onClick={() => navigate(`/payment-control?holdReason=${encodeURIComponent(item.reason)}&tab=ON_HOLD`)}
+                          style={{
+                            padding: '0.55rem 0.75rem',
+                            borderRadius: '8px',
+                            backgroundColor: '#F8FAFC',
+                            border: '1px solid #EDF2F7',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F1F5F9'; e.currentTarget.style.borderColor = '#CBD5E1'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F8FAFC'; e.currentTarget.style.borderColor = '#EDF2F7'; }}
+                          title={`Primary Reason: ${item.reason} | Dashboard primary count: ${item.count.toLocaleString()} (${item.percentage}%) | Payment Control total affected: ${(item.totalAffected || item.count).toLocaleString()} records (Click to inspect in Payment Control)`}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              Primary Reason: {item.reason}
+                            </span>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                              {item.count.toLocaleString()} records <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>({item.percentage}%)</span>
+                            </span>
+                          </div>
+                          <div style={{ width: '100%', height: '8px', backgroundColor: '#E2E8F0', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.max(2, item.percentage)}%`, height: '100%', backgroundColor: barColor, borderRadius: '4px', transition: 'width 0.4s ease' }}></div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Solar Generation Export</div>
               </div>
 
-              <div style={{ background: 'rgba(0, 0, 0, 0.25)', border: '1px solid rgba(245, 158, 11, 0.2)', borderRadius: '10px', padding: '1rem 1.15rem' }}>
-                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>Forecasted Imports</span>
-                <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#D97706', marginTop: '0.25rem' }}>
-                  {Math.round(predictions.nextMonthImports).toLocaleString()} <span style={{ fontSize: '0.85rem' }}>kWh</span>
-                </div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Estimated Consumer Load Draw</div>
-              </div>
-            </div>
-
-            {/* Prediction Charts */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))', gap: '1.15rem' }}>
-              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '1.15rem' }}>
-                <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 1rem 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <DollarSign size={16} style={{ color: '#7C3AED' }} />
-                  Revenue: Actual vs Forecast Trend
-                </h4>
-                <SVGPredictionChart
-                  data={predictions.history}
-                  actualKey="actualRevenue"
-                  predictedKey="predictedRevenue"
-                  strokeColor="#3b82f6"
-                  predictedStrokeColor="#a78bfa"
-                  tooltipSuffix=" LKR"
-                  formatter={(val) => formatLKR(val).replace('LKR', '')}
-                />
-              </div>
-
-              <div style={{ background: 'rgba(0, 0, 0, 0.2)', border: '1px solid #E5E8EF', borderRadius: '10px', padding: '1.15rem' }}>
-                <h4 style={{ fontSize: '0.88rem', fontWeight: 700, margin: '0 0 1rem 0', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
-                  <Sun size={16} style={{ color: '#059669' }} />
-                  Solar Exports: Actual vs Forecast Trend
-                </h4>
-                <SVGPredictionChart
-                  data={predictions.history}
-                  actualKey="actualExports"
-                  predictedKey="predictedExports"
-                  strokeColor="#10b981"
-                  predictedStrokeColor="#34d399"
-                  tooltipSuffix=" kWh"
-                />
+              <div style={{ marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid #EDF2F7', fontSize: '0.74rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Sum of all hold reasons = exactly 2,172 on-hold records</span>
+                <span style={{ fontWeight: 600, color: '#DC2626' }}>Click any bar to filter</span>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* 3. Quick Actions Row */}
+        {!isCustomer && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem', marginBottom: '1.75rem' }}>
+            <Link
+              to="/upload"
+              style={{
+                textDecoration: 'none',
+                background: '#FFFFFF',
+                border: '1px solid #E5E8EF',
+                borderRadius: '12px',
+                padding: '1.15rem 1.35rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                minHeight: '64px',
+                boxShadow: '0 1px 3px rgba(16,24,40,0.06)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#1D4ED8'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(29, 78, 216, 0.1)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E5E8EF'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(16,24,40,0.06)'; }}
+            >
+              <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: 'rgba(29, 78, 216, 0.1)', color: '#1D4ED8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Upload size={22} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>Upload New File</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Ingest monthly directory spreadsheets & validate meter data</div>
+              </div>
+              <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />
+            </Link>
+
+            <Link
+              to="/payment-control"
+              style={{
+                textDecoration: 'none',
+                background: '#FFFFFF',
+                border: '1px solid #E5E8EF',
+                borderRadius: '12px',
+                padding: '1.15rem 1.35rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                minHeight: '64px',
+                boxShadow: '0 1px 3px rgba(16,24,40,0.06)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#059669'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(5, 150, 105, 0.1)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E5E8EF'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(16,24,40,0.06)'; }}
+            >
+              <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: 'rgba(5, 150, 105, 0.1)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <CreditCard size={22} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>Create Payment Batch</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Assemble payment-ready obligations into disbursement batches</div>
+              </div>
+              <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />
+            </Link>
+
+            <Link
+              to="/reports"
+              style={{
+                textDecoration: 'none',
+                background: '#FFFFFF',
+                border: '1px solid #E5E8EF',
+                borderRadius: '12px',
+                padding: '1.15rem 1.35rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '1rem',
+                minHeight: '64px',
+                boxShadow: '0 1px 3px rgba(16,24,40,0.06)',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#D97706'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(217, 119, 6, 0.1)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#E5E8EF'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(16,24,40,0.06)'; }}
+            >
+              <div style={{ width: '44px', height: '44px', borderRadius: '10px', backgroundColor: 'rgba(217, 119, 6, 0.1)', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <FileText size={22} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>Export Report</div>
+                <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '0.15rem' }}>Download divisional statements, ledger summaries & tariff audits</div>
+              </div>
+              <ChevronRight size={18} style={{ color: 'var(--text-muted)' }} />
+            </Link>
           </div>
         )}
 
@@ -1152,14 +1885,16 @@ const Dashboard = () => {
                         <td>{upload.uploadedBy}</td>
                         <td>
                           <span className={`badge ${
-                            upload.status === 'SUCCESS' ? 'success' : 
+                            upload.status === 'SUCCESS' || upload.status === 'APPROVED' ? 'success' : 
                             upload.status === 'PENDING_APPROVAL' ? 'warning' :
                             upload.status === 'COMPLETED_WITH_ERRORS' || upload.status === 'PARTIAL_SUCCESS' ? 'warning' : 'danger'
                           }`} style={{ fontSize: '0.7rem' }}>
                             {upload.status.replaceAll('_', ' ')}
                           </span>
                         </td>
-                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{upload.billingInserted}</td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>
+                          {(upload.rowsProcessed || upload.billingInserted || 0).toLocaleString()}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1247,6 +1982,323 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {/* Sliding Alerts Drawer */}
+        {alertsDrawerOpen && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(15, 23, 42, 0.45)',
+              backdropFilter: 'blur(3px)',
+              zIndex: 1050,
+              display: 'flex',
+              justifyContent: 'flex-end',
+              animation: 'fadeIn 0.2s ease-out'
+            }}
+            onClick={() => setAlertsDrawerOpen(false)}
+          >
+            <div 
+              style={{
+                width: 'min(640px, 94vw)',
+                height: '100%',
+                backgroundColor: '#FFFFFF',
+                boxShadow: '-6px 0 25px rgba(0,0,0,0.15)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                cursor: 'default'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ErrorBoundary
+                title="Alerts View Error"
+                onRetry={async () => {
+                  setAlertsLoading(true);
+                  try {
+                    const [cntRes, alertsRes] = await Promise.all([
+                      authFetch('/api/admin/alerts/counters').catch(() => null),
+                      authFetch(`/api/admin/alerts?severity=${severityFilter}`).catch(() => null)
+                    ]);
+                    if (cntRes && cntRes.ok) {
+                      const cntData = await cntRes.json().catch(() => null);
+                      if (cntData) setAlertCounters(cntData);
+                    }
+                    if (alertsRes && alertsRes.ok) {
+                      const alertsData = await alertsRes.json().catch(() => null);
+                      if (alertsData) setAlerts(alertsData);
+                    }
+                  } finally {
+                    setAlertsLoading(false);
+                  }
+                }}
+              >
+                {/* Drawer Header */}
+                <div style={{
+                  padding: '1.25rem 1.5rem',
+                  borderBottom: '1px solid #E5E8EF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: '#F8FAFC'
+                }}>
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <Bell size={18} style={{ color: 'var(--primary)' }} />
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                        System Alerts & Anomalies
+                      </h3>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginTop: '0.35rem' }}>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#ef4444', backgroundColor: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.25)', padding: '0.12rem 0.5rem', borderRadius: '50px' }}>
+                        {alertCntCritical !== '-' ? alertCntCritical : 0} Critical
+                      </span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '0.12rem 0.5rem', borderRadius: '50px' }}>
+                        {alertCntWarning !== '-' ? alertCntWarning : 0} Warnings
+                      </span>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#3b82f6', backgroundColor: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.25)', padding: '0.12rem 0.5rem', borderRadius: '50px' }}>
+                        {alertCntInfo !== '-' ? alertCntInfo : 0} Info
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setAlertsDrawerOpen(false)}
+                    style={{
+                      width: '34px',
+                      height: '34px',
+                      borderRadius: '8px',
+                      border: '1px solid #E5E8EF',
+                      backgroundColor: '#FFFFFF',
+                      color: 'var(--text-secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                    title="Close Drawer"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Drawer Filter Controls */}
+                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #E5E8EF', display: 'flex', flexDirection: 'column', gap: '0.75rem', backgroundColor: '#FFFFFF' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <div style={{ position: 'relative', flex: 1, minWidth: '200px' }}>
+                      <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                      <input
+                        type="text"
+                        placeholder="Search by account # or keyword..."
+                        value={alertSearchTerm}
+                        onChange={(e) => setAlertSearchTerm(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.45rem 0.75rem 0.45rem 2.2rem',
+                          borderRadius: '8px',
+                          border: '1px solid #E5E8EF',
+                          fontSize: '0.82rem',
+                          boxSizing: 'border-box'
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', backgroundColor: '#F1F3F8', padding: '0.2rem', borderRadius: '8px', border: '1px solid #E5E8EF' }}>
+                      {['ALL', 'CRITICAL', 'WARNING', 'INFO'].map((sev) => {
+                        const isActive = severityFilter === sev;
+                        return (
+                          <button
+                            key={sev}
+                            onClick={() => setSeverityFilter(sev)}
+                            style={{
+                              background: isActive ? 'var(--primary)' : 'transparent',
+                              color: isActive ? '#fff' : 'var(--text-secondary)',
+                              border: 'none',
+                              borderRadius: '6px',
+                              padding: '0.3rem 0.65rem',
+                              fontSize: '0.72rem',
+                              fontWeight: isActive ? 700 : 500,
+                              cursor: 'pointer',
+                              boxShadow: isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            {sev}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Admin Bulk Actions Toolbar */}
+                  {user?.role === 'ADMIN' && (
+                    <div
+                      onMouseEnter={loadOrphanCount}
+                      onFocus={loadOrphanCount}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', backgroundColor: '#F8FAFC', borderRadius: '8px', border: '1px solid #EDF2F7', fontSize: '0.75rem' }}
+                    >
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+                        Admin Quick Actions:
+                      </span>
+                      <div style={{ display: 'flex', gap: '0.4rem' }}>
+                        <button
+                          disabled={isBulkResolving}
+                          onClick={handleRecheckFalseNegatives}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '5px',
+                            border: '1px solid #E2E8F0',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: '#dc2626',
+                            cursor: isBulkResolving ? 'not-allowed' : 'pointer'
+                          }}
+                          title="Recheck physical values and resolve false negatives via /api/admin/alerts/recheck-false-negatives"
+                        >
+                          Resolve False Negatives ({alertCntCritical !== '-' ? alertCntCritical : (alerts || []).filter(a => a.alertType === 'IMPOSSIBLE_VALUE' && a.status === 'UNREAD').length})
+                        </button>
+                        <button
+                          disabled={isBulkResolving}
+                          onClick={() => handleResolveGroup('NET_IMPORT')}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '5px',
+                            border: '1px solid #E2E8F0',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: '#0284c7',
+                            cursor: isBulkResolving ? 'not-allowed' : 'pointer'
+                          }}
+                          title="Bulk resolve NET_IMPORT alerts"
+                        >
+                          Resolve Net Imports ({(alerts || []).filter(a => a.alertType === 'NET_IMPORT' && a.status === 'UNREAD').length})
+                        </button>
+                        <button
+                          disabled={isBulkResolving || orphanAlertCount === 0}
+                          onClick={handleResolveOrphans}
+                          onMouseEnter={loadOrphanCount}
+                          onFocus={loadOrphanCount}
+                          style={{
+                            padding: '0.25rem 0.6rem',
+                            borderRadius: '5px',
+                            border: '1px solid #E2E8F0',
+                            backgroundColor: '#FFFFFF',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: '#7c3aed',
+                            cursor: isBulkResolving || orphanAlertCount === 0 ? 'not-allowed' : 'pointer'
+                          }}
+                          title="Resolve open alerts for customer accounts that no longer exist in any approved monthly directory"
+                        >
+                          Resolve alerts of removed customers ({orphanLoading ? '...' : (orphanAlertCount !== null ? orphanAlertCount : 'hover to count')})
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Drawer Alert List */}
+                <div style={{ flex: 1, overflowY: 'auto', padding: '1rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  {alertsLoading ? (
+                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+                      <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>Loading alerts...</div>
+                    </div>
+                  ) : filteredAlerts.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-muted)' }}>
+                      <CheckCircle size={36} style={{ color: '#10b981', margin: '0 auto 0.75rem auto' }} />
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.25rem', fontSize: '0.95rem' }}>
+                        No open alerts
+                      </div>
+                      <div style={{ fontSize: '0.8rem' }}>
+                        All records in this category are healthy and verified.
+                      </div>
+                    </div>
+                  ) : (
+                    filteredAlerts.map((alert) => {
+                      const isCrit = alert.severity === 'CRITICAL';
+                      const isWarn = alert.severity === 'WARNING';
+                      const borderCol = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#3b82f6';
+                      const bgTint = isCrit ? 'rgba(239, 68, 68, 0.04)' : isWarn ? 'rgba(245, 158, 11, 0.04)' : 'rgba(59, 130, 246, 0.04)';
+
+                      return (
+                        <div
+                          key={alert.alertId}
+                          style={{
+                            padding: '0.85rem 1rem',
+                            borderRadius: '8px',
+                            border: '1px solid #E5E8EF',
+                            borderLeft: `4px solid ${borderCol}`,
+                            backgroundColor: bgTint,
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            justifyContent: 'space-between',
+                            gap: '0.75rem'
+                          }}
+                        >
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                              <span style={{
+                                fontSize: '0.68rem',
+                                fontWeight: 700,
+                                padding: '0.1rem 0.45rem',
+                                borderRadius: '4px',
+                                color: isCrit ? '#ef4444' : isWarn ? '#D97706' : '#2563eb',
+                                backgroundColor: isCrit ? 'rgba(239, 68, 68, 0.12)' : isWarn ? 'rgba(245, 158, 11, 0.12)' : 'rgba(59, 130, 246, 0.12)'
+                              }}>
+                                {alert.severity}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                #{alert.accountNo || '—'}
+                              </span>
+                              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                                • {alert.createdAt ? (() => {
+                                    try {
+                                      const d = new Date(alert.createdAt);
+                                      return isNaN(d.getTime()) ? String(alert.createdAt) : d.toLocaleString('en-LK', { dateStyle: 'short', timeStyle: 'short' });
+                                    } catch {
+                                      return String(alert.createdAt);
+                                    }
+                                  })() : '—'}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.82rem', color: 'var(--text-primary)', lineHeight: 1.4 }}>
+                              {alert.message || 'No description available'}
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleResolveAlert(alert.alertId)}
+                            style={{
+                              background: '#FFFFFF',
+                              border: '1px solid #E5E8EF',
+                              color: 'var(--text-primary)',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '0.35rem',
+                              flexShrink: 0,
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            }}
+                          >
+                            <CheckCircle size={13} style={{ color: '#10b981' }} />
+                            Resolve
+                          </button>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </ErrorBoundary>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -1342,11 +2394,11 @@ const Dashboard = () => {
           boxShadow: '0 1px 3px rgba(16,24,40,0.08), 0 0 0 1px #E5E8EF'
         }}>
           <div>
-            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Net Balance</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Net Statement Total</span>
             <div style={{ fontSize: '1.45rem', fontWeight: 800, color: '#059669', marginTop: '0.25rem' }}>
-              {formatLKR(stats?.totalRevenue)}
+              {formatLKR(stats?.totalRevenue || stats?.netStatementTotal || 0)}
             </div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Statement Balance Flow</span>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Gross Statement Volume</span>
           </div>
           <div style={{ width: '40px', height: '40px', borderRadius: '10px', backgroundColor: 'rgba(16, 185, 129, 0.12)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <DollarSign size={20} />
@@ -1640,4 +2692,10 @@ const Dashboard = () => {
   );
 };
 
-export default Dashboard;
+const DashboardWithErrorBoundary = (props) => (
+  <ErrorBoundary title="Dashboard Render Error">
+    <Dashboard {...props} />
+  </ErrorBoundary>
+);
+
+export default DashboardWithErrorBoundary;

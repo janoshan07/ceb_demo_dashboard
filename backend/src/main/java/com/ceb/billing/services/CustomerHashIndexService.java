@@ -51,7 +51,7 @@ public class CustomerHashIndexService {
     private PaymentControlService paymentControlService;
 
     // Primary Hash Index: accountNo (Key) -> Pre-parsed DTO Map (Value) [O(1) Access]
-    private final Map<String, Map<String, Object>> accountNoHashIndex = new ConcurrentHashMap<>();
+    private volatile Map<String, Map<String, Object>> accountNoHashIndex = new ConcurrentHashMap<>();
 
     // In-Memory Lookup Caches to eliminate N+1 database queries
     private final Map<String, Long> costCodeCache = new ConcurrentHashMap<>();
@@ -59,13 +59,13 @@ public class CustomerHashIndexService {
     private final Map<String, Long> expenseCodeCache = new ConcurrentHashMap<>();
 
     private volatile boolean initialized = false;
+    private final Object rebuildLock = new Object();
+    private final java.util.concurrent.atomic.AtomicBoolean rebuildPending = new java.util.concurrent.atomic.AtomicBoolean(false);
 
     @PostConstruct
     public void init() {
-        // Pre-warm the hash index asynchronously on application startup
-        Thread warmUpThread = new Thread(this::rebuildIndex, "Customer-Hash-Index-Warmup");
-        warmUpThread.setDaemon(true);
-        warmUpThread.start();
+        // Pre-warm the hash index synchronously on application startup so initial callers never see 0 customers
+        rebuildIndex();
     }
 
     /**
@@ -103,13 +103,23 @@ public class CustomerHashIndexService {
 
     /**
      * Rebuilds the entire in-memory Hash Index from the database.
+     * Single-flight execution: concurrent callers wait and reuse the running rebuild.
      */
-    public synchronized void rebuildIndex() {
+    public void rebuildIndex() {
+        rebuildPending.set(true);
+        synchronized (rebuildLock) {
+            while (rebuildPending.compareAndSet(true, false)) {
+                doRebuild();
+            }
+        }
+    }
+
+    private void doRebuild() {
         try {
             long start = System.currentTimeMillis();
             reloadLookupCaches();
             List<Customer> all = customerRepository.findAll();
-            Map<String, Map<String, Object>> tempMap = new HashMap<>();
+            Map<String, Map<String, Object>> tempMap = new ConcurrentHashMap<>();
 
             for (Customer c : all) {
                 if (c.getAccountNo() != null && !c.getAccountNo().trim().isEmpty()) {
@@ -118,9 +128,9 @@ public class CustomerHashIndexService {
                 }
             }
 
-            accountNoHashIndex.clear();
-            accountNoHashIndex.putAll(tempMap);
-            initialized = true;
+            // Atomically swap the new index reference - never publish an empty index while rebuilding
+            this.accountNoHashIndex = tempMap;
+            this.initialized = true;
             long elapsed = System.currentTimeMillis() - start;
             log.info("Customer Hash Index built successfully: " + accountNoHashIndex.size() + " customers indexed in " + elapsed + "ms.");
         } catch (Exception e) {
@@ -132,6 +142,7 @@ public class CustomerHashIndexService {
      * O(1) direct Hash Lookup by Account Number.
      */
     public Map<String, Object> getByAccountNo(String accountNo) {
+        if (!initialized) rebuildIndex();
         if (accountNo == null) return null;
         return accountNoHashIndex.get(accountNo.trim());
     }
@@ -140,6 +151,7 @@ public class CustomerHashIndexService {
      * Check if an account exists in the Hash Index.
      */
     public boolean containsAccount(String accountNo) {
+        if (!initialized) rebuildIndex();
         if (accountNo == null) return false;
         return accountNoHashIndex.containsKey(accountNo.trim());
     }
@@ -182,13 +194,14 @@ public class CustomerHashIndexService {
      * Clears the entire hash index.
      */
     public void clear() {
-        accountNoHashIndex.clear();
+        accountNoHashIndex = new ConcurrentHashMap<>();
     }
 
     /**
      * Returns all cached customer DTOs.
      */
     public Collection<Map<String, Object>> getAllCachedDtos() {
+        if (!initialized) rebuildIndex();
         return accountNoHashIndex.values();
     }
 
@@ -197,6 +210,7 @@ public class CustomerHashIndexService {
     }
 
     public int size() {
+        if (!initialized) rebuildIndex();
         return accountNoHashIndex.size();
     }
 
@@ -215,6 +229,8 @@ public class CustomerHashIndexService {
             Sort.Direction direction,
             int page,
             int size) {
+
+        if (!initialized) rebuildIndex();
 
         final String queryTrim = (query != null) ? query.trim() : "";
         final String qLower = queryTrim.toLowerCase();

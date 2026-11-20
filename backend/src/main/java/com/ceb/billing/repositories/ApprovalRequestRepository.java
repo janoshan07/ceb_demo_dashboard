@@ -13,6 +13,8 @@ import org.springframework.data.jpa.repository.Query;
 @Repository
 public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest, Long> {
     List<ApprovalRequest> findByStatusOrderByCreatedAtDesc(String status);
+
+    List<ApprovalRequest> findTop3ByStatusOrderByCreatedAtDesc(String status);
     long countByStatus(String status);
     boolean existsByBillingIdAndEntityTypeAndActionTypeAndStatus(Long billingId, String entityType, String actionType, String status);
 

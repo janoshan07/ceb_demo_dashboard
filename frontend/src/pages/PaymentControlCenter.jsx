@@ -729,7 +729,7 @@ const PaymentControlCenter = () => {
           },
           {
             key: 'TOTAL_PAYABLE',
-            label: 'Total Payable',
+            label: 'Payable (ready)',
             icon: DollarSign,
             accent: '#0284C7',
             iconBg: '#F0F9FF',
@@ -738,11 +738,11 @@ const PaymentControlCenter = () => {
             rawValue: summary.totalPayable,
             isCurrency: true,
             subtitle: 'Ready settlement',
-            fullSubtitle: 'Ready settlement balance'
+            fullSubtitle: 'Ready settlement balance (L9001)'
           },
           {
             key: 'TOTAL_ON_HOLD',
-            label: 'Total On Hold',
+            label: 'On hold',
             icon: Lock,
             accent: '#DC2626',
             iconBg: '#FEF2F2',
@@ -751,7 +751,7 @@ const PaymentControlCenter = () => {
             rawValue: summary.totalOnHold,
             isCurrency: true,
             subtitle: 'Pending resolution',
-            fullSubtitle: 'Pending resolution'
+            fullSubtitle: 'Pending hold resolution'
           },
           {
             key: 'MULTI_PAYMENTS',
